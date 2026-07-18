@@ -11,7 +11,7 @@
         <section class="rounded-lg border border-white/10 bg-white p-6 text-zinc-950">
             <p class="text-sm font-medium" style="color: var(--brand)">{{ $shop->tenant->company_name }}</p>
             <h1 class="mt-2 text-2xl font-semibold">Confirm internet access</h1>
-            <p class="mt-2 text-sm text-zinc-600">A pending payment has been created. Flutterwave checkout will be connected in the next payment integration step.</p>
+            <p class="mt-2 text-sm text-zinc-600">A pending payment has been created, but online payment is not available for this shop yet.</p>
 
             <dl class="mt-5 space-y-3 text-sm">
                 <div>
@@ -33,7 +33,7 @@
             </dl>
 
             <div class="mt-6 rounded-md bg-amber-50 p-4 text-sm leading-6 text-amber-800">
-                Payment gateway handoff is not live yet. Use test access while Flutterwave initialization and webhook verification are being connected.
+                This tenant has not connected a Flutterwave payment account for hotspot customers. Use test access while the tenant account is being configured.
             </div>
 
             <form method="POST" action="{{ route('hotspot.grant') }}" class="mt-5">

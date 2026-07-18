@@ -37,7 +37,7 @@
                 <div class="mb-4">
                     <h2 class="text-sm font-semibold text-zinc-950">Flutterwave payments</h2>
                     <p class="mt-1 text-sm leading-6 text-zinc-600">
-                        Add this shop's Flutterwave v4 client ID and client secret when payments should settle into the tenant's own Flutterwave account. Leave both empty to use the platform fallback account from the server .env file.
+                        Add this shop's Flutterwave v4 client ID and client secret so hotspot customer payments settle into the tenant's own Flutterwave account. If these are empty, online customer payments stay disabled for this shop until the tenant connects an account.
                     </p>
                     @if ($shop->exists)
                         <p class="mt-2 text-xs font-medium text-zinc-500">
@@ -64,7 +64,7 @@
                     <label class="block">
                         <span class="text-sm font-medium">Flutterwave webhook secret hash</span>
                         <input name="flutterwave_webhook_secret" value="{{ old('flutterwave_webhook_secret') }}" placeholder="{{ $shop->exists ? 'Leave blank to keep current value' : 'Optional: tenant webhook verif-hash' }}" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2">
-                        <span class="mt-1 block text-xs text-zinc-500">If empty, webhook verification falls back to the platform webhook secret hash.</span>
+                        <span class="mt-1 block text-xs text-zinc-500">Use the verif-hash from this tenant's Flutterwave webhook settings. Payment callbacks can still verify successful payments, but webhooks need this value.</span>
                         @error('flutterwave_webhook_secret') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
                     </label>
                 </div>

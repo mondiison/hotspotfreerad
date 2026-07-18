@@ -73,8 +73,7 @@ class FlutterwaveService
 
     public function webhookIsValid(?string $signature, ?Payment $payment = null): bool
     {
-        $secretHash = $payment?->shop?->flutterwave_webhook_secret
-            ?: config('services.flutterwave.webhook_secret_hash');
+        $secretHash = $payment?->shop?->flutterwave_webhook_secret;
 
         return filled($secretHash) && hash_equals((string) $secretHash, (string) $signature);
     }
@@ -94,8 +93,8 @@ class FlutterwaveService
         }
 
         return [
-            'source' => 'platform',
-            'label' => (string) config('app.name', 'Platform').' fallback account',
+            'source' => 'unconfigured',
+            'label' => 'Tenant payment account not configured',
         ];
     }
 
@@ -164,7 +163,7 @@ class FlutterwaveService
             return (string) $payment->shop->flutterwave_client_id;
         }
 
-        return (string) config('services.flutterwave.client_id');
+        return '';
     }
 
     private function clientSecret(Payment $payment): string
@@ -173,7 +172,7 @@ class FlutterwaveService
             return (string) $payment->shop->flutterwave_client_secret;
         }
 
-        return (string) config('services.flutterwave.client_secret');
+        return '';
     }
 
     private function baseUrl(): string

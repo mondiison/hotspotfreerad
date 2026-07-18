@@ -182,6 +182,10 @@ class HotspotPortalTest extends TestCase
             ]),
         ]);
         [$router, $package] = $this->routerWithPackage();
+        $router->shop->update([
+            'flutterwave_client_id' => 'tenant-client-id',
+            'flutterwave_client_secret' => 'tenant-client-secret',
+        ]);
 
         $this->post(route('hotspot.pay'), [
             'mac' => 'AA:BB:CC:DD:EE:FF',
@@ -199,7 +203,8 @@ class HotspotPortalTest extends TestCase
             && $request['amount'] === 500.0
             && $request['currency'] === 'NGN'
             && $request['payment_method'] === 'opay'
-            && $request['metadata']['credential_source'] === 'platform'
+            && $request['metadata']['credential_source'] === 'tenant'
+            && $request['metadata']['credential_label'] === 'Demo ISP / Demo Shop'
             && $request['metadata']['tenant_name'] === 'Demo ISP'
             && $request['metadata']['shop_name'] === 'Demo Shop'
             && $request['metadata']['package_name'] === 'One Hour Ultra'
@@ -208,7 +213,7 @@ class HotspotPortalTest extends TestCase
             && $request['redirect_url'] === route('hotspot.payment.callback'));
 
         $payment = \App\Models\Payment::firstOrFail();
-        $this->assertSame('platform', data_get($payment->payload, 'flutterwave_account.source'));
+        $this->assertSame('tenant', data_get($payment->payload, 'flutterwave_account.source'));
     }
 
     public function test_tenant_flutterwave_credentials_are_used_when_complete(): void
@@ -262,26 +267,10 @@ class HotspotPortalTest extends TestCase
         $this->assertSame('tenant', data_get($payment->payload, 'flutterwave_account.source'));
     }
 
-    public function test_incomplete_tenant_flutterwave_credentials_fall_back_to_platform_account(): void
+    public function test_incomplete_tenant_flutterwave_credentials_do_not_use_platform_account_for_customer_payments(): void
     {
         $this->configureFlutterwave();
-        Http::fake([
-            'idp.flutterwave.com/*' => Http::response([
-                'access_token' => 'PLATFORM_TOKEN',
-                'expires_in' => 600,
-            ]),
-            'developersandbox-api.flutterwave.com/orchestration/direct-orders' => Http::response([
-                'status' => 'success',
-                'data' => [
-                    'id' => 'ord_platform_123',
-                    'next_action' => [
-                        'redirect_url' => [
-                            'url' => 'https://developer-sandbox-ui-sit.flutterwave.cloud/redirects/opay/platform',
-                        ],
-                    ],
-                ],
-            ]),
-        ]);
+        Http::fake();
         [$router, $package] = $this->routerWithPackage();
         $router->shop->update([
             'flutterwave_client_id' => 'tenant-client-id-only',
@@ -293,14 +282,13 @@ class HotspotPortalTest extends TestCase
             'package_id' => $package->id,
             'email' => 'customer@example.com',
         ])
-            ->assertRedirect('https://developer-sandbox-ui-sit.flutterwave.cloud/redirects/opay/platform');
+            ->assertOk()
+            ->assertSee('online payment is not available');
 
-        Http::assertSent(fn ($request) => str_contains($request->url(), 'idp.flutterwave.com')
-            && $request['client_id'] === 'client-id'
-            && $request['client_secret'] === 'client-secret');
+        Http::assertNothingSent();
 
         $payment = \App\Models\Payment::firstOrFail();
-        $this->assertSame('platform', data_get($payment->payload, 'flutterwave_account.source'));
+        $this->assertNull(data_get($payment->payload, 'flutterwave_account.source'));
     }
 
     public function test_successful_flutterwave_callback_provisions_radius_access(): void
@@ -315,12 +303,11 @@ class HotspotPortalTest extends TestCase
         ]);
 
         $payment = \App\Models\Payment::firstOrFail();
-        config([
-            'services.flutterwave.client_id' => 'client-id',
-            'services.flutterwave.client_secret' => 'client-secret',
-            'services.flutterwave.auth_url' => 'https://idp.flutterwave.com/realms/flutterwave/protocol/openid-connect/token',
-            'services.flutterwave.base_url' => 'https://developersandbox-api.flutterwave.com',
+        $router->shop->update([
+            'flutterwave_client_id' => 'tenant-client-id',
+            'flutterwave_client_secret' => 'tenant-client-secret',
         ]);
+        $this->configureFlutterwave();
         Http::fake([
             'idp.flutterwave.com/*' => Http::response([
                 'access_token' => 'FLW_V4_TOKEN',
@@ -373,13 +360,12 @@ class HotspotPortalTest extends TestCase
         ]);
 
         $payment = \App\Models\Payment::firstOrFail();
-        config([
-            'services.flutterwave.client_id' => 'client-id',
-            'services.flutterwave.client_secret' => 'client-secret',
-            'services.flutterwave.auth_url' => 'https://idp.flutterwave.com/realms/flutterwave/protocol/openid-connect/token',
-            'services.flutterwave.base_url' => 'https://developersandbox-api.flutterwave.com',
-            'services.flutterwave.webhook_secret_hash' => 'webhook-secret',
+        $router->shop->update([
+            'flutterwave_client_id' => 'tenant-client-id',
+            'flutterwave_client_secret' => 'tenant-client-secret',
+            'flutterwave_webhook_secret' => 'webhook-secret',
         ]);
+        $this->configureFlutterwave();
         Http::fake([
             'idp.flutterwave.com/*' => Http::response([
                 'access_token' => 'FLW_V4_TOKEN',
