@@ -52,6 +52,11 @@ class RouterProvisioningPageTest extends TestCase
             ->assertSee('endpoint-address=vpn.example.com')
             ->assertSee('/radius add address=10.8.0.1 secret=&quot;radius-secret&quot;', false)
             ->assertSee('/ip hotspot walled-garden add dst-host=portal.example.com action=allow')
-            ->assertSee('Before pasting');
+            ->assertSee('Config In Use')
+            ->assertSee('MikroTik login.html')
+            ->assertSee('https://portal.example.com/hotspot/portal')
+            ->assertSee('window.location.replace(portal)')
+            ->assertSee('/ip hotspot active remove', false)
+            ->assertSee('sudo freeradius -X');
     }
 }

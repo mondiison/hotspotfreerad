@@ -33,4 +33,36 @@ class MikroTikProvisioningService
 /ip hotspot walled-garden add dst-host={$portalHost} action=allow
 SCRIPT;
     }
+
+    public function generateLoginTemplate(): string
+    {
+        $portalUrl = rtrim(config('app.url'), '/') . '/hotspot/portal';
+
+        return <<<HTML
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Opening hotspot portal</title>
+</head>
+<body style="font-family: system-ui, sans-serif; padding: 24px;">
+    <h1>Opening internet access</h1>
+    <p>If nothing happens, use the button below.</p>
+    <p><a id="portal-link" href="#">Continue to internet packages</a></p>
+
+    <script>
+        var portal = '{$portalUrl}'
+            + '?mac=' + encodeURIComponent('\$(mac)')
+            + '&nasid=' + encodeURIComponent('\$(identity)')
+            + '&link-login=' + encodeURIComponent('\$(link-login)')
+            + '&link-orig=' + encodeURIComponent('\$(link-orig)');
+
+        document.getElementById('portal-link').href = portal;
+        window.location.replace(portal);
+    </script>
+</body>
+</html>
+HTML;
+    }
 }

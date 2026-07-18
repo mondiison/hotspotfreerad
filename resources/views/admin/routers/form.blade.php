@@ -40,6 +40,11 @@
                 <label class="block">
                     <span class="text-sm font-medium">WireGuard internal IP</span>
                     <input name="wireguard_internal_ip" value="{{ old('wireguard_internal_ip', $router->wireguard_internal_ip) }}" placeholder="10.8.0.10" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2" required>
+                    <div class="mt-2 flex flex-wrap gap-2">
+                        @foreach (['10.8.0.10', '10.8.0.11', '10.8.0.12', '10.8.0.13'] as $ip)
+                            <button type="button" data-set-field="wireguard_internal_ip" data-set-value="{{ $ip }}" class="rounded-md border border-zinc-200 px-2.5 py-1.5 text-xs text-zinc-700 hover:bg-zinc-50">{{ $ip }}</button>
+                        @endforeach
+                    </div>
                     <span class="mt-1 block text-xs text-zinc-500">Private VPN IP for this router. Keep <code>10.8.0.1</code> for the server, then use <code>10.8.0.10</code>, <code>10.8.0.11</code>, and so on.</span>
                     @error('wireguard_internal_ip') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
                 </label>
@@ -74,4 +79,16 @@
             </div>
         </aside>
     </div>
+
+    <script>
+        document.querySelectorAll('[data-set-field]').forEach((button) => {
+            button.addEventListener('click', () => {
+                const field = document.querySelector(`[name="${button.dataset.setField}"]`);
+
+                if (field) {
+                    field.value = button.dataset.setValue;
+                }
+            });
+        });
+    </script>
 </x-layouts.admin>

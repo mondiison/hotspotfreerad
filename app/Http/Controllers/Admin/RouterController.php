@@ -52,6 +52,15 @@ class RouterController extends Controller
         return view('admin.routers.show', [
             'router' => $router->load('shop.tenant'),
             'script' => $mikroTik->generateScript($router),
+            'loginTemplate' => $mikroTik->generateLoginTemplate(),
+            'provisioningConfig' => [
+                'portal_url' => rtrim(config('app.url'), '/') . '/hotspot/portal',
+                'radius_server_ip' => config('services.radius.server_ip'),
+                'wireguard_endpoint_host' => config('services.wireguard.endpoint_host'),
+                'wireguard_endpoint_port' => config('services.wireguard.endpoint_port'),
+                'wireguard_public_key' => config('services.wireguard.public_key'),
+                'hotspot_dns_name' => config('services.mikrotik.hotspot_dns_name'),
+            ],
         ]);
     }
 
