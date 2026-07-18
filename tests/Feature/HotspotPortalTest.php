@@ -112,6 +112,9 @@ class HotspotPortalTest extends TestCase
         ])
             ->assertOk()
             ->assertSee('Access provisioned')
+            ->assertSee('Demo ISP')
+            ->assertSee('#0f766e')
+            ->assertSee('/storage/tenant-brand/demo/fallback-flyer.jpg', false)
             ->assertSee('AA:BB:CC:DD:EE:FF')
             ->assertSee('http://hotspot.local/login', false);
 
@@ -151,6 +154,9 @@ class HotspotPortalTest extends TestCase
         ])
             ->assertOk()
             ->assertSee('Confirm internet access')
+            ->assertSee('Demo ISP')
+            ->assertSee('#0f766e')
+            ->assertSee('/storage/tenant-brand/demo/fallback-hero.jpg', false)
             ->assertSee('One Hour Ultra')
             ->assertSee('NGN 500.00')
             ->assertSee('Start test access');
@@ -422,6 +428,9 @@ class HotspotPortalTest extends TestCase
         $tenant = Tenant::create([
             'company_name' => 'Demo ISP',
             'owner_email' => 'owner@example.com',
+            'brand_color' => '#0f766e',
+            'hero_image_path' => 'tenant-brand/demo/fallback-hero.jpg',
+            'flyer_image_path' => 'tenant-brand/demo/fallback-flyer.jpg',
         ]);
 
         $shop = Shop::create([

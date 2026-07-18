@@ -70,7 +70,7 @@ class PortalController extends Controller
         ]);
 
         $router = Router::query()
-            ->with('shop')
+            ->with('shop.tenant')
             ->where('nas_identifier', $validated['nasid'])
             ->first();
 
@@ -281,7 +281,7 @@ class PortalController extends Controller
         $subscription = $this->markPaidAndGrantAccess($payment, $verification, $radius);
 
         return view('hotspot.access-granted', [
-            'router' => Router::where('shop_id', $payment->shop_id)->first(),
+            'router' => Router::with('shop.tenant')->where('shop_id', $payment->shop_id)->first(),
             'package' => $payment->package,
             'subscription' => $subscription,
             'macAddress' => $payment->payload['mac'],

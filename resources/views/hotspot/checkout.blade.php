@@ -7,9 +7,31 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="min-h-screen bg-zinc-950 text-white antialiased" style="--brand: {{ $shop->tenant->brand_color ?? '#10b981' }}">
-    <main class="mx-auto flex min-h-screen w-full max-w-2xl flex-col justify-center px-5 py-8">
-        <section class="rounded-lg border border-white/10 bg-white p-6 text-zinc-950">
-            <p class="text-sm font-medium" style="color: var(--brand)">{{ $shop->tenant->company_name }}</p>
+    @php
+        $tenant = $shop->tenant;
+        $heroImageUrl = $tenant->hero_image_path ? \Illuminate\Support\Facades\Storage::disk('public')->url($tenant->hero_image_path) : null;
+    @endphp
+
+    <main class="mx-auto flex min-h-screen w-full max-w-4xl flex-col justify-center px-5 py-8">
+        <section class="grid overflow-hidden rounded-lg border border-white/10 bg-white text-zinc-950 md:grid-cols-[0.95fr_1.05fr]">
+            <div class="hidden bg-zinc-950 p-6 text-white md:flex md:flex-col md:justify-between">
+                @if ($heroImageUrl)
+                    <img src="{{ $heroImageUrl }}" alt="{{ $tenant->company_name }} hero" class="-mx-6 -mt-6 h-64 w-[calc(100%+3rem)] object-cover">
+                @else
+                    <div class="rounded-lg border border-white/10 bg-white/[0.04] p-5">
+                        <p class="text-sm font-medium" style="color: var(--brand)">{{ $tenant->company_name }}</p>
+                        <p class="mt-3 text-2xl font-semibold">{{ $tenant->public_site_tagline ?: 'Internet access for this hotspot.' }}</p>
+                    </div>
+                @endif
+
+                <div class="mt-6">
+                    <p class="text-sm text-zinc-400">Hotspot location</p>
+                    <p class="mt-1 text-xl font-semibold">{{ $shop->name }}</p>
+                </div>
+            </div>
+
+            <div class="p-6">
+            <p class="text-sm font-medium" style="color: var(--brand)">{{ $tenant->company_name }}</p>
             <h1 class="mt-2 text-2xl font-semibold">Confirm internet access</h1>
             <p class="mt-2 text-sm text-zinc-600">A pending payment has been created, but online payment is not available for this shop yet.</p>
 
@@ -51,6 +73,7 @@
                     Start test access
                 </button>
             </form>
+            </div>
         </section>
     </main>
 </body>
