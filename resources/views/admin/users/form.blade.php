@@ -10,59 +10,58 @@
         @endif
 
         <div class="grid gap-5 md:grid-cols-2">
-            <label class="block">
-                <span class="text-sm font-medium">Name</span>
-                <input name="name" value="{{ old('name', $managedUser->name) }}" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2" required>
-                @error('name') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
-            </label>
+            <flux:field>
+                <flux:label>Name</flux:label>
+                <flux:input name="name" value="{{ old('name', $managedUser->name) }}" icon="user" required />
+                <flux:error name="name" />
+            </flux:field>
 
-            <label class="block">
-                <span class="text-sm font-medium">Email</span>
-                <input type="email" name="email" value="{{ old('email', $managedUser->email) }}" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2" required>
-                @error('email') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
-            </label>
+            <flux:field>
+                <flux:label>Email</flux:label>
+                <flux:input type="email" name="email" value="{{ old('email', $managedUser->email) }}" icon="envelope" required />
+                <flux:error name="email" />
+            </flux:field>
 
-            <label class="block">
-                <span class="text-sm font-medium">Tenant</span>
-                <select name="tenant_id" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2" @required(! auth()->user()->isSuperAdmin())>
+            <flux:field>
+                <flux:label>Tenant</flux:label>
+                <flux:select name="tenant_id" :required="! auth()->user()->isSuperAdmin()">
                     @if (auth()->user()->isSuperAdmin())
                         <option value="">Platform account</option>
                     @endif
                     @foreach ($tenants as $tenant)
                         <option value="{{ $tenant->id }}" @selected(old('tenant_id', $managedUser->tenant_id) == $tenant->id)>{{ $tenant->company_name }}</option>
                     @endforeach
-                </select>
-                <span class="mt-1 block text-xs text-zinc-500">Tenant admins are always attached to one tenant.</span>
-                @error('tenant_id') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
-            </label>
+                </flux:select>
+                <flux:description>Tenant admins are always attached to one tenant.</flux:description>
+                <flux:error name="tenant_id" />
+            </flux:field>
 
-            <label class="block">
-                <span class="text-sm font-medium">Role</span>
-                <select name="role" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2" required>
+            <flux:field>
+                <flux:label>Role</flux:label>
+                <flux:select name="role" required>
                     @if (auth()->user()->isSuperAdmin())
                         <option value="super_admin" @selected(old('role', $managedUser->role) === 'super_admin')>Super admin</option>
                     @endif
                     <option value="tenant_admin" @selected(old('role', $managedUser->role ?: 'tenant_admin') === 'tenant_admin')>Tenant admin</option>
-                </select>
-                @error('role') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
-            </label>
+                </flux:select>
+                <flux:error name="role" />
+            </flux:field>
 
-            <label class="block md:col-span-2">
-                <span class="text-sm font-medium">{{ $managedUser->exists ? 'New password' : 'Password' }}</span>
-                <input type="password" name="password" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2" @required(! $managedUser->exists)>
-                <span class="mt-1 block text-xs text-zinc-500">{{ $managedUser->exists ? 'Leave blank to keep the current password.' : 'Use at least 8 characters.' }}</span>
-                @error('password') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
-            </label>
+            <flux:field class="md:col-span-2">
+                <flux:label>{{ $managedUser->exists ? 'New password' : 'Password' }}</flux:label>
+                <flux:input type="password" name="password" icon="key" viewable :required="! $managedUser->exists" />
+                <flux:description>{{ $managedUser->exists ? 'Leave blank to keep the current password.' : 'Use at least 8 characters.' }}</flux:description>
+                <flux:error name="password" />
+            </flux:field>
 
-            <label class="flex items-center gap-2 text-sm md:col-span-2">
-                <input type="checkbox" name="is_active" value="1" @checked(old('is_active', $managedUser->is_active ?? true)) class="rounded border-zinc-300" @disabled(auth()->user()->is($managedUser))>
-                Active account
-            </label>
+            <div class="md:col-span-2">
+                <flux:checkbox name="is_active" value="1" :checked="(bool) old('is_active', $managedUser->is_active ?? true)" label="Active account" :disabled="auth()->user()->is($managedUser)" />
+            </div>
         </div>
 
         <div class="mt-6 flex gap-3">
-            <button class="rounded-md bg-zinc-950 px-4 py-2 text-sm font-medium text-white">Save User</button>
-            <a href="{{ route('admin.users.index') }}" class="rounded-md border border-zinc-200 px-4 py-2 text-sm">Cancel</a>
+            <flux:button type="submit" variant="primary" icon="check">Save User</flux:button>
+            <flux:button href="{{ route('admin.users.index') }}" variant="outline">Cancel</flux:button>
         </div>
     </form>
 </x-layouts.admin>
