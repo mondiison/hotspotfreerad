@@ -5,7 +5,7 @@
 >
     @if (auth()->user()->isSuperAdmin())
         <x-slot:action>
-            <a href="{{ route('admin.billing.plans.create') }}" class="rounded-md bg-zinc-950 px-4 py-2 text-sm font-medium text-white">Add Plan</a>
+            <flux:button href="{{ route('admin.billing.plans.create') }}" variant="primary" icon="plus">Add Plan</flux:button>
         </x-slot:action>
     @endif
 
@@ -18,7 +18,7 @@
                             <h2 class="font-semibold">{{ $plan->name }}</h2>
                             <p class="mt-1 text-sm text-zinc-500">{{ $plan->slug }}</p>
                         </div>
-                        <span class="rounded-md bg-zinc-100 px-2 py-1 text-xs font-medium text-zinc-600">{{ $plan->is_active ? 'Active' : 'Hidden' }}</span>
+                        <flux:badge :color="$plan->is_active ? 'emerald' : 'zinc'" size="sm">{{ $plan->is_active ? 'Active' : 'Hidden' }}</flux:badge>
                     </div>
                     <p class="mt-4 text-2xl font-semibold">{{ $plan->currency }} {{ number_format($plan->monthly_price, 2) }}</p>
                     <dl class="mt-4 grid grid-cols-3 gap-2 text-xs text-zinc-500">
@@ -43,11 +43,11 @@
                         </ul>
                     @endif
                     <div class="mt-5 flex gap-2">
-                        <a href="{{ route('admin.billing.plans.edit', $plan) }}" class="rounded-md border border-zinc-200 px-3 py-1.5 text-sm">Edit</a>
+                        <flux:button href="{{ route('admin.billing.plans.edit', $plan) }}" size="sm" variant="outline" icon="pencil-square">Edit</flux:button>
                         <form method="POST" action="{{ route('admin.billing.plans.destroy', $plan) }}" onsubmit="return confirm('Delete this billing plan? Hide it instead if tenants already use it.')">
                             @csrf
                             @method('DELETE')
-                            <button class="rounded-md border border-red-200 px-3 py-1.5 text-sm text-red-700">Delete</button>
+                            <flux:button type="submit" size="sm" variant="danger" icon="trash">Delete</flux:button>
                         </form>
                     </div>
                 </section>
@@ -60,58 +60,58 @@
 
             <form method="POST" action="{{ route('admin.billing.subscriptions.store') }}" class="mt-5 grid gap-4 md:grid-cols-3">
                 @csrf
-                <label class="block">
-                    <span class="text-sm font-medium">Tenant</span>
-                    <select name="tenant_id" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2" required>
+                <flux:field>
+                    <flux:label>Tenant</flux:label>
+                    <flux:select name="tenant_id" required>
                         <option value="">Select tenant</option>
                         @foreach ($tenants as $tenantOption)
                             <option value="{{ $tenantOption->id }}" @selected(old('tenant_id') == $tenantOption->id)>{{ $tenantOption->company_name }}</option>
                         @endforeach
-                    </select>
-                    @error('tenant_id') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
-                </label>
+                    </flux:select>
+                    <flux:error name="tenant_id" />
+                </flux:field>
 
-                <label class="block">
-                    <span class="text-sm font-medium">Billing plan</span>
-                    <select name="billing_plan_id" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2" required>
+                <flux:field>
+                    <flux:label>Billing plan</flux:label>
+                    <flux:select name="billing_plan_id" required>
                         <option value="">Select plan</option>
                         @foreach ($plans as $plan)
                             <option value="{{ $plan->id }}" @selected(old('billing_plan_id') == $plan->id)>{{ $plan->name }} - {{ $plan->currency }} {{ number_format($plan->monthly_price, 2) }}</option>
                         @endforeach
-                    </select>
-                    @error('billing_plan_id') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
-                </label>
+                    </flux:select>
+                    <flux:error name="billing_plan_id" />
+                </flux:field>
 
-                <label class="block">
-                    <span class="text-sm font-medium">Status</span>
-                    <select name="status" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2" required>
+                <flux:field>
+                    <flux:label>Status</flux:label>
+                    <flux:select name="status" required>
                         @foreach (['trialing', 'active', 'past_due', 'canceled'] as $status)
                             <option value="{{ $status }}" @selected(old('status', 'trialing') === $status)>{{ str_replace('_', ' ', ucfirst($status)) }}</option>
                         @endforeach
-                    </select>
-                    @error('status') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
-                </label>
+                    </flux:select>
+                    <flux:error name="status" />
+                </flux:field>
 
-                <label class="block">
-                    <span class="text-sm font-medium">Trial ends</span>
-                    <input type="datetime-local" name="trial_ends_at" value="{{ old('trial_ends_at') }}" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2">
-                    @error('trial_ends_at') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
-                </label>
+                <flux:field>
+                    <flux:label>Trial ends</flux:label>
+                    <flux:input type="datetime-local" name="trial_ends_at" value="{{ old('trial_ends_at') }}" />
+                    <flux:error name="trial_ends_at" />
+                </flux:field>
 
-                <label class="block">
-                    <span class="text-sm font-medium">Period starts</span>
-                    <input type="datetime-local" name="current_period_starts_at" value="{{ old('current_period_starts_at') }}" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2">
-                    @error('current_period_starts_at') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
-                </label>
+                <flux:field>
+                    <flux:label>Period starts</flux:label>
+                    <flux:input type="datetime-local" name="current_period_starts_at" value="{{ old('current_period_starts_at') }}" />
+                    <flux:error name="current_period_starts_at" />
+                </flux:field>
 
-                <label class="block">
-                    <span class="text-sm font-medium">Period ends</span>
-                    <input type="datetime-local" name="current_period_ends_at" value="{{ old('current_period_ends_at') }}" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2">
-                    @error('current_period_ends_at') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
-                </label>
+                <flux:field>
+                    <flux:label>Period ends</flux:label>
+                    <flux:input type="datetime-local" name="current_period_ends_at" value="{{ old('current_period_ends_at') }}" />
+                    <flux:error name="current_period_ends_at" />
+                </flux:field>
 
                 <div class="md:col-span-3">
-                    <button class="rounded-md bg-zinc-950 px-4 py-2 text-sm font-medium text-white">Record Subscription</button>
+                    <flux:button type="submit" variant="primary" icon="check">Record Subscription</flux:button>
                 </div>
             </form>
         </section>
@@ -184,7 +184,7 @@
                     <p class="mt-1 text-sm text-zinc-500">Pay the platform subscription from here. Hotspot customer collections remain on your shop Flutterwave account.</p>
                 </div>
                 @unless ($platformFlutterwaveConfigured)
-                    <span class="rounded-md bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800">Platform checkout not configured</span>
+                    <flux:badge color="amber">Platform checkout not configured</flux:badge>
                 @endunless
             </div>
 
@@ -197,7 +197,7 @@
                                 <p class="mt-1 text-sm text-zinc-500">{{ $plan->currency }} {{ number_format($plan->monthly_price, 2) }} / month</p>
                             </div>
                             @if ($currentSubscription?->billing_plan_id === $plan->id && $currentSubscription?->status === 'active')
-                                <span class="rounded-md bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700">Current</span>
+                                <flux:badge color="emerald" size="sm">Current</flux:badge>
                             @endif
                         </div>
                         @if ($plan->features)
@@ -210,9 +210,9 @@
                         <form method="POST" action="{{ route('admin.billing.payments.checkout') }}" class="mt-4">
                             @csrf
                             <input type="hidden" name="billing_plan_id" value="{{ $plan->id }}">
-                            <button class="w-full rounded-md px-3 py-2 text-sm font-medium {{ $platformFlutterwaveConfigured ? 'bg-zinc-950 text-white' : 'bg-zinc-100 text-zinc-400' }}" @disabled(! $platformFlutterwaveConfigured)>
+                            <flux:button type="submit" class="w-full" variant="primary" :disabled="! $platformFlutterwaveConfigured">
                                 {{ $currentSubscription?->billing_plan_id === $plan->id ? 'Renew Plan' : 'Pay for Plan' }}
-                            </button>
+                            </flux:button>
                         </form>
                     </section>
                 @endforeach

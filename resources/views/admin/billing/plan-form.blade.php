@@ -10,72 +10,71 @@
         @endif
 
         <div class="grid gap-5 md:grid-cols-2">
-            <label class="block">
-                <span class="text-sm font-medium">Plan name</span>
-                <input name="name" value="{{ old('name', $plan->name) }}" placeholder="Growth" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2" required>
-                @error('name') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
-            </label>
+            <flux:field>
+                <flux:label>Plan name</flux:label>
+                <flux:input name="name" value="{{ old('name', $plan->name) }}" icon="tag" placeholder="Growth" required />
+                <flux:error name="name" />
+            </flux:field>
 
-            <label class="block">
-                <span class="text-sm font-medium">Slug</span>
-                <input name="slug" value="{{ old('slug', $plan->slug) }}" placeholder="growth" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2">
-                <span class="mt-1 block text-xs text-zinc-500">Leave blank to generate it from the plan name.</span>
-                @error('slug') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
-            </label>
+            <flux:field>
+                <flux:label>Slug</flux:label>
+                <flux:input name="slug" value="{{ old('slug', $plan->slug) }}" icon="link" placeholder="growth" />
+                <flux:description>Leave blank to generate it from the plan name.</flux:description>
+                <flux:error name="slug" />
+            </flux:field>
 
-            <label class="block">
-                <span class="text-sm font-medium">Monthly price</span>
-                <input type="number" step="0.01" min="0" name="monthly_price" value="{{ old('monthly_price', $plan->monthly_price ?? 0) }}" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2" required>
-                @error('monthly_price') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
-            </label>
+            <flux:field>
+                <flux:label>Monthly price</flux:label>
+                <flux:input type="number" step="0.01" min="0" name="monthly_price" value="{{ old('monthly_price', $plan->monthly_price ?? 0) }}" icon="banknotes" required />
+                <flux:error name="monthly_price" />
+            </flux:field>
 
-            <label class="block">
-                <span class="text-sm font-medium">Currency</span>
-                <input name="currency" value="{{ old('currency', $plan->currency ?? 'NGN') }}" maxlength="3" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 uppercase" required>
-                @error('currency') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
-            </label>
+            <flux:field>
+                <flux:label>Currency</flux:label>
+                <flux:input name="currency" value="{{ old('currency', $plan->currency ?? 'NGN') }}" maxlength="3" class="uppercase" icon="currency-dollar" required />
+                <flux:error name="currency" />
+            </flux:field>
 
             <section class="md:col-span-2 rounded-lg border border-zinc-200 bg-zinc-50 p-4">
                 <h2 class="text-sm font-semibold text-zinc-950">Usage limits</h2>
                 <p class="mt-1 text-sm text-zinc-500">Leave a limit empty when the plan should be unlimited for that item.</p>
 
                 <div class="mt-4 grid gap-5 md:grid-cols-3">
-                    <label class="block">
-                        <span class="text-sm font-medium">Shop limit</span>
-                        <input type="number" min="1" name="shop_limit" value="{{ old('shop_limit', $plan->shop_limit) }}" placeholder="Unlimited" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2">
-                        @error('shop_limit') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
-                    </label>
+                    <flux:field>
+                        <flux:label>Shop limit</flux:label>
+                        <flux:input type="number" min="1" name="shop_limit" value="{{ old('shop_limit', $plan->shop_limit) }}" placeholder="Unlimited" />
+                        <flux:error name="shop_limit" />
+                    </flux:field>
 
-                    <label class="block">
-                        <span class="text-sm font-medium">Router limit</span>
-                        <input type="number" min="1" name="router_limit" value="{{ old('router_limit', $plan->router_limit) }}" placeholder="Unlimited" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2">
-                        @error('router_limit') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
-                    </label>
+                    <flux:field>
+                        <flux:label>Router limit</flux:label>
+                        <flux:input type="number" min="1" name="router_limit" value="{{ old('router_limit', $plan->router_limit) }}" placeholder="Unlimited" />
+                        <flux:error name="router_limit" />
+                    </flux:field>
 
-                    <label class="block">
-                        <span class="text-sm font-medium">Package limit</span>
-                        <input type="number" min="1" name="package_limit" value="{{ old('package_limit', $plan->package_limit) }}" placeholder="Unlimited" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2">
-                        @error('package_limit') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
-                    </label>
+                    <flux:field>
+                        <flux:label>Package limit</flux:label>
+                        <flux:input type="number" min="1" name="package_limit" value="{{ old('package_limit', $plan->package_limit) }}" placeholder="Unlimited" />
+                        <flux:error name="package_limit" />
+                    </flux:field>
                 </div>
             </section>
 
-            <label class="block md:col-span-2">
-                <span class="text-sm font-medium">Features</span>
-                <textarea name="features" rows="6" placeholder="One feature per line" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2">{{ old('features', collect($plan->features ?? [])->implode("\n")) }}</textarea>
-                <span class="mt-1 block text-xs text-zinc-500">These appear on billing screens and later can appear on tenant subscription checkout.</span>
-                @error('features') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
-            </label>
+            <flux:field class="md:col-span-2">
+                <flux:label>Features</flux:label>
+                <flux:textarea name="features" rows="6" placeholder="One feature per line">{{ old('features', collect($plan->features ?? [])->implode("\n")) }}</flux:textarea>
+                <flux:description>These appear on billing screens and later can appear on tenant subscription checkout.</flux:description>
+                <flux:error name="features" />
+            </flux:field>
 
-            <label class="flex items-center gap-2 text-sm md:col-span-2">
-                <input type="checkbox" name="is_active" value="1" @checked(old('is_active', $plan->is_active ?? true)) class="rounded border-zinc-300">
-                Active plan
-            </label>
+            <div class="md:col-span-2">
+                <flux:checkbox name="is_active" value="1" :checked="(bool) old('is_active', $plan->is_active ?? true)" label="Active plan" />
+            </div>
         </div>
 
         <div class="mt-6 flex gap-3">
-            <button class="rounded-md bg-zinc-950 px-4 py-2 text-sm font-medium text-white">Save Plan</button>
-            <a href="{{ route('admin.billing.index') }}" class="rounded-md border border-zinc-200 px-4 py-2 text-sm">Cancel</a>
+            <flux:button type="submit" variant="primary" icon="check">Save Plan</flux:button>
+            <flux:button href="{{ route('admin.billing.index') }}" variant="outline">Cancel</flux:button>
         </div>
     </form>
 </x-layouts.admin>
