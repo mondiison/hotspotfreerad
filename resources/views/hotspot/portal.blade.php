@@ -43,7 +43,25 @@
                                 <dd class="font-medium text-zinc-950">{{ $package->data_limit_bytes ? number_format($package->data_limit_bytes / 1073741824, 1) . ' GB' : 'Unlimited' }}</dd>
                             </div>
                         </dl>
-                        <form method="POST" action="{{ route('hotspot.grant') }}" class="mt-5">
+                        <form method="POST" action="{{ route('hotspot.pay') }}" class="mt-5 space-y-3">
+                            @csrf
+                            <input type="hidden" name="package_id" value="{{ $package->id }}">
+                            <input type="hidden" name="mac" value="{{ $macAddress }}">
+                            <input type="hidden" name="nasid" value="{{ $router->nas_identifier }}">
+                            <input type="email" name="email" placeholder="Email for receipt" class="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm">
+                            <input name="phone" placeholder="Phone number" class="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm">
+                            @if ($loginUrl)
+                                <input type="hidden" name="link-login" value="{{ $loginUrl }}">
+                            @endif
+                            @if ($originalUrl)
+                                <input type="hidden" name="link-orig" value="{{ $originalUrl }}">
+                            @endif
+                            <button class="w-full rounded-md px-4 py-2 text-sm font-medium text-white" style="background-color: var(--brand)">
+                                Continue to payment
+                            </button>
+                        </form>
+
+                        <form method="POST" action="{{ route('hotspot.grant') }}" class="mt-3">
                             @csrf
                             <input type="hidden" name="package_id" value="{{ $package->id }}">
                             <input type="hidden" name="mac" value="{{ $macAddress }}">
@@ -54,8 +72,8 @@
                             @if ($originalUrl)
                                 <input type="hidden" name="link-orig" value="{{ $originalUrl }}">
                             @endif
-                            <button class="w-full rounded-md px-4 py-2 text-sm font-medium text-white" style="background-color: var(--brand)">
-                                Start free access
+                            <button class="w-full rounded-md border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700">
+                                Start test access
                             </button>
                         </form>
                     </article>

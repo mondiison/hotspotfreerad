@@ -5,12 +5,14 @@ namespace App\Http\Controllers\Hotspot;
 use App\Http\Controllers\Controller;
 use App\Models\Customer;
 use App\Models\Package;
+use App\Models\Payment;
 use App\Models\Router;
 use App\Models\Subscription;
 use App\Services\RadiusProvisioningService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 class PortalController extends Controller
@@ -116,6 +118,76 @@ class PortalController extends Controller
             'macAddress' => $validated['mac'],
             'username' => $validated['mac'],
             'password' => self::TEST_ACCESS_PASSWORD,
+            'loginUrl' => $validated['link-login'] ?? null,
+            'originalUrl' => $validated['link-orig'] ?? null,
+        ]);
+    }
+
+    public function pay(Request $request): View
+    {
+        $validated = $request->validate([
+            'mac' => ['required', 'string', 'max:64'],
+            'nasid' => ['required', 'string', 'max:255'],
+            'package_id' => ['required', 'integer', 'exists:packages,id'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:255'],
+            'link-login' => ['nullable', 'string', 'max:2048'],
+            'link-orig' => ['nullable', 'string', 'max:2048'],
+        ]);
+
+        $router = Router::query()
+            ->with('shop.tenant')
+            ->where('nas_identifier', $validated['nasid'])
+            ->first();
+
+        if (! $router) {
+            return view('hotspot.unknown-router', [
+                'macAddress' => $validated['mac'],
+                'nasIdentifier' => $validated['nasid'],
+            ]);
+        }
+
+        $package = Package::query()
+            ->where('shop_id', $router->shop_id)
+            ->where('is_active', true)
+            ->findOrFail($validated['package_id']);
+
+        $payment = DB::transaction(function () use ($router, $package, $validated) {
+            $customer = Customer::updateOrCreate(
+                [
+                    'shop_id' => $router->shop_id,
+                    'mac_address' => $validated['mac'],
+                ],
+                [
+                    'email' => $validated['email'] ?? null,
+                    'phone' => $validated['phone'] ?? null,
+                ]
+            );
+
+            return Payment::create([
+                'shop_id' => $router->shop_id,
+                'package_id' => $package->id,
+                'customer_id' => $customer->id,
+                'provider' => 'flutterwave',
+                'tx_ref' => 'HSF-'.now()->format('YmdHis').'-'.Str::upper(Str::random(8)),
+                'amount' => $package->price,
+                'currency' => $package->currency,
+                'status' => 'pending',
+                'payload' => [
+                    'mac' => $validated['mac'],
+                    'nasid' => $validated['nasid'],
+                    'link_login' => $validated['link-login'] ?? null,
+                    'link_orig' => $validated['link-orig'] ?? null,
+                ],
+            ]);
+        });
+
+        return view('hotspot.checkout', [
+            'router' => $router,
+            'shop' => $router->shop,
+            'package' => $package,
+            'payment' => $payment,
+            'macAddress' => $validated['mac'],
             'loginUrl' => $validated['link-login'] ?? null,
             'originalUrl' => $validated['link-orig'] ?? null,
         ]);

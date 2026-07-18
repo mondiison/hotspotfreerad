@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Checkout - {{ $shop->name }}</title>
+    @vite(['resources/css/app.css', 'resources/js/app.js'])
+</head>
+<body class="min-h-screen bg-zinc-950 text-white antialiased" style="--brand: {{ $shop->tenant->brand_color ?? '#10b981' }}">
+    <main class="mx-auto flex min-h-screen w-full max-w-2xl flex-col justify-center px-5 py-8">
+        <section class="rounded-lg border border-white/10 bg-white p-6 text-zinc-950">
+            <p class="text-sm font-medium" style="color: var(--brand)">{{ $shop->tenant->company_name }}</p>
+            <h1 class="mt-2 text-2xl font-semibold">Confirm internet access</h1>
+            <p class="mt-2 text-sm text-zinc-600">A pending payment has been created. Flutterwave checkout will be connected in the next payment integration step.</p>
+
+            <dl class="mt-5 space-y-3 text-sm">
+                <div>
+                    <dt class="text-zinc-500">Package</dt>
+                    <dd class="font-medium">{{ $package->name }}</dd>
+                </div>
+                <div>
+                    <dt class="text-zinc-500">Amount</dt>
+                    <dd class="font-medium">{{ $payment->currency }} {{ number_format($payment->amount, 2) }}</dd>
+                </div>
+                <div>
+                    <dt class="text-zinc-500">Transaction reference</dt>
+                    <dd class="font-mono text-xs font-medium">{{ $payment->tx_ref }}</dd>
+                </div>
+                <div>
+                    <dt class="text-zinc-500">Device</dt>
+                    <dd class="font-mono text-xs font-medium">{{ $macAddress }}</dd>
+                </div>
+            </dl>
+
+            <div class="mt-6 rounded-md bg-amber-50 p-4 text-sm leading-6 text-amber-800">
+                Payment gateway handoff is not live yet. Use test access while Flutterwave initialization and webhook verification are being connected.
+            </div>
+
+            <form method="POST" action="{{ route('hotspot.grant') }}" class="mt-5">
+                @csrf
+                <input type="hidden" name="package_id" value="{{ $package->id }}">
+                <input type="hidden" name="mac" value="{{ $macAddress }}">
+                <input type="hidden" name="nasid" value="{{ $router->nas_identifier }}">
+                @if ($loginUrl)
+                    <input type="hidden" name="link-login" value="{{ $loginUrl }}">
+                @endif
+                @if ($originalUrl)
+                    <input type="hidden" name="link-orig" value="{{ $originalUrl }}">
+                @endif
+                <button class="w-full rounded-md px-4 py-2 text-sm font-medium text-white" style="background-color: var(--brand)">
+                    Start test access
+                </button>
+            </form>
+        </section>
+    </main>
+</body>
+</html>

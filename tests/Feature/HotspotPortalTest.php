@@ -62,7 +62,8 @@ class HotspotPortalTest extends TestCase
             ->assertSee('AA:BB:CC:DD:EE:FF')
             ->assertSee('One Hour Ultra')
             ->assertSee('NGN 500.00')
-            ->assertSee('Start free access');
+            ->assertSee('Continue to payment')
+            ->assertSee('Start test access');
     }
 
     public function test_portal_displays_helpful_page_for_unknown_router(): void
@@ -117,6 +118,41 @@ class HotspotPortalTest extends TestCase
         $this->assertDatabaseHas('radusergroup', [
             'username' => 'AA:BB:CC:DD:EE:FF',
             'groupname' => 'tenant_1_shop_1_one_hour_ultra',
+        ]);
+    }
+
+    public function test_payment_step_creates_pending_payment_and_customer(): void
+    {
+        [$router, $package] = $this->routerWithPackage();
+
+        $this->post(route('hotspot.pay'), [
+            'mac' => 'AA:BB:CC:DD:EE:FF',
+            'nasid' => $router->nas_identifier,
+            'package_id' => $package->id,
+            'email' => 'customer@example.com',
+            'phone' => '08000000000',
+            'link-login' => 'http://hotspot.local/login',
+            'link-orig' => 'http://neverssl.com',
+        ])
+            ->assertOk()
+            ->assertSee('Confirm internet access')
+            ->assertSee('One Hour Ultra')
+            ->assertSee('NGN 500.00')
+            ->assertSee('Start test access');
+
+        $this->assertDatabaseHas('customers', [
+            'shop_id' => $router->shop_id,
+            'mac_address' => 'AA:BB:CC:DD:EE:FF',
+            'email' => 'customer@example.com',
+            'phone' => '08000000000',
+        ]);
+        $this->assertDatabaseHas('payments', [
+            'shop_id' => $router->shop_id,
+            'package_id' => $package->id,
+            'amount' => 500,
+            'currency' => 'NGN',
+            'status' => 'pending',
+            'provider' => 'flutterwave',
         ]);
     }
 

@@ -27,6 +27,7 @@ Route::middleware('guest')->group(function () {
 Route::post('/logout', [LoginController::class, 'destroy'])->middleware('auth')->name('logout');
 
 Route::get('/hotspot/portal', [PortalController::class, 'show'])->name('hotspot.portal');
+Route::post('/hotspot/pay', [PortalController::class, 'pay'])->name('hotspot.pay');
 Route::post('/hotspot/grant', [PortalController::class, 'grant'])->name('hotspot.grant');
 
 Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
