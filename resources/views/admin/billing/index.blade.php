@@ -177,6 +177,48 @@
             </dl>
         </section>
 
+        <section class="mt-6 rounded-lg border border-zinc-200 bg-white p-6">
+            <div class="flex flex-col justify-between gap-3 md:flex-row md:items-start">
+                <div>
+                    <h2 class="font-semibold">Choose Platform Plan</h2>
+                    <p class="mt-1 text-sm text-zinc-500">Pay the platform subscription from here. Hotspot customer collections remain on your shop Flutterwave account.</p>
+                </div>
+                @unless ($platformFlutterwaveConfigured)
+                    <span class="rounded-md bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800">Platform checkout not configured</span>
+                @endunless
+            </div>
+
+            <div class="mt-5 grid gap-4 md:grid-cols-3">
+                @foreach ($plans as $plan)
+                    <section class="rounded-lg border border-zinc-200 p-4">
+                        <div class="flex items-start justify-between gap-3">
+                            <div>
+                                <h3 class="font-semibold">{{ $plan->name }}</h3>
+                                <p class="mt-1 text-sm text-zinc-500">{{ $plan->currency }} {{ number_format($plan->monthly_price, 2) }} / month</p>
+                            </div>
+                            @if ($currentSubscription?->billing_plan_id === $plan->id && $currentSubscription?->status === 'active')
+                                <span class="rounded-md bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700">Current</span>
+                            @endif
+                        </div>
+                        @if ($plan->features)
+                            <ul class="mt-3 space-y-1 text-sm text-zinc-600">
+                                @foreach ($plan->features as $feature)
+                                    <li>{{ $feature }}</li>
+                                @endforeach
+                            </ul>
+                        @endif
+                        <form method="POST" action="{{ route('admin.billing.payments.checkout') }}" class="mt-4">
+                            @csrf
+                            <input type="hidden" name="billing_plan_id" value="{{ $plan->id }}">
+                            <button class="w-full rounded-md px-3 py-2 text-sm font-medium {{ $platformFlutterwaveConfigured ? 'bg-zinc-950 text-white' : 'bg-zinc-100 text-zinc-400' }}" @disabled(! $platformFlutterwaveConfigured)>
+                                {{ $currentSubscription?->billing_plan_id === $plan->id ? 'Renew Plan' : 'Pay for Plan' }}
+                            </button>
+                        </form>
+                    </section>
+                @endforeach
+            </div>
+        </section>
+
         <section class="mt-6 overflow-hidden rounded-lg border border-zinc-200 bg-white">
             <div class="border-b border-zinc-200 px-4 py-3">
                 <h2 class="font-semibold">Billing History</h2>

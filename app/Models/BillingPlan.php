@@ -22,4 +22,9 @@ class BillingPlan extends Model
     {
         return $this->hasMany(TenantBillingSubscription::class);
     }
+
+    public function platformBillingPayments(): HasMany
+    {
+        return $this->hasMany(PlatformBillingPayment::class);
+    }
 }
