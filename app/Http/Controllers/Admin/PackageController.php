@@ -84,7 +84,7 @@ class PackageController extends Controller
 
     private function validated(Request $request, ?InternetPackage $package = null): array
     {
-        return $request->validate([
+        $data = $request->validate([
             'shop_id' => ['required', TenantAccess::shopExistsRule($request->user())],
             'name' => ['required', 'string', 'max:255'],
             'radius_group_name' => ['nullable', 'string', 'max:64', Rule::unique('packages')->ignore($package)],
@@ -94,8 +94,12 @@ class PackageController extends Controller
             'data_limit_bytes' => ['nullable', 'integer', 'min:1'],
             'speed_limit_profile' => ['required', 'string', 'max:255'],
             'fup_data_threshold_bytes' => ['nullable', 'integer', 'min:1'],
-            'fup_speed_limit_profile' => ['nullable', 'string', 'max:255'],
+            'fup_speed_limit_profile' => ['nullable', 'required_with:fup_data_threshold_bytes', 'string', 'max:255'],
             'is_active' => ['nullable', 'boolean'],
         ]) + ['is_active' => false];
+
+        $data['currency'] = strtoupper($data['currency']);
+
+        return $data;
     }
 }

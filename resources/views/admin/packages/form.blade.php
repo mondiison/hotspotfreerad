@@ -76,6 +76,11 @@
                                 @endforeach
                             </select>
                             <input type="number" min="60" name="limit_uptime_seconds" value="{{ old('limit_uptime_seconds', $package->limit_uptime_seconds) }}" placeholder="3600" class="mt-2 w-full rounded-md border border-zinc-300 px-3 py-2" required>
+                            <div class="mt-2 flex flex-wrap gap-2">
+                                @foreach ([86400 => '1 day', 259200 => '3 days', 604800 => '7 days', 2592000 => '30 days'] as $seconds => $label)
+                                    <button type="button" data-set-field="limit_uptime_seconds" data-set-value="{{ $seconds }}" class="rounded-md border border-zinc-200 px-2.5 py-1.5 text-xs text-zinc-700 hover:bg-zinc-50">{{ $label }}</button>
+                                @endforeach
+                            </div>
                             <span class="mt-1 block text-xs text-zinc-500">Session duration in seconds. 1 day = 86400, 7 days = 604800, 30 days = 2592000.</span>
                             @error('limit_uptime_seconds') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
                         </label>
@@ -83,6 +88,11 @@
                         <label class="block">
                             <span class="text-sm font-medium">Bandwidth</span>
                             <input name="speed_limit_profile" value="{{ old('speed_limit_profile', $package->speed_limit_profile) }}" placeholder="5M/5M" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2" required>
+                            <div class="mt-2 flex flex-wrap gap-2">
+                                @foreach (['2M/2M', '5M/5M', '10M/10M', '20M/20M'] as $speed)
+                                    <button type="button" data-set-field="speed_limit_profile" data-set-value="{{ $speed }}" class="rounded-md border border-zinc-200 px-2.5 py-1.5 text-xs text-zinc-700 hover:bg-zinc-50">{{ $speed }}</button>
+                                @endforeach
+                            </div>
                             <span class="mt-1 block text-xs text-zinc-500">Upload/download format. Examples: <code>2M/5M</code>, <code>5M/5M</code>, <code>10M/20M</code>.</span>
                             @error('speed_limit_profile') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
                         </label>
@@ -104,6 +114,12 @@
                                 @endforeach
                             </select>
                             <input type="number" min="1" name="data_limit_bytes" value="{{ old('data_limit_bytes', $package->data_limit_bytes) }}" placeholder="Leave blank for unlimited" class="mt-2 w-full rounded-md border border-zinc-300 px-3 py-2">
+                            <div class="mt-2 flex flex-wrap gap-2">
+                                <button type="button" data-set-field="data_limit_bytes" data-set-value="" class="rounded-md border border-zinc-200 px-2.5 py-1.5 text-xs text-zinc-700 hover:bg-zinc-50">Unlimited</button>
+                                @foreach ([5368709120 => '5GB', 10737418240 => '10GB', 21474836480 => '20GB', 53687091200 => '50GB'] as $bytes => $label)
+                                    <button type="button" data-set-field="data_limit_bytes" data-set-value="{{ $bytes }}" class="rounded-md border border-zinc-200 px-2.5 py-1.5 text-xs text-zinc-700 hover:bg-zinc-50">{{ $label }}</button>
+                                @endforeach
+                            </div>
                             <span class="mt-1 block text-xs text-zinc-500">Leave blank for unlimited. If set, the user is cut off when total upload + download reaches this byte value.</span>
                             @error('data_limit_bytes') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
                         </label>
@@ -117,6 +133,12 @@
                         <label class="block">
                             <span class="text-sm font-medium">FUP threshold</span>
                             <input type="number" min="1" name="fup_data_threshold_bytes" value="{{ old('fup_data_threshold_bytes', $package->fup_data_threshold_bytes) }}" placeholder="Leave blank for no FUP" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2">
+                            <div class="mt-2 flex flex-wrap gap-2">
+                                <button type="button" data-set-field="fup_data_threshold_bytes" data-set-value="" class="rounded-md border border-zinc-200 px-2.5 py-1.5 text-xs text-zinc-700 hover:bg-zinc-50">No FUP</button>
+                                @foreach ([5368709120 => '5GB', 10737418240 => '10GB', 21474836480 => '20GB'] as $bytes => $label)
+                                    <button type="button" data-set-field="fup_data_threshold_bytes" data-set-value="{{ $bytes }}" class="rounded-md border border-zinc-200 px-2.5 py-1.5 text-xs text-zinc-700 hover:bg-zinc-50">{{ $label }}</button>
+                                @endforeach
+                            </div>
                             <span class="mt-1 block text-xs text-zinc-500">Byte value where throttling starts. Example: 20GB = 21474836480.</span>
                             @error('fup_data_threshold_bytes') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
                         </label>
@@ -124,6 +146,11 @@
                         <label class="block">
                             <span class="text-sm font-medium">FUP speed</span>
                             <input name="fup_speed_limit_profile" value="{{ old('fup_speed_limit_profile', $package->fup_speed_limit_profile) }}" placeholder="1M/1M" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2">
+                            <div class="mt-2 flex flex-wrap gap-2">
+                                @foreach (['512K/512K', '1M/1M', '2M/2M'] as $speed)
+                                    <button type="button" data-set-field="fup_speed_limit_profile" data-set-value="{{ $speed }}" class="rounded-md border border-zinc-200 px-2.5 py-1.5 text-xs text-zinc-700 hover:bg-zinc-50">{{ $speed }}</button>
+                                @endforeach
+                            </div>
                             <span class="mt-1 block text-xs text-zinc-500">Speed after FUP threshold. Example: reduce a 10M/10M plan to 1M/1M.</span>
                             @error('fup_speed_limit_profile') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
                         </label>
@@ -143,6 +170,24 @@
         </form>
 
         <aside class="space-y-4">
+            <section class="rounded-lg border border-zinc-200 bg-zinc-950 p-5 text-white">
+                <h2 class="text-base font-semibold">Plan Shape</h2>
+                <dl class="mt-4 space-y-3 text-sm">
+                    <div class="flex justify-between gap-4">
+                        <dt class="text-zinc-400">Visibility</dt>
+                        <dd>{{ old('is_active', $package->is_active ?? true) ? 'Captive portal ready' : 'Hidden' }}</dd>
+                    </div>
+                    <div class="flex justify-between gap-4">
+                        <dt class="text-zinc-400">Data mode</dt>
+                        <dd>{{ old('data_limit_bytes', $package->data_limit_bytes) ? 'Hard cap' : 'Unlimited' }}</dd>
+                    </div>
+                    <div class="flex justify-between gap-4">
+                        <dt class="text-zinc-400">Fair use</dt>
+                        <dd>{{ old('fup_data_threshold_bytes', $package->fup_data_threshold_bytes) ? 'Throttle enabled' : 'Off' }}</dd>
+                    </div>
+                </dl>
+            </section>
+
             <section class="rounded-lg border border-zinc-200 bg-white p-5">
                 <h2 class="text-base font-semibold">Example Plans</h2>
                 <div class="mt-4 space-y-3 text-sm text-zinc-600">
@@ -179,4 +224,17 @@
             </section>
         </aside>
     </div>
+
+    <script>
+        document.querySelectorAll('[data-set-field]').forEach((button) => {
+            button.addEventListener('click', () => {
+                const field = document.querySelector(`[name="${button.dataset.setField}"]`);
+
+                if (field) {
+                    field.value = button.dataset.setValue;
+                    field.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            });
+        });
+    </script>
 </x-layouts.admin>
