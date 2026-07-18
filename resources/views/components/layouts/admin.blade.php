@@ -54,6 +54,7 @@
                         ['label' => 'Packages', 'route' => 'admin.packages.index', 'icon' => 'radio'],
                         ['label' => 'Access', 'route' => 'admin.subscriptions.index', 'icon' => 'key'],
                         ['label' => 'Payments', 'route' => 'admin.payments.index', 'icon' => 'banknotes'],
+                        ['label' => 'Payment Setup', 'route' => 'admin.payment-settings.index', 'icon' => 'credit-card', 'tenant_admin' => true],
                     ];
                 @endphp
 
