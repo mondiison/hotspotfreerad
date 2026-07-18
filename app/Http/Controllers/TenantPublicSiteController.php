@@ -18,6 +18,20 @@ class TenantPublicSiteController extends Controller
                 ->orderBy('name'),
         ]);
 
-        return view('tenants.public-site', compact('tenant'));
+        $packages = $tenant->shops
+            ->flatMap(fn ($shop) => $shop->packages->map(fn ($package) => $package->setRelation('shop', $shop)))
+            ->sortBy('price')
+            ->values();
+
+        return view('tenants.public-site', [
+            'tenant' => $tenant,
+            'featuredPackages' => $packages->take(3),
+            'publicStats' => [
+                'locations' => $tenant->shops->count(),
+                'plans' => $packages->count(),
+                'starting_price' => $packages->first()?->price,
+                'currency' => $packages->first()?->currency ?? 'NGN',
+            ],
+        ]);
     }
 }

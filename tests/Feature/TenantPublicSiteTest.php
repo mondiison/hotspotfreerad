@@ -44,7 +44,10 @@ class TenantPublicSiteTest extends TestCase
             'price' => 1000,
             'currency' => 'NGN',
             'limit_uptime_seconds' => 86400,
+            'data_limit_bytes' => 5368709120,
             'speed_limit_profile' => '5M/5M',
+            'fup_data_threshold_bytes' => 2147483648,
+            'fup_speed_limit_profile' => '1M/1M',
             'is_active' => true,
         ]);
 
@@ -56,6 +59,11 @@ class TenantPublicSiteTest extends TestCase
             ->assertSee('Ibadan')
             ->assertSee('Daily Unlimited')
             ->assertSee('NGN 1,000.00')
+            ->assertSee('Admin sign in')
+            ->assertSee(route('tenant.login', $tenant), false)
+            ->assertSee('Featured access')
+            ->assertSee('5 GB')
+            ->assertSee('After 2 GB: 1M/1M')
             ->assertSee('+234 800 000 0000');
     }
 

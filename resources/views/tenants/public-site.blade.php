@@ -7,9 +7,58 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="min-h-screen bg-stone-50 text-zinc-950 antialiased" style="--brand: {{ $tenant->brand_color ?? '#0f766e' }}">
+    @php
+        $formatDuration = function (?int $seconds): string {
+            if (! $seconds) {
+                return 'Not set';
+            }
+
+            if ($seconds >= 86400) {
+                $days = (int) round($seconds / 86400);
+
+                return $days.' '.\Illuminate\Support\Str::plural('day', $days);
+            }
+
+            if ($seconds >= 3600) {
+                $hours = (int) round($seconds / 3600);
+
+                return $hours.' '.\Illuminate\Support\Str::plural('hour', $hours);
+            }
+
+            $minutes = (int) max(1, round($seconds / 60));
+
+            return $minutes.' '.\Illuminate\Support\Str::plural('minute', $minutes);
+        };
+
+        $formatData = function (?int $bytes): string {
+            if (! $bytes) {
+                return 'Unlimited';
+            }
+
+            return number_format($bytes / 1073741824, $bytes % 1073741824 === 0 ? 0 : 1).' GB';
+        };
+    @endphp
+
     <main>
         <section class="border-b border-zinc-200 bg-white">
-            <div class="mx-auto grid min-h-[82vh] max-w-6xl content-center gap-10 px-5 py-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
+            <div class="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-5">
+                <a href="{{ route('tenant.public-site', $tenant) }}" class="flex min-w-0 items-center gap-3">
+                    <span class="grid h-10 w-10 shrink-0 place-items-center rounded-lg text-sm font-semibold text-white" style="background-color: var(--brand)">
+                        {{ str($tenant->company_name)->substr(0, 1)->upper() }}
+                    </span>
+                    <span class="min-w-0">
+                        <span class="block truncate font-semibold">{{ $tenant->company_name }}</span>
+                        <span class="block truncate text-xs text-zinc-500">Public hotspot site</span>
+                    </span>
+                </a>
+
+                <div class="flex items-center gap-2">
+                    <a href="#plans" class="hidden rounded-md border border-zinc-200 px-3 py-2 text-sm font-medium hover:bg-zinc-50 sm:inline-flex">Plans</a>
+                    <a href="{{ route('tenant.login', $tenant) }}" class="rounded-md bg-zinc-950 px-3 py-2 text-sm font-medium text-white">Admin sign in</a>
+                </div>
+            </div>
+
+            <div class="mx-auto grid min-h-[72vh] max-w-6xl content-center gap-10 px-5 py-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
                 <div>
                     <p class="text-sm font-medium uppercase tracking-wide" style="color: var(--brand)">{{ $tenant->subscription_plan }} hotspot network</p>
                     <h1 class="mt-4 max-w-3xl text-4xl font-semibold leading-tight md:text-6xl">{{ $tenant->company_name }}</h1>
@@ -23,6 +72,21 @@
                             <a href="tel:{{ $tenant->contact_phone }}" class="rounded-md border border-zinc-300 bg-white px-5 py-3 text-sm font-semibold">Call support</a>
                         @endif
                     </div>
+
+                    <dl class="mt-8 grid max-w-2xl grid-cols-3 gap-3">
+                        <div class="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+                            <dt class="text-xs text-zinc-500">Locations</dt>
+                            <dd class="mt-2 text-2xl font-semibold">{{ number_format($publicStats['locations']) }}</dd>
+                        </div>
+                        <div class="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+                            <dt class="text-xs text-zinc-500">Plans</dt>
+                            <dd class="mt-2 text-2xl font-semibold">{{ number_format($publicStats['plans']) }}</dd>
+                        </div>
+                        <div class="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+                            <dt class="text-xs text-zinc-500">From</dt>
+                            <dd class="mt-2 text-lg font-semibold">{{ $publicStats['starting_price'] === null ? 'Soon' : $publicStats['currency'].' '.number_format($publicStats['starting_price'], 0) }}</dd>
+                        </div>
+                    </dl>
                 </div>
 
                 <div class="rounded-lg border border-zinc-200 bg-zinc-950 p-6 text-white shadow-sm">
@@ -47,6 +111,35 @@
                 </div>
             </div>
         </section>
+
+        @if ($featuredPackages->isNotEmpty())
+            <section class="border-b border-zinc-200 bg-zinc-950 text-white">
+                <div class="mx-auto max-w-6xl px-5 py-10">
+                    <div class="flex flex-col justify-between gap-3 md:flex-row md:items-end">
+                        <div>
+                            <p class="text-sm font-medium text-zinc-400">Featured access</p>
+                            <h2 class="mt-2 text-2xl font-semibold">Popular plans</h2>
+                        </div>
+                        <a href="#plans" class="text-sm font-medium text-zinc-300 hover:text-white">See every location</a>
+                    </div>
+
+                    <div class="mt-6 grid gap-4 md:grid-cols-3">
+                        @foreach ($featuredPackages as $package)
+                            <article class="rounded-lg border border-white/10 bg-white/[0.04] p-5">
+                                <p class="text-sm text-zinc-400">{{ $package->shop->name }}</p>
+                                <h3 class="mt-2 text-lg font-semibold">{{ $package->name }}</h3>
+                                <p class="mt-4 text-3xl font-semibold">{{ $package->currency }} {{ number_format($package->price, 2) }}</p>
+                                <dl class="mt-5 space-y-2 text-sm text-zinc-300">
+                                    <div class="flex justify-between gap-4"><dt>Uptime</dt><dd>{{ $formatDuration($package->limit_uptime_seconds) }}</dd></div>
+                                    <div class="flex justify-between gap-4"><dt>Data</dt><dd>{{ $formatData($package->data_limit_bytes) }}</dd></div>
+                                    <div class="flex justify-between gap-4"><dt>Speed</dt><dd>{{ $package->speed_limit_profile }}</dd></div>
+                                </dl>
+                            </article>
+                        @endforeach
+                    </div>
+                </div>
+            </section>
+        @endif
 
         <section id="plans" class="mx-auto max-w-6xl px-5 py-12">
             <div class="flex flex-col justify-between gap-3 md:flex-row md:items-end">
@@ -81,12 +174,18 @@
                                         </div>
                                         <div class="flex justify-between gap-4">
                                             <dt>Uptime</dt>
-                                            <dd class="font-medium text-zinc-950">{{ $package->limit_uptime_seconds >= 86400 ? number_format($package->limit_uptime_seconds / 86400) . ' days' : gmdate('H:i', $package->limit_uptime_seconds) }}</dd>
+                                            <dd class="font-medium text-zinc-950">{{ $formatDuration($package->limit_uptime_seconds) }}</dd>
                                         </div>
                                         <div class="flex justify-between gap-4">
                                             <dt>Data</dt>
-                                            <dd class="font-medium text-zinc-950">{{ $package->data_limit_bytes ? number_format($package->data_limit_bytes / 1073741824, 1) . ' GB' : 'Unlimited' }}</dd>
+                                            <dd class="font-medium text-zinc-950">{{ $formatData($package->data_limit_bytes) }}</dd>
                                         </div>
+                                        @if ($package->fup_data_threshold_bytes && $package->fup_speed_limit_profile)
+                                            <div class="flex justify-between gap-4">
+                                                <dt>Fair use</dt>
+                                                <dd class="text-right font-medium text-zinc-950">After {{ $formatData($package->fup_data_threshold_bytes) }}: {{ $package->fup_speed_limit_profile }}</dd>
+                                            </div>
+                                        @endif
                                     </dl>
                                 </article>
                             @empty
