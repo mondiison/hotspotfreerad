@@ -65,15 +65,18 @@
                         @error('slug') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
                     </label>
 
-                    <label class="block">
+                    <div class="block">
                         <span class="text-sm font-medium">Brand color</span>
-                        <div class="mt-1 flex overflow-hidden rounded-md border border-zinc-300">
-                            <input type="color" value="{{ old('brand_color', $tenant->brand_color ?? '#0f766e') }}" class="h-10 w-14 border-0 bg-white p-1" onchange="this.nextElementSibling.value = this.value">
-                            <input name="brand_color" value="{{ old('brand_color', $tenant->brand_color ?? '#0f766e') }}" class="min-w-0 flex-1 border-0 px-3 py-2 focus:ring-0" required>
-                        </div>
+                        <flux:color-picker
+                            name="brand_color"
+                            value="{{ old('brand_color', $tenant->brand_color ?? '#0f766e') }}"
+                            format="hex"
+                            copyable
+                            :swatches="['#0f766e', '#2563eb', '#7c3aed', '#dc2626', '#f59e0b', '#16a34a', '#0891b2', '#111827']"
+                        />
                         <span class="mt-1 block text-xs text-zinc-500">Example: #0f766e. This accents buttons and public-site highlights.</span>
                         @error('brand_color') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
-                    </label>
+                    </div>
 
                     <label class="block md:col-span-2">
                         <span class="text-sm font-medium">Tagline</span>

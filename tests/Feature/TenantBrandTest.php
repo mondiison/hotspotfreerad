@@ -1,0 +1,99 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\Tenant;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
+use Tests\TestCase;
+
+class TenantBrandTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_tenant_admin_can_view_brand_settings_with_flux_color_picker(): void
+    {
+        $tenant = Tenant::create([
+            'company_name' => 'Mondi Internet',
+            'owner_email' => 'owner@example.com',
+            'brand_color' => '#2563eb',
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('admin.brand.edit'))
+            ->assertOk()
+            ->assertSee('Public Site Brand')
+            ->assertSee('data-flux-color-picker', false)
+            ->assertSee('#2563eb');
+    }
+
+    public function test_tenant_admin_can_update_brand_and_upload_public_media(): void
+    {
+        Storage::fake('public');
+
+        $tenant = Tenant::create([
+            'company_name' => 'Mondi Internet',
+            'owner_email' => 'owner@example.com',
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->put(route('admin.brand.update'), [
+                'brand_color' => '#7c3aed',
+                'public_site_tagline' => 'Premium hotspot access.',
+                'public_site_about' => 'Reliable access across our branches.',
+                'contact_phone' => '+234 800 000 0000',
+                'contact_email' => 'support@example.com',
+                'contact_address' => 'Main road branch',
+                'hero_image' => UploadedFile::fake()->image('hero.jpg', 1600, 1000),
+                'flyer_image' => UploadedFile::fake()->image('flyer.jpg', 800, 1000),
+                'slider_images' => [
+                    UploadedFile::fake()->image('slide-one.jpg', 1200, 800),
+                    UploadedFile::fake()->image('slide-two.jpg', 1200, 800),
+                ],
+            ])
+            ->assertRedirect(route('admin.brand.edit'));
+
+        $tenant->refresh();
+
+        $this->assertSame('#7c3aed', $tenant->brand_color);
+        $this->assertSame('Premium hotspot access.', $tenant->public_site_tagline);
+        $this->assertNotNull($tenant->hero_image_path);
+        $this->assertNotNull($tenant->flyer_image_path);
+        $this->assertCount(2, $tenant->public_site_slides);
+
+        Storage::disk('public')->assertExists($tenant->hero_image_path);
+        Storage::disk('public')->assertExists($tenant->flyer_image_path);
+        Storage::disk('public')->assertExists($tenant->public_site_slides[0]);
+
+        $this->get(route('tenant.public-site', $tenant))
+            ->assertOk()
+            ->assertSee('Premium hotspot access.')
+            ->assertSee(Storage::disk('public')->url($tenant->hero_image_path), false)
+            ->assertSee(Storage::disk('public')->url($tenant->flyer_image_path), false)
+            ->assertSee(Storage::disk('public')->url($tenant->public_site_slides[0]), false);
+    }
+
+    public function test_super_admin_cannot_use_scoped_brand_page(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'super_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('admin.brand.edit'))
+            ->assertNotFound();
+    }
+}

@@ -37,6 +37,11 @@
 
             return number_format($bytes / 1073741824, $bytes % 1073741824 === 0 ? 0 : 1).' GB';
         };
+
+        $heroImageUrl = $tenant->hero_image_path ? \Illuminate\Support\Facades\Storage::disk('public')->url($tenant->hero_image_path) : null;
+        $flyerImageUrl = $tenant->flyer_image_path ? \Illuminate\Support\Facades\Storage::disk('public')->url($tenant->flyer_image_path) : null;
+        $slideImageUrls = collect($tenant->public_site_slides ?? [])
+            ->map(fn ($path) => \Illuminate\Support\Facades\Storage::disk('public')->url($path));
     @endphp
 
     <main>
@@ -89,7 +94,12 @@
                     </dl>
                 </div>
 
-                <div class="rounded-lg border border-zinc-200 bg-zinc-950 p-6 text-white shadow-sm">
+                <div class="overflow-hidden rounded-lg border border-zinc-200 bg-zinc-950 text-white shadow-sm">
+                    @if ($heroImageUrl)
+                        <img src="{{ $heroImageUrl }}" alt="{{ $tenant->company_name }} hero" class="h-56 w-full object-cover">
+                    @endif
+
+                    <div class="p-6">
                     <div class="flex items-start justify-between gap-4">
                         <div>
                             <p class="text-sm text-zinc-400">Network locations</p>
@@ -108,9 +118,29 @@
                             <div class="border-t border-white/10 pt-4 text-sm text-zinc-400">No public hotspot locations have been added yet.</div>
                         @endforelse
                     </div>
+                    </div>
                 </div>
             </div>
         </section>
+
+        @if ($slideImageUrls->isNotEmpty())
+            <section class="border-b border-zinc-200 bg-white">
+                <div class="mx-auto max-w-6xl px-5 py-10">
+                    <div class="flex flex-col justify-between gap-3 md:flex-row md:items-end">
+                        <div>
+                            <p class="text-sm font-medium" style="color: var(--brand)">Network gallery</p>
+                            <h2 class="mt-2 text-2xl font-semibold">Latest offers and locations</h2>
+                        </div>
+                    </div>
+
+                    <div class="mt-6 grid gap-4 {{ $slideImageUrls->count() === 1 ? 'md:grid-cols-1' : ($slideImageUrls->count() === 2 ? 'md:grid-cols-2' : 'md:grid-cols-3') }}">
+                        @foreach ($slideImageUrls as $slideImageUrl)
+                            <img src="{{ $slideImageUrl }}" alt="{{ $tenant->company_name }} gallery image {{ $loop->iteration }}" class="h-64 w-full rounded-lg border border-zinc-200 object-cover">
+                        @endforeach
+                    </div>
+                </div>
+            </section>
+        @endif
 
         @if ($featuredPackages->isNotEmpty())
             <section class="border-b border-zinc-200 bg-zinc-950 text-white">
@@ -200,7 +230,13 @@
         </section>
 
         <section class="border-t border-zinc-200 bg-white">
-            <div class="mx-auto grid max-w-6xl gap-8 px-5 py-10 md:grid-cols-2">
+            <div class="mx-auto grid max-w-6xl gap-8 px-5 py-10 {{ $flyerImageUrl ? 'md:grid-cols-3' : 'md:grid-cols-2' }}">
+                @if ($flyerImageUrl)
+                    <div>
+                        <img src="{{ $flyerImageUrl }}" alt="{{ $tenant->company_name }} flyer" class="aspect-[4/5] w-full rounded-lg border border-zinc-200 object-cover">
+                    </div>
+                @endif
+
                 <div>
                     <h2 class="text-xl font-semibold">About {{ $tenant->company_name }}</h2>
                     <p class="mt-3 leading-7 text-zinc-600">{{ $tenant->public_site_about ?: 'This hotspot operator uses HotspotFreeRAD to manage plans, routers, and customer access through MikroTik and FreeRADIUS.' }}</p>

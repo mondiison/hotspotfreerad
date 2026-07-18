@@ -32,6 +32,7 @@ class Tenant extends Model
             'trial_ends_at' => 'datetime',
             'is_active' => 'boolean',
             'public_site_enabled' => 'boolean',
+            'public_site_slides' => 'array',
         ];
     }
 

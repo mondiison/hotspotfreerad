@@ -46,6 +46,7 @@
                     $links = [
                         ['label' => 'Dashboard', 'route' => 'admin.dashboard', 'icon' => 'squares-2x2'],
                         ['label' => 'Tenants', 'route' => 'admin.tenants.index', 'icon' => 'building-storefront', 'super_admin' => true],
+                        ['label' => 'Brand', 'route' => 'admin.brand.edit', 'icon' => 'swatch', 'tenant_admin' => true],
                         ['label' => 'Billing', 'route' => 'admin.billing.index', 'icon' => 'credit-card'],
                         ['label' => 'Shops', 'route' => 'admin.shops.index', 'icon' => 'building-storefront'],
                         ['label' => 'Routers', 'route' => 'admin.routers.index', 'icon' => 'signal'],
@@ -55,6 +56,7 @@
 
                 @foreach ($links as $link)
                     @continue(($link['super_admin'] ?? false) && ! auth()->user()?->isSuperAdmin())
+                    @continue(($link['tenant_admin'] ?? false) && auth()->user()?->isSuperAdmin())
 
                     @php
                         $sectionPattern = $link['route'] === 'admin.dashboard'

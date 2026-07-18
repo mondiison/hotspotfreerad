@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\BillingController;
 use App\Http\Controllers\Admin\PackageController;
 use App\Http\Controllers\Admin\RouterController;
 use App\Http\Controllers\Admin\ShopController;
+use App\Http\Controllers\Admin\TenantBrandController;
 use App\Http\Controllers\Admin\TenantController;
 use App\Http\Controllers\Auth\ForgotPasswordController;
 use App\Http\Controllers\Auth\LoginController;
@@ -50,6 +51,8 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::post('billing/subscriptions', [BillingController::class, 'storeSubscription'])->name('billing.subscriptions.store');
     Route::post('billing/payments', [BillingController::class, 'checkout'])->name('billing.payments.checkout');
     Route::get('billing/payments/callback', [BillingController::class, 'callback'])->name('billing.payments.callback');
+    Route::get('brand', [TenantBrandController::class, 'edit'])->name('brand.edit');
+    Route::put('brand', [TenantBrandController::class, 'update'])->name('brand.update');
     Route::resource('tenants', TenantController::class)->except('show');
     Route::resource('shops', ShopController::class)->except('show');
     Route::resource('routers', RouterController::class);
