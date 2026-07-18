@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Shop;
 use App\Models\Tenant;
+use App\Support\BillingPlanLimits;
 use App\Support\TenantAccess;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -45,7 +46,10 @@ class ShopController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        Shop::create($this->validated($request));
+        $data = $this->validated($request);
+        BillingPlanLimits::assertCanCreateShop($request->user());
+
+        Shop::create($data);
 
         return redirect()->route('admin.shops.index')->with('status', 'Shop created.');
     }

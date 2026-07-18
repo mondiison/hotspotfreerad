@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Package as InternetPackage;
 use App\Models\Shop;
 use App\Services\RadiusProvisioningService;
+use App\Support\BillingPlanLimits;
 use App\Support\TenantAccess;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -46,7 +47,10 @@ class PackageController extends Controller
 
     public function store(Request $request, RadiusProvisioningService $radius): RedirectResponse
     {
-        $package = InternetPackage::create($this->validated($request));
+        $data = $this->validated($request);
+        BillingPlanLimits::assertCanCreatePackage($request->user());
+
+        $package = InternetPackage::create($data);
         $radius->syncPackageProfile($package);
 
         return redirect()->route('admin.packages.index')->with('status', 'Package created and synced to RADIUS profile.');

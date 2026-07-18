@@ -8,6 +8,7 @@ use App\Models\Shop;
 use App\Services\MikroTikProvisioningService;
 use App\Services\RadiusProvisioningService;
 use App\Support\RadiusAccountingStats;
+use App\Support\BillingPlanLimits;
 use App\Support\TenantAccess;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -69,7 +70,10 @@ class RouterController extends Controller
 
     public function store(Request $request, RadiusProvisioningService $radius): RedirectResponse
     {
-        $router = Router::create($this->validated($request));
+        $data = $this->validated($request);
+        BillingPlanLimits::assertCanCreateRouter($request->user());
+
+        $router = Router::create($data);
         $radius->syncRouter($router);
 
         return redirect()->route('admin.routers.index')->with('status', 'Router created and synced to RADIUS nas.');
