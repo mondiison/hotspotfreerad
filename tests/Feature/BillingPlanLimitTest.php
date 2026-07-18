@@ -125,6 +125,59 @@ class BillingPlanLimitTest extends TestCase
         ]);
     }
 
+    public function test_create_forms_show_tenant_billing_allowance(): void
+    {
+        $tenant = $this->tenant();
+        $this->subscribeTenant($tenant, [
+            'shop_limit' => 2,
+            'router_limit' => 3,
+            'package_limit' => 4,
+        ]);
+        $shop = Shop::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Main Shop',
+        ]);
+        Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'Main Router',
+            'nas_identifier' => 'main-router',
+            'wireguard_internal_ip' => '10.8.0.10',
+            'shared_secret' => 'radius-secret',
+        ]);
+        Package::create([
+            'shop_id' => $shop->id,
+            'name' => 'Daily Plan',
+            'price' => 500,
+            'currency' => 'NGN',
+            'limit_uptime_seconds' => 3600,
+            'speed_limit_profile' => '5M/5M',
+            'is_active' => true,
+        ]);
+        $user = $this->tenantAdmin($tenant);
+
+        $this->actingAs($user)
+            ->get(route('admin.shops.create'))
+            ->assertOk()
+            ->assertSee('Platform allowance')
+            ->assertSee('1 locations')
+            ->assertSee('2')
+            ->assertSee('You can add this item under the current platform plan.');
+
+        $this->actingAs($user)
+            ->get(route('admin.routers.create'))
+            ->assertOk()
+            ->assertSee('Platform allowance')
+            ->assertSee('1 routers')
+            ->assertSee('3');
+
+        $this->actingAs($user)
+            ->get(route('admin.packages.create'))
+            ->assertOk()
+            ->assertSee('Platform allowance')
+            ->assertSee('1 packages')
+            ->assertSee('4');
+    }
+
     private function tenant(): Tenant
     {
         return Tenant::create([

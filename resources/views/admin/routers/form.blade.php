@@ -68,15 +68,19 @@
             </div>
         </form>
 
-        <aside class="rounded-lg border border-zinc-200 bg-white p-5">
-            <h2 class="text-base font-semibold">Field Guide</h2>
-            <div class="mt-4 space-y-4 text-sm text-zinc-600">
-                <p><strong class="text-zinc-900">NAS identifier:</strong> the MikroTik system identity. Example: <code>lagos-shop-01</code>.</p>
-                <p><strong class="text-zinc-900">WireGuard IP:</strong> the router's private VPN address. First router can be <code>10.8.0.10</code>.</p>
-                <p><strong class="text-zinc-900">Shared secret:</strong> generate a strong random value and keep it private.</p>
-                <p class="rounded-md bg-zinc-50 p-3 font-mono text-xs text-zinc-800">openssl rand -base64 24</p>
-                <p>After saving, open the router's Script page and paste the generated commands into MikroTik RouterOS terminal.</p>
-            </div>
+        <aside class="space-y-4">
+            @include('admin.partials.billing-usage', ['usage' => $billingUsage ?? null])
+
+            <section class="rounded-lg border border-zinc-200 bg-white p-5">
+                <h2 class="text-base font-semibold">Field Guide</h2>
+                <div class="mt-4 space-y-4 text-sm text-zinc-600">
+                    <p><strong class="text-zinc-900">NAS identifier:</strong> the MikroTik system identity. Example: <code>lagos-shop-01</code>.</p>
+                    <p><strong class="text-zinc-900">WireGuard IP:</strong> the router's private VPN address. First router can be <code>10.8.0.10</code>.</p>
+                    <p><strong class="text-zinc-900">Shared secret:</strong> generate a strong random value and keep it private.</p>
+                    <p class="rounded-md bg-zinc-50 p-3 font-mono text-xs text-zinc-800">openssl rand -base64 24</p>
+                    <p>After saving, open the router's Script page and paste the generated commands into MikroTik RouterOS terminal.</p>
+                </div>
+            </section>
         </aside>
     </div>
 

@@ -46,6 +46,7 @@ class RouterController extends Controller
         return view('admin.routers.form', [
             'router' => new Router(),
             'shops' => TenantAccess::scopeShops(Shop::with('tenant'), $user)->orderBy('name')->get(),
+            'billingUsage' => BillingPlanLimits::usageSummary($user, 'routers'),
         ]);
     }
 
@@ -87,6 +88,7 @@ class RouterController extends Controller
         return view('admin.routers.form', [
             'router' => $router,
             'shops' => TenantAccess::scopeShops(Shop::with('tenant'), $user)->orderBy('name')->get(),
+            'billingUsage' => null,
         ]);
     }
 

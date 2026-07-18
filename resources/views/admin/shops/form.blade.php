@@ -3,7 +3,10 @@
     :heading="$shop->exists ? 'Edit Shop' : 'Add Shop'"
     subheading="Shops own routers, packages, portal branding, and payment credentials."
 >
-    <form method="POST" action="{{ $shop->exists ? route('admin.shops.update', $shop) : route('admin.shops.store') }}" class="max-w-3xl rounded-lg border border-zinc-200 bg-white p-6">
+    <div class="max-w-3xl space-y-6">
+        @include('admin.partials.billing-usage', ['usage' => $billingUsage ?? null])
+
+        <form method="POST" action="{{ $shop->exists ? route('admin.shops.update', $shop) : route('admin.shops.store') }}" class="rounded-lg border border-zinc-200 bg-white p-6">
         @csrf
         @if ($shop->exists)
             @method('PUT')
@@ -80,5 +83,6 @@
             <button class="rounded-md bg-zinc-950 px-4 py-2 text-sm font-medium text-white">Save Shop</button>
             <a href="{{ route('admin.shops.index') }}" class="rounded-md border border-zinc-200 px-4 py-2 text-sm">Cancel</a>
         </div>
-    </form>
+        </form>
+    </div>
 </x-layouts.admin>

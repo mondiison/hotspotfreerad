@@ -42,6 +42,7 @@ class PackageController extends Controller
         return view('admin.packages.form', [
             'package' => new InternetPackage(),
             'shops' => TenantAccess::scopeShops(Shop::with('tenant'), $user)->orderBy('name')->get(),
+            'billingUsage' => BillingPlanLimits::usageSummary($user, 'packages'),
         ]);
     }
 
@@ -64,6 +65,7 @@ class PackageController extends Controller
         return view('admin.packages.form', [
             'package' => $package,
             'shops' => TenantAccess::scopeShops(Shop::with('tenant'), $user)->orderBy('name')->get(),
+            'billingUsage' => null,
         ]);
     }
 

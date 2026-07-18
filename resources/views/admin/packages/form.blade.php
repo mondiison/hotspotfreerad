@@ -170,6 +170,8 @@
         </form>
 
         <aside class="space-y-4">
+            @include('admin.partials.billing-usage', ['usage' => $billingUsage ?? null])
+
             <section class="rounded-lg border border-zinc-200 bg-zinc-950 p-5 text-white">
                 <h2 class="text-base font-semibold">Plan Shape</h2>
                 <dl class="mt-4 space-y-3 text-sm">

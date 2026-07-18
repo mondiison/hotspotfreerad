@@ -41,6 +41,7 @@ class ShopController extends Controller
             'tenants' => $user->isSuperAdmin()
                 ? Tenant::orderBy('company_name')->get()
                 : Tenant::whereKey($user->tenant_id)->get(),
+            'billingUsage' => BillingPlanLimits::usageSummary($user, 'shops'),
         ]);
     }
 
@@ -64,6 +65,7 @@ class ShopController extends Controller
             'tenants' => $user->isSuperAdmin()
                 ? Tenant::orderBy('company_name')->get()
                 : Tenant::whereKey($user->tenant_id)->get(),
+            'billingUsage' => null,
         ]);
     }
 
