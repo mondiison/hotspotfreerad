@@ -122,7 +122,11 @@ class TenantController extends Controller
             return back()->withErrors(['owner_email' => 'The tenant owner login is inactive. Activate the tenant before sending a reset link.']);
         }
 
-        Password::sendResetLink(['email' => $tenantAdmin->email]);
+        $status = Password::sendResetLink(['email' => $tenantAdmin->email]);
+
+        if ($status !== Password::RESET_LINK_SENT) {
+            return back()->withErrors(['owner_email' => __($status)]);
+        }
 
         return back()->with('status', 'Password reset link sent to '.$tenantAdmin->email.'.');
     }

@@ -21,7 +21,11 @@ class ForgotPasswordController extends Controller
             'email' => ['required', 'email'],
         ]);
 
-        Password::sendResetLink($request->only('email'));
+        $status = Password::sendResetLink($request->only('email'));
+
+        if ($status !== Password::RESET_LINK_SENT && $status !== Password::INVALID_USER) {
+            return back()->withErrors(['email' => __($status)])->onlyInput('email');
+        }
 
         return back()->with('status', 'If that email belongs to an active user, a password reset link has been sent.');
     }
