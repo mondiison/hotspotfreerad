@@ -11,6 +11,7 @@ use App\Http\Controllers\Admin\SubscriptionController;
 use App\Http\Controllers\Admin\TenantBrandController;
 use App\Http\Controllers\Admin\TenantController;
 use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\Auth\ForcePasswordChangeController;
 use App\Http\Controllers\Auth\ForgotPasswordController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\ResetPasswordController;
@@ -31,6 +32,10 @@ Route::middleware('guest')->group(function () {
 });
 
 Route::post('/logout', [LoginController::class, 'destroy'])->middleware('auth')->name('logout');
+Route::middleware('auth')->group(function () {
+    Route::get('/change-password', [ForcePasswordChangeController::class, 'edit'])->name('password.force-change');
+    Route::put('/change-password', [ForcePasswordChangeController::class, 'update'])->name('password.force-update');
+});
 
 Route::get('/hotspot/portal', [PortalController::class, 'show'])->name('hotspot.portal');
 Route::post('/hotspot/pay', [PortalController::class, 'pay'])->name('hotspot.pay');
@@ -57,6 +62,7 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::get('brand', [TenantBrandController::class, 'edit'])->name('brand.edit');
     Route::put('brand', [TenantBrandController::class, 'update'])->name('brand.update');
     Route::resource('users', UserController::class)->except('show');
+    Route::post('tenants/{tenant}/owner-reset-link', [TenantController::class, 'sendOwnerResetLink'])->name('tenants.owner-reset-link');
     Route::resource('tenants', TenantController::class)->except('show');
     Route::resource('shops', ShopController::class)->except('show');
     Route::resource('routers', RouterController::class);

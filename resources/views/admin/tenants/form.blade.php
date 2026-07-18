@@ -22,21 +22,8 @@
                     <flux:field>
                         <flux:label>Owner email</flux:label>
                         <flux:input type="email" name="owner_email" value="{{ old('owner_email', $tenant->owner_email) }}" icon="envelope" required />
-                        <flux:description>This email becomes the tenant admin login.</flux:description>
+                        <flux:description>{{ $tenant->exists ? 'This is the tenant owner login email. Use the reset action below to send a password link.' : 'This email becomes the tenant admin login. A temporary password will be emailed after creation.' }}</flux:description>
                         <flux:error name="owner_email" />
-                    </flux:field>
-
-                    <flux:field>
-                        <flux:label>{{ $tenant->exists ? 'Owner password' : 'Owner password' }}</flux:label>
-                        <flux:input type="password" name="owner_password" icon="key" :required="! $tenant->exists" />
-                        <flux:description>{{ $tenant->exists ? 'Leave blank to keep the current password. Enter one to create or reset the tenant owner login.' : 'Give this to the tenant owner for first sign in. Minimum 8 characters.' }}</flux:description>
-                        <flux:error name="owner_password" />
-                    </flux:field>
-
-                    <flux:field>
-                        <flux:label>Confirm owner password</flux:label>
-                        <flux:input type="password" name="owner_password_confirmation" icon="key" :required="! $tenant->exists" />
-                        <flux:error name="owner_password_confirmation" />
                     </flux:field>
 
                     <flux:field>
@@ -138,4 +125,24 @@
             <flux:button href="{{ route('admin.tenants.index') }}" variant="outline">Cancel</flux:button>
         </div>
     </form>
+
+    @if ($tenant->exists)
+        <section class="mt-6 max-w-4xl rounded-lg border border-zinc-200 bg-white p-6">
+            <div class="flex flex-col justify-between gap-4 md:flex-row md:items-center">
+                <div>
+                    <h2 class="text-sm font-semibold uppercase tracking-wide text-zinc-500">Tenant Admin Access</h2>
+                    <p class="mt-2 text-sm text-zinc-600">Send a password reset link to {{ $tenant->owner_email }}. This avoids exposing the tenant admin password inside the platform.</p>
+                </div>
+
+                <form method="POST" action="{{ route('admin.tenants.owner-reset-link', $tenant) }}">
+                    @csrf
+                    <flux:button type="submit" variant="outline" icon="envelope">Send reset link</flux:button>
+                </form>
+            </div>
+
+            @error('owner_email')
+                <p class="mt-3 text-sm text-red-600">{{ $message }}</p>
+            @enderror
+        </section>
+    @endif
 </x-layouts.admin>

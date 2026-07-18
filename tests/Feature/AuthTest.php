@@ -58,6 +58,59 @@ class AuthTest extends TestCase
         $this->assertAuthenticatedAs($user);
     }
 
+    public function test_tenant_admin_with_temporary_password_must_change_password_before_workspace(): void
+    {
+        $tenant = Tenant::create([
+            'company_name' => 'Mondi Internet',
+            'owner_email' => 'owner@example.com',
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'email' => 'tenant@example.com',
+            'password' => 'temporary-password',
+            'role' => 'tenant_admin',
+            'is_active' => true,
+            'must_change_password' => true,
+        ]);
+
+        $this->post('/login', [
+            'email' => $user->email,
+            'password' => 'temporary-password',
+        ])
+            ->assertRedirect(route('password.force-change'));
+
+        $this->actingAs($user)
+            ->get(route('admin.dashboard'))
+            ->assertRedirect(route('password.force-change'));
+    }
+
+    public function test_tenant_admin_can_change_temporary_password_and_continue(): void
+    {
+        $tenant = Tenant::create([
+            'company_name' => 'Mondi Internet',
+            'owner_email' => 'owner@example.com',
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'email' => 'tenant@example.com',
+            'password' => 'temporary-password',
+            'role' => 'tenant_admin',
+            'is_active' => true,
+            'must_change_password' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->put(route('password.force-update'), [
+                'current_password' => 'temporary-password',
+                'password' => 'private-password',
+                'password_confirmation' => 'private-password',
+            ])
+            ->assertRedirect(route('tenant.public-site', $tenant));
+
+        $this->assertFalse($user->fresh()->must_change_password);
+        $this->assertTrue(Hash::check('private-password', $user->fresh()->password));
+    }
+
     public function test_inactive_user_cannot_login(): void
     {
         User::factory()->create([
@@ -132,6 +185,7 @@ class AuthTest extends TestCase
             'password' => 'old-password',
             'role' => 'super_admin',
             'is_active' => true,
+            'must_change_password' => true,
         ]);
         $token = Password::createToken($user);
 
@@ -144,6 +198,7 @@ class AuthTest extends TestCase
             ->assertRedirect(route('login'));
 
         $this->assertTrue(Hash::check('new-password', $user->fresh()->password));
+        $this->assertFalse($user->fresh()->must_change_password);
     }
 
     public function test_default_super_admin_command_creates_mondiison_account(): void

@@ -44,6 +44,10 @@ class LoginController extends Controller
 
         $request->session()->regenerate();
 
+        if ($user->must_change_password) {
+            return redirect()->route('password.force-change');
+        }
+
         return redirect()->intended(
             $user->isTenantAdmin()
                 ? route('tenant.public-site', $user->tenant)

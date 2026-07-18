@@ -4,8 +4,10 @@ namespace Tests\Feature;
 
 use App\Models\Tenant;
 use App\Models\User;
+use App\Notifications\TenantAdminTemporaryPassword;
+use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 
 class AdminTenantManagementTest extends TestCase
@@ -14,6 +16,8 @@ class AdminTenantManagementTest extends TestCase
 
     public function test_super_admin_creates_tenant_with_login_user(): void
     {
+        Notification::fake();
+
         $superAdmin = User::factory()->create([
             'role' => 'super_admin',
             'tenant_id' => null,
@@ -25,8 +29,6 @@ class AdminTenantManagementTest extends TestCase
                 'company_name' => 'Mondi Internet',
                 'slug' => 'mondi-internet',
                 'owner_email' => 'mondiison@gmail.com',
-                'owner_password' => 'tenant-password',
-                'owner_password_confirmation' => 'tenant-password',
                 'subscription_plan' => 'basic',
                 'is_active' => 1,
                 'public_site_enabled' => 1,
@@ -40,7 +42,9 @@ class AdminTenantManagementTest extends TestCase
         $this->assertSame($tenant->id, $tenantAdmin->tenant_id);
         $this->assertSame('tenant_admin', $tenantAdmin->role);
         $this->assertTrue($tenantAdmin->is_active);
-        $this->assertTrue(Hash::check('tenant-password', $tenantAdmin->password));
+        $this->assertTrue($tenantAdmin->must_change_password);
+
+        Notification::assertSentTo($tenantAdmin, TenantAdminTemporaryPassword::class);
     }
 
     public function test_super_admin_updates_tenant_owner_email_on_existing_login_user(): void
@@ -66,8 +70,6 @@ class AdminTenantManagementTest extends TestCase
                 'company_name' => 'Mondi Internet',
                 'slug' => $tenant->slug,
                 'owner_email' => 'new@example.com',
-                'owner_password' => 'new-password',
-                'owner_password_confirmation' => 'new-password',
                 'subscription_plan' => 'growth',
                 'is_active' => 1,
                 'public_site_enabled' => 1,
@@ -76,11 +78,39 @@ class AdminTenantManagementTest extends TestCase
             ->assertRedirect(route('admin.tenants.index'));
 
         $this->assertSame('new@example.com', $tenantAdmin->fresh()->email);
-        $this->assertTrue(Hash::check('new-password', $tenantAdmin->fresh()->password));
     }
 
-    public function test_super_admin_can_create_missing_owner_login_when_updating_tenant(): void
+    public function test_super_admin_can_send_owner_password_reset_link(): void
     {
+        Notification::fake();
+
+        $superAdmin = User::factory()->create([
+            'role' => 'super_admin',
+            'tenant_id' => null,
+            'is_active' => true,
+        ]);
+        $tenant = Tenant::create([
+            'company_name' => 'Legacy Tenant',
+            'owner_email' => 'legacy@example.com',
+        ]);
+        $tenantAdmin = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'email' => 'legacy@example.com',
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($superAdmin)
+            ->post(route('admin.tenants.owner-reset-link', $tenant))
+            ->assertSessionHas('status');
+
+        Notification::assertSentTo($tenantAdmin, ResetPassword::class);
+    }
+
+    public function test_owner_password_reset_link_creates_missing_owner_login(): void
+    {
+        Notification::fake();
+
         $superAdmin = User::factory()->create([
             'role' => 'super_admin',
             'tenant_id' => null,
@@ -92,22 +122,13 @@ class AdminTenantManagementTest extends TestCase
         ]);
 
         $this->actingAs($superAdmin)
-            ->put(route('admin.tenants.update', $tenant), [
-                'company_name' => 'Legacy Tenant',
-                'slug' => $tenant->slug,
-                'owner_email' => 'legacy@example.com',
-                'owner_password' => 'legacy-password',
-                'owner_password_confirmation' => 'legacy-password',
-                'subscription_plan' => 'basic',
-                'is_active' => 1,
-                'public_site_enabled' => 1,
-                'brand_color' => '#0f766e',
-            ])
-            ->assertRedirect(route('admin.tenants.index'));
+            ->post(route('admin.tenants.owner-reset-link', $tenant))
+            ->assertSessionHas('status');
 
         $tenantAdmin = User::where('email', 'legacy@example.com')->firstOrFail();
 
         $this->assertSame($tenant->id, $tenantAdmin->tenant_id);
-        $this->assertTrue(Hash::check('legacy-password', $tenantAdmin->password));
+        $this->assertTrue($tenantAdmin->must_change_password);
+        Notification::assertSentTo($tenantAdmin, ResetPassword::class);
     }
 }
