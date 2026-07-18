@@ -9,24 +9,23 @@ use App\Models\Router;
 use App\Models\Shop;
 use App\Models\Subscription;
 use App\Models\Tenant;
+use App\Support\RadiusAccountingStats;
 use App\Support\TenantAccess;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 
 class DashboardController extends Controller
 {
-    public function __invoke(Request $request): View
+    public function __invoke(Request $request, RadiusAccountingStats $radiusStats): View
     {
         $user = $request->user();
         $shopQuery = TenantAccess::scopeShops(Shop::query(), $user);
         $routerQuery = TenantAccess::scopeRouters(Router::query(), $user);
         $packageQuery = TenantAccess::scopePackages(Package::query(), $user);
         $shopIds = (clone $shopQuery)->pluck('id');
-        $activeSessionCount = Schema::hasTable('radacct')
-            ? DB::table('radacct')->whereNull('acctstoptime')->count()
-            : null;
+        $routers = (clone $routerQuery)->with('shop.tenant')->get();
+        $routers = $radiusStats->refreshRouterHealth($routers);
+        $radiusSummary = $radiusStats->summary($routers);
         $activeSubscriptionCount = Subscription::query()
             ->whereIn('shop_id', $shopIds)
             ->where('expires_at', '>', now())
@@ -39,24 +38,25 @@ class DashboardController extends Controller
         return view('admin.dashboard', [
             'tenantCount' => $user->isSuperAdmin() ? Tenant::count() : 1,
             'shopCount' => $shopIds->count(),
-            'routerCount' => (clone $routerQuery)->count(),
-            'onlineRouterCount' => (clone $routerQuery)->where('is_online', true)->count(),
+            'routerCount' => $routers->count(),
+            'onlineRouterCount' => $routers->where('detected_status', 'Online')->count(),
             'packageCount' => (clone $packageQuery)->count(),
             'activePackageCount' => (clone $packageQuery)->where('is_active', true)->count(),
-            'activeSessionCount' => $activeSessionCount,
+            'activeSessionCount' => $radiusSummary['active_session_count'],
+            'onlineUserCount' => $radiusSummary['online_user_count'],
+            'totalUsageBytes' => $radiusSummary['total_bytes'],
+            'todayUsageBytes' => $radiusSummary['today_bytes'],
+            'radiusAccountingReady' => $radiusSummary['ready'],
             'activeSubscriptionCount' => $activeSubscriptionCount,
             'paidRevenue' => $paidRevenue,
+            'onlineSessions' => $radiusStats->onlineSessions($routers),
             'recentSubscriptions' => Subscription::query()
                 ->with(['shop.tenant', 'package'])
                 ->whereIn('shop_id', $shopIds)
                 ->latest()
                 ->take(6)
                 ->get(),
-            'routerHealth' => (clone $routerQuery)
-                ->with('shop.tenant')
-                ->latest('last_seen_at')
-                ->take(6)
-                ->get(),
+            'routerHealth' => $routers->sortByDesc('last_seen_at')->take(6),
             'setupSteps' => [
                 [
                     'label' => 'Create tenant profile',

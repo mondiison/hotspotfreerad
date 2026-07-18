@@ -7,6 +7,7 @@ use App\Models\Router;
 use App\Models\Shop;
 use App\Services\MikroTikProvisioningService;
 use App\Services\RadiusProvisioningService;
+use App\Support\RadiusAccountingStats;
 use App\Support\TenantAccess;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -15,9 +16,11 @@ use Illuminate\View\View;
 
 class RouterController extends Controller
 {
-    public function index(): View
+    public function index(RadiusAccountingStats $radiusStats): View
     {
         $user = request()->user();
+        $radiusStats->refreshRouterHealth(TenantAccess::scopeRouters(Router::with('shop.tenant'), $user)->get());
+
         $query = TenantAccess::scopeRouters(Router::with('shop.tenant'), $user)
             ->when(request('search'), function ($query, string $search): void {
                 $query->where(function ($query) use ($search): void {

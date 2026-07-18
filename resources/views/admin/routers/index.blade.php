@@ -8,8 +8,8 @@
             <input name="search" value="{{ request('search') }}" placeholder="Search router, NAS ID, WireGuard IP, or shop" class="rounded-md border border-zinc-300 px-3 py-2 text-sm">
             <select name="status" class="rounded-md border border-zinc-300 px-3 py-2 text-sm">
                 <option value="">All statuses</option>
-                <option value="online" @selected(request('status') === 'online')>Online</option>
-                <option value="offline" @selected(request('status') === 'offline')>Offline</option>
+                <option value="online" @selected(request('status') === 'online')>Active/recent</option>
+                <option value="offline" @selected(request('status') === 'offline')>No recent accounting</option>
             </select>
             <div class="flex gap-2">
                 <button class="rounded-md bg-zinc-950 px-4 py-2 text-sm font-medium text-white">Filter</button>
@@ -42,7 +42,7 @@
                         <td class="px-4 py-3 font-mono text-xs text-zinc-600">{{ $router->wireguard_internal_ip }}</td>
                         <td class="px-4 py-3">
                             <span class="rounded-full px-2 py-1 text-xs font-medium {{ $router->is_online ? 'bg-emerald-50 text-emerald-700' : 'bg-zinc-100 text-zinc-600' }}">
-                                {{ $router->is_online ? 'Online' : 'Offline' }}
+                                {{ $router->is_online ? 'Active/recent' : 'No recent accounting' }}
                             </span>
                         </td>
                         <td class="px-4 py-3">
