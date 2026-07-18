@@ -12,11 +12,18 @@
             <a href="{{ route('admin.dashboard') }}" class="block text-lg font-semibold">HotspotFreeRAD</a>
             <p class="mt-1 text-sm text-zinc-500">FreeRADIUS control</p>
 
+            @auth
+                <div class="mt-6 rounded-md bg-zinc-100 p-3 text-sm">
+                    <p class="font-medium">{{ auth()->user()->name }}</p>
+                    <p class="mt-1 text-xs text-zinc-500">{{ str_replace('_', ' ', auth()->user()->role) }}</p>
+                </div>
+            @endauth
+
             <nav class="mt-8 space-y-1 text-sm">
                 @php
                     $links = [
                         ['label' => 'Dashboard', 'route' => 'admin.dashboard'],
-                        ['label' => 'Tenants', 'route' => 'admin.tenants.index'],
+                        ['label' => 'Tenants', 'route' => 'admin.tenants.index', 'super_admin' => true],
                         ['label' => 'Shops', 'route' => 'admin.shops.index'],
                         ['label' => 'Routers', 'route' => 'admin.routers.index'],
                         ['label' => 'Packages', 'route' => 'admin.packages.index'],
@@ -24,6 +31,8 @@
                 @endphp
 
                 @foreach ($links as $link)
+                    @continue(($link['super_admin'] ?? false) && ! auth()->user()?->isSuperAdmin())
+
                     @php
                         $sectionPattern = $link['route'] === 'admin.dashboard'
                             ? $link['route']
@@ -37,6 +46,13 @@
                     </a>
                 @endforeach
             </nav>
+
+            <form method="POST" action="{{ route('logout') }}" class="mt-8">
+                @csrf
+                <button class="w-full rounded-md border border-zinc-200 px-3 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-100">
+                    Sign out
+                </button>
+            </form>
         </aside>
 
         <main class="flex-1">

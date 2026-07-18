@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Router;
 use App\Models\Shop;
 use App\Models\Tenant;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -39,7 +40,13 @@ class RouterProvisioningPageTest extends TestCase
             'shared_secret' => 'radius-secret',
         ]);
 
-        $this->get(route('admin.routers.show', $router))
+        $user = User::factory()->create([
+            'role' => 'super_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('admin.routers.show', $router))
             ->assertOk()
             ->assertSee('/system identity set name=&quot;demo-router&quot;', false)
             ->assertSee('endpoint-address=vpn.example.com')

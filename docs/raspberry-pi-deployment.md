@@ -109,6 +109,18 @@ php artisan migrate --force
 
 Do not run `migrate:fresh` on the Pi. It drops tables and can destroy FreeRADIUS data.
 
+Create the first platform owner account:
+
+```bash
+php artisan hotspot:create-super-admin admin@example.com 'change-this-password' --name='Platform Admin'
+```
+
+Use that account to sign in at:
+
+```text
+http://your-pi-ip/login
+```
+
 ## 6. Set Permissions
 
 ```bash
