@@ -184,10 +184,12 @@ class PortalController extends Controller
             ]);
         });
 
-        if (filled(config('services.flutterwave.secret_key'))) {
+        $payment->load(['shop.tenant', 'package', 'customer']);
+
+        if ($flutterwave->isConfiguredFor($payment)) {
             try {
-                $checkoutUrl = $flutterwave->initializeCheckout(
-                    $payment->load(['shop.tenant', 'package', 'customer']),
+                $checkout = $flutterwave->initializeCheckout(
+                    $payment,
                     [
                         'email' => $validated['email'] ?? null,
                         'phone' => $validated['phone'] ?? null,
@@ -197,10 +199,16 @@ class PortalController extends Controller
                 );
 
                 $payment->update([
-                    'payload' => array_merge($payment->payload ?? [], ['checkout_url' => $checkoutUrl]),
+                    'provider_reference' => $checkout['provider_reference'],
+                    'payload' => array_merge($payment->payload ?? [], [
+                        'checkout_url' => $checkout['checkout_url'],
+                        'flutterwave_init_response' => $checkout['response'],
+                    ]),
                 ]);
 
-                return redirect()->away($checkoutUrl);
+                if (filled($checkout['checkout_url'])) {
+                    return redirect()->away($checkout['checkout_url']);
+                }
             } catch (\Throwable $exception) {
                 Log::warning('Flutterwave checkout initialization failed', [
                     'payment_id' => $payment->id,
@@ -223,18 +231,32 @@ class PortalController extends Controller
 
     public function callback(Request $request, FlutterwaveService $flutterwave, RadiusProvisioningService $radius): View
     {
+        $txRef = $request->query('tx_ref') ?: $request->query('reference');
+
         $payment = Payment::with(['shop.tenant', 'package'])
-            ->where('tx_ref', $request->query('tx_ref'))
+            ->where('tx_ref', $txRef)
             ->firstOrFail();
 
-        if ($request->query('status') !== 'successful' || blank($request->query('transaction_id'))) {
+        if (! $this->statusIsSuccessful($request->query('status'))) {
             $payment->update(['status' => $request->query('status', 'failed')]);
 
             return view('hotspot.payment-failed', compact('payment'));
         }
 
+        $providerReference = $this->providerReferenceFromRequest($request) ?: $payment->provider_reference;
+
+        if (blank($providerReference)) {
+            $payment->update(['status' => 'verification_failed']);
+
+            return view('hotspot.payment-failed', compact('payment'));
+        }
+
         try {
-            $verification = $flutterwave->verifyTransaction((string) $request->query('transaction_id'));
+            $verification = $flutterwave->verifyPayment(
+                $payment,
+                (string) $providerReference,
+                $this->paymentResourceType((string) $providerReference, $request->query('type'))
+            );
         } catch (\Throwable $exception) {
             Log::warning('Flutterwave callback verification failed', [
                 'payment_id' => $payment->id,
@@ -270,15 +292,10 @@ class PortalController extends Controller
 
     public function webhook(Request $request, FlutterwaveService $flutterwave, RadiusProvisioningService $radius): \Illuminate\Http\Response
     {
-        if (! $flutterwave->webhookIsValid($request->header('verif-hash'))) {
-            abort(401);
-        }
-
         $payload = $request->all();
-        $txRef = data_get($payload, 'data.tx_ref');
-        $transactionId = data_get($payload, 'data.id');
+        $txRef = data_get($payload, 'data.reference') ?: data_get($payload, 'data.tx_ref');
 
-        if (blank($txRef) || blank($transactionId)) {
+        if (blank($txRef)) {
             return response('ignored', 200);
         }
 
@@ -288,7 +305,34 @@ class PortalController extends Controller
             return response('ignored', 200);
         }
 
-        $verification = $flutterwave->verifyTransaction((string) $transactionId);
+        if (! $flutterwave->webhookIsValid($request->header('verif-hash'), $payment)) {
+            abort(401);
+        }
+
+        $providerReference = data_get($payload, 'data.id')
+            ?: data_get($payload, 'data.order.id')
+            ?: data_get($payload, 'data.order_id')
+            ?: $payment->provider_reference;
+
+        if (blank($providerReference)) {
+            return response('ignored', 200);
+        }
+
+        try {
+            $verification = $flutterwave->verifyPayment(
+                $payment,
+                (string) $providerReference,
+                $this->paymentResourceType((string) $providerReference, data_get($payload, 'event'))
+            );
+        } catch (\Throwable $exception) {
+            Log::warning('Flutterwave webhook verification failed', [
+                'payment_id' => $payment->id,
+                'tx_ref' => $payment->tx_ref,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return response('ok', 200);
+        }
 
         if ($this->verificationMatchesPayment($verification, $payment)) {
             $this->markPaidAndGrantAccess($payment, $verification, $radius);
@@ -299,9 +343,9 @@ class PortalController extends Controller
 
     private function verificationMatchesPayment(array $verification, Payment $payment): bool
     {
-        return data_get($verification, 'status') === 'success'
-            && data_get($verification, 'data.status') === 'successful'
-            && data_get($verification, 'data.tx_ref') === $payment->tx_ref
+        return in_array(strtolower((string) data_get($verification, 'status')), ['success', 'successful', 'succeeded'], true)
+            && $this->statusIsSuccessful(data_get($verification, 'data.status'))
+            && (data_get($verification, 'data.reference') === $payment->tx_ref || data_get($verification, 'data.tx_ref') === $payment->tx_ref)
             && strtoupper((string) data_get($verification, 'data.currency')) === strtoupper($payment->currency)
             && (float) data_get($verification, 'data.amount') >= (float) $payment->amount;
     }
@@ -311,7 +355,7 @@ class PortalController extends Controller
         return DB::transaction(function () use ($payment, $verification, $radius) {
             $payment->update([
                 'status' => 'successful',
-                'provider_reference' => (string) data_get($verification, 'data.id'),
+                'provider_reference' => (string) (data_get($verification, 'data.id') ?: $payment->provider_reference),
                 'paid_at' => now(),
                 'payload' => array_merge($payment->payload ?? [], ['verification' => $verification]),
             ]);
@@ -334,5 +378,32 @@ class PortalController extends Controller
 
             return $subscription;
         });
+    }
+
+    private function providerReferenceFromRequest(Request $request): ?string
+    {
+        foreach (['id', 'order_id', 'charge_id', 'transaction_id'] as $key) {
+            if (filled($request->query($key))) {
+                return (string) $request->query($key);
+            }
+        }
+
+        return null;
+    }
+
+    private function paymentResourceType(string $providerReference, mixed $hint = null): string
+    {
+        $hint = strtolower((string) $hint);
+
+        if (str_contains($hint, 'charge') || str_starts_with(strtolower($providerReference), 'chg')) {
+            return 'charge';
+        }
+
+        return 'order';
+    }
+
+    private function statusIsSuccessful(mixed $status): bool
+    {
+        return in_array(strtolower((string) $status), ['success', 'successful', 'succeeded', 'completed'], true);
     }
 }

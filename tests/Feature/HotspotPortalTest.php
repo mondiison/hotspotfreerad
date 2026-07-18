@@ -8,6 +8,7 @@ use App\Models\Shop;
 use App\Models\Tenant;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
@@ -20,6 +21,7 @@ class HotspotPortalTest extends TestCase
     {
         parent::setUp();
 
+        Cache::flush();
         $this->createRadiusTables();
     }
 
@@ -159,11 +161,24 @@ class HotspotPortalTest extends TestCase
 
     public function test_payment_step_redirects_to_flutterwave_when_configured(): void
     {
-        config(['services.flutterwave.secret_key' => 'FLWSECK_TEST']);
+        $this->configureFlutterwave();
         Http::fake([
-            'api.flutterwave.com/v3/payments' => Http::response([
+            'idp.flutterwave.com/*' => Http::response([
+                'access_token' => 'FLW_V4_TOKEN',
+                'expires_in' => 600,
+            ]),
+            'developersandbox-api.flutterwave.com/orchestration/direct-orders' => Http::response([
                 'status' => 'success',
-                'data' => ['link' => 'https://checkout.flutterwave.com/pay/demo'],
+                'data' => [
+                    'id' => 'ord_12345',
+                    'reference' => 'pending',
+                    'next_action' => [
+                        'type' => 'redirect_url',
+                        'redirect_url' => [
+                            'url' => 'https://developer-sandbox-ui-sit.flutterwave.cloud/redirects/opay/demo',
+                        ],
+                    ],
+                ],
             ]),
         ]);
         [$router, $package] = $this->routerWithPackage();
@@ -174,12 +189,16 @@ class HotspotPortalTest extends TestCase
             'package_id' => $package->id,
             'email' => 'customer@example.com',
         ])
-            ->assertRedirect('https://checkout.flutterwave.com/pay/demo');
+            ->assertRedirect('https://developer-sandbox-ui-sit.flutterwave.cloud/redirects/opay/demo');
 
-        Http::assertSent(fn ($request) => $request->hasHeader('Authorization', 'Bearer FLWSECK_TEST')
-            && $request['tx_ref']
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/orchestration/direct-orders')
+            && $request->hasHeader('Authorization', 'Bearer FLW_V4_TOKEN')
+            && $request->hasHeader('X-Trace-Id')
+            && $request->hasHeader('X-Idempotency-Key')
+            && $request['reference']
             && $request['amount'] === 500.0
             && $request['currency'] === 'NGN'
+            && $request['payment_method'] === 'opay'
             && $request['redirect_url'] === route('hotspot.payment.callback'));
     }
 
@@ -195,14 +214,23 @@ class HotspotPortalTest extends TestCase
         ]);
 
         $payment = \App\Models\Payment::firstOrFail();
-        config(['services.flutterwave.secret_key' => 'FLWSECK_TEST']);
+        config([
+            'services.flutterwave.client_id' => 'client-id',
+            'services.flutterwave.client_secret' => 'client-secret',
+            'services.flutterwave.auth_url' => 'https://idp.flutterwave.com/realms/flutterwave/protocol/openid-connect/token',
+            'services.flutterwave.base_url' => 'https://developersandbox-api.flutterwave.com',
+        ]);
         Http::fake([
-            'api.flutterwave.com/v3/transactions/12345/verify' => Http::response([
+            'idp.flutterwave.com/*' => Http::response([
+                'access_token' => 'FLW_V4_TOKEN',
+                'expires_in' => 600,
+            ]),
+            'developersandbox-api.flutterwave.com/orders/ord_12345' => Http::response([
                 'status' => 'success',
                 'data' => [
-                    'id' => 12345,
-                    'status' => 'successful',
-                    'tx_ref' => $payment->tx_ref,
+                    'id' => 'ord_12345',
+                    'status' => 'succeeded',
+                    'reference' => $payment->tx_ref,
                     'amount' => 500,
                     'currency' => 'NGN',
                 ],
@@ -210,9 +238,9 @@ class HotspotPortalTest extends TestCase
         ]);
 
         $this->get(route('hotspot.payment.callback', [
-            'status' => 'successful',
-            'tx_ref' => $payment->tx_ref,
-            'transaction_id' => 12345,
+            'status' => 'succeeded',
+            'reference' => $payment->tx_ref,
+            'id' => 'ord_12345',
         ]))
             ->assertOk()
             ->assertSee('Access provisioned');
@@ -220,7 +248,7 @@ class HotspotPortalTest extends TestCase
         $this->assertDatabaseHas('payments', [
             'id' => $payment->id,
             'status' => 'successful',
-            'provider_reference' => '12345',
+            'provider_reference' => 'ord_12345',
         ]);
         $this->assertDatabaseHas('subscriptions', [
             'payment_id' => $payment->id,
@@ -245,16 +273,23 @@ class HotspotPortalTest extends TestCase
 
         $payment = \App\Models\Payment::firstOrFail();
         config([
-            'services.flutterwave.secret_key' => 'FLWSECK_TEST',
+            'services.flutterwave.client_id' => 'client-id',
+            'services.flutterwave.client_secret' => 'client-secret',
+            'services.flutterwave.auth_url' => 'https://idp.flutterwave.com/realms/flutterwave/protocol/openid-connect/token',
+            'services.flutterwave.base_url' => 'https://developersandbox-api.flutterwave.com',
             'services.flutterwave.webhook_secret_hash' => 'webhook-secret',
         ]);
         Http::fake([
-            'api.flutterwave.com/v3/transactions/12345/verify' => Http::response([
+            'idp.flutterwave.com/*' => Http::response([
+                'access_token' => 'FLW_V4_TOKEN',
+                'expires_in' => 600,
+            ]),
+            'developersandbox-api.flutterwave.com/orders/ord_12345' => Http::response([
                 'status' => 'success',
                 'data' => [
-                    'id' => 12345,
-                    'status' => 'successful',
-                    'tx_ref' => $payment->tx_ref,
+                    'id' => 'ord_12345',
+                    'status' => 'succeeded',
+                    'reference' => $payment->tx_ref,
                     'amount' => 500,
                     'currency' => 'NGN',
                 ],
@@ -263,8 +298,9 @@ class HotspotPortalTest extends TestCase
 
         $this->postJson(route('hotspot.payment.webhook'), [
             'data' => [
-                'id' => 12345,
-                'tx_ref' => $payment->tx_ref,
+                'id' => 'ord_12345',
+                'reference' => $payment->tx_ref,
+                'status' => 'succeeded',
             ],
         ], [
             'verif-hash' => 'webhook-secret',
@@ -313,6 +349,17 @@ class HotspotPortalTest extends TestCase
         ]);
 
         return [$router, $package];
+    }
+
+    private function configureFlutterwave(): void
+    {
+        config([
+            'services.flutterwave.auth_url' => 'https://idp.flutterwave.com/realms/flutterwave/protocol/openid-connect/token',
+            'services.flutterwave.base_url' => 'https://developersandbox-api.flutterwave.com',
+            'services.flutterwave.client_id' => 'client-id',
+            'services.flutterwave.client_secret' => 'client-secret',
+            'services.flutterwave.default_payment_method' => 'opay',
+        ]);
     }
 
     private function createRadiusTables(): void
