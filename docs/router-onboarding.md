@@ -188,6 +188,44 @@ The portal uses:
 - `link-login` for later MikroTik login handoff.
 - `link-orig` to return the user to their original destination after login.
 
+## Local Captive Redirect Test
+
+When testing with the Laravel app on the Raspberry Pi LAN IP, use:
+
+```text
+http://192.168.190.244/hotspot/portal?mac=$(mac)&nasid=$(identity)&link-login=$(link-login)&link-orig=$(link-orig)
+```
+
+Allow the Pi before login:
+
+```routeros
+/ip hotspot walled-garden ip add dst-address=192.168.190.244 action=accept
+```
+
+Then replace the MikroTik hotspot `login.html` with:
+
+```html
+<!doctype html>
+<html>
+<head>
+    <meta http-equiv="refresh" content="0; url=http://192.168.190.244/hotspot/portal?mac=$(mac)&nasid=$(identity)&link-login=$(link-login)&link-orig=$(link-orig)">
+</head>
+<body>
+    <script>
+        window.location.href = "http://192.168.190.244/hotspot/portal?mac=$(mac)&nasid=$(identity)&link-login=$(link-login)&link-orig=$(link-orig)";
+    </script>
+</body>
+</html>
+```
+
+If the portal shows "Router not registered", compare the received NAS ID with:
+
+```routeros
+/system identity print
+```
+
+Then create or update the router in HotspotFreeRAD so its NAS identifier exactly matches that value.
+
 ## Important Notes
 
 - Keep RADIUS ports `1812` and `1813` reachable only through the WireGuard tunnel or trusted LAN.

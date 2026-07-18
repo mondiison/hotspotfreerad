@@ -21,7 +21,14 @@ class PortalController extends Controller
         $router = Router::query()
             ->with(['shop.tenant', 'shop.packages' => fn ($query) => $query->where('is_active', true)->orderBy('price')])
             ->where('nas_identifier', $validated['nasid'])
-            ->firstOrFail();
+            ->first();
+
+        if (! $router) {
+            return view('hotspot.unknown-router', [
+                'macAddress' => $validated['mac'],
+                'nasIdentifier' => $validated['nasid'],
+            ]);
+        }
 
         return view('hotspot.portal', [
             'router' => $router,

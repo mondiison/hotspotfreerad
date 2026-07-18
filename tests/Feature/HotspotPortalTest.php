@@ -51,4 +51,13 @@ class HotspotPortalTest extends TestCase
             ->assertSee('NGN 500.00')
             ->assertSee('Payment coming next');
     }
+
+    public function test_portal_displays_helpful_page_for_unknown_router(): void
+    {
+        $this->get('/hotspot/portal?mac=AA:BB:CC:DD:EE:FF&nasid=missing-router')
+            ->assertOk()
+            ->assertSee('Router not registered')
+            ->assertSee('missing-router')
+            ->assertSee('AA:BB:CC:DD:EE:FF');
+    }
 }
