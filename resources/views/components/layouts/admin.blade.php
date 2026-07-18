@@ -48,6 +48,7 @@
                         ['label' => 'Tenants', 'route' => 'admin.tenants.index', 'icon' => 'building-storefront', 'super_admin' => true],
                         ['label' => 'Brand', 'route' => 'admin.brand.edit', 'icon' => 'swatch', 'tenant_admin' => true],
                         ['label' => 'Billing', 'route' => 'admin.billing.index', 'icon' => 'credit-card'],
+                        ['label' => 'Users', 'route' => 'admin.users.index', 'icon' => 'users'],
                         ['label' => 'Shops', 'route' => 'admin.shops.index', 'icon' => 'building-storefront'],
                         ['label' => 'Routers', 'route' => 'admin.routers.index', 'icon' => 'signal'],
                         ['label' => 'Packages', 'route' => 'admin.packages.index', 'icon' => 'radio'],

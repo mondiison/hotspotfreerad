@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\RouterController;
 use App\Http\Controllers\Admin\ShopController;
 use App\Http\Controllers\Admin\TenantBrandController;
 use App\Http\Controllers\Admin\TenantController;
+use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Auth\ForgotPasswordController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\ResetPasswordController;
@@ -53,6 +54,7 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::get('billing/payments/callback', [BillingController::class, 'callback'])->name('billing.payments.callback');
     Route::get('brand', [TenantBrandController::class, 'edit'])->name('brand.edit');
     Route::put('brand', [TenantBrandController::class, 'update'])->name('brand.update');
+    Route::resource('users', UserController::class)->except('show');
     Route::resource('tenants', TenantController::class)->except('show');
     Route::resource('shops', ShopController::class)->except('show');
     Route::resource('routers', RouterController::class);
