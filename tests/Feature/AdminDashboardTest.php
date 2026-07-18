@@ -2,11 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Models\BillingPlan;
 use App\Models\Package;
 use App\Models\Router;
 use App\Models\Shop;
 use App\Models\Subscription;
 use App\Models\Tenant;
+use App\Models\TenantBillingSubscription;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -129,6 +131,71 @@ class AdminDashboardTest extends TestCase
             ->assertOk()
             ->assertSee('Own Router')
             ->assertDontSee('Other Router');
+    }
+
+    public function test_tenant_admin_dashboard_shows_billing_plan_usage(): void
+    {
+        $tenant = Tenant::create([
+            'company_name' => 'Billing Tenant',
+            'owner_email' => 'billing@example.com',
+        ]);
+        $shop = Shop::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Billing Shop',
+        ]);
+        Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'Billing Router',
+            'nas_identifier' => 'billing-router',
+            'wireguard_internal_ip' => '10.8.0.40',
+            'shared_secret' => 'radius-secret',
+        ]);
+        Package::create([
+            'shop_id' => $shop->id,
+            'name' => 'Weekly 10GB',
+            'price' => 2500,
+            'currency' => 'NGN',
+            'limit_uptime_seconds' => 604800,
+            'speed_limit_profile' => '10M/10M',
+            'is_active' => true,
+        ]);
+        $plan = BillingPlan::create([
+            'name' => 'Starter',
+            'slug' => 'starter-test',
+            'monthly_price' => 15000,
+            'currency' => 'NGN',
+            'shop_limit' => 2,
+            'router_limit' => 3,
+            'package_limit' => 4,
+            'is_active' => true,
+        ]);
+        TenantBillingSubscription::create([
+            'tenant_id' => $tenant->id,
+            'billing_plan_id' => $plan->id,
+            'status' => 'active',
+            'amount' => 15000,
+            'currency' => 'NGN',
+            'current_period_starts_at' => now(),
+            'current_period_ends_at' => now()->addMonth(),
+        ]);
+
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('admin.dashboard'))
+            ->assertOk()
+            ->assertSee('Platform Plan')
+            ->assertSee('Starter')
+            ->assertSee('NGN 15,000.00/month')
+            ->assertSee('Active')
+            ->assertSee('Renews')
+            ->assertSee('1 / 2')
+            ->assertSee('1 / 3')
+            ->assertSee('1 / 4');
     }
 
     public function test_dashboard_does_not_mark_quiet_router_online_without_accounting(): void

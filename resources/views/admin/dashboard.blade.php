@@ -43,6 +43,61 @@
         @endforeach
     </section>
 
+    @if ($tenantBillingSummary)
+        <section class="mt-6 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+            <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                <div>
+                    <p class="text-sm font-medium text-zinc-500">Platform Plan</p>
+                    <h2 class="mt-2 text-2xl font-semibold">{{ $tenantBillingSummary['plan_name'] }}</h2>
+                    <p class="mt-1 text-sm text-zinc-500">{{ $tenantBillingSummary['price'] }}</p>
+                </div>
+
+                <div class="flex flex-wrap gap-2">
+                    <span class="rounded-full bg-zinc-100 px-3 py-1 text-sm font-medium text-zinc-700">{{ $tenantBillingSummary['status'] }}</span>
+                    <span class="rounded-full bg-blue-50 px-3 py-1 text-sm font-medium text-blue-700">{{ $tenantBillingSummary['period_label'] }}</span>
+                    <a href="{{ route('admin.billing.index') }}" class="rounded-md border border-zinc-200 px-3 py-1.5 text-sm font-medium hover:bg-zinc-50">Manage billing</a>
+                </div>
+            </div>
+
+            <div class="mt-5 grid gap-4 md:grid-cols-3">
+                @foreach ($tenantBillingSummary['usage'] as $usage)
+                    <div class="rounded-lg border border-zinc-200 p-4">
+                        <div class="flex items-center justify-between gap-3">
+                            <p class="text-sm font-medium">{{ $usage['label'] }}</p>
+                            <p class="text-sm text-zinc-500">{{ number_format($usage['used']) }} / {{ $usage['limit_label'] }}</p>
+                        </div>
+                        <div class="mt-3 h-2 overflow-hidden rounded-full bg-zinc-100">
+                            <div
+                                class="h-full rounded-full {{ $usage['is_limited'] && $usage['percent'] >= 90 ? 'bg-amber-500' : 'bg-zinc-950' }}"
+                                style="width: {{ $usage['percent'] }}%"
+                            ></div>
+                        </div>
+                        <p class="mt-2 text-xs leading-5 text-zinc-500">
+                            {{ $usage['is_limited'] ? 'Upgrade before adding beyond this plan limit.' : 'No plan limit is applied to this resource.' }}
+                        </p>
+                    </div>
+                @endforeach
+            </div>
+        </section>
+    @endif
+
+    @if ($platformBillingSummary)
+        <section class="mt-6 grid gap-4 md:grid-cols-4">
+            @foreach ([
+                ['label' => 'Billing Plans', 'value' => $platformBillingSummary['plan_count'], 'hint' => 'Plans tenant admins can subscribe to'],
+                ['label' => 'Active Tenants', 'value' => $platformBillingSummary['active_subscription_count'], 'hint' => 'Active or trialing platform subscriptions'],
+                ['label' => 'Past Due', 'value' => $platformBillingSummary['past_due_subscription_count'], 'hint' => 'Tenants needing billing attention'],
+                ['label' => 'Platform MRR', 'value' => 'NGN '.number_format($platformBillingSummary['monthly_recurring_revenue'], 2), 'hint' => 'Active subscription amount per month'],
+            ] as $billingStat)
+                <div class="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+                    <p class="text-sm font-medium text-zinc-500">{{ $billingStat['label'] }}</p>
+                    <p class="mt-3 text-2xl font-semibold">{{ is_numeric($billingStat['value']) ? number_format($billingStat['value']) : $billingStat['value'] }}</p>
+                    <p class="mt-2 text-xs leading-5 text-zinc-500">{{ $billingStat['hint'] }}</p>
+                </div>
+            @endforeach
+        </section>
+    @endif
+
     <section class="mt-6 grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <div class="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
             <div class="flex items-center justify-between gap-4">

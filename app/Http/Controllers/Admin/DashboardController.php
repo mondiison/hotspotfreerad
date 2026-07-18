@@ -3,12 +3,15 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\BillingPlan;
 use App\Models\Package;
 use App\Models\Payment;
 use App\Models\Router;
 use App\Models\Shop;
 use App\Models\Subscription;
 use App\Models\Tenant;
+use App\Models\TenantBillingSubscription;
+use App\Models\User;
 use App\Support\RadiusAccountingStats;
 use App\Support\TenantAccess;
 use Illuminate\Contracts\View\View;
@@ -42,6 +45,8 @@ class DashboardController extends Controller
             'onlineRouterCount' => $routers->where('detected_status', 'Online')->count(),
             'packageCount' => (clone $packageQuery)->count(),
             'activePackageCount' => (clone $packageQuery)->where('is_active', true)->count(),
+            'tenantBillingSummary' => $this->tenantBillingSummary($user, $shopIds->count(), $routers->count(), (clone $packageQuery)->count()),
+            'platformBillingSummary' => $this->platformBillingSummary($user),
             'activeSessionCount' => $radiusSummary['active_session_count'],
             'onlineUserCount' => $radiusSummary['online_user_count'],
             'totalUsageBytes' => $radiusSummary['total_bytes'],
@@ -80,5 +85,74 @@ class DashboardController extends Controller
                 ],
             ],
         ]);
+    }
+
+    private function tenantBillingSummary(User $user, int $shopCount, int $routerCount, int $packageCount): ?array
+    {
+        if ($user->isSuperAdmin() || ! $user->tenant_id) {
+            return null;
+        }
+
+        $tenant = Tenant::query()
+            ->with('currentBillingSubscription.billingPlan')
+            ->find($user->tenant_id);
+
+        $subscription = $tenant?->currentBillingSubscription;
+        $plan = $subscription?->billingPlan;
+
+        return [
+            'plan_name' => $plan?->name ?? 'No platform plan',
+            'price' => $plan ? $plan->currency.' '.number_format((float) $plan->monthly_price, 2).'/month' : 'Choose a plan to unlock tenant growth',
+            'status' => $subscription ? str($subscription->status)->replace('_', ' ')->title()->toString() : 'Not subscribed',
+            'period_label' => $this->billingPeriodLabel($subscription),
+            'usage' => [
+                $this->limitUsage('Locations', $shopCount, $plan?->shop_limit),
+                $this->limitUsage('Routers', $routerCount, $plan?->router_limit),
+                $this->limitUsage('Packages', $packageCount, $plan?->package_limit),
+            ],
+        ];
+    }
+
+    private function platformBillingSummary(User $user): ?array
+    {
+        if (! $user->isSuperAdmin()) {
+            return null;
+        }
+
+        return [
+            'plan_count' => BillingPlan::count(),
+            'active_subscription_count' => TenantBillingSubscription::whereIn('status', ['active', 'trialing'])->count(),
+            'past_due_subscription_count' => TenantBillingSubscription::where('status', 'past_due')->count(),
+            'monthly_recurring_revenue' => TenantBillingSubscription::whereIn('status', ['active', 'trialing'])->sum('amount'),
+        ];
+    }
+
+    private function limitUsage(string $label, int $used, ?int $limit): array
+    {
+        return [
+            'label' => $label,
+            'used' => $used,
+            'limit' => $limit,
+            'limit_label' => $limit === null ? 'Unlimited' : number_format($limit),
+            'percent' => $limit === null ? 100 : min(100, (int) round(($used / max(1, $limit)) * 100)),
+            'is_limited' => $limit !== null,
+        ];
+    }
+
+    private function billingPeriodLabel(?TenantBillingSubscription $subscription): string
+    {
+        if (! $subscription) {
+            return 'No renewal date yet';
+        }
+
+        if ($subscription->status === 'trialing' && $subscription->trial_ends_at) {
+            return 'Trial ends '.$subscription->trial_ends_at->toFormattedDateString();
+        }
+
+        if ($subscription->current_period_ends_at) {
+            return ($subscription->current_period_ends_at->isPast() ? 'Expired ' : 'Renews ').$subscription->current_period_ends_at->toFormattedDateString();
+        }
+
+        return 'Billing period not set';
     }
 }
