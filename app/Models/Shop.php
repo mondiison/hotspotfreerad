@@ -55,4 +55,14 @@ class Shop extends Model
     {
         return $this->hasMany(Subscription::class);
     }
+
+    public function hasCompleteFlutterwaveCredentials(): bool
+    {
+        return filled($this->flutterwave_client_id) && filled($this->flutterwave_client_secret);
+    }
+
+    public function hasFlutterwaveWebhookSecret(): bool
+    {
+        return filled($this->flutterwave_webhook_secret);
+    }
 }

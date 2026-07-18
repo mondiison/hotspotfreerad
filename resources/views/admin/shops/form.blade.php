@@ -46,6 +46,14 @@
                         <p class="mt-2 text-xs font-medium text-zinc-500">
                             Existing saved secrets are hidden. Leave a credential field empty when editing to keep the current value.
                         </p>
+                        <div class="mt-3 flex flex-wrap gap-2">
+                            <span class="rounded-full px-2 py-1 text-xs font-medium {{ $shop->hasCompleteFlutterwaveCredentials() ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700' }}">
+                                {{ $shop->hasCompleteFlutterwaveCredentials() ? 'Payments configured' : 'Payments not configured' }}
+                            </span>
+                            <span class="rounded-full px-2 py-1 text-xs font-medium {{ $shop->hasFlutterwaveWebhookSecret() ? 'bg-emerald-50 text-emerald-700' : 'bg-zinc-100 text-zinc-600' }}">
+                                {{ $shop->hasFlutterwaveWebhookSecret() ? 'Webhook ready' : 'Webhook secret missing' }}
+                            </span>
+                        </div>
                     @endif
                 </div>
 

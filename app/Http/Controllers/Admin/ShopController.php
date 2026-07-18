@@ -25,7 +25,14 @@ class ShopController extends Controller
                         ->orWhereHas('tenant', fn ($tenant) => $tenant->where('company_name', 'like', "%{$search}%"));
                 });
             })
-            ->when(request()->filled('status'), fn ($query) => $query->where('is_active', request('status') === 'active'));
+            ->when(request()->filled('status'), fn ($query) => $query->where('is_active', request('status') === 'active'))
+            ->when(request('payments') === 'configured', fn ($query) => $query
+                ->whereNotNull('flutterwave_client_id')
+                ->whereNotNull('flutterwave_client_secret'))
+            ->when(request('payments') === 'unconfigured', fn ($query) => $query
+                ->where(fn ($query) => $query
+                    ->whereNull('flutterwave_client_id')
+                    ->orWhereNull('flutterwave_client_secret')));
 
         return view('admin.shops.index', [
             'shops' => $query->latest()->paginate(15)->withQueryString(),
@@ -49,6 +56,7 @@ class ShopController extends Controller
     {
         $data = $this->validated($request);
         BillingPlanLimits::assertCanCreateShop($request->user());
+        $data = $this->withoutBlankPaymentCredentials($data);
 
         Shop::create($data);
 
@@ -74,12 +82,7 @@ class ShopController extends Controller
         TenantAccess::assertShop($shop, $request->user());
 
         $data = $this->validated($request);
-
-        foreach (['flutterwave_client_id', 'flutterwave_client_secret', 'flutterwave_webhook_secret'] as $field) {
-            if (blank($data[$field] ?? null)) {
-                unset($data[$field]);
-            }
-        }
+        $data = $this->withoutBlankPaymentCredentials($data);
 
         $shop->update($data);
 
@@ -109,6 +112,17 @@ class ShopController extends Controller
 
         if (! $request->user()->isSuperAdmin()) {
             $data['tenant_id'] = $request->user()->tenant_id;
+        }
+
+        return $data;
+    }
+
+    private function withoutBlankPaymentCredentials(array $data): array
+    {
+        foreach (['flutterwave_client_id', 'flutterwave_client_secret', 'flutterwave_webhook_secret'] as $field) {
+            if (blank($data[$field] ?? null)) {
+                unset($data[$field]);
+            }
         }
 
         return $data;

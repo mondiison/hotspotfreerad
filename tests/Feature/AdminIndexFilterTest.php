@@ -37,6 +37,40 @@ class AdminIndexFilterTest extends TestCase
             ->assertDontSee($inactiveShop->name);
     }
 
+    public function test_shop_index_shows_and_filters_payment_configuration(): void
+    {
+        $tenant = $this->tenant();
+        $configuredShop = Shop::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Payment Ready Shop',
+            'is_active' => true,
+            'flutterwave_client_id' => 'tenant-client-id',
+            'flutterwave_client_secret' => 'tenant-client-secret',
+            'flutterwave_webhook_secret' => 'tenant-webhook-secret',
+        ]);
+        $unconfiguredShop = Shop::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Cash Only Shop',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($this->superAdmin())
+            ->get(route('admin.shops.index', ['payments' => 'configured']))
+            ->assertOk()
+            ->assertSee($configuredShop->name)
+            ->assertSee('Configured')
+            ->assertSee('Webhook secret saved')
+            ->assertDontSee($unconfiguredShop->name);
+
+        $this->actingAs($this->superAdmin())
+            ->get(route('admin.shops.index', ['payments' => 'unconfigured']))
+            ->assertOk()
+            ->assertSee($unconfiguredShop->name)
+            ->assertSee('Not configured')
+            ->assertSee('Customer payments disabled')
+            ->assertDontSee($configuredShop->name);
+    }
+
     public function test_router_index_can_search_and_filter_by_online_status(): void
     {
         $shop = $this->shop();
