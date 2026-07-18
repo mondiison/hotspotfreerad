@@ -70,6 +70,15 @@ class HotspotPortalTest extends TestCase
             ->assertSee('AA:BB:CC:DD:EE:FF');
     }
 
+    public function test_portal_displays_helpful_page_when_mikrotik_parameters_are_missing(): void
+    {
+        $this->get('/hotspot/portal')
+            ->assertOk()
+            ->assertSee('Redirect incomplete')
+            ->assertSee('Device MAC')
+            ->assertSee('Missing');
+    }
+
     public function test_grant_creates_subscription_and_radius_access(): void
     {
         [$router, $package] = $this->routerWithPackage();

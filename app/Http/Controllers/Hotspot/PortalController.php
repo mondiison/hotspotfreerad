@@ -20,11 +20,18 @@ class PortalController extends Controller
     public function show(Request $request): View
     {
         $validated = $request->validate([
-            'mac' => ['required', 'string', 'max:64'],
-            'nasid' => ['required', 'string', 'max:255'],
+            'mac' => ['nullable', 'string', 'max:64'],
+            'nasid' => ['nullable', 'string', 'max:255'],
             'link-login' => ['nullable', 'string', 'max:2048'],
             'link-orig' => ['nullable', 'string', 'max:2048'],
         ]);
+
+        if (blank($validated['mac'] ?? null) || blank($validated['nasid'] ?? null)) {
+            return view('hotspot.missing-parameters', [
+                'macAddress' => $validated['mac'] ?? null,
+                'nasIdentifier' => $validated['nasid'] ?? null,
+            ]);
+        }
 
         $router = Router::query()
             ->with(['shop.tenant', 'shop.packages' => fn ($query) => $query->where('is_active', true)->orderBy('price')])

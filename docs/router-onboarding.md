@@ -202,17 +202,30 @@ Allow the Pi before login:
 /ip hotspot walled-garden ip add dst-address=192.168.190.244 action=accept
 ```
 
-Then replace the MikroTik hotspot `login.html` with:
+Then replace the MikroTik hotspot `login.html` with this visible fallback template. It encodes MikroTik variables before redirecting, which prevents blank pages when the original URL contains its own query string.
 
 ```html
 <!doctype html>
-<html>
+<html lang="en">
 <head>
-    <meta http-equiv="refresh" content="0; url=http://192.168.190.244/hotspot/portal?mac=$(mac)&nasid=$(identity)&link-login=$(link-login)&link-orig=$(link-orig)">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Opening hotspot portal</title>
 </head>
-<body>
+<body style="font-family: system-ui, sans-serif; padding: 24px;">
+    <h1>Opening internet access</h1>
+    <p>If nothing happens, use the button below.</p>
+    <p><a id="portal-link" href="#">Continue to internet packages</a></p>
+
     <script>
-        window.location.href = "http://192.168.190.244/hotspot/portal?mac=$(mac)&nasid=$(identity)&link-login=$(link-login)&link-orig=$(link-orig)";
+        var portal = 'http://192.168.190.244/hotspot/portal'
+            + '?mac=' + encodeURIComponent('$(mac)')
+            + '&nasid=' + encodeURIComponent('$(identity)')
+            + '&link-login=' + encodeURIComponent('$(link-login)')
+            + '&link-orig=' + encodeURIComponent('$(link-orig)');
+
+        document.getElementById('portal-link').href = portal;
+        window.location.replace(portal);
     </script>
 </body>
 </html>
