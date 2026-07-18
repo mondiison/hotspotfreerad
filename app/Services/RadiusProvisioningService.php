@@ -37,6 +37,18 @@ class RadiusProvisioningService
         $this->upsertGroupReply($groupName, 'Mikrotik-Rate-Limit', $package->speed_limit_profile);
         $this->upsertGroupReply($groupName, 'Session-Timeout', (string) $package->limit_uptime_seconds);
 
+        if ($package->data_limit_bytes) {
+            [$totalLimit, $totalLimitGigawords] = $this->splitBytesForMikroTikLimit((int) $package->data_limit_bytes);
+
+            $this->upsertGroupReply($groupName, 'Mikrotik-Total-Limit', (string) $totalLimit);
+            $this->upsertGroupReply($groupName, 'Mikrotik-Total-Limit-Gigawords', (string) $totalLimitGigawords);
+        } else {
+            DB::table('radgroupreply')
+                ->where('groupname', $groupName)
+                ->whereIn('attribute', ['Mikrotik-Total-Limit', 'Mikrotik-Total-Limit-Gigawords'])
+                ->delete();
+        }
+
         return $groupName;
     }
 
@@ -97,5 +109,15 @@ class RadiusProvisioningService
             ->trim('_')
             ->limit(64, '')
             ->toString();
+    }
+
+    private function splitBytesForMikroTikLimit(int $bytes): array
+    {
+        $gigaword = 4294967296;
+
+        return [
+            $bytes % $gigaword,
+            intdiv($bytes, $gigaword),
+        ];
     }
 }

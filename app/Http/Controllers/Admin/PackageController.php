@@ -68,6 +68,7 @@ class PackageController extends Controller
             'price' => ['required', 'numeric', 'min:0'],
             'currency' => ['required', 'string', 'size:3'],
             'limit_uptime_seconds' => ['required', 'integer', 'min:60'],
+            'data_limit_bytes' => ['nullable', 'integer', 'min:1'],
             'speed_limit_profile' => ['required', 'string', 'max:255'],
             'fup_data_threshold_bytes' => ['nullable', 'integer', 'min:1'],
             'fup_speed_limit_profile' => ['nullable', 'string', 'max:255'],

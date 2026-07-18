@@ -13,6 +13,8 @@ class Package extends Model
     protected function casts(): array
     {
         return [
+            'data_limit_bytes' => 'integer',
+            'fup_data_threshold_bytes' => 'integer',
             'price' => 'decimal:2',
             'is_active' => 'boolean',
         ];

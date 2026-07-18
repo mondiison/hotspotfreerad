@@ -72,6 +72,27 @@ class RadiusProvisioningServiceTest extends TestCase
         ]);
     }
 
+    public function test_it_syncs_total_transfer_limit_for_limited_data_packages(): void
+    {
+        $package = $this->package();
+        $package->update(['data_limit_bytes' => 5368709120]);
+
+        $groupName = app(RadiusProvisioningService::class)->syncPackageProfile($package);
+
+        $this->assertDatabaseHas('radgroupreply', [
+            'groupname' => $groupName,
+            'attribute' => 'Mikrotik-Total-Limit',
+            'op' => ':=',
+            'value' => '1073741824',
+        ]);
+        $this->assertDatabaseHas('radgroupreply', [
+            'groupname' => $groupName,
+            'attribute' => 'Mikrotik-Total-Limit-Gigawords',
+            'op' => ':=',
+            'value' => '1',
+        ]);
+    }
+
     public function test_it_grants_and_revokes_mac_access_through_radius_tables(): void
     {
         $package = $this->package();

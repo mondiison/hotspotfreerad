@@ -37,6 +37,10 @@
                                 <dt>Time</dt>
                                 <dd class="font-medium text-zinc-950">{{ gmdate('H:i', $package->limit_uptime_seconds) }}</dd>
                             </div>
+                            <div class="flex justify-between gap-4">
+                                <dt>Data</dt>
+                                <dd class="font-medium text-zinc-950">{{ $package->data_limit_bytes ? number_format($package->data_limit_bytes / 1073741824, 1) . ' GB' : 'Unlimited' }}</dd>
+                            </div>
                         </dl>
                         <form method="POST" action="{{ route('hotspot.grant') }}" class="mt-5">
                             @csrf

@@ -11,7 +11,8 @@
                     <th class="px-4 py-3 font-medium">Shop</th>
                     <th class="px-4 py-3 font-medium">Group</th>
                     <th class="px-4 py-3 font-medium">Price</th>
-                    <th class="px-4 py-3 font-medium">Limit</th>
+                    <th class="px-4 py-3 font-medium">Time</th>
+                    <th class="px-4 py-3 font-medium">Data</th>
                     <th class="px-4 py-3 font-medium">Speed</th>
                     <th class="px-4 py-3 text-right font-medium">Actions</th>
                 </tr>
@@ -23,7 +24,16 @@
                         <td class="px-4 py-3">{{ $package->shop->name }} / {{ $package->shop->tenant->company_name }}</td>
                         <td class="px-4 py-3">{{ $package->radius_group_name ?: 'Pending sync' }}</td>
                         <td class="px-4 py-3">{{ $package->currency }} {{ number_format($package->price, 2) }}</td>
-                        <td class="px-4 py-3">{{ number_format($package->limit_uptime_seconds) }}s</td>
+                        <td class="px-4 py-3">
+                            @php
+                                $days = intdiv($package->limit_uptime_seconds, 86400);
+                                $hours = intdiv($package->limit_uptime_seconds % 86400, 3600);
+                            @endphp
+                            {{ $days ? "{$days}d" : "{$hours}h" }}
+                        </td>
+                        <td class="px-4 py-3">
+                            {{ $package->data_limit_bytes ? number_format($package->data_limit_bytes / 1073741824, 1) . ' GB' : 'Unlimited' }}
+                        </td>
                         <td class="px-4 py-3">{{ $package->speed_limit_profile }}</td>
                         <td class="px-4 py-3">
                             <div class="flex justify-end gap-2">
@@ -37,7 +47,7 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="7" class="px-4 py-8 text-center text-zinc-500">No packages yet.</td></tr>
+                    <tr><td colspan="8" class="px-4 py-8 text-center text-zinc-500">No packages yet.</td></tr>
                 @endforelse
             </tbody>
         </table>
