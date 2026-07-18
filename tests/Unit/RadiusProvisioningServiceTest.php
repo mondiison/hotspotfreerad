@@ -53,7 +53,7 @@ class RadiusProvisioningServiceTest extends TestCase
 
         $groupName = app(RadiusProvisioningService::class)->syncPackageProfile($package);
 
-        $this->assertSame('tenant_1_shop_1_one_hour_ultra', $groupName);
+        $this->assertSame("tenant_{$package->shop->tenant_id}_shop_{$package->shop_id}_one_hour_ultra", $groupName);
         $this->assertDatabaseHas('packages', [
             'id' => $package->id,
             'radius_group_name' => $groupName,
@@ -107,6 +107,7 @@ class RadiusProvisioningServiceTest extends TestCase
         $service = app(RadiusProvisioningService::class);
 
         $service->grantSubscriptionAccess($subscription);
+        $package->refresh();
 
         $this->assertDatabaseHas('radcheck', [
             'username' => 'AA:BB:CC:DD:EE:FF',
@@ -115,7 +116,7 @@ class RadiusProvisioningServiceTest extends TestCase
         ]);
         $this->assertDatabaseHas('radusergroup', [
             'username' => 'AA:BB:CC:DD:EE:FF',
-            'groupname' => 'tenant_1_shop_1_one_hour_ultra',
+            'groupname' => $package->radius_group_name,
             'priority' => 1,
         ]);
 

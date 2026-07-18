@@ -38,6 +38,7 @@
                     $links = [
                         ['label' => 'Dashboard', 'route' => 'admin.dashboard'],
                         ['label' => 'Tenants', 'route' => 'admin.tenants.index', 'super_admin' => true],
+                        ['label' => 'Billing', 'route' => 'admin.billing.index'],
                         ['label' => 'Shops', 'route' => 'admin.shops.index'],
                         ['label' => 'Routers', 'route' => 'admin.routers.index'],
                         ['label' => 'Packages', 'route' => 'admin.packages.index'],

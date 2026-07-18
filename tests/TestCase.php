@@ -3,6 +3,7 @@
 namespace Tests;
 
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
+use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 
 abstract class TestCase extends BaseTestCase
 {
@@ -10,6 +11,7 @@ abstract class TestCase extends BaseTestCase
     {
         parent::setUp();
 
+        $this->withoutMiddleware(ValidateCsrfToken::class);
         $this->withoutVite();
     }
 }

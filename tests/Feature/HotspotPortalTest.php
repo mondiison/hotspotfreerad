@@ -120,7 +120,7 @@ class HotspotPortalTest extends TestCase
         ]);
         $this->assertDatabaseHas('radusergroup', [
             'username' => 'AA:BB:CC:DD:EE:FF',
-            'groupname' => 'tenant_1_shop_1_one_hour_ultra',
+            'groupname' => "tenant_{$router->shop->tenant_id}_shop_{$router->shop_id}_one_hour_ultra",
         ]);
     }
 

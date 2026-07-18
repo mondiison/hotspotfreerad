@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
 
@@ -42,6 +43,16 @@ class Tenant extends Model
     public function shops(): HasMany
     {
         return $this->hasMany(Shop::class);
+    }
+
+    public function billingSubscriptions(): HasMany
+    {
+        return $this->hasMany(TenantBillingSubscription::class);
+    }
+
+    public function currentBillingSubscription(): HasOne
+    {
+        return $this->hasOne(TenantBillingSubscription::class)->latestOfMany();
     }
 
     public function publicUrl(): string

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\BillingController;
 use App\Http\Controllers\Admin\PackageController;
 use App\Http\Controllers\Admin\RouterController;
 use App\Http\Controllers\Admin\ShopController;
@@ -37,6 +38,8 @@ Route::post('/hotspot/grant', [PortalController::class, 'grant'])->name('hotspot
 
 Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::get('/', DashboardController::class)->name('dashboard');
+    Route::get('billing', [BillingController::class, 'index'])->name('billing.index');
+    Route::post('billing/subscriptions', [BillingController::class, 'storeSubscription'])->name('billing.subscriptions.store');
     Route::resource('tenants', TenantController::class)->except('show');
     Route::resource('shops', ShopController::class)->except('show');
     Route::resource('routers', RouterController::class);
