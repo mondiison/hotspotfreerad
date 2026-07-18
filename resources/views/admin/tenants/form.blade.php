@@ -13,35 +13,34 @@
             <section>
                 <h2 class="text-sm font-semibold uppercase tracking-wide text-zinc-500">Account</h2>
                 <div class="mt-4 grid gap-5 md:grid-cols-2">
-            <label class="block">
-                <span class="text-sm font-medium">Company name</span>
-                <input name="company_name" value="{{ old('company_name', $tenant->company_name) }}" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2" required>
-                @error('company_name') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
-            </label>
+                    <flux:field>
+                        <flux:label>Company name</flux:label>
+                        <flux:input name="company_name" value="{{ old('company_name', $tenant->company_name) }}" icon="building-office" required />
+                        <flux:error name="company_name" />
+                    </flux:field>
 
-            <label class="block">
-                <span class="text-sm font-medium">Owner email</span>
-                <input type="email" name="owner_email" value="{{ old('owner_email', $tenant->owner_email) }}" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2" required>
-                @error('owner_email') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
-            </label>
+                    <flux:field>
+                        <flux:label>Owner email</flux:label>
+                        <flux:input type="email" name="owner_email" value="{{ old('owner_email', $tenant->owner_email) }}" icon="envelope" required />
+                        <flux:error name="owner_email" />
+                    </flux:field>
 
-            <label class="block">
-                <span class="text-sm font-medium">Subscription plan</span>
-                <input name="subscription_plan" value="{{ old('subscription_plan', $tenant->subscription_plan ?? 'basic') }}" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2" required>
-                <span class="mt-1 block text-xs text-zinc-500">Example: basic, growth, pro, enterprise.</span>
-                @error('subscription_plan') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
-            </label>
+                    <flux:field>
+                        <flux:label>Subscription plan</flux:label>
+                        <flux:input name="subscription_plan" value="{{ old('subscription_plan', $tenant->subscription_plan ?? 'basic') }}" icon="credit-card" required />
+                        <flux:description>Example: basic, growth, pro, enterprise.</flux:description>
+                        <flux:error name="subscription_plan" />
+                    </flux:field>
 
-            <label class="block">
-                <span class="text-sm font-medium">Trial ends at</span>
-                <input type="datetime-local" name="trial_ends_at" value="{{ old('trial_ends_at', optional($tenant->trial_ends_at)->format('Y-m-d\TH:i')) }}" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2">
-                @error('trial_ends_at') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
-            </label>
+                    <flux:field>
+                        <flux:label>Trial ends at</flux:label>
+                        <flux:input type="datetime-local" name="trial_ends_at" value="{{ old('trial_ends_at', optional($tenant->trial_ends_at)->format('Y-m-d\TH:i')) }}" />
+                        <flux:error name="trial_ends_at" />
+                    </flux:field>
 
-                    <label class="flex items-center gap-2 text-sm md:col-span-2">
-                <input type="checkbox" name="is_active" value="1" @checked(old('is_active', $tenant->is_active ?? true)) class="rounded border-zinc-300">
-                        Active tenant account
-            </label>
+                    <div class="md:col-span-2">
+                        <flux:checkbox name="is_active" value="1" :checked="(bool) old('is_active', $tenant->is_active ?? true)" label="Active tenant account" />
+                    </div>
                 </div>
             </section>
 
@@ -53,17 +52,17 @@
                     </div>
 
                     @if ($tenant->exists && $tenant->slug)
-                        <a href="{{ $tenant->publicUrl() }}" target="_blank" class="rounded-md border border-zinc-200 px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50">Preview site</a>
+                        <flux:button href="{{ $tenant->publicUrl() }}" target="_blank" variant="outline" icon="arrow-top-right-on-square">Preview site</flux:button>
                     @endif
                 </div>
 
                 <div class="mt-4 grid gap-5 md:grid-cols-2">
-                    <label class="block">
-                        <span class="text-sm font-medium">Unique slug</span>
-                        <input name="slug" value="{{ old('slug', $tenant->slug) }}" placeholder="demo-hotspot" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2">
-                        <span class="mt-1 block text-xs text-zinc-500">Use lowercase words with hyphens. Leave blank to generate it from the company name.</span>
-                        @error('slug') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
-                    </label>
+                    <flux:field>
+                        <flux:label>Unique slug</flux:label>
+                        <flux:input name="slug" value="{{ old('slug', $tenant->slug) }}" icon="link" placeholder="demo-hotspot" />
+                        <flux:description>Use lowercase words with hyphens. Leave blank to generate it from the company name.</flux:description>
+                        <flux:error name="slug" />
+                    </flux:field>
 
                     <div class="block">
                         <span class="text-sm font-medium">Brand color</span>
@@ -74,56 +73,55 @@
                             copyable
                             :swatches="['#0f766e', '#2563eb', '#7c3aed', '#dc2626', '#f59e0b', '#16a34a', '#0891b2', '#111827']"
                         />
-                        <span class="mt-1 block text-xs text-zinc-500">Example: #0f766e. This accents buttons and public-site highlights.</span>
-                        @error('brand_color') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
+                        <flux:description>Example: #0f766e. This accents buttons and public-site highlights.</flux:description>
+                        <flux:error name="brand_color" />
                     </div>
 
-                    <label class="block md:col-span-2">
-                        <span class="text-sm font-medium">Tagline</span>
-                        <input name="public_site_tagline" value="{{ old('public_site_tagline', $tenant->public_site_tagline) }}" placeholder="Fast Wi-Fi for guests, students, and daily users." class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2">
-                        @error('public_site_tagline') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
-                    </label>
+                    <flux:field class="md:col-span-2">
+                        <flux:label>Tagline</flux:label>
+                        <flux:input name="public_site_tagline" value="{{ old('public_site_tagline', $tenant->public_site_tagline) }}" icon="sparkles" placeholder="Fast Wi-Fi for guests, students, and daily users." />
+                        <flux:error name="public_site_tagline" />
+                    </flux:field>
 
-                    <label class="block md:col-span-2">
-                        <span class="text-sm font-medium">About this hotspot business</span>
-                        <textarea name="public_site_about" rows="4" placeholder="Tell customers what kind of locations you serve, support hours, or why your internet access is reliable." class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2">{{ old('public_site_about', $tenant->public_site_about) }}</textarea>
-                        @error('public_site_about') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
-                    </label>
+                    <flux:field class="md:col-span-2">
+                        <flux:label>About this hotspot business</flux:label>
+                        <flux:textarea name="public_site_about" rows="4" placeholder="Tell customers what kind of locations you serve, support hours, or why your internet access is reliable.">{{ old('public_site_about', $tenant->public_site_about) }}</flux:textarea>
+                        <flux:error name="public_site_about" />
+                    </flux:field>
 
-                    <label class="flex items-center gap-2 text-sm md:col-span-2">
-                        <input type="checkbox" name="public_site_enabled" value="1" @checked(old('public_site_enabled', $tenant->public_site_enabled ?? true)) class="rounded border-zinc-300">
-                        Public site enabled
-                    </label>
+                    <div class="md:col-span-2">
+                        <flux:checkbox name="public_site_enabled" value="1" :checked="(bool) old('public_site_enabled', $tenant->public_site_enabled ?? true)" label="Public site enabled" />
+                    </div>
                 </div>
             </section>
 
             <section class="border-t border-zinc-200 pt-6">
                 <h2 class="text-sm font-semibold uppercase tracking-wide text-zinc-500">Customer contact</h2>
                 <div class="mt-4 grid gap-5 md:grid-cols-2">
-                    <label class="block">
-                        <span class="text-sm font-medium">Contact phone</span>
-                        <input name="contact_phone" value="{{ old('contact_phone', $tenant->contact_phone) }}" placeholder="+234 800 000 0000" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2">
-                        @error('contact_phone') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
-                    </label>
+                    <flux:field>
+                        <flux:label>Contact phone</flux:label>
+                        <flux:input name="contact_phone" value="{{ old('contact_phone', $tenant->contact_phone) }}" icon="phone" placeholder="+234 800 000 0000" />
+                        <flux:error name="contact_phone" />
+                    </flux:field>
 
-                    <label class="block">
-                        <span class="text-sm font-medium">Contact email</span>
-                        <input type="email" name="contact_email" value="{{ old('contact_email', $tenant->contact_email ?? $tenant->owner_email) }}" placeholder="support@example.com" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2">
-                        @error('contact_email') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
-                    </label>
+                    <flux:field>
+                        <flux:label>Contact email</flux:label>
+                        <flux:input type="email" name="contact_email" value="{{ old('contact_email', $tenant->contact_email ?? $tenant->owner_email) }}" icon="envelope" placeholder="support@example.com" />
+                        <flux:error name="contact_email" />
+                    </flux:field>
 
-                    <label class="block md:col-span-2">
-                        <span class="text-sm font-medium">Contact address</span>
-                        <textarea name="contact_address" rows="3" placeholder="Shop address or coverage area customers should recognize." class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2">{{ old('contact_address', $tenant->contact_address) }}</textarea>
-                        @error('contact_address') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
-                    </label>
+                    <flux:field class="md:col-span-2">
+                        <flux:label>Contact address</flux:label>
+                        <flux:textarea name="contact_address" rows="3" placeholder="Shop address or coverage area customers should recognize.">{{ old('contact_address', $tenant->contact_address) }}</flux:textarea>
+                        <flux:error name="contact_address" />
+                    </flux:field>
                 </div>
             </section>
         </div>
 
         <div class="mt-6 flex gap-3">
-            <button class="rounded-md bg-zinc-950 px-4 py-2 text-sm font-medium text-white">Save Tenant</button>
-            <a href="{{ route('admin.tenants.index') }}" class="rounded-md border border-zinc-200 px-4 py-2 text-sm">Cancel</a>
+            <flux:button type="submit" variant="primary" icon="check">Save Tenant</flux:button>
+            <flux:button href="{{ route('admin.tenants.index') }}" variant="outline">Cancel</flux:button>
         </div>
     </form>
 </x-layouts.admin>
