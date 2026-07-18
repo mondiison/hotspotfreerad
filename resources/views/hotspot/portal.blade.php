@@ -38,9 +38,21 @@
                                 <dd class="font-medium text-zinc-950">{{ gmdate('H:i', $package->limit_uptime_seconds) }}</dd>
                             </div>
                         </dl>
-                        <button class="mt-5 w-full rounded-md bg-zinc-950 px-4 py-2 text-sm font-medium text-white" disabled>
-                            Payment coming next
-                        </button>
+                        <form method="POST" action="{{ route('hotspot.grant') }}" class="mt-5">
+                            @csrf
+                            <input type="hidden" name="package_id" value="{{ $package->id }}">
+                            <input type="hidden" name="mac" value="{{ $macAddress }}">
+                            <input type="hidden" name="nasid" value="{{ $router->nas_identifier }}">
+                            @if ($loginUrl)
+                                <input type="hidden" name="link-login" value="{{ $loginUrl }}">
+                            @endif
+                            @if ($originalUrl)
+                                <input type="hidden" name="link-orig" value="{{ $originalUrl }}">
+                            @endif
+                            <button class="w-full rounded-md bg-zinc-950 px-4 py-2 text-sm font-medium text-white">
+                                Start free access
+                            </button>
+                        </form>
                     </article>
                 @empty
                     <div class="rounded-lg border border-white/10 bg-white/5 p-5 text-sm text-zinc-300 md:col-span-3">

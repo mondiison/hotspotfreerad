@@ -226,6 +226,46 @@ If the portal shows "Router not registered", compare the received NAS ID with:
 
 Then create or update the router in HotspotFreeRAD so its NAS identifier exactly matches that value.
 
+## Temporary Free Access Test
+
+Before payment is added, the portal has a test button:
+
+```text
+Start free access
+```
+
+It creates:
+
+- a customer row for the device MAC;
+- a subscription row for the selected package;
+- a `radcheck` row using the MAC as username;
+- a `radusergroup` row binding the MAC to the package profile.
+
+The temporary RADIUS password is:
+
+```text
+authenticated_device_pass
+```
+
+For the handoff page to post the phone back into MikroTik automatically, the Hotspot profile should allow PAP during this test phase:
+
+```routeros
+/ip hotspot profile set saas-prof login-by=http-pap,http-chap,cookie,mac-cookie
+```
+
+After pressing `Start free access`, the app posts back to `$(link-login)` with:
+
+```text
+username = device MAC
+password = authenticated_device_pass
+```
+
+When real payment is added, this test path will be replaced with:
+
+```text
+Select package -> pay -> verified webhook -> provision access
+```
+
 ## Important Notes
 
 - Keep RADIUS ports `1812` and `1813` reachable only through the WireGuard tunnel or trusted LAN.

@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Route;
 Route::redirect('/', '/admin');
 
 Route::get('/hotspot/portal', [PortalController::class, 'show'])->name('hotspot.portal');
+Route::post('/hotspot/grant', [PortalController::class, 'grant'])->name('hotspot.grant');
 
 Route::prefix('admin')->name('admin.')->group(function () {
     Route::get('/', DashboardController::class)->name('dashboard');
