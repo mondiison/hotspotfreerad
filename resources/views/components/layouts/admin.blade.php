@@ -32,19 +32,20 @@
             </div>
 
             @auth
-                <div class="mt-6 flex items-center gap-3 rounded-md bg-zinc-100 p-3 text-sm" data-sidebar-user title="{{ auth()->user()->name }}">
+                <a href="{{ route('admin.profile.edit') }}" class="mt-6 flex items-center gap-3 rounded-md bg-zinc-100 p-3 text-sm hover:bg-zinc-200" data-sidebar-user title="{{ auth()->user()->name }}">
                     <span class="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-white text-xs font-semibold text-zinc-700">{{ str(auth()->user()->name)->substr(0, 1)->upper() }}</span>
                     <div data-sidebar-label class="min-w-0">
                         <p class="truncate font-medium">{{ auth()->user()->name }}</p>
                         <p class="mt-1 truncate text-xs text-zinc-500">{{ str_replace('_', ' ', auth()->user()->role) }}</p>
                     </div>
-                </div>
+                </a>
             @endauth
 
             <nav class="mt-8 space-y-1 text-sm">
                 @php
                     $links = [
                         ['label' => 'Dashboard', 'route' => 'admin.dashboard', 'icon' => 'squares-2x2'],
+                        ['label' => 'My Profile', 'route' => 'admin.profile.edit', 'icon' => 'user-circle'],
                         ['label' => 'Tenants', 'route' => 'admin.tenants.index', 'icon' => 'building-storefront', 'super_admin' => true],
                         ['label' => 'Brand', 'route' => 'admin.brand.edit', 'icon' => 'swatch', 'tenant_admin' => true],
                         ['label' => 'Billing', 'route' => 'admin.billing.index', 'icon' => 'credit-card'],
