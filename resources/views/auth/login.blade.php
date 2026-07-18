@@ -7,52 +7,48 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="min-h-screen bg-zinc-100 text-zinc-950 antialiased" style="--brand: {{ $tenant->brand_color ?? '#047857' }}">
-    <main class="grid min-h-screen lg:grid-cols-[1.05fr_0.95fr]">
-        <section class="hidden bg-zinc-950 text-white lg:flex lg:flex-col lg:justify-between lg:px-12 lg:py-10 xl:px-16">
-            <div>
-                <p class="text-lg font-semibold">{{ $tenant->company_name ?? 'HotspotFreeRAD' }}</p>
-                <p class="mt-2 text-sm text-zinc-400">{{ $tenant ? 'Tenant admin workspace' : 'FreeRADIUS control for MikroTik hotspot operators.' }}</p>
+    <main class="flex min-h-screen items-center justify-center px-5 py-10 sm:px-8">
+        <section class="grid w-full max-w-6xl overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm lg:grid-cols-[1.05fr_0.95fr]">
+            <div class="hidden bg-zinc-950 p-10 text-white lg:flex lg:flex-col lg:justify-between xl:p-12">
+                <div class="flex items-center gap-3">
+                    <span class="grid h-10 w-10 place-items-center rounded-lg text-sm font-semibold text-white" style="background-color: var(--brand)">HF</span>
+                    <div>
+                        <p class="font-semibold">{{ $tenant->company_name ?? 'HotspotFreeRAD' }}</p>
+                        <p class="mt-1 text-xs text-zinc-400">{{ $tenant ? 'Tenant admin workspace' : 'Platform operations console' }}</p>
+                    </div>
+                </div>
+
+                <div class="max-w-lg">
+                    <p class="text-xs font-semibold uppercase tracking-wide" style="color: var(--brand)">{{ $tenant ? 'Workspace access' : 'SaaS operations' }}</p>
+                    <h1 class="mt-4 text-4xl font-semibold leading-tight xl:text-5xl">{{ $tenant ? 'Manage locations, plans, routers, and access from one workspace.' : 'Operate tenants, billing, routers, and captive portal access from one console.' }}</h1>
+                    <p class="mt-5 text-sm leading-6 text-zinc-300">
+                        {{ $tenant->public_site_tagline ?? 'Built for hotspot operators that need tenant separation, branded public pages, payment routing, and RADIUS-backed access control.' }}
+                    </p>
+                </div>
+
+                <div class="grid grid-cols-3 gap-3 text-sm">
+                    @foreach ([
+                        ['value' => '01', 'label' => 'Tenant scope'],
+                        ['value' => '02', 'label' => 'Router health'],
+                        ['value' => '03', 'label' => 'Billing control'],
+                    ] as $item)
+                        <div class="rounded-lg border border-white/10 bg-white/[0.03] p-4">
+                            <p class="text-xl font-semibold">{{ $item['value'] }}</p>
+                            <p class="mt-2 text-xs text-zinc-400">{{ $item['label'] }}</p>
+                        </div>
+                    @endforeach
+                </div>
             </div>
 
-            <div class="max-w-xl">
-                <p class="text-sm font-medium uppercase tracking-wide" style="color: var(--brand)">{{ $tenant ? 'Workspace Access' : 'SaaS Operations' }}</p>
-                <h1 class="mt-4 text-5xl font-semibold leading-tight">{{ $tenant ? 'Manage your hotspot locations with a branded control room.' : 'Run tenants, routers, plans, and access from one console.' }}</h1>
-                <p class="mt-5 text-base leading-7 text-zinc-300">
-                    {{ $tenant->public_site_tagline ?? 'Built for hotspot businesses that need clean tenant separation, branded public pages, and RADIUS-backed customer access.' }}
-                </p>
-            </div>
+            <div class="flex items-center justify-center px-5 py-10 sm:px-8 lg:px-12">
+                <div class="w-full max-w-md">
+                    <div class="mb-8">
+                        <p class="text-sm font-medium" style="color: var(--brand)">{{ $tenant ? $tenant->company_name : 'Welcome back' }}</p>
+                        <h2 class="mt-2 text-3xl font-semibold">Sign in to {{ $tenant ? 'your workspace' : 'HotspotFreeRAD' }}</h2>
+                        <p class="mt-2 text-sm leading-6 text-zinc-600">{{ $tenant ? 'Use the tenant admin account linked to this workspace.' : 'Use your super admin or tenant admin credentials.' }}</p>
+                    </div>
 
-            <div class="grid grid-cols-3 gap-3 text-sm">
-                <div class="rounded-lg border border-white/10 p-4">
-                    <p class="text-2xl font-semibold">01</p>
-                    <p class="mt-2 text-zinc-400">Tenant scope</p>
-                </div>
-                <div class="rounded-lg border border-white/10 p-4">
-                    <p class="text-2xl font-semibold">02</p>
-                    <p class="mt-2 text-zinc-400">Router health</p>
-                </div>
-                <div class="rounded-lg border border-white/10 p-4">
-                    <p class="text-2xl font-semibold">03</p>
-                    <p class="mt-2 text-zinc-400">Captive portal</p>
-                </div>
-            </div>
-        </section>
-
-        <section class="flex min-h-screen items-center justify-center px-5 py-10 sm:px-8">
-            <div class="w-full max-w-md">
-                <div class="mb-8 lg:hidden">
-                    <p class="text-sm font-medium" style="color: var(--brand)">{{ $tenant->company_name ?? 'HotspotFreeRAD' }}</p>
-                    <h1 class="mt-2 text-3xl font-semibold">Sign in</h1>
-                    <p class="mt-2 text-sm text-zinc-600">{{ $tenant ? 'Manage this tenant workspace.' : 'Manage tenants, routers, packages, and captive portal access.' }}</p>
-                </div>
-
-                <div class="hidden lg:mb-8 lg:block">
-                    <p class="text-sm font-medium" style="color: var(--brand)">Welcome back</p>
-                    <h2 class="mt-2 text-3xl font-semibold">Sign in to {{ $tenant ? $tenant->company_name : 'your console' }}</h2>
-                    <p class="mt-2 text-sm text-zinc-600">{{ $tenant ? 'Use the tenant admin account linked to this workspace.' : 'Use your super admin or tenant admin credentials.' }}</p>
-                </div>
-
-                <form method="POST" action="{{ route('login.store') }}" class="rounded-lg border border-zinc-200 bg-white p-6 shadow-sm">
+                    <form method="POST" action="{{ route('login.store') }}" class="rounded-lg border border-zinc-200 bg-zinc-50 p-6">
                     @csrf
                     @if ($tenant)
                         <input type="hidden" name="tenant_slug" value="{{ $tenant->slug }}">
@@ -80,8 +76,9 @@
                         </label>
                     </div>
 
-                    <button class="mt-6 w-full rounded-md px-4 py-2.5 text-sm font-medium text-white" style="background-color: var(--brand)">Sign In</button>
-                </form>
+                        <button class="mt-6 w-full rounded-md px-4 py-2.5 text-sm font-medium text-white" style="background-color: var(--brand)">Sign In</button>
+                    </form>
+                </div>
             </div>
         </section>
     </main>
