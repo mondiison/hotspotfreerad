@@ -32,6 +32,9 @@ class HotspotPortalTest extends TestCase
             'owner_email' => 'owner@example.com',
             'brand_color' => '#2563eb',
             'public_site_tagline' => 'Premium guest Wi-Fi.',
+            'hero_image_path' => 'tenant-brand/1/hero.jpg',
+            'flyer_image_path' => 'tenant-brand/1/flyer.jpg',
+            'public_site_slides' => ['tenant-brand/1/slides/offer.jpg'],
         ]);
 
         $shop = Shop::create([
@@ -53,7 +56,10 @@ class HotspotPortalTest extends TestCase
             'price' => 500,
             'currency' => 'NGN',
             'limit_uptime_seconds' => 3600,
+            'data_limit_bytes' => 5368709120,
             'speed_limit_profile' => '5M/5M',
+            'fup_data_threshold_bytes' => 2147483648,
+            'fup_speed_limit_profile' => '1M/1M',
             'is_active' => true,
         ]);
 
@@ -62,9 +68,15 @@ class HotspotPortalTest extends TestCase
             ->assertSee('Demo Shop')
             ->assertSee('Premium guest Wi-Fi.')
             ->assertSee('#2563eb')
+            ->assertSee('/storage/tenant-brand/1/hero.jpg', false)
+            ->assertSee('/storage/tenant-brand/1/flyer.jpg', false)
+            ->assertSee('/storage/tenant-brand/1/slides/offer.jpg', false)
             ->assertSee('AA:BB:CC:DD:EE:FF')
             ->assertSee('One Hour Ultra')
             ->assertSee('NGN 500.00')
+            ->assertSee('1 hour')
+            ->assertSee('5 GB')
+            ->assertSee('After 2 GB: 1M/1M')
             ->assertSee('Continue to payment')
             ->assertSee('Start test access');
     }

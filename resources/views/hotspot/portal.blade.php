@@ -7,12 +7,50 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="min-h-screen bg-zinc-950 text-white antialiased" style="--brand: {{ $shop->tenant->brand_color ?? '#10b981' }}">
+    @php
+        $tenant = $shop->tenant;
+        $heroImageUrl = $tenant->hero_image_path ? \Illuminate\Support\Facades\Storage::disk('public')->url($tenant->hero_image_path) : null;
+        $flyerImageUrl = $tenant->flyer_image_path ? \Illuminate\Support\Facades\Storage::disk('public')->url($tenant->flyer_image_path) : null;
+        $slideImageUrls = collect($tenant->public_site_slides ?? [])
+            ->map(fn ($path) => \Illuminate\Support\Facades\Storage::disk('public')->url($path));
+
+        $formatDuration = function (?int $seconds): string {
+            if (! $seconds) {
+                return 'Not set';
+            }
+
+            if ($seconds >= 86400) {
+                $days = (int) round($seconds / 86400);
+
+                return $days.' '.\Illuminate\Support\Str::plural('day', $days);
+            }
+
+            if ($seconds >= 3600) {
+                $hours = (int) round($seconds / 3600);
+
+                return $hours.' '.\Illuminate\Support\Str::plural('hour', $hours);
+            }
+
+            $minutes = (int) max(1, round($seconds / 60));
+
+            return $minutes.' '.\Illuminate\Support\Str::plural('minute', $minutes);
+        };
+
+        $formatData = function (?int $bytes): string {
+            if (! $bytes) {
+                return 'Unlimited';
+            }
+
+            return number_format($bytes / 1073741824, $bytes % 1073741824 === 0 ? 0 : 1).' GB';
+        };
+    @endphp
+
     <main class="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-5 py-8">
         <header class="flex items-start justify-between gap-4 border-b border-white/10 pb-5">
             <div>
-                <p class="text-sm font-medium" style="color: var(--brand)">{{ $shop->tenant->company_name }}</p>
+                <p class="text-sm font-medium" style="color: var(--brand)">{{ $tenant->company_name }}</p>
                 <h1 class="mt-1 text-3xl font-semibold">{{ $shop->name }}</h1>
-                <p class="mt-2 max-w-2xl text-sm text-zinc-300">{{ $shop->tenant->public_site_tagline ?: 'Choose an internet plan for this device.' }}</p>
+                <p class="mt-2 max-w-2xl text-sm text-zinc-300">{{ $tenant->public_site_tagline ?: 'Choose an internet plan for this device.' }}</p>
                 <p class="mt-2 text-sm text-zinc-400">Device {{ $macAddress }}</p>
             </div>
             <div class="rounded-md border border-white/10 px-3 py-2 text-right text-xs text-zinc-300">
@@ -20,6 +58,33 @@
                 <p>{{ $router->wireguard_internal_ip }}</p>
             </div>
         </header>
+
+        @if ($heroImageUrl || $flyerImageUrl || $slideImageUrls->isNotEmpty())
+            <section class="grid gap-4 border-b border-white/10 py-6 lg:grid-cols-[1.4fr_0.8fr]">
+                @if ($heroImageUrl)
+                    <img src="{{ $heroImageUrl }}" alt="{{ $tenant->company_name }} hero" class="h-64 w-full rounded-lg border border-white/10 object-cover">
+                @else
+                    <div class="rounded-lg border border-white/10 bg-white/[0.04] p-6">
+                        <p class="text-sm font-medium" style="color: var(--brand)">Welcome</p>
+                        <p class="mt-3 text-2xl font-semibold">{{ $tenant->public_site_tagline ?: 'Internet access for this hotspot.' }}</p>
+                    </div>
+                @endif
+
+                <div class="grid gap-4">
+                    @if ($flyerImageUrl)
+                        <img src="{{ $flyerImageUrl }}" alt="{{ $tenant->company_name }} flyer" class="h-64 w-full rounded-lg border border-white/10 object-cover">
+                    @endif
+
+                    @if ($slideImageUrls->isNotEmpty())
+                        <div class="grid gap-3 {{ $flyerImageUrl ? 'grid-cols-2' : 'grid-cols-3' }}">
+                            @foreach ($slideImageUrls->take($flyerImageUrl ? 2 : 3) as $slideImageUrl)
+                                <img src="{{ $slideImageUrl }}" alt="{{ $tenant->company_name }} offer {{ $loop->iteration }}" class="h-24 w-full rounded-lg border border-white/10 object-cover">
+                            @endforeach
+                        </div>
+                    @endif
+                </div>
+            </section>
+        @endif
 
         <section class="py-8">
             <h2 class="text-lg font-semibold">Choose internet access</h2>
@@ -36,12 +101,18 @@
                             </div>
                             <div class="flex justify-between gap-4">
                                 <dt>Time</dt>
-                                <dd class="font-medium text-zinc-950">{{ gmdate('H:i', $package->limit_uptime_seconds) }}</dd>
+                                <dd class="font-medium text-zinc-950">{{ $formatDuration($package->limit_uptime_seconds) }}</dd>
                             </div>
                             <div class="flex justify-between gap-4">
                                 <dt>Data</dt>
-                                <dd class="font-medium text-zinc-950">{{ $package->data_limit_bytes ? number_format($package->data_limit_bytes / 1073741824, 1) . ' GB' : 'Unlimited' }}</dd>
+                                <dd class="font-medium text-zinc-950">{{ $formatData($package->data_limit_bytes) }}</dd>
                             </div>
+                            @if ($package->fup_data_threshold_bytes && $package->fup_speed_limit_profile)
+                                <div class="flex justify-between gap-4">
+                                    <dt>Fair use</dt>
+                                    <dd class="text-right font-medium text-zinc-950">After {{ $formatData($package->fup_data_threshold_bytes) }}: {{ $package->fup_speed_limit_profile }}</dd>
+                                </div>
+                            @endif
                         </dl>
                         <form method="POST" action="{{ route('hotspot.pay') }}" class="mt-5 space-y-3">
                             @csrf
