@@ -33,23 +33,42 @@
                 @error('location_city') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
             </label>
 
-            <label class="block md:col-span-2">
-                <span class="text-sm font-medium">Flutterwave client ID</span>
-                <input name="flutterwave_client_id" value="{{ old('flutterwave_client_id') }}" placeholder="{{ $shop->exists ? 'Leave blank to keep current value' : '' }}" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2">
-                @error('flutterwave_client_id') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
-            </label>
+            <section class="md:col-span-2 rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+                <div class="mb-4">
+                    <h2 class="text-sm font-semibold text-zinc-950">Flutterwave payments</h2>
+                    <p class="mt-1 text-sm leading-6 text-zinc-600">
+                        Add this shop's Flutterwave v4 client ID and client secret when payments should settle into the tenant's own Flutterwave account. Leave both empty to use the platform fallback account from the server .env file.
+                    </p>
+                    @if ($shop->exists)
+                        <p class="mt-2 text-xs font-medium text-zinc-500">
+                            Existing saved secrets are hidden. Leave a credential field empty when editing to keep the current value.
+                        </p>
+                    @endif
+                </div>
 
-            <label class="block md:col-span-2">
-                <span class="text-sm font-medium">Flutterwave client secret</span>
-                <input name="flutterwave_client_secret" value="{{ old('flutterwave_client_secret') }}" placeholder="{{ $shop->exists ? 'Leave blank to keep current value' : '' }}" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2">
-                @error('flutterwave_client_secret') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
-            </label>
+                <div class="grid gap-5">
+                    <label class="block">
+                        <span class="text-sm font-medium">Flutterwave client ID</span>
+                        <input name="flutterwave_client_id" value="{{ old('flutterwave_client_id') }}" placeholder="{{ $shop->exists ? 'Leave blank to keep current value' : 'Example: FLW_CLIENT_...' }}" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2">
+                        <span class="mt-1 block text-xs text-zinc-500">Required with client secret for tenant-owned collections.</span>
+                        @error('flutterwave_client_id') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
+                    </label>
 
-            <label class="block md:col-span-2">
-                <span class="text-sm font-medium">Flutterwave webhook secret</span>
-                <input name="flutterwave_webhook_secret" value="{{ old('flutterwave_webhook_secret') }}" placeholder="{{ $shop->exists ? 'Leave blank to keep current value' : '' }}" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2">
-                @error('flutterwave_webhook_secret') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
-            </label>
+                    <label class="block">
+                        <span class="text-sm font-medium">Flutterwave client secret</span>
+                        <input name="flutterwave_client_secret" value="{{ old('flutterwave_client_secret') }}" placeholder="{{ $shop->exists ? 'Leave blank to keep current value' : 'Paste the matching v4 client secret' }}" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2">
+                        <span class="mt-1 block text-xs text-zinc-500">The app uses this only on the server to request Flutterwave access tokens.</span>
+                        @error('flutterwave_client_secret') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
+                    </label>
+
+                    <label class="block">
+                        <span class="text-sm font-medium">Flutterwave webhook secret hash</span>
+                        <input name="flutterwave_webhook_secret" value="{{ old('flutterwave_webhook_secret') }}" placeholder="{{ $shop->exists ? 'Leave blank to keep current value' : 'Optional: tenant webhook verif-hash' }}" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2">
+                        <span class="mt-1 block text-xs text-zinc-500">If empty, webhook verification falls back to the platform webhook secret hash.</span>
+                        @error('flutterwave_webhook_secret') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
+                    </label>
+                </div>
+            </section>
 
             <label class="flex items-center gap-2 text-sm">
                 <input type="checkbox" name="is_active" value="1" @checked(old('is_active', $shop->is_active ?? true)) class="rounded border-zinc-300">

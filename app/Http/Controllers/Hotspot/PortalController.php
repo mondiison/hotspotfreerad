@@ -185,6 +185,7 @@ class PortalController extends Controller
         });
 
         $payment->load(['shop.tenant', 'package', 'customer']);
+        $credentialSource = $flutterwave->credentialSource($payment);
 
         if ($flutterwave->isConfiguredFor($payment)) {
             try {
@@ -202,6 +203,7 @@ class PortalController extends Controller
                     'provider_reference' => $checkout['provider_reference'],
                     'payload' => array_merge($payment->payload ?? [], [
                         'checkout_url' => $checkout['checkout_url'],
+                        'flutterwave_account' => $credentialSource,
                         'flutterwave_init_response' => $checkout['response'],
                     ]),
                 ]);

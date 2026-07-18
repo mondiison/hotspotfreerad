@@ -33,10 +33,18 @@ class FlutterwaveService
                     'name' => $customer['name'] ?? 'Hotspot Customer',
                 ],
                 'metadata' => [
+                    'payment_id' => $payment->id,
+                    'payment_reference' => $payment->tx_ref,
+                    'credential_source' => $this->credentialSource($payment)['source'],
+                    'credential_label' => $this->credentialSource($payment)['label'],
+                    'tenant_id' => $payment->shop->tenant_id,
+                    'tenant_name' => $payment->shop->tenant->company_name,
                     'shop_id' => $payment->shop_id,
+                    'shop_name' => $payment->shop->name,
                     'package_id' => $payment->package_id,
-                    'tenant' => $payment->shop->tenant->company_name,
-                    'package' => $payment->package->name,
+                    'package_name' => $payment->package->name,
+                    'device_mac' => data_get($payment->payload, 'mac'),
+                    'nas_identifier' => data_get($payment->payload, 'nasid'),
                 ],
             ])
             ->throw()
@@ -74,6 +82,21 @@ class FlutterwaveService
     public function isConfiguredFor(Payment $payment): bool
     {
         return filled($this->clientId($payment)) && filled($this->clientSecret($payment));
+    }
+
+    public function credentialSource(Payment $payment): array
+    {
+        if (filled($payment->shop?->flutterwave_client_id) && filled($payment->shop?->flutterwave_client_secret)) {
+            return [
+                'source' => 'tenant',
+                'label' => $payment->shop->tenant->company_name.' / '.$payment->shop->name,
+            ];
+        }
+
+        return [
+            'source' => 'platform',
+            'label' => (string) config('app.name', 'Platform').' fallback account',
+        ];
     }
 
     public function providerReference(array $response): ?string
@@ -137,12 +160,20 @@ class FlutterwaveService
 
     private function clientId(Payment $payment): string
     {
-        return (string) ($payment->shop?->flutterwave_client_id ?: config('services.flutterwave.client_id'));
+        if ($this->credentialSource($payment)['source'] === 'tenant') {
+            return (string) $payment->shop->flutterwave_client_id;
+        }
+
+        return (string) config('services.flutterwave.client_id');
     }
 
     private function clientSecret(Payment $payment): string
     {
-        return (string) ($payment->shop?->flutterwave_client_secret ?: config('services.flutterwave.client_secret'));
+        if ($this->credentialSource($payment)['source'] === 'tenant') {
+            return (string) $payment->shop->flutterwave_client_secret;
+        }
+
+        return (string) config('services.flutterwave.client_secret');
     }
 
     private function baseUrl(): string
