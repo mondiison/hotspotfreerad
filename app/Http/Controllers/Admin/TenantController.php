@@ -4,8 +4,10 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Tenant;
+use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
@@ -32,7 +34,22 @@ class TenantController extends Controller
     {
         abort_unless($request->user()->isSuperAdmin(), 403);
 
-        Tenant::create($this->validated($request));
+        $data = $this->validated($request);
+        $password = $data['owner_password'];
+        unset($data['owner_password'], $data['owner_password_confirmation']);
+
+        DB::transaction(function () use ($data, $password): void {
+            $tenant = Tenant::create($data);
+
+            User::create([
+                'tenant_id' => $tenant->id,
+                'name' => $tenant->company_name.' Admin',
+                'email' => $tenant->owner_email,
+                'role' => 'tenant_admin',
+                'is_active' => $tenant->is_active,
+                'password' => $password,
+            ]);
+        });
 
         return redirect()->route('admin.tenants.index')->with('status', 'Tenant created.');
     }
@@ -48,7 +65,41 @@ class TenantController extends Controller
     {
         abort_unless($request->user()->isSuperAdmin(), 403);
 
-        $tenant->update($this->validated($request, $tenant));
+        $data = $this->validated($request, $tenant);
+        $password = $data['owner_password'] ?? null;
+        unset($data['owner_password'], $data['owner_password_confirmation']);
+
+        DB::transaction(function () use ($tenant, $data, $password): void {
+            $previousOwnerEmail = $tenant->owner_email;
+            $ownerUser = User::query()
+                ->where('tenant_id', $tenant->id)
+                ->where('role', 'tenant_admin')
+                ->where('email', $previousOwnerEmail)
+                ->first();
+
+            $tenant->update($data);
+
+            if ($ownerUser) {
+                $ownerUser->update(array_filter([
+                    'email' => $tenant->owner_email,
+                    'is_active' => $tenant->is_active,
+                    'password' => $password,
+                ], fn ($value) => filled($value) || is_bool($value)));
+
+                return;
+            }
+
+            if (filled($password)) {
+                User::create([
+                    'tenant_id' => $tenant->id,
+                    'name' => $tenant->company_name.' Admin',
+                    'email' => $tenant->owner_email,
+                    'role' => 'tenant_admin',
+                    'is_active' => $tenant->is_active,
+                    'password' => $password,
+                ]);
+            }
+        });
 
         return redirect()->route('admin.tenants.index')->with('status', 'Tenant updated.');
     }
@@ -65,6 +116,13 @@ class TenantController extends Controller
     private function validated(Request $request, ?Tenant $tenant = null): array
     {
         $tenantId = $tenant?->id ?? 'NULL';
+        $ownerUserId = $tenant
+            ? User::query()
+                ->where('tenant_id', $tenant->id)
+                ->where('role', 'tenant_admin')
+                ->where('email', $tenant->owner_email)
+                ->value('id')
+            : null;
 
         $data = $request->validate([
             'company_name' => ['required', 'string', 'max:255'],
@@ -77,6 +135,7 @@ class TenantController extends Controller
                 Rule::unique('tenants', 'slug')->ignore($tenant?->id),
             ],
             'owner_email' => ['required', 'email', 'max:255', "unique:tenants,owner_email,{$tenantId}"],
+            'owner_password' => [$tenant ? 'nullable' : 'required', 'string', 'min:8', 'confirmed'],
             'subscription_plan' => ['required', 'string', 'max:50'],
             'trial_ends_at' => ['nullable', 'date'],
             'is_active' => ['nullable', 'boolean'],
@@ -92,6 +151,12 @@ class TenantController extends Controller
             'public_site_enabled' => false,
             'brand_color' => '#0f766e',
         ];
+
+        validator($data, [
+            'owner_email' => [
+                Rule::unique('users', 'email')->ignore($ownerUserId),
+            ],
+        ])->validate();
 
         if (filled($data['slug'] ?? null)) {
             $data['slug'] = Str::slug($data['slug']);

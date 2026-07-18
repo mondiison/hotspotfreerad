@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
-use App\Models\Tenant;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -11,11 +10,9 @@ use Illuminate\View\View;
 
 class LoginController extends Controller
 {
-    public function create(?Tenant $tenant = null): View
+    public function create(): View
     {
-        abort_if($tenant && (! $tenant->is_active || ! $tenant->public_site_enabled), 404);
-
-        return view('auth.login', compact('tenant'));
+        return view('auth.login');
     }
 
     public function store(Request $request): RedirectResponse
@@ -23,12 +20,7 @@ class LoginController extends Controller
         $credentials = $request->validate([
             'email' => ['required', 'email'],
             'password' => ['required', 'string'],
-            'tenant_slug' => ['nullable', 'string'],
         ]);
-
-        $tenant = filled($credentials['tenant_slug'] ?? null)
-            ? Tenant::where('slug', $credentials['tenant_slug'])->first()
-            : null;
 
         if (! Auth::attempt([
             'email' => $credentials['email'],
@@ -40,17 +32,23 @@ class LoginController extends Controller
                 ->onlyInput('email');
         }
 
-        if ($tenant && ! Auth::user()->isSuperAdmin() && Auth::user()->tenant_id !== $tenant->id) {
+        $user = Auth::user()->load('tenant');
+
+        if ($user->isTenantAdmin() && (! $user->tenant || ! $user->tenant->is_active)) {
             Auth::logout();
 
             return back()
-                ->withErrors(['email' => 'This user does not belong to this tenant workspace.'])
+                ->withErrors(['email' => 'This tenant workspace is not active.'])
                 ->onlyInput('email');
         }
 
         $request->session()->regenerate();
 
-        return redirect()->intended(route('admin.dashboard'));
+        return redirect()->intended(
+            $user->isTenantAdmin()
+                ? route('tenant.public-site', $user->tenant)
+                : route('admin.dashboard')
+        );
     }
 
     public function destroy(Request $request): RedirectResponse

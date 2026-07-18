@@ -3,34 +3,26 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Sign In - {{ $tenant->company_name ?? 'HotspotFreeRAD' }}</title>
+    <title>Sign In - HotspotFreeRAD</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
-<body class="min-h-screen bg-zinc-100 text-zinc-950 antialiased" style="--brand: {{ $tenant->brand_color ?? '#047857' }}">
-    @php
-        $logoImageUrl = $tenant?->logo_image_path ? \Illuminate\Support\Facades\Storage::disk('public')->url($tenant->logo_image_path) : null;
-    @endphp
-
+<body class="min-h-screen bg-zinc-100 text-zinc-950 antialiased" style="--brand: #047857">
     <main class="flex min-h-screen items-center justify-center px-5 py-10 sm:px-8">
         <section class="grid w-full max-w-6xl overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm lg:grid-cols-[1.05fr_0.95fr]">
             <div class="hidden bg-zinc-950 p-10 text-white lg:flex lg:flex-col lg:justify-between xl:p-12">
                 <div class="flex items-center gap-3">
-                    @if ($logoImageUrl)
-                        <img src="{{ $logoImageUrl }}" alt="{{ $tenant->company_name }} logo" class="h-10 w-10 rounded-lg border border-white/10 bg-white object-cover">
-                    @else
-                        <span class="grid h-10 w-10 place-items-center rounded-lg text-sm font-semibold text-white" style="background-color: var(--brand)">HF</span>
-                    @endif
+                    <span class="grid h-10 w-10 place-items-center rounded-lg text-sm font-semibold text-white" style="background-color: var(--brand)">HF</span>
                     <div>
-                        <p class="font-semibold">{{ $tenant->company_name ?? 'HotspotFreeRAD' }}</p>
-                        <p class="mt-1 text-xs text-zinc-400">{{ $tenant ? 'Tenant admin workspace' : 'Platform operations console' }}</p>
+                        <p class="font-semibold">HotspotFreeRAD</p>
+                        <p class="mt-1 text-xs text-zinc-400">Platform and tenant operations console</p>
                     </div>
                 </div>
 
                 <div class="max-w-lg">
-                    <p class="text-xs font-semibold uppercase tracking-wide" style="color: var(--brand)">{{ $tenant ? 'Workspace access' : 'SaaS operations' }}</p>
-                    <h1 class="mt-4 text-4xl font-semibold leading-tight xl:text-5xl">{{ $tenant ? 'Manage locations, plans, routers, and access from one workspace.' : 'Operate tenants, billing, routers, and captive portal access from one console.' }}</h1>
+                    <p class="text-xs font-semibold uppercase tracking-wide" style="color: var(--brand)">SaaS operations</p>
+                    <h1 class="mt-4 text-4xl font-semibold leading-tight xl:text-5xl">Operate tenants, billing, routers, and captive portal access from one console.</h1>
                     <p class="mt-5 text-sm leading-6 text-zinc-300">
-                        {{ $tenant->public_site_tagline ?? 'Built for hotspot operators that need tenant separation, branded public pages, payment routing, and RADIUS-backed access control.' }}
+                        Built for hotspot operators that need tenant separation, branded public pages, payment routing, and RADIUS-backed access control.
                     </p>
                 </div>
 
@@ -51,16 +43,13 @@
             <div class="flex items-center justify-center px-5 py-10 sm:px-8 lg:px-12">
                 <div class="w-full max-w-md">
                     <div class="mb-8">
-                        <p class="text-sm font-medium" style="color: var(--brand)">{{ $tenant ? $tenant->company_name : 'Welcome back' }}</p>
-                        <h2 class="mt-2 text-3xl font-semibold">Sign in to {{ $tenant ? 'your workspace' : 'HotspotFreeRAD' }}</h2>
-                        <p class="mt-2 text-sm leading-6 text-zinc-600">{{ $tenant ? 'Use the tenant admin account linked to this workspace.' : 'Use your super admin or tenant admin credentials.' }}</p>
+                        <p class="text-sm font-medium" style="color: var(--brand)">Welcome back</p>
+                        <h2 class="mt-2 text-3xl font-semibold">Sign in to HotspotFreeRAD</h2>
+                        <p class="mt-2 text-sm leading-6 text-zinc-600">Use your super admin or tenant admin credentials. Tenant admins are routed to their own tenant workspace after login.</p>
                     </div>
 
                     <form method="POST" action="{{ route('login.store') }}" class="rounded-lg border border-zinc-200 bg-zinc-50 p-6">
                     @csrf
-                    @if ($tenant)
-                        <input type="hidden" name="tenant_slug" value="{{ $tenant->slug }}">
-                    @endif
 
                     <div class="space-y-5">
                         <label class="block">

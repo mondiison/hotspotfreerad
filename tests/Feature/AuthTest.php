@@ -35,6 +35,29 @@ class AuthTest extends TestCase
         $this->assertAuthenticatedAs($user);
     }
 
+    public function test_tenant_admin_uses_shared_login_and_redirects_to_tenant_slug(): void
+    {
+        $tenant = Tenant::create([
+            'company_name' => 'Mondi Internet',
+            'owner_email' => 'owner@example.com',
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'email' => 'tenant@example.com',
+            'password' => 'secret-password',
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->post('/login', [
+            'email' => $user->email,
+            'password' => 'secret-password',
+        ])
+            ->assertRedirect(route('tenant.public-site', $tenant));
+
+        $this->assertAuthenticatedAs($user);
+    }
+
     public function test_inactive_user_cannot_login(): void
     {
         User::factory()->create([
@@ -60,42 +83,22 @@ class AuthTest extends TestCase
             ->assertSee(route('password.request'), false);
     }
 
-    public function test_tenant_login_page_is_branded(): void
+    public function test_tenant_admin_cannot_login_when_tenant_is_inactive(): void
     {
         $tenant = Tenant::create([
             'company_name' => 'Mondi Internet',
             'owner_email' => 'owner@example.com',
-            'brand_color' => '#2563eb',
-            'public_site_tagline' => 'Fast access for every guest.',
-        ]);
-
-        $this->get(route('tenant.login', $tenant))
-            ->assertOk()
-            ->assertSee('Mondi Internet')
-            ->assertSee('Fast access for every guest.')
-            ->assertSee('#2563eb');
-    }
-
-    public function test_tenant_login_rejects_user_from_another_tenant(): void
-    {
-        $tenant = Tenant::create([
-            'company_name' => 'Mondi Internet',
-            'owner_email' => 'owner@example.com',
-        ]);
-        $otherTenant = Tenant::create([
-            'company_name' => 'Other Internet',
-            'owner_email' => 'other@example.com',
+            'is_active' => false,
         ]);
         $user = User::factory()->create([
-            'tenant_id' => $otherTenant->id,
+            'tenant_id' => $tenant->id,
             'email' => 'admin@example.com',
             'password' => 'secret-password',
             'role' => 'tenant_admin',
             'is_active' => true,
         ]);
 
-        $this->post(route('login.store'), [
-            'tenant_slug' => $tenant->slug,
+        $this->post('/login', [
             'email' => $user->email,
             'password' => 'secret-password',
         ])

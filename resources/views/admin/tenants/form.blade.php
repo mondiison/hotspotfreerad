@@ -22,7 +22,21 @@
                     <flux:field>
                         <flux:label>Owner email</flux:label>
                         <flux:input type="email" name="owner_email" value="{{ old('owner_email', $tenant->owner_email) }}" icon="envelope" required />
+                        <flux:description>This email becomes the tenant admin login.</flux:description>
                         <flux:error name="owner_email" />
+                    </flux:field>
+
+                    <flux:field>
+                        <flux:label>{{ $tenant->exists ? 'Owner password' : 'Owner password' }}</flux:label>
+                        <flux:input type="password" name="owner_password" icon="key" :required="! $tenant->exists" />
+                        <flux:description>{{ $tenant->exists ? 'Leave blank to keep the current password. Enter one to create or reset the tenant owner login.' : 'Give this to the tenant owner for first sign in. Minimum 8 characters.' }}</flux:description>
+                        <flux:error name="owner_password" />
+                    </flux:field>
+
+                    <flux:field>
+                        <flux:label>Confirm owner password</flux:label>
+                        <flux:input type="password" name="owner_password_confirmation" icon="key" :required="! $tenant->exists" />
+                        <flux:error name="owner_password_confirmation" />
                     </flux:field>
 
                     <flux:field>

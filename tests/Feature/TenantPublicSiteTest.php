@@ -60,7 +60,7 @@ class TenantPublicSiteTest extends TestCase
             ->assertSee('Daily Unlimited')
             ->assertSee('NGN 1,000.00')
             ->assertSee('Admin sign in')
-            ->assertSee(route('tenant.login', $tenant), false)
+            ->assertSee(route('login'), false)
             ->assertSee('Featured access')
             ->assertSee('5 GB')
             ->assertSee('After 2 GB: 1M/1M')
