@@ -3,6 +3,8 @@
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
+use App\Mail\HotspotTestMail;
 use App\Models\Tenant;
 use App\Models\User;
 
@@ -65,3 +67,14 @@ Artisan::command('hotspot:create-tenant-admin {tenant} {password} {--email=} {--
     $this->info("Tenant admin ready: {$user->email}");
     $this->line("Tenant: {$tenantModel->company_name} ({$tenantModel->slug})");
 })->purpose('Create or update a tenant admin user for an existing tenant');
+
+Artisan::command('hotspot:test-mail {email}', function (string $email): void {
+    $this->line('Mailer: '.config('mail.default'));
+    $this->line('Host: '.(config('mail.mailers.smtp.host') ?: 'not configured'));
+    $this->line('Port: '.(config('mail.mailers.smtp.port') ?: 'not configured'));
+    $this->line('From: '.config('mail.from.address'));
+
+    Mail::to($email)->send(new HotspotTestMail());
+
+    $this->info("Test email handed to mailer for {$email}");
+})->purpose('Send a test email and show the active mail transport without secrets');

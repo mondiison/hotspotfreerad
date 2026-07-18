@@ -4,9 +4,11 @@ namespace Tests\Feature;
 
 use App\Models\Tenant;
 use App\Models\User;
+use App\Mail\HotspotTestMail;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Password;
 use Tests\TestCase;
@@ -128,5 +130,15 @@ class AuthTest extends TestCase
         $this->assertSame('tenant_admin', $user->role);
         $this->assertSame($tenant->id, $user->tenant_id);
         $this->assertTrue(Hash::check('tenant-password', $user->password));
+    }
+
+    public function test_mail_test_command_hands_message_to_mailer(): void
+    {
+        Mail::fake();
+
+        $this->artisan('hotspot:test-mail mondiison@yahoo.com')
+            ->assertSuccessful();
+
+        Mail::assertSent(HotspotTestMail::class);
     }
 }
