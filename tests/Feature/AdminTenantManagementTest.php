@@ -47,6 +47,49 @@ class AdminTenantManagementTest extends TestCase
         Notification::assertSentTo($tenantAdmin, TenantAdminTemporaryPassword::class);
     }
 
+    public function test_tenant_index_shows_owner_access_status_and_reset_action(): void
+    {
+        $superAdmin = User::factory()->create([
+            'role' => 'super_admin',
+            'tenant_id' => null,
+            'is_active' => true,
+        ]);
+        $readyTenant = Tenant::create([
+            'company_name' => 'Ready Tenant',
+            'owner_email' => 'ready@example.com',
+        ]);
+        User::factory()->create([
+            'tenant_id' => $readyTenant->id,
+            'email' => 'ready@example.com',
+            'role' => 'tenant_admin',
+            'is_active' => true,
+            'must_change_password' => false,
+        ]);
+        $temporaryTenant = Tenant::create([
+            'company_name' => 'Temporary Tenant',
+            'owner_email' => 'temporary@example.com',
+        ]);
+        User::factory()->create([
+            'tenant_id' => $temporaryTenant->id,
+            'email' => 'temporary@example.com',
+            'role' => 'tenant_admin',
+            'is_active' => true,
+            'must_change_password' => true,
+        ]);
+        Tenant::create([
+            'company_name' => 'Missing Tenant',
+            'owner_email' => 'missing@example.com',
+        ]);
+
+        $this->actingAs($superAdmin)
+            ->get(route('admin.tenants.index'))
+            ->assertOk()
+            ->assertSee('Ready')
+            ->assertSee('Temporary password')
+            ->assertSee('Login missing')
+            ->assertSee(route('admin.tenants.owner-reset-link', $readyTenant), false);
+    }
+
     public function test_super_admin_updates_tenant_owner_email_on_existing_login_user(): void
     {
         $superAdmin = User::factory()->create([

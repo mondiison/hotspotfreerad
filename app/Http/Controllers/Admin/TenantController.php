@@ -20,8 +20,17 @@ class TenantController extends Controller
     {
         abort_unless(request()->user()->isSuperAdmin(), 403);
 
+        $tenants = Tenant::latest()->paginate(15);
+        $ownerUsers = User::query()
+            ->whereIn('tenant_id', $tenants->getCollection()->pluck('id'))
+            ->whereIn('email', $tenants->getCollection()->pluck('owner_email'))
+            ->where('role', 'tenant_admin')
+            ->get()
+            ->keyBy('tenant_id');
+
         return view('admin.tenants.index', [
-            'tenants' => Tenant::latest()->paginate(15),
+            'ownerUsers' => $ownerUsers,
+            'tenants' => $tenants,
         ]);
     }
 
