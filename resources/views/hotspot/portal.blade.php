@@ -6,13 +6,14 @@
     <title>{{ $shop->name }} Hotspot</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
-<body class="min-h-screen bg-zinc-950 text-white antialiased">
+<body class="min-h-screen bg-zinc-950 text-white antialiased" style="--brand: {{ $shop->tenant->brand_color ?? '#10b981' }}">
     <main class="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-5 py-8">
         <header class="flex items-start justify-between gap-4 border-b border-white/10 pb-5">
             <div>
-                <p class="text-sm text-emerald-300">{{ $shop->tenant->company_name }}</p>
+                <p class="text-sm font-medium" style="color: var(--brand)">{{ $shop->tenant->company_name }}</p>
                 <h1 class="mt-1 text-3xl font-semibold">{{ $shop->name }}</h1>
-                <p class="mt-2 text-sm text-zinc-300">Device {{ $macAddress }}</p>
+                <p class="mt-2 max-w-2xl text-sm text-zinc-300">{{ $shop->tenant->public_site_tagline ?: 'Choose an internet plan for this device.' }}</p>
+                <p class="mt-2 text-sm text-zinc-400">Device {{ $macAddress }}</p>
             </div>
             <div class="rounded-md border border-white/10 px-3 py-2 text-right text-xs text-zinc-300">
                 <p>{{ $router->nas_identifier }}</p>
@@ -53,7 +54,7 @@
                             @if ($originalUrl)
                                 <input type="hidden" name="link-orig" value="{{ $originalUrl }}">
                             @endif
-                            <button class="w-full rounded-md bg-zinc-950 px-4 py-2 text-sm font-medium text-white">
+                            <button class="w-full rounded-md px-4 py-2 text-sm font-medium text-white" style="background-color: var(--brand)">
                                 Start free access
                             </button>
                         </form>

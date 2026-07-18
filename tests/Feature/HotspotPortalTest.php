@@ -27,6 +27,8 @@ class HotspotPortalTest extends TestCase
         $tenant = Tenant::create([
             'company_name' => 'Demo ISP',
             'owner_email' => 'owner@example.com',
+            'brand_color' => '#2563eb',
+            'public_site_tagline' => 'Premium guest Wi-Fi.',
         ]);
 
         $shop = Shop::create([
@@ -55,6 +57,8 @@ class HotspotPortalTest extends TestCase
         $this->get('/hotspot/portal?mac=AA:BB:CC:DD:EE:FF&nasid=demo-router')
             ->assertOk()
             ->assertSee('Demo Shop')
+            ->assertSee('Premium guest Wi-Fi.')
+            ->assertSee('#2563eb')
             ->assertSee('AA:BB:CC:DD:EE:FF')
             ->assertSee('One Hour Ultra')
             ->assertSee('NGN 500.00')

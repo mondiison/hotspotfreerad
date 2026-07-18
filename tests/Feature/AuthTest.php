@@ -60,6 +60,50 @@ class AuthTest extends TestCase
             ->assertSee(route('password.request'), false);
     }
 
+    public function test_tenant_login_page_is_branded(): void
+    {
+        $tenant = Tenant::create([
+            'company_name' => 'Mondi Internet',
+            'owner_email' => 'owner@example.com',
+            'brand_color' => '#2563eb',
+            'public_site_tagline' => 'Fast access for every guest.',
+        ]);
+
+        $this->get(route('tenant.login', $tenant))
+            ->assertOk()
+            ->assertSee('Mondi Internet')
+            ->assertSee('Fast access for every guest.')
+            ->assertSee('#2563eb');
+    }
+
+    public function test_tenant_login_rejects_user_from_another_tenant(): void
+    {
+        $tenant = Tenant::create([
+            'company_name' => 'Mondi Internet',
+            'owner_email' => 'owner@example.com',
+        ]);
+        $otherTenant = Tenant::create([
+            'company_name' => 'Other Internet',
+            'owner_email' => 'other@example.com',
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $otherTenant->id,
+            'email' => 'admin@example.com',
+            'password' => 'secret-password',
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->post(route('login.store'), [
+            'tenant_slug' => $tenant->slug,
+            'email' => $user->email,
+            'password' => 'secret-password',
+        ])
+            ->assertSessionHasErrors('email');
+
+        $this->assertGuest();
+    }
+
     public function test_forgot_password_sends_reset_notification(): void
     {
         Notification::fake();
