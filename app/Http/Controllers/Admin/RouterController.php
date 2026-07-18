@@ -18,9 +18,20 @@ class RouterController extends Controller
     public function index(): View
     {
         $user = request()->user();
+        $query = TenantAccess::scopeRouters(Router::with('shop.tenant'), $user)
+            ->when(request('search'), function ($query, string $search): void {
+                $query->where(function ($query) use ($search): void {
+                    $query
+                        ->where('name', 'like', "%{$search}%")
+                        ->orWhere('nas_identifier', 'like', "%{$search}%")
+                        ->orWhere('wireguard_internal_ip', 'like', "%{$search}%")
+                        ->orWhereHas('shop', fn ($shop) => $shop->where('name', 'like', "%{$search}%"));
+                });
+            })
+            ->when(request()->filled('status'), fn ($query) => $query->where('is_online', request('status') === 'online'));
 
         return view('admin.routers.index', [
-            'routers' => TenantAccess::scopeRouters(Router::with('shop.tenant'), $user)->latest()->paginate(15),
+            'routers' => $query->latest()->paginate(15)->withQueryString(),
         ]);
     }
 

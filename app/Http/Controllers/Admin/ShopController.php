@@ -15,9 +15,19 @@ class ShopController extends Controller
     public function index(): View
     {
         $user = request()->user();
+        $query = TenantAccess::scopeShops(Shop::with('tenant')->withCount(['routers', 'packages']), $user)
+            ->when(request('search'), function ($query, string $search): void {
+                $query->where(function ($query) use ($search): void {
+                    $query
+                        ->where('name', 'like', "%{$search}%")
+                        ->orWhere('location_city', 'like', "%{$search}%")
+                        ->orWhereHas('tenant', fn ($tenant) => $tenant->where('company_name', 'like', "%{$search}%"));
+                });
+            })
+            ->when(request()->filled('status'), fn ($query) => $query->where('is_active', request('status') === 'active'));
 
         return view('admin.shops.index', [
-            'shops' => TenantAccess::scopeShops(Shop::with('tenant'), $user)->latest()->paginate(15),
+            'shops' => $query->latest()->paginate(15)->withQueryString(),
         ]);
     }
 
