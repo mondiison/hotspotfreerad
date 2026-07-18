@@ -40,6 +40,13 @@ class TenantAccess
             : $query->whereHas('shop', fn (Builder $shop) => $shop->where('tenant_id', $user->tenant_id));
     }
 
+    public static function scopeSubscriptions(Builder $query, User $user): Builder
+    {
+        return $user->isSuperAdmin()
+            ? $query
+            : $query->whereHas('shop', fn (Builder $shop) => $shop->where('tenant_id', $user->tenant_id));
+    }
+
     public static function assertShop(Shop $shop, User $user): void
     {
         abort_unless($user->isSuperAdmin() || $shop->tenant_id === $user->tenant_id, 403);

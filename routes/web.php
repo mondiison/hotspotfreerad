@@ -6,6 +6,7 @@ use App\Http\Controllers\Admin\PackageController;
 use App\Http\Controllers\Admin\PaymentController;
 use App\Http\Controllers\Admin\RouterController;
 use App\Http\Controllers\Admin\ShopController;
+use App\Http\Controllers\Admin\SubscriptionController;
 use App\Http\Controllers\Admin\TenantBrandController;
 use App\Http\Controllers\Admin\TenantController;
 use App\Http\Controllers\Admin\UserController;
@@ -60,6 +61,7 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::resource('shops', ShopController::class)->except('show');
     Route::resource('routers', RouterController::class);
     Route::resource('packages', PackageController::class)->except('show');
+    Route::get('subscriptions', [SubscriptionController::class, 'index'])->name('subscriptions.index');
     Route::get('payments', [PaymentController::class, 'index'])->name('payments.index');
 });
 
