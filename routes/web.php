@@ -35,6 +35,9 @@ Route::post('/hotspot/payment/webhook', [PortalController::class, 'webhook'])
     ->withoutMiddleware([ValidateCsrfToken::class])
     ->name('hotspot.payment.webhook');
 Route::post('/hotspot/grant', [PortalController::class, 'grant'])->name('hotspot.grant');
+Route::post('/billing/payment/webhook', [BillingController::class, 'webhook'])
+    ->withoutMiddleware([ValidateCsrfToken::class])
+    ->name('billing.payment.webhook');
 
 Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::get('/', DashboardController::class)->name('dashboard');

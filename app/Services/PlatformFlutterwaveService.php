@@ -71,6 +71,20 @@ class PlatformFlutterwaveService
             && filled(config('services.flutterwave.client_secret'));
     }
 
+    public function webhookIsValid(string $rawBody, ?string $signature): bool
+    {
+        $secretHash = config('services.flutterwave.webhook_secret_hash');
+
+        if (blank($secretHash) || blank($signature)) {
+            return false;
+        }
+
+        $computedSignature = base64_encode(hash_hmac('sha256', $rawBody, (string) $secretHash, true));
+
+        return hash_equals($computedSignature, (string) $signature)
+            || hash_equals((string) $secretHash, (string) $signature);
+    }
+
     public function providerReference(array $response): ?string
     {
         foreach (['data.id', 'data.order.id', 'data.order_id', 'data.charge.id', 'data.charge_id'] as $key) {

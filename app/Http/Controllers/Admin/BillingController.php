@@ -240,33 +240,65 @@ class BillingController extends Controller
             return redirect()->route('admin.billing.index')->withErrors(['billing' => 'Flutterwave verification did not match this billing payment.']);
         }
 
-        DB::transaction(function () use ($payment, $verification): void {
-            $subscription = TenantBillingSubscription::create([
-                'tenant_id' => $payment->tenant_id,
-                'billing_plan_id' => $payment->billing_plan_id,
-                'status' => 'active',
-                'amount' => $payment->amount,
-                'currency' => $payment->currency,
-                'current_period_starts_at' => now(),
-                'current_period_ends_at' => now()->addMonth(),
-                'provider' => $payment->provider,
-                'provider_reference' => (string) (data_get($verification, 'data.id') ?: $payment->provider_reference),
-                'payload' => [
-                    'payment_id' => $payment->id,
-                    'payment_reference' => $payment->tx_ref,
-                ],
-            ]);
-
-            $payment->update([
-                'tenant_billing_subscription_id' => $subscription->id,
-                'status' => 'successful',
-                'provider_reference' => (string) (data_get($verification, 'data.id') ?: $payment->provider_reference),
-                'paid_at' => now(),
-                'payload' => array_merge($payment->payload ?? [], ['verification' => $verification]),
-            ]);
-        });
+        $this->activateBillingSubscription($payment, $verification);
 
         return redirect()->route('admin.billing.index')->with('status', 'Platform subscription payment confirmed.');
+    }
+
+    public function webhook(Request $request, PlatformFlutterwaveService $flutterwave): \Illuminate\Http\Response
+    {
+        if (! $flutterwave->webhookIsValid($request->getContent(), $request->header('flutterwave-signature') ?: $request->header('verif-hash'))) {
+            abort(401);
+        }
+
+        $payload = $request->all();
+        $txRef = data_get($payload, 'data.reference') ?: data_get($payload, 'data.tx_ref');
+
+        if (blank($txRef)) {
+            return response('ignored', 200);
+        }
+
+        $payment = PlatformBillingPayment::with(['tenant', 'billingPlan'])
+            ->where('tx_ref', $txRef)
+            ->first();
+
+        if (! $payment) {
+            return response('ignored', 200);
+        }
+
+        if ($payment->status === 'successful' && $payment->tenant_billing_subscription_id) {
+            return response('ok', 200);
+        }
+
+        $providerReference = data_get($payload, 'data.id')
+            ?: data_get($payload, 'data.order.id')
+            ?: data_get($payload, 'data.order_id')
+            ?: $payment->provider_reference;
+
+        if (blank($providerReference)) {
+            return response('ignored', 200);
+        }
+
+        try {
+            $verification = $flutterwave->verifyPayment(
+                (string) $providerReference,
+                $this->paymentResourceType((string) $providerReference, data_get($payload, 'type'))
+            );
+        } catch (\Throwable $exception) {
+            Log::warning('Platform billing webhook verification failed', [
+                'payment_id' => $payment->id,
+                'tx_ref' => $payment->tx_ref,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return response('ok', 200);
+        }
+
+        if ($this->verificationMatchesPayment($verification, $payment)) {
+            $this->activateBillingSubscription($payment, $verification);
+        }
+
+        return response('ok', 200);
     }
 
     private function validatedPlan(Request $request, ?BillingPlan $plan = null): array
@@ -311,6 +343,41 @@ class BillingController extends Controller
             && (float) data_get($verification, 'data.amount') >= (float) $payment->amount;
     }
 
+    private function activateBillingSubscription(PlatformBillingPayment $payment, array $verification): void
+    {
+        DB::transaction(function () use ($payment, $verification): void {
+            $payment->refresh();
+
+            if ($payment->status === 'successful' && $payment->tenant_billing_subscription_id) {
+                return;
+            }
+
+            $subscription = TenantBillingSubscription::create([
+                'tenant_id' => $payment->tenant_id,
+                'billing_plan_id' => $payment->billing_plan_id,
+                'status' => 'active',
+                'amount' => $payment->amount,
+                'currency' => $payment->currency,
+                'current_period_starts_at' => now(),
+                'current_period_ends_at' => now()->addMonth(),
+                'provider' => $payment->provider,
+                'provider_reference' => (string) (data_get($verification, 'data.id') ?: $payment->provider_reference),
+                'payload' => [
+                    'payment_id' => $payment->id,
+                    'payment_reference' => $payment->tx_ref,
+                ],
+            ]);
+
+            $payment->update([
+                'tenant_billing_subscription_id' => $subscription->id,
+                'status' => 'successful',
+                'provider_reference' => (string) (data_get($verification, 'data.id') ?: $payment->provider_reference),
+                'paid_at' => now(),
+                'payload' => array_merge($payment->payload ?? [], ['verification' => $verification]),
+            ]);
+        });
+    }
+
     private function providerReferenceFromRequest(Request $request): ?string
     {
         foreach (['id', 'order_id', 'charge_id', 'transaction_id'] as $key) {
@@ -324,9 +391,17 @@ class BillingController extends Controller
 
     private function paymentResourceType(string $providerReference, mixed $hint = null): string
     {
+        if (str_starts_with(strtolower($providerReference), 'chg')) {
+            return 'charge';
+        }
+
+        if (str_starts_with(strtolower($providerReference), 'ord')) {
+            return 'order';
+        }
+
         $hint = strtolower((string) $hint);
 
-        if (str_contains($hint, 'charge') || str_starts_with(strtolower($providerReference), 'chg')) {
+        if (str_contains($hint, 'charge')) {
             return 'charge';
         }
 
