@@ -34,6 +34,33 @@ Can manage only their tenant scope:
 
 Tenant admins should not see other tenants' data.
 
+Current enforcement:
+
+- `/admin` requires login.
+- Tenant management is super-admin only.
+- Shop, router, and package lists are tenant-scoped for tenant admins.
+- Tenant admins cannot view or update routers/packages belonging to another tenant's shop.
+- Tenant admins cannot create packages for shops outside their tenant.
+
+## Tenant Public Sites
+
+Each tenant has a unique slug that can power a branded public page:
+
+```text
+http://192.168.190.244/{tenant-slug}
+https://mondiison.16mb.com/{tenant-slug}
+```
+
+Public tenant pages should show:
+
+- company identity and brand color;
+- tagline and business description;
+- active hotspot locations;
+- active internet packages;
+- customer contact details.
+
+Reserved slugs such as `admin`, `hotspot`, and `login` are blocked so tenant pages do not collide with platform routes.
+
 ## Package Model
 
 Packages should support:

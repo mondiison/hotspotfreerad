@@ -8,6 +8,7 @@
             <thead class="border-b border-zinc-200 bg-zinc-50 text-zinc-500">
                 <tr>
                     <th class="px-4 py-3 font-medium">Company</th>
+                    <th class="px-4 py-3 font-medium">Public site</th>
                     <th class="px-4 py-3 font-medium">Owner</th>
                     <th class="px-4 py-3 font-medium">Plan</th>
                     <th class="px-4 py-3 font-medium">Status</th>
@@ -17,7 +18,17 @@
             <tbody class="divide-y divide-zinc-100">
                 @forelse ($tenants as $tenant)
                     <tr>
-                        <td class="px-4 py-3 font-medium">{{ $tenant->company_name }}</td>
+                        <td class="px-4 py-3">
+                            <p class="font-medium">{{ $tenant->company_name }}</p>
+                            <p class="mt-1 text-xs text-zinc-500">/{{ $tenant->slug }}</p>
+                        </td>
+                        <td class="px-4 py-3">
+                            @if ($tenant->public_site_enabled)
+                                <a href="{{ $tenant->publicUrl() }}" target="_blank" class="text-zinc-950 underline decoration-zinc-300 underline-offset-4">Open</a>
+                            @else
+                                <span class="text-zinc-500">Disabled</span>
+                            @endif
+                        </td>
                         <td class="px-4 py-3">{{ $tenant->owner_email }}</td>
                         <td class="px-4 py-3">{{ ucfirst($tenant->subscription_plan) }}</td>
                         <td class="px-4 py-3">{{ $tenant->is_active ? 'Active' : 'Inactive' }}</td>
@@ -33,7 +44,7 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="5" class="px-4 py-8 text-center text-zinc-500">No tenants yet.</td></tr>
+                    <tr><td colspan="6" class="px-4 py-8 text-center text-zinc-500">No tenants yet.</td></tr>
                 @endforelse
             </tbody>
         </table>

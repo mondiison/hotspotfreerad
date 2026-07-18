@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Shop;
 use App\Models\Tenant;
+use App\Support\TenantAccess;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -13,16 +14,22 @@ class ShopController extends Controller
 {
     public function index(): View
     {
+        $user = request()->user();
+
         return view('admin.shops.index', [
-            'shops' => Shop::with('tenant')->latest()->paginate(15),
+            'shops' => TenantAccess::scopeShops(Shop::with('tenant'), $user)->latest()->paginate(15),
         ]);
     }
 
     public function create(): View
     {
+        $user = request()->user();
+
         return view('admin.shops.form', [
             'shop' => new Shop(),
-            'tenants' => Tenant::orderBy('company_name')->get(),
+            'tenants' => $user->isSuperAdmin()
+                ? Tenant::orderBy('company_name')->get()
+                : Tenant::whereKey($user->tenant_id)->get(),
         ]);
     }
 
@@ -35,14 +42,21 @@ class ShopController extends Controller
 
     public function edit(Shop $shop): View
     {
+        TenantAccess::assertShop($shop, request()->user());
+        $user = request()->user();
+
         return view('admin.shops.form', [
             'shop' => $shop,
-            'tenants' => Tenant::orderBy('company_name')->get(),
+            'tenants' => $user->isSuperAdmin()
+                ? Tenant::orderBy('company_name')->get()
+                : Tenant::whereKey($user->tenant_id)->get(),
         ]);
     }
 
     public function update(Request $request, Shop $shop): RedirectResponse
     {
+        TenantAccess::assertShop($shop, $request->user());
+
         $data = $this->validated($request);
 
         foreach (['flutterwave_client_id', 'flutterwave_client_secret', 'flutterwave_webhook_secret'] as $field) {
@@ -58,6 +72,8 @@ class ShopController extends Controller
 
     public function destroy(Shop $shop): RedirectResponse
     {
+        TenantAccess::assertShop($shop, request()->user());
+
         $shop->delete();
 
         return redirect()->route('admin.shops.index')->with('status', 'Shop deleted.');
@@ -65,7 +81,7 @@ class ShopController extends Controller
 
     private function validated(Request $request): array
     {
-        return $request->validate([
+        $data = $request->validate([
             'tenant_id' => ['required', 'exists:tenants,id'],
             'name' => ['required', 'string', 'max:255'],
             'location_city' => ['nullable', 'string', 'max:255'],
@@ -74,5 +90,11 @@ class ShopController extends Controller
             'flutterwave_webhook_secret' => ['nullable', 'string'],
             'is_active' => ['nullable', 'boolean'],
         ]) + ['is_active' => false];
+
+        if (! $request->user()->isSuperAdmin()) {
+            $data['tenant_id'] = $request->user()->tenant_id;
+        }
+
+        return $data;
     }
 }
