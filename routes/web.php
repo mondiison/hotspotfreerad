@@ -39,6 +39,11 @@ Route::post('/hotspot/grant', [PortalController::class, 'grant'])->name('hotspot
 Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::get('/', DashboardController::class)->name('dashboard');
     Route::get('billing', [BillingController::class, 'index'])->name('billing.index');
+    Route::get('billing/plans/create', [BillingController::class, 'createPlan'])->name('billing.plans.create');
+    Route::post('billing/plans', [BillingController::class, 'storePlan'])->name('billing.plans.store');
+    Route::get('billing/plans/{billingPlan}/edit', [BillingController::class, 'editPlan'])->name('billing.plans.edit');
+    Route::put('billing/plans/{billingPlan}', [BillingController::class, 'updatePlan'])->name('billing.plans.update');
+    Route::delete('billing/plans/{billingPlan}', [BillingController::class, 'destroyPlan'])->name('billing.plans.destroy');
     Route::post('billing/subscriptions', [BillingController::class, 'storeSubscription'])->name('billing.subscriptions.store');
     Route::resource('tenants', TenantController::class)->except('show');
     Route::resource('shops', ShopController::class)->except('show');

@@ -4,6 +4,12 @@
     subheading="Platform subscriptions are separate from hotspot customer payments."
 >
     @if (auth()->user()->isSuperAdmin())
+        <x-slot:action>
+            <a href="{{ route('admin.billing.plans.create') }}" class="rounded-md bg-zinc-950 px-4 py-2 text-sm font-medium text-white">Add Plan</a>
+        </x-slot:action>
+    @endif
+
+    @if (auth()->user()->isSuperAdmin())
         <div class="grid gap-4 md:grid-cols-3">
             @foreach ($plans as $plan)
                 <section class="rounded-lg border border-zinc-200 bg-white p-5">
@@ -29,6 +35,21 @@
                             <dd class="mt-1 font-medium text-zinc-950">{{ $plan->package_limit ?? 'Unlimited' }}</dd>
                         </div>
                     </dl>
+                    @if ($plan->features)
+                        <ul class="mt-4 space-y-1 text-sm text-zinc-600">
+                            @foreach ($plan->features as $feature)
+                                <li>{{ $feature }}</li>
+                            @endforeach
+                        </ul>
+                    @endif
+                    <div class="mt-5 flex gap-2">
+                        <a href="{{ route('admin.billing.plans.edit', $plan) }}" class="rounded-md border border-zinc-200 px-3 py-1.5 text-sm">Edit</a>
+                        <form method="POST" action="{{ route('admin.billing.plans.destroy', $plan) }}" onsubmit="return confirm('Delete this billing plan? Hide it instead if tenants already use it.')">
+                            @csrf
+                            @method('DELETE')
+                            <button class="rounded-md border border-red-200 px-3 py-1.5 text-sm text-red-700">Delete</button>
+                        </form>
+                    </div>
                 </section>
             @endforeach
         </div>
