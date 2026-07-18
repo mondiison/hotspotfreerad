@@ -52,6 +52,7 @@
                         ['label' => 'Shops', 'route' => 'admin.shops.index', 'icon' => 'building-storefront'],
                         ['label' => 'Routers', 'route' => 'admin.routers.index', 'icon' => 'signal'],
                         ['label' => 'Packages', 'route' => 'admin.packages.index', 'icon' => 'radio'],
+                        ['label' => 'Payments', 'route' => 'admin.payments.index', 'icon' => 'banknotes'],
                     ];
                 @endphp
 

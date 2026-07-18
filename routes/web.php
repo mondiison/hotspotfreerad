@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\BillingController;
 use App\Http\Controllers\Admin\PackageController;
+use App\Http\Controllers\Admin\PaymentController;
 use App\Http\Controllers\Admin\RouterController;
 use App\Http\Controllers\Admin\ShopController;
 use App\Http\Controllers\Admin\TenantBrandController;
@@ -59,6 +60,7 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::resource('shops', ShopController::class)->except('show');
     Route::resource('routers', RouterController::class);
     Route::resource('packages', PackageController::class)->except('show');
+    Route::get('payments', [PaymentController::class, 'index'])->name('payments.index');
 });
 
 Route::get('/{tenant:slug}', TenantPublicSiteController::class)->name('tenant.public-site');
