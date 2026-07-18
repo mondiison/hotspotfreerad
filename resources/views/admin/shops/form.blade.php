@@ -13,28 +13,28 @@
         @endif
 
         <div class="grid gap-5 md:grid-cols-2">
-            <label class="block md:col-span-2">
-                <span class="text-sm font-medium">Tenant</span>
-                <select name="tenant_id" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2" required>
+            <flux:field class="md:col-span-2">
+                <flux:label>Tenant</flux:label>
+                <flux:select name="tenant_id" required>
                     <option value="">Select tenant</option>
                     @foreach ($tenants as $tenant)
                         <option value="{{ $tenant->id }}" @selected(old('tenant_id', $shop->tenant_id) == $tenant->id)>{{ $tenant->company_name }}</option>
                     @endforeach
-                </select>
-                @error('tenant_id') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
-            </label>
+                </flux:select>
+                <flux:error name="tenant_id" />
+            </flux:field>
 
-            <label class="block">
-                <span class="text-sm font-medium">Shop name</span>
-                <input name="name" value="{{ old('name', $shop->name) }}" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2" required>
-                @error('name') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
-            </label>
+            <flux:field>
+                <flux:label>Shop name</flux:label>
+                <flux:input name="name" value="{{ old('name', $shop->name) }}" icon="building-storefront" required />
+                <flux:error name="name" />
+            </flux:field>
 
-            <label class="block">
-                <span class="text-sm font-medium">City</span>
-                <input name="location_city" value="{{ old('location_city', $shop->location_city) }}" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2">
-                @error('location_city') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
-            </label>
+            <flux:field>
+                <flux:label>City</flux:label>
+                <flux:input name="location_city" value="{{ old('location_city', $shop->location_city) }}" icon="map-pin" />
+                <flux:error name="location_city" />
+            </flux:field>
 
             <section class="md:col-span-2 rounded-lg border border-zinc-200 bg-zinc-50 p-4">
                 <div class="mb-4">
@@ -47,49 +47,46 @@
                             Existing saved secrets are hidden. Leave a credential field empty when editing to keep the current value.
                         </p>
                         <div class="mt-3 flex flex-wrap gap-2">
-                            <span class="rounded-full px-2 py-1 text-xs font-medium {{ $shop->hasCompleteFlutterwaveCredentials() ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700' }}">
+                            <flux:badge :color="$shop->hasCompleteFlutterwaveCredentials() ? 'emerald' : 'amber'" size="sm">
                                 {{ $shop->hasCompleteFlutterwaveCredentials() ? 'Payments configured' : 'Payments not configured' }}
-                            </span>
-                            <span class="rounded-full px-2 py-1 text-xs font-medium {{ $shop->hasFlutterwaveWebhookSecret() ? 'bg-emerald-50 text-emerald-700' : 'bg-zinc-100 text-zinc-600' }}">
+                            </flux:badge>
+                            <flux:badge :color="$shop->hasFlutterwaveWebhookSecret() ? 'emerald' : 'zinc'" size="sm">
                                 {{ $shop->hasFlutterwaveWebhookSecret() ? 'Webhook ready' : 'Webhook secret missing' }}
-                            </span>
+                            </flux:badge>
                         </div>
                     @endif
                 </div>
 
                 <div class="grid gap-5">
-                    <label class="block">
-                        <span class="text-sm font-medium">Flutterwave client ID</span>
-                        <input name="flutterwave_client_id" value="{{ old('flutterwave_client_id') }}" placeholder="{{ $shop->exists ? 'Leave blank to keep current value' : 'Example: FLW_CLIENT_...' }}" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2">
-                        <span class="mt-1 block text-xs text-zinc-500">Required with client secret for tenant-owned collections.</span>
-                        @error('flutterwave_client_id') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
-                    </label>
+                    <flux:field>
+                        <flux:label>Flutterwave client ID</flux:label>
+                        <flux:input name="flutterwave_client_id" value="{{ old('flutterwave_client_id') }}" icon="identification" placeholder="{{ $shop->exists ? 'Leave blank to keep current value' : 'Example: FLW_CLIENT_...' }}" />
+                        <flux:description>Required with client secret for tenant-owned collections.</flux:description>
+                        <flux:error name="flutterwave_client_id" />
+                    </flux:field>
 
-                    <label class="block">
-                        <span class="text-sm font-medium">Flutterwave client secret</span>
-                        <input name="flutterwave_client_secret" value="{{ old('flutterwave_client_secret') }}" placeholder="{{ $shop->exists ? 'Leave blank to keep current value' : 'Paste the matching v4 client secret' }}" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2">
-                        <span class="mt-1 block text-xs text-zinc-500">The app uses this only on the server to request Flutterwave access tokens.</span>
-                        @error('flutterwave_client_secret') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
-                    </label>
+                    <flux:field>
+                        <flux:label>Flutterwave client secret</flux:label>
+                        <flux:input name="flutterwave_client_secret" value="{{ old('flutterwave_client_secret') }}" icon="key" placeholder="{{ $shop->exists ? 'Leave blank to keep current value' : 'Paste the matching v4 client secret' }}" viewable />
+                        <flux:description>The app uses this only on the server to request Flutterwave access tokens.</flux:description>
+                        <flux:error name="flutterwave_client_secret" />
+                    </flux:field>
 
-                    <label class="block">
-                        <span class="text-sm font-medium">Flutterwave webhook secret hash</span>
-                        <input name="flutterwave_webhook_secret" value="{{ old('flutterwave_webhook_secret') }}" placeholder="{{ $shop->exists ? 'Leave blank to keep current value' : 'Optional: tenant webhook verif-hash' }}" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2">
-                        <span class="mt-1 block text-xs text-zinc-500">Use the verif-hash from this tenant's Flutterwave webhook settings. Payment callbacks can still verify successful payments, but webhooks need this value.</span>
-                        @error('flutterwave_webhook_secret') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
-                    </label>
+                    <flux:field>
+                        <flux:label>Flutterwave webhook secret hash</flux:label>
+                        <flux:input name="flutterwave_webhook_secret" value="{{ old('flutterwave_webhook_secret') }}" icon="shield-check" placeholder="{{ $shop->exists ? 'Leave blank to keep current value' : 'Optional: tenant webhook verif-hash' }}" viewable />
+                        <flux:description>Use the verif-hash from this tenant's Flutterwave webhook settings. Payment callbacks can still verify successful payments, but webhooks need this value.</flux:description>
+                        <flux:error name="flutterwave_webhook_secret" />
+                    </flux:field>
                 </div>
             </section>
 
-            <label class="flex items-center gap-2 text-sm">
-                <input type="checkbox" name="is_active" value="1" @checked(old('is_active', $shop->is_active ?? true)) class="rounded border-zinc-300">
-                Active
-            </label>
+            <flux:checkbox name="is_active" value="1" :checked="(bool) old('is_active', $shop->is_active ?? true)" label="Active" />
         </div>
 
         <div class="mt-6 flex gap-3">
-            <button class="rounded-md bg-zinc-950 px-4 py-2 text-sm font-medium text-white">Save Shop</button>
-            <a href="{{ route('admin.shops.index') }}" class="rounded-md border border-zinc-200 px-4 py-2 text-sm">Cancel</a>
+            <flux:button type="submit" variant="primary" icon="check">Save Shop</flux:button>
+            <flux:button href="{{ route('admin.shops.index') }}" variant="outline">Cancel</flux:button>
         </div>
         </form>
     </div>
