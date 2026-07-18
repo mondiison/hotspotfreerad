@@ -48,6 +48,13 @@
                 </div>
 
                 <div class="mt-5 grid gap-5 md:grid-cols-2">
+                    <label class="block md:col-span-2">
+                        <span class="text-sm font-medium">Logo image</span>
+                        <input type="file" name="logo_image" accept="image/*" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm">
+                        <span class="mt-1 block text-xs text-zinc-500">Best size: square PNG or JPG. This appears on the public site, captive portal, checkout, and tenant login.</span>
+                        @error('logo_image') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
+                    </label>
+
                     <label class="block">
                         <span class="text-sm font-medium">Hero image</span>
                         <input type="file" name="hero_image" accept="image/*" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm">
@@ -72,6 +79,13 @@
                 </div>
 
                 <div class="mt-5 grid gap-3 md:grid-cols-3">
+                    @if ($tenant->logo_image_path)
+                        <label class="flex items-center gap-2 rounded-md border border-zinc-200 p-3 text-sm">
+                            <input type="checkbox" name="remove_logo_image" value="1" class="rounded border-zinc-300">
+                            Remove logo image
+                        </label>
+                    @endif
+
                     @if ($tenant->hero_image_path)
                         <label class="flex items-center gap-2 rounded-md border border-zinc-200 p-3 text-sm">
                             <input type="checkbox" name="remove_hero_image" value="1" class="rounded border-zinc-300">
@@ -130,7 +144,14 @@
                 <h2 class="text-base font-semibold">Current Preview</h2>
                 <div class="mt-4 overflow-hidden rounded-lg border border-zinc-200">
                     <div class="p-4 text-white" style="background-color: {{ old('brand_color', $tenant->brand_color ?? '#0f766e') }}">
-                        <p class="text-sm font-medium">{{ $tenant->company_name }}</p>
+                        <div class="flex items-center gap-3">
+                            @if ($tenant->logo_image_path)
+                                <img src="{{ \Illuminate\Support\Facades\Storage::disk('public')->url($tenant->logo_image_path) }}" alt="{{ $tenant->company_name }} logo" class="h-10 w-10 rounded-md bg-white object-cover">
+                            @else
+                                <span class="grid h-10 w-10 place-items-center rounded-md bg-white/15 text-sm font-semibold">{{ str($tenant->company_name)->substr(0, 1)->upper() }}</span>
+                            @endif
+                            <p class="text-sm font-medium">{{ $tenant->company_name }}</p>
+                        </div>
                         <p class="mt-6 text-2xl font-semibold">{{ old('public_site_tagline', $tenant->public_site_tagline) ?: 'Simple, reliable internet access.' }}</p>
                     </div>
                     <div class="bg-zinc-50 p-4 text-sm text-zinc-600">
@@ -142,6 +163,7 @@
             <section class="rounded-lg border border-zinc-200 bg-white p-5">
                 <h2 class="text-base font-semibold">Saved Media</h2>
                 <div class="mt-4 space-y-4 text-sm">
+                    <p class="text-zinc-500">Logo image: <span class="font-medium text-zinc-950">{{ $tenant->logo_image_path ? 'Uploaded' : 'Not set' }}</span></p>
                     <p class="text-zinc-500">Hero image: <span class="font-medium text-zinc-950">{{ $tenant->hero_image_path ? 'Uploaded' : 'Not set' }}</span></p>
                     <p class="text-zinc-500">Flyer image: <span class="font-medium text-zinc-950">{{ $tenant->flyer_image_path ? 'Uploaded' : 'Not set' }}</span></p>
                     <p class="text-zinc-500">Slider images: <span class="font-medium text-zinc-950">{{ count($tenant->public_site_slides ?? []) }}</span></p>

@@ -10,6 +10,7 @@
     @php
         $tenant = $shop->tenant;
         $heroImageUrl = $tenant->hero_image_path ? \Illuminate\Support\Facades\Storage::disk('public')->url($tenant->hero_image_path) : null;
+        $logoImageUrl = $tenant->logo_image_path ? \Illuminate\Support\Facades\Storage::disk('public')->url($tenant->logo_image_path) : null;
     @endphp
 
     <main class="mx-auto flex min-h-screen w-full max-w-4xl flex-col justify-center px-5 py-8">
@@ -31,7 +32,14 @@
             </div>
 
             <div class="p-6">
-            <p class="text-sm font-medium" style="color: var(--brand)">{{ $tenant->company_name }}</p>
+            <div class="flex items-center gap-3">
+                @if ($logoImageUrl)
+                    <img src="{{ $logoImageUrl }}" alt="{{ $tenant->company_name }} logo" class="h-10 w-10 rounded-lg border border-zinc-200 bg-white object-cover">
+                @else
+                    <span class="grid h-10 w-10 place-items-center rounded-lg text-sm font-semibold text-white" style="background-color: var(--brand)">{{ str($tenant->company_name)->substr(0, 1)->upper() }}</span>
+                @endif
+                <p class="text-sm font-medium" style="color: var(--brand)">{{ $tenant->company_name }}</p>
+            </div>
             <h1 class="mt-2 text-2xl font-semibold">Confirm internet access</h1>
             <p class="mt-2 text-sm text-zinc-600">A pending payment has been created, but online payment is not available for this shop yet.</p>
 

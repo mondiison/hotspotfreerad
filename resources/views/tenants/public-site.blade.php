@@ -40,6 +40,7 @@
 
         $heroImageUrl = $tenant->hero_image_path ? \Illuminate\Support\Facades\Storage::disk('public')->url($tenant->hero_image_path) : null;
         $flyerImageUrl = $tenant->flyer_image_path ? \Illuminate\Support\Facades\Storage::disk('public')->url($tenant->flyer_image_path) : null;
+        $logoImageUrl = $tenant->logo_image_path ? \Illuminate\Support\Facades\Storage::disk('public')->url($tenant->logo_image_path) : null;
         $slideImageUrls = collect($tenant->public_site_slides ?? [])
             ->map(fn ($path) => \Illuminate\Support\Facades\Storage::disk('public')->url($path));
     @endphp
@@ -48,9 +49,13 @@
         <section class="border-b border-zinc-200 bg-white">
             <div class="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-5">
                 <a href="{{ route('tenant.public-site', $tenant) }}" class="flex min-w-0 items-center gap-3">
-                    <span class="grid h-10 w-10 shrink-0 place-items-center rounded-lg text-sm font-semibold text-white" style="background-color: var(--brand)">
-                        {{ str($tenant->company_name)->substr(0, 1)->upper() }}
-                    </span>
+                    @if ($logoImageUrl)
+                        <img src="{{ $logoImageUrl }}" alt="{{ $tenant->company_name }} logo" class="h-10 w-10 shrink-0 rounded-lg border border-zinc-200 bg-white object-cover">
+                    @else
+                        <span class="grid h-10 w-10 shrink-0 place-items-center rounded-lg text-sm font-semibold text-white" style="background-color: var(--brand)">
+                            {{ str($tenant->company_name)->substr(0, 1)->upper() }}
+                        </span>
+                    @endif
                     <span class="min-w-0">
                         <span class="block truncate font-semibold">{{ $tenant->company_name }}</span>
                         <span class="block truncate text-xs text-zinc-500">Public hotspot site</span>

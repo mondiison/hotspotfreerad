@@ -7,11 +7,19 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="min-h-screen bg-zinc-100 text-zinc-950 antialiased" style="--brand: {{ $tenant->brand_color ?? '#047857' }}">
+    @php
+        $logoImageUrl = $tenant?->logo_image_path ? \Illuminate\Support\Facades\Storage::disk('public')->url($tenant->logo_image_path) : null;
+    @endphp
+
     <main class="flex min-h-screen items-center justify-center px-5 py-10 sm:px-8">
         <section class="grid w-full max-w-6xl overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm lg:grid-cols-[1.05fr_0.95fr]">
             <div class="hidden bg-zinc-950 p-10 text-white lg:flex lg:flex-col lg:justify-between xl:p-12">
                 <div class="flex items-center gap-3">
-                    <span class="grid h-10 w-10 place-items-center rounded-lg text-sm font-semibold text-white" style="background-color: var(--brand)">HF</span>
+                    @if ($logoImageUrl)
+                        <img src="{{ $logoImageUrl }}" alt="{{ $tenant->company_name }} logo" class="h-10 w-10 rounded-lg border border-white/10 bg-white object-cover">
+                    @else
+                        <span class="grid h-10 w-10 place-items-center rounded-lg text-sm font-semibold text-white" style="background-color: var(--brand)">HF</span>
+                    @endif
                     <div>
                         <p class="font-semibold">{{ $tenant->company_name ?? 'HotspotFreeRAD' }}</p>
                         <p class="mt-1 text-xs text-zinc-400">{{ $tenant ? 'Tenant admin workspace' : 'Platform operations console' }}</p>

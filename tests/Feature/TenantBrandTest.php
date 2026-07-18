@@ -56,6 +56,7 @@ class TenantBrandTest extends TestCase
                 'contact_phone' => '+234 800 000 0000',
                 'contact_email' => 'support@example.com',
                 'contact_address' => 'Main road branch',
+                'logo_image' => UploadedFile::fake()->image('logo.png', 512, 512),
                 'hero_image' => UploadedFile::fake()->image('hero.jpg', 1600, 1000),
                 'flyer_image' => UploadedFile::fake()->image('flyer.jpg', 800, 1000),
                 'slider_images' => [
@@ -69,10 +70,12 @@ class TenantBrandTest extends TestCase
 
         $this->assertSame('#7c3aed', $tenant->brand_color);
         $this->assertSame('Premium hotspot access.', $tenant->public_site_tagline);
+        $this->assertNotNull($tenant->logo_image_path);
         $this->assertNotNull($tenant->hero_image_path);
         $this->assertNotNull($tenant->flyer_image_path);
         $this->assertCount(2, $tenant->public_site_slides);
 
+        Storage::disk('public')->assertExists($tenant->logo_image_path);
         Storage::disk('public')->assertExists($tenant->hero_image_path);
         Storage::disk('public')->assertExists($tenant->flyer_image_path);
         Storage::disk('public')->assertExists($tenant->public_site_slides[0]);
@@ -80,6 +83,7 @@ class TenantBrandTest extends TestCase
         $this->get(route('tenant.public-site', $tenant))
             ->assertOk()
             ->assertSee('Premium hotspot access.')
+            ->assertSee(Storage::disk('public')->url($tenant->logo_image_path), false)
             ->assertSee(Storage::disk('public')->url($tenant->hero_image_path), false)
             ->assertSee(Storage::disk('public')->url($tenant->flyer_image_path), false)
             ->assertSee(Storage::disk('public')->url($tenant->public_site_slides[0]), false);

@@ -11,6 +11,7 @@
         $tenant = $shop->tenant;
         $heroImageUrl = $tenant->hero_image_path ? \Illuminate\Support\Facades\Storage::disk('public')->url($tenant->hero_image_path) : null;
         $flyerImageUrl = $tenant->flyer_image_path ? \Illuminate\Support\Facades\Storage::disk('public')->url($tenant->flyer_image_path) : null;
+        $logoImageUrl = $tenant->logo_image_path ? \Illuminate\Support\Facades\Storage::disk('public')->url($tenant->logo_image_path) : null;
         $slideImageUrls = collect($tenant->public_site_slides ?? [])
             ->map(fn ($path) => \Illuminate\Support\Facades\Storage::disk('public')->url($path));
 
@@ -47,11 +48,18 @@
 
     <main class="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-5 py-8">
         <header class="flex items-start justify-between gap-4 border-b border-white/10 pb-5">
-            <div>
-                <p class="text-sm font-medium" style="color: var(--brand)">{{ $tenant->company_name }}</p>
-                <h1 class="mt-1 text-3xl font-semibold">{{ $shop->name }}</h1>
+            <div class="flex min-w-0 gap-4">
+                @if ($logoImageUrl)
+                    <img src="{{ $logoImageUrl }}" alt="{{ $tenant->company_name }} logo" class="h-14 w-14 shrink-0 rounded-lg border border-white/10 bg-white object-cover">
+                @else
+                    <span class="grid h-14 w-14 shrink-0 place-items-center rounded-lg text-lg font-semibold text-white" style="background-color: var(--brand)">{{ str($tenant->company_name)->substr(0, 1)->upper() }}</span>
+                @endif
+                <div class="min-w-0">
+                    <p class="truncate text-sm font-medium" style="color: var(--brand)">{{ $tenant->company_name }}</p>
+                    <h1 class="mt-1 truncate text-3xl font-semibold">{{ $shop->name }}</h1>
                 <p class="mt-2 max-w-2xl text-sm text-zinc-300">{{ $tenant->public_site_tagline ?: 'Choose an internet plan for this device.' }}</p>
                 <p class="mt-2 text-sm text-zinc-400">Device {{ $macAddress }}</p>
+                </div>
             </div>
             <div class="rounded-md border border-white/10 px-3 py-2 text-right text-xs text-zinc-300">
                 <p>{{ $router->nas_identifier }}</p>

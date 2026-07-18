@@ -28,17 +28,24 @@ class TenantBrandController extends Controller
             'contact_phone' => ['nullable', 'string', 'max:255'],
             'contact_email' => ['nullable', 'email', 'max:255'],
             'contact_address' => ['nullable', 'string', 'max:1000'],
+            'logo_image' => ['nullable', 'image', 'max:2048'],
             'hero_image' => ['nullable', 'image', 'max:4096'],
             'flyer_image' => ['nullable', 'image', 'max:4096'],
             'slider_images' => ['nullable', 'array', 'max:5'],
             'slider_images.*' => ['image', 'max:4096'],
+            'remove_logo_image' => ['nullable', 'boolean'],
             'remove_hero_image' => ['nullable', 'boolean'],
             'remove_flyer_image' => ['nullable', 'boolean'],
             'clear_slider_images' => ['nullable', 'boolean'],
         ]);
 
-        foreach (['hero_image', 'flyer_image', 'slider_images', 'remove_hero_image', 'remove_flyer_image', 'clear_slider_images'] as $key) {
+        foreach (['logo_image', 'hero_image', 'flyer_image', 'slider_images', 'remove_logo_image', 'remove_hero_image', 'remove_flyer_image', 'clear_slider_images'] as $key) {
             unset($data[$key]);
+        }
+
+        if ($request->boolean('remove_logo_image')) {
+            $this->deletePath($tenant->logo_image_path);
+            $data['logo_image_path'] = null;
         }
 
         if ($request->boolean('remove_hero_image')) {
@@ -54,6 +61,11 @@ class TenantBrandController extends Controller
         if ($request->boolean('clear_slider_images')) {
             collect($tenant->public_site_slides ?? [])->each(fn ($path) => $this->deletePath($path));
             $data['public_site_slides'] = null;
+        }
+
+        if ($request->hasFile('logo_image')) {
+            $this->deletePath($tenant->logo_image_path);
+            $data['logo_image_path'] = $request->file('logo_image')->store('tenant-brand/'.$tenant->id, 'public');
         }
 
         if ($request->hasFile('hero_image')) {
