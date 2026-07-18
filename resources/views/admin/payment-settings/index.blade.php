@@ -31,56 +31,73 @@
                     </div>
 
                     <div class="flex flex-wrap gap-2">
-                        <span class="rounded-full px-2 py-1 text-xs font-medium {{ $shop->hasCompleteFlutterwaveCredentials() ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700' }}">
+                        <flux:badge :color="$shop->hasCompleteFlutterwaveCredentials() ? 'emerald' : 'amber'" size="sm">
                             {{ $shop->hasCompleteFlutterwaveCredentials() ? 'Payments configured' : 'Payments not configured' }}
-                        </span>
-                        <span class="rounded-full px-2 py-1 text-xs font-medium {{ $shop->hasFlutterwaveWebhookSecret() ? 'bg-emerald-50 text-emerald-700' : 'bg-zinc-100 text-zinc-600' }}">
+                        </flux:badge>
+                        <flux:badge :color="$shop->hasFlutterwaveWebhookSecret() ? 'emerald' : 'zinc'" size="sm">
                             {{ $shop->hasFlutterwaveWebhookSecret() ? 'Webhook ready' : 'Webhook missing' }}
-                        </span>
+                        </flux:badge>
                     </div>
                 </div>
 
+                <flux:separator class="my-5" />
+
                 <div class="mt-5 grid gap-4">
-                    <label class="block">
-                        <span class="text-sm font-medium">Flutterwave client ID</span>
-                        <input name="flutterwave_client_id" value="{{ old('flutterwave_client_id') }}" placeholder="{{ $shop->hasCompleteFlutterwaveCredentials() ? 'Leave blank to keep saved client ID' : 'Paste tenant Flutterwave v4 client ID' }}" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm">
-                        @error('flutterwave_client_id') <span class="mt-1 block text-sm text-red-600">{{ $message }}</span> @enderror
-                    </label>
+                    <flux:field>
+                        <flux:label>Flutterwave client ID</flux:label>
+                        <flux:input
+                            name="flutterwave_client_id"
+                            value="{{ old('flutterwave_client_id') }}"
+                            icon="identification"
+                            placeholder="{{ $shop->hasCompleteFlutterwaveCredentials() ? 'Leave blank to keep saved client ID' : 'Paste tenant Flutterwave v4 client ID' }}"
+                        />
+                        <flux:error name="flutterwave_client_id" />
+                    </flux:field>
 
-                    <label class="block">
-                        <span class="text-sm font-medium">Flutterwave client secret</span>
-                        <input name="flutterwave_client_secret" value="{{ old('flutterwave_client_secret') }}" placeholder="{{ $shop->hasCompleteFlutterwaveCredentials() ? 'Leave blank to keep saved client secret' : 'Paste tenant Flutterwave v4 client secret' }}" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm">
-                        <span class="mt-1 block text-xs text-zinc-500">Client ID and secret must be saved together before online customer payment is enabled.</span>
-                        @error('flutterwave_client_secret') <span class="mt-1 block text-sm text-red-600">{{ $message }}</span> @enderror
-                    </label>
+                    <flux:field>
+                        <flux:label>Flutterwave client secret</flux:label>
+                        <flux:input
+                            name="flutterwave_client_secret"
+                            value="{{ old('flutterwave_client_secret') }}"
+                            icon="key"
+                            placeholder="{{ $shop->hasCompleteFlutterwaveCredentials() ? 'Leave blank to keep saved client secret' : 'Paste tenant Flutterwave v4 client secret' }}"
+                            viewable
+                        />
+                        <flux:description>Client ID and secret must be saved together before online customer payment is enabled.</flux:description>
+                        <flux:error name="flutterwave_client_secret" />
+                    </flux:field>
 
-                    <label class="block">
-                        <span class="text-sm font-medium">Webhook secret hash</span>
-                        <input name="flutterwave_webhook_secret" value="{{ old('flutterwave_webhook_secret') }}" placeholder="{{ $shop->hasFlutterwaveWebhookSecret() ? 'Leave blank to keep saved webhook secret' : 'Paste Flutterwave webhook verif-hash' }}" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm">
-                        <span class="mt-1 block text-xs text-zinc-500">Needed for automatic webhook confirmation. Payment callbacks can still verify successful payments after customer redirect.</span>
-                        @error('flutterwave_webhook_secret') <span class="mt-1 block text-sm text-red-600">{{ $message }}</span> @enderror
-                    </label>
+                    <flux:field>
+                        <flux:label>Webhook secret hash</flux:label>
+                        <flux:input
+                            name="flutterwave_webhook_secret"
+                            value="{{ old('flutterwave_webhook_secret') }}"
+                            icon="shield-check"
+                            placeholder="{{ $shop->hasFlutterwaveWebhookSecret() ? 'Leave blank to keep saved webhook secret' : 'Paste Flutterwave webhook verif-hash' }}"
+                            viewable
+                        />
+                        <flux:description>Needed for automatic webhook confirmation. Payment callbacks can still verify successful payments after customer redirect.</flux:description>
+                        <flux:error name="flutterwave_webhook_secret" />
+                    </flux:field>
                 </div>
 
                 <div class="mt-4 grid gap-3 md:grid-cols-2">
                     @if ($shop->hasCompleteFlutterwaveCredentials())
-                        <label class="flex items-center gap-2 rounded-md border border-zinc-200 p-3 text-sm">
-                            <input type="checkbox" name="clear_flutterwave_credentials" value="1" class="rounded border-zinc-300">
-                            Clear client credentials
-                        </label>
+                        <div class="rounded-md border border-zinc-200 p-3">
+                            <flux:checkbox name="clear_flutterwave_credentials" value="1" label="Clear client credentials" />
+                        </div>
                     @endif
 
                     @if ($shop->hasFlutterwaveWebhookSecret())
-                        <label class="flex items-center gap-2 rounded-md border border-zinc-200 p-3 text-sm">
-                            <input type="checkbox" name="clear_flutterwave_webhook_secret" value="1" class="rounded border-zinc-300">
-                            Clear webhook secret
-                        </label>
+                        <div class="rounded-md border border-zinc-200 p-3">
+                            <flux:checkbox name="clear_flutterwave_webhook_secret" value="1" label="Clear webhook secret" />
+                        </div>
                     @endif
                 </div>
 
                 <div class="mt-5 flex flex-wrap gap-3">
-                    <button class="rounded-md bg-zinc-950 px-4 py-2 text-sm font-medium text-white">Save payment settings</button>
-                    <a href="{{ route('admin.shops.edit', $shop) }}" class="rounded-md border border-zinc-200 px-4 py-2 text-sm">Open shop</a>
+                    <flux:button type="submit" variant="primary" icon="check">Save payment settings</flux:button>
+                    <flux:button href="{{ route('admin.shops.edit', $shop) }}" variant="outline" icon="arrow-top-right-on-square">Open shop</flux:button>
                 </div>
             </form>
         @empty
