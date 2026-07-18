@@ -8,9 +8,11 @@ use App\Models\Package;
 use App\Models\Payment;
 use App\Models\Router;
 use App\Models\Subscription;
+use App\Services\FlutterwaveService;
 use App\Services\RadiusProvisioningService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
@@ -123,7 +125,7 @@ class PortalController extends Controller
         ]);
     }
 
-    public function pay(Request $request): View
+    public function pay(Request $request, FlutterwaveService $flutterwave): RedirectResponse|View
     {
         $validated = $request->validate([
             'mac' => ['required', 'string', 'max:64'],
@@ -182,6 +184,32 @@ class PortalController extends Controller
             ]);
         });
 
+        if (filled(config('services.flutterwave.secret_key'))) {
+            try {
+                $checkoutUrl = $flutterwave->initializeCheckout(
+                    $payment->load(['shop.tenant', 'package', 'customer']),
+                    [
+                        'email' => $validated['email'] ?? null,
+                        'phone' => $validated['phone'] ?? null,
+                        'name' => 'Hotspot Customer',
+                    ],
+                    route('hotspot.payment.callback')
+                );
+
+                $payment->update([
+                    'payload' => array_merge($payment->payload ?? [], ['checkout_url' => $checkoutUrl]),
+                ]);
+
+                return redirect()->away($checkoutUrl);
+            } catch (\Throwable $exception) {
+                Log::warning('Flutterwave checkout initialization failed', [
+                    'payment_id' => $payment->id,
+                    'tx_ref' => $payment->tx_ref,
+                    'message' => $exception->getMessage(),
+                ]);
+            }
+        }
+
         return view('hotspot.checkout', [
             'router' => $router,
             'shop' => $router->shop,
@@ -191,5 +219,120 @@ class PortalController extends Controller
             'loginUrl' => $validated['link-login'] ?? null,
             'originalUrl' => $validated['link-orig'] ?? null,
         ]);
+    }
+
+    public function callback(Request $request, FlutterwaveService $flutterwave, RadiusProvisioningService $radius): View
+    {
+        $payment = Payment::with(['shop.tenant', 'package'])
+            ->where('tx_ref', $request->query('tx_ref'))
+            ->firstOrFail();
+
+        if ($request->query('status') !== 'successful' || blank($request->query('transaction_id'))) {
+            $payment->update(['status' => $request->query('status', 'failed')]);
+
+            return view('hotspot.payment-failed', compact('payment'));
+        }
+
+        try {
+            $verification = $flutterwave->verifyTransaction((string) $request->query('transaction_id'));
+        } catch (\Throwable $exception) {
+            Log::warning('Flutterwave callback verification failed', [
+                'payment_id' => $payment->id,
+                'tx_ref' => $payment->tx_ref,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return view('hotspot.payment-failed', compact('payment'));
+        }
+
+        if (! $this->verificationMatchesPayment($verification, $payment)) {
+            $payment->update([
+                'status' => 'verification_failed',
+                'payload' => array_merge($payment->payload ?? [], ['verification' => $verification]),
+            ]);
+
+            return view('hotspot.payment-failed', compact('payment'));
+        }
+
+        $subscription = $this->markPaidAndGrantAccess($payment, $verification, $radius);
+
+        return view('hotspot.access-granted', [
+            'router' => Router::where('shop_id', $payment->shop_id)->first(),
+            'package' => $payment->package,
+            'subscription' => $subscription,
+            'macAddress' => $payment->payload['mac'],
+            'username' => $payment->payload['mac'],
+            'password' => self::TEST_ACCESS_PASSWORD,
+            'loginUrl' => $payment->payload['link_login'] ?? null,
+            'originalUrl' => $payment->payload['link_orig'] ?? null,
+        ]);
+    }
+
+    public function webhook(Request $request, FlutterwaveService $flutterwave, RadiusProvisioningService $radius): \Illuminate\Http\Response
+    {
+        if (! $flutterwave->webhookIsValid($request->header('verif-hash'))) {
+            abort(401);
+        }
+
+        $payload = $request->all();
+        $txRef = data_get($payload, 'data.tx_ref');
+        $transactionId = data_get($payload, 'data.id');
+
+        if (blank($txRef) || blank($transactionId)) {
+            return response('ignored', 200);
+        }
+
+        $payment = Payment::with(['shop.tenant', 'package'])->where('tx_ref', $txRef)->first();
+
+        if (! $payment) {
+            return response('ignored', 200);
+        }
+
+        $verification = $flutterwave->verifyTransaction((string) $transactionId);
+
+        if ($this->verificationMatchesPayment($verification, $payment)) {
+            $this->markPaidAndGrantAccess($payment, $verification, $radius);
+        }
+
+        return response('ok', 200);
+    }
+
+    private function verificationMatchesPayment(array $verification, Payment $payment): bool
+    {
+        return data_get($verification, 'status') === 'success'
+            && data_get($verification, 'data.status') === 'successful'
+            && data_get($verification, 'data.tx_ref') === $payment->tx_ref
+            && strtoupper((string) data_get($verification, 'data.currency')) === strtoupper($payment->currency)
+            && (float) data_get($verification, 'data.amount') >= (float) $payment->amount;
+    }
+
+    private function markPaidAndGrantAccess(Payment $payment, array $verification, RadiusProvisioningService $radius): Subscription
+    {
+        return DB::transaction(function () use ($payment, $verification, $radius) {
+            $payment->update([
+                'status' => 'successful',
+                'provider_reference' => (string) data_get($verification, 'data.id'),
+                'paid_at' => now(),
+                'payload' => array_merge($payment->payload ?? [], ['verification' => $verification]),
+            ]);
+
+            $subscription = Subscription::updateOrCreate(
+                [
+                    'shop_id' => $payment->shop_id,
+                    'mac_address' => $payment->payload['mac'],
+                ],
+                [
+                    'package_id' => $payment->package_id,
+                    'payment_id' => $payment->id,
+                    'starts_at' => now(),
+                    'expires_at' => now()->addSeconds($payment->package->limit_uptime_seconds),
+                    'is_throttled' => false,
+                ]
+            );
+
+            $radius->grantSubscriptionAccess($subscription, self::TEST_ACCESS_PASSWORD);
+
+            return $subscription;
+        });
     }
 }

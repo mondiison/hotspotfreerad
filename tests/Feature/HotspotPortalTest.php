@@ -8,6 +8,7 @@ use App\Models\Shop;
 use App\Models\Tenant;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
@@ -153,6 +154,131 @@ class HotspotPortalTest extends TestCase
             'currency' => 'NGN',
             'status' => 'pending',
             'provider' => 'flutterwave',
+        ]);
+    }
+
+    public function test_payment_step_redirects_to_flutterwave_when_configured(): void
+    {
+        config(['services.flutterwave.secret_key' => 'FLWSECK_TEST']);
+        Http::fake([
+            'api.flutterwave.com/v3/payments' => Http::response([
+                'status' => 'success',
+                'data' => ['link' => 'https://checkout.flutterwave.com/pay/demo'],
+            ]),
+        ]);
+        [$router, $package] = $this->routerWithPackage();
+
+        $this->post(route('hotspot.pay'), [
+            'mac' => 'AA:BB:CC:DD:EE:FF',
+            'nasid' => $router->nas_identifier,
+            'package_id' => $package->id,
+            'email' => 'customer@example.com',
+        ])
+            ->assertRedirect('https://checkout.flutterwave.com/pay/demo');
+
+        Http::assertSent(fn ($request) => $request->hasHeader('Authorization', 'Bearer FLWSECK_TEST')
+            && $request['tx_ref']
+            && $request['amount'] === 500.0
+            && $request['currency'] === 'NGN'
+            && $request['redirect_url'] === route('hotspot.payment.callback'));
+    }
+
+    public function test_successful_flutterwave_callback_provisions_radius_access(): void
+    {
+        [$router, $package] = $this->routerWithPackage();
+
+        $this->post(route('hotspot.pay'), [
+            'mac' => 'AA:BB:CC:DD:EE:FF',
+            'nasid' => $router->nas_identifier,
+            'package_id' => $package->id,
+            'email' => 'customer@example.com',
+        ]);
+
+        $payment = \App\Models\Payment::firstOrFail();
+        config(['services.flutterwave.secret_key' => 'FLWSECK_TEST']);
+        Http::fake([
+            'api.flutterwave.com/v3/transactions/12345/verify' => Http::response([
+                'status' => 'success',
+                'data' => [
+                    'id' => 12345,
+                    'status' => 'successful',
+                    'tx_ref' => $payment->tx_ref,
+                    'amount' => 500,
+                    'currency' => 'NGN',
+                ],
+            ]),
+        ]);
+
+        $this->get(route('hotspot.payment.callback', [
+            'status' => 'successful',
+            'tx_ref' => $payment->tx_ref,
+            'transaction_id' => 12345,
+        ]))
+            ->assertOk()
+            ->assertSee('Access provisioned');
+
+        $this->assertDatabaseHas('payments', [
+            'id' => $payment->id,
+            'status' => 'successful',
+            'provider_reference' => '12345',
+        ]);
+        $this->assertDatabaseHas('subscriptions', [
+            'payment_id' => $payment->id,
+            'mac_address' => 'AA:BB:CC:DD:EE:FF',
+        ]);
+        $this->assertDatabaseHas('radcheck', [
+            'username' => 'AA:BB:CC:DD:EE:FF',
+            'attribute' => 'Cleartext-Password',
+        ]);
+    }
+
+    public function test_successful_flutterwave_webhook_provisions_radius_access(): void
+    {
+        [$router, $package] = $this->routerWithPackage();
+
+        $this->post(route('hotspot.pay'), [
+            'mac' => 'AA:BB:CC:DD:EE:FF',
+            'nasid' => $router->nas_identifier,
+            'package_id' => $package->id,
+            'email' => 'customer@example.com',
+        ]);
+
+        $payment = \App\Models\Payment::firstOrFail();
+        config([
+            'services.flutterwave.secret_key' => 'FLWSECK_TEST',
+            'services.flutterwave.webhook_secret_hash' => 'webhook-secret',
+        ]);
+        Http::fake([
+            'api.flutterwave.com/v3/transactions/12345/verify' => Http::response([
+                'status' => 'success',
+                'data' => [
+                    'id' => 12345,
+                    'status' => 'successful',
+                    'tx_ref' => $payment->tx_ref,
+                    'amount' => 500,
+                    'currency' => 'NGN',
+                ],
+            ]),
+        ]);
+
+        $this->postJson(route('hotspot.payment.webhook'), [
+            'data' => [
+                'id' => 12345,
+                'tx_ref' => $payment->tx_ref,
+            ],
+        ], [
+            'verif-hash' => 'webhook-secret',
+        ])
+            ->assertOk()
+            ->assertSee('ok');
+
+        $this->assertDatabaseHas('payments', [
+            'id' => $payment->id,
+            'status' => 'successful',
+        ]);
+        $this->assertDatabaseHas('subscriptions', [
+            'payment_id' => $payment->id,
+            'mac_address' => 'AA:BB:CC:DD:EE:FF',
         ]);
     }
 

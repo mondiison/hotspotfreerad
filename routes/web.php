@@ -10,6 +10,7 @@ use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\ResetPasswordController;
 use App\Http\Controllers\Hotspot\PortalController;
 use App\Http\Controllers\TenantPublicSiteController;
+use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Support\Facades\Route;
 
 Route::redirect('/', '/admin');
@@ -28,6 +29,10 @@ Route::post('/logout', [LoginController::class, 'destroy'])->middleware('auth')-
 
 Route::get('/hotspot/portal', [PortalController::class, 'show'])->name('hotspot.portal');
 Route::post('/hotspot/pay', [PortalController::class, 'pay'])->name('hotspot.pay');
+Route::get('/hotspot/payment/callback', [PortalController::class, 'callback'])->name('hotspot.payment.callback');
+Route::post('/hotspot/payment/webhook', [PortalController::class, 'webhook'])
+    ->withoutMiddleware([ValidateCsrfToken::class])
+    ->name('hotspot.payment.webhook');
 Route::post('/hotspot/grant', [PortalController::class, 'grant'])->name('hotspot.grant');
 
 Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
