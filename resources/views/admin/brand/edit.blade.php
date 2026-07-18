@@ -24,20 +24,20 @@
                             copyable
                             :swatches="['#0f766e', '#2563eb', '#7c3aed', '#dc2626', '#f59e0b', '#16a34a', '#0891b2', '#111827']"
                         />
-                        @error('brand_color') <span class="mt-1 block text-sm text-red-600">{{ $message }}</span> @enderror
+                        <flux:error name="brand_color" />
                     </div>
 
-                    <label class="block md:col-span-2">
-                        <span class="text-sm font-medium">Hero tagline</span>
-                        <input name="public_site_tagline" value="{{ old('public_site_tagline', $tenant->public_site_tagline) }}" placeholder="Fast internet access for daily users." class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2">
-                        @error('public_site_tagline') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
-                    </label>
+                    <flux:field class="md:col-span-2">
+                        <flux:label>Hero tagline</flux:label>
+                        <flux:input name="public_site_tagline" value="{{ old('public_site_tagline', $tenant->public_site_tagline) }}" icon="sparkles" placeholder="Fast internet access for daily users." />
+                        <flux:error name="public_site_tagline" />
+                    </flux:field>
 
-                    <label class="block md:col-span-2">
-                        <span class="text-sm font-medium">About this business</span>
-                        <textarea name="public_site_about" rows="5" placeholder="Describe your hotspot locations, support promise, or coverage area." class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2">{{ old('public_site_about', $tenant->public_site_about) }}</textarea>
-                        @error('public_site_about') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
-                    </label>
+                    <flux:field class="md:col-span-2">
+                        <flux:label>About this business</flux:label>
+                        <flux:textarea name="public_site_about" rows="5" placeholder="Describe your hotspot locations, support promise, or coverage area.">{{ old('public_site_about', $tenant->public_site_about) }}</flux:textarea>
+                        <flux:error name="public_site_about" />
+                    </flux:field>
                 </div>
             </section>
 
@@ -48,63 +48,59 @@
                 </div>
 
                 <div class="mt-5 grid gap-5 md:grid-cols-2">
-                    <label class="block md:col-span-2">
-                        <span class="text-sm font-medium">Logo image</span>
-                        <input type="file" name="logo_image" accept="image/*" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm">
-                        <span class="mt-1 block text-xs text-zinc-500">Best size: square PNG or JPG. This appears on the public site, captive portal, checkout, and tenant login.</span>
-                        @error('logo_image') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
-                    </label>
+                    <flux:field class="md:col-span-2">
+                        <flux:label>Logo image</flux:label>
+                        <flux:input.file name="logo_image" accept="image/*" />
+                        <flux:description>Best size: square PNG or JPG. This appears on the public site, captive portal, checkout, and tenant login.</flux:description>
+                        <flux:error name="logo_image" />
+                    </flux:field>
 
-                    <label class="block">
-                        <span class="text-sm font-medium">Hero image</span>
-                        <input type="file" name="hero_image" accept="image/*" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm">
-                        <span class="mt-1 block text-xs text-zinc-500">Best size: 1600x1000. This appears in the first screen.</span>
-                        @error('hero_image') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
-                    </label>
+                    <flux:field>
+                        <flux:label>Hero image</flux:label>
+                        <flux:input.file name="hero_image" accept="image/*" />
+                        <flux:description>Best size: 1600x1000. This appears in the first screen.</flux:description>
+                        <flux:error name="hero_image" />
+                    </flux:field>
 
-                    <label class="block">
-                        <span class="text-sm font-medium">Flyer image</span>
-                        <input type="file" name="flyer_image" accept="image/*" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm">
-                        <span class="mt-1 block text-xs text-zinc-500">Use for promos, offers, or branch announcements.</span>
-                        @error('flyer_image') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
-                    </label>
+                    <flux:field>
+                        <flux:label>Flyer image</flux:label>
+                        <flux:input.file name="flyer_image" accept="image/*" />
+                        <flux:description>Use for promos, offers, or branch announcements.</flux:description>
+                        <flux:error name="flyer_image" />
+                    </flux:field>
 
-                    <label class="block md:col-span-2">
-                        <span class="text-sm font-medium">Slider images</span>
-                        <input type="file" name="slider_images[]" accept="image/*" multiple class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm">
-                        <span class="mt-1 block text-xs text-zinc-500">Upload up to 5 images. New uploads replace the existing slider set.</span>
-                        @error('slider_images') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
-                        @error('slider_images.*') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
-                    </label>
+                    <flux:field class="md:col-span-2">
+                        <flux:label>Slider images</flux:label>
+                        <flux:input.file name="slider_images[]" accept="image/*" multiple />
+                        <flux:description>Upload up to 5 images. New uploads replace the existing slider set.</flux:description>
+                        <flux:error name="slider_images" />
+                        <flux:error name="slider_images.*" />
+                    </flux:field>
                 </div>
 
                 <div class="mt-5 grid gap-3 md:grid-cols-3">
                     @if ($tenant->logo_image_path)
-                        <label class="flex items-center gap-2 rounded-md border border-zinc-200 p-3 text-sm">
-                            <input type="checkbox" name="remove_logo_image" value="1" class="rounded border-zinc-300">
-                            Remove logo image
-                        </label>
+                        <div class="rounded-md border border-zinc-200 p-3">
+                            <flux:checkbox name="remove_logo_image" value="1" label="Remove logo image" />
+                        </div>
                     @endif
 
                     @if ($tenant->hero_image_path)
-                        <label class="flex items-center gap-2 rounded-md border border-zinc-200 p-3 text-sm">
-                            <input type="checkbox" name="remove_hero_image" value="1" class="rounded border-zinc-300">
-                            Remove hero image
-                        </label>
+                        <div class="rounded-md border border-zinc-200 p-3">
+                            <flux:checkbox name="remove_hero_image" value="1" label="Remove hero image" />
+                        </div>
                     @endif
 
                     @if ($tenant->flyer_image_path)
-                        <label class="flex items-center gap-2 rounded-md border border-zinc-200 p-3 text-sm">
-                            <input type="checkbox" name="remove_flyer_image" value="1" class="rounded border-zinc-300">
-                            Remove flyer image
-                        </label>
+                        <div class="rounded-md border border-zinc-200 p-3">
+                            <flux:checkbox name="remove_flyer_image" value="1" label="Remove flyer image" />
+                        </div>
                     @endif
 
                     @if ($tenant->public_site_slides)
-                        <label class="flex items-center gap-2 rounded-md border border-zinc-200 p-3 text-sm">
-                            <input type="checkbox" name="clear_slider_images" value="1" class="rounded border-zinc-300">
-                            Clear slider images
-                        </label>
+                        <div class="rounded-md border border-zinc-200 p-3">
+                            <flux:checkbox name="clear_slider_images" value="1" label="Clear slider images" />
+                        </div>
                     @endif
                 </div>
             </section>
@@ -113,29 +109,29 @@
                 <h2 class="text-base font-semibold">Customer Contact</h2>
 
                 <div class="mt-5 grid gap-5 md:grid-cols-2">
-                    <label class="block">
-                        <span class="text-sm font-medium">Contact phone</span>
-                        <input name="contact_phone" value="{{ old('contact_phone', $tenant->contact_phone) }}" placeholder="+234 800 000 0000" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2">
-                        @error('contact_phone') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
-                    </label>
+                    <flux:field>
+                        <flux:label>Contact phone</flux:label>
+                        <flux:input name="contact_phone" value="{{ old('contact_phone', $tenant->contact_phone) }}" icon="phone" placeholder="+234 800 000 0000" />
+                        <flux:error name="contact_phone" />
+                    </flux:field>
 
-                    <label class="block">
-                        <span class="text-sm font-medium">Contact email</span>
-                        <input type="email" name="contact_email" value="{{ old('contact_email', $tenant->contact_email ?? $tenant->owner_email) }}" placeholder="support@example.com" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2">
-                        @error('contact_email') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
-                    </label>
+                    <flux:field>
+                        <flux:label>Contact email</flux:label>
+                        <flux:input type="email" name="contact_email" value="{{ old('contact_email', $tenant->contact_email ?? $tenant->owner_email) }}" icon="envelope" placeholder="support@example.com" />
+                        <flux:error name="contact_email" />
+                    </flux:field>
 
-                    <label class="block md:col-span-2">
-                        <span class="text-sm font-medium">Contact address</span>
-                        <textarea name="contact_address" rows="3" placeholder="Shop address or coverage area customers should recognize." class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2">{{ old('contact_address', $tenant->contact_address) }}</textarea>
-                        @error('contact_address') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
-                    </label>
+                    <flux:field class="md:col-span-2">
+                        <flux:label>Contact address</flux:label>
+                        <flux:textarea name="contact_address" rows="3" placeholder="Shop address or coverage area customers should recognize.">{{ old('contact_address', $tenant->contact_address) }}</flux:textarea>
+                        <flux:error name="contact_address" />
+                    </flux:field>
                 </div>
             </section>
 
             <div class="flex gap-3">
-                <button class="rounded-md bg-zinc-950 px-4 py-2 text-sm font-medium text-white">Save Brand</button>
-                <a href="{{ $tenant->publicUrl() }}" target="_blank" class="rounded-md border border-zinc-200 px-4 py-2 text-sm">Preview public site</a>
+                <flux:button type="submit" variant="primary" icon="check">Save Brand</flux:button>
+                <flux:button href="{{ $tenant->publicUrl() }}" target="_blank" variant="outline" icon="arrow-top-right-on-square">Preview public site</flux:button>
             </div>
         </div>
 
@@ -163,10 +159,22 @@
             <section class="rounded-lg border border-zinc-200 bg-white p-5">
                 <h2 class="text-base font-semibold">Saved Media</h2>
                 <div class="mt-4 space-y-4 text-sm">
-                    <p class="text-zinc-500">Logo image: <span class="font-medium text-zinc-950">{{ $tenant->logo_image_path ? 'Uploaded' : 'Not set' }}</span></p>
-                    <p class="text-zinc-500">Hero image: <span class="font-medium text-zinc-950">{{ $tenant->hero_image_path ? 'Uploaded' : 'Not set' }}</span></p>
-                    <p class="text-zinc-500">Flyer image: <span class="font-medium text-zinc-950">{{ $tenant->flyer_image_path ? 'Uploaded' : 'Not set' }}</span></p>
-                    <p class="text-zinc-500">Slider images: <span class="font-medium text-zinc-950">{{ count($tenant->public_site_slides ?? []) }}</span></p>
+                    <div class="flex items-center justify-between gap-3">
+                        <span class="text-zinc-500">Logo image</span>
+                        <flux:badge :color="$tenant->logo_image_path ? 'emerald' : 'zinc'" size="sm">{{ $tenant->logo_image_path ? 'Uploaded' : 'Not set' }}</flux:badge>
+                    </div>
+                    <div class="flex items-center justify-between gap-3">
+                        <span class="text-zinc-500">Hero image</span>
+                        <flux:badge :color="$tenant->hero_image_path ? 'emerald' : 'zinc'" size="sm">{{ $tenant->hero_image_path ? 'Uploaded' : 'Not set' }}</flux:badge>
+                    </div>
+                    <div class="flex items-center justify-between gap-3">
+                        <span class="text-zinc-500">Flyer image</span>
+                        <flux:badge :color="$tenant->flyer_image_path ? 'emerald' : 'zinc'" size="sm">{{ $tenant->flyer_image_path ? 'Uploaded' : 'Not set' }}</flux:badge>
+                    </div>
+                    <div class="flex items-center justify-between gap-3">
+                        <span class="text-zinc-500">Slider images</span>
+                        <flux:badge color="zinc" size="sm">{{ count($tenant->public_site_slides ?? []) }}</flux:badge>
+                    </div>
                 </div>
             </section>
         </aside>
