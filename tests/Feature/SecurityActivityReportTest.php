@@ -142,4 +142,125 @@ class SecurityActivityReportTest extends TestCase
             ->assertDontSee('Other tenant login.')
             ->assertDontSee('All tenants');
     }
+
+    public function test_security_activity_report_can_be_exported_as_csv(): void
+    {
+        $tenant = Tenant::create([
+            'company_name' => 'Export Tenant',
+            'owner_email' => 'export@example.com',
+        ]);
+        $otherTenant = Tenant::create([
+            'company_name' => 'Other Export Tenant',
+            'owner_email' => 'other-export@example.com',
+        ]);
+        $superAdmin = User::factory()->create([
+            'role' => 'super_admin',
+            'is_active' => true,
+        ]);
+        $tenantAdmin = User::factory()->create([
+            'name' => 'Export Owner',
+            'email' => 'export-owner@example.com',
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+        $otherAdmin = User::factory()->create([
+            'name' => 'Other Export Owner',
+            'tenant_id' => $otherTenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $tenantAdmin->securityActivities()->create([
+            'tenant_id' => $tenant->id,
+            'action' => 'passkey_registered',
+            'label' => 'Passkey registered: Export laptop.',
+            'ip_address' => '10.8.0.40',
+            'metadata' => ['passkey' => 'Export laptop'],
+        ]);
+        $tenantAdmin->securityActivities()->create([
+            'tenant_id' => $tenant->id,
+            'action' => 'password_updated',
+            'label' => 'Password changed from export test.',
+            'ip_address' => '10.8.0.41',
+        ]);
+        $otherAdmin->securityActivities()->create([
+            'tenant_id' => $otherTenant->id,
+            'action' => 'passkey_registered',
+            'label' => 'Other tenant passkey event.',
+            'ip_address' => '10.8.0.42',
+        ]);
+
+        $response = $this->actingAs($superAdmin)
+            ->get(route('admin.security-activity.export', [
+                'tenant_id' => $tenant->id,
+                'action_group' => 'passkey',
+            ]));
+
+        $response
+            ->assertOk()
+            ->assertHeader('content-type', 'text/csv; charset=UTF-8');
+
+        $content = $response->streamedContent();
+
+        $this->assertStringContainsString('Security Activity Report', $content);
+        $this->assertStringContainsString('Passkey registered: Export laptop.', $content);
+        $this->assertStringContainsString('Export Owner', $content);
+        $this->assertStringContainsString('Export Tenant', $content);
+        $this->assertStringNotContainsString('Password changed from export test.', $content);
+        $this->assertStringNotContainsString('Other tenant passkey event.', $content);
+    }
+
+    public function test_tenant_admin_exports_only_own_security_activity(): void
+    {
+        $ownTenant = Tenant::create([
+            'company_name' => 'Tenant Export Scope',
+            'owner_email' => 'own-scope@example.com',
+        ]);
+        $otherTenant = Tenant::create([
+            'company_name' => 'Other Export Scope',
+            'owner_email' => 'other-scope@example.com',
+        ]);
+        $actor = User::factory()->create([
+            'tenant_id' => $ownTenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+        $ownUser = User::factory()->create([
+            'tenant_id' => $ownTenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+        $otherUser = User::factory()->create([
+            'tenant_id' => $otherTenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $ownUser->securityActivities()->create([
+            'tenant_id' => $ownTenant->id,
+            'action' => 'login',
+            'label' => 'Own exported login.',
+            'ip_address' => '10.8.0.50',
+        ]);
+        $otherUser->securityActivities()->create([
+            'tenant_id' => $otherTenant->id,
+            'action' => 'login',
+            'label' => 'Other exported login.',
+            'ip_address' => '10.8.0.51',
+        ]);
+
+        $response = $this->actingAs($actor)
+            ->get(route('admin.security-activity.export', [
+                'tenant_id' => $otherTenant->id,
+                'date_preset' => 'all',
+            ]));
+
+        $response->assertOk();
+
+        $content = $response->streamedContent();
+
+        $this->assertStringContainsString('Own exported login.', $content);
+        $this->assertStringNotContainsString('Other exported login.', $content);
+    }
 }

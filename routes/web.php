@@ -10,6 +10,7 @@ use App\Http\Controllers\Admin\PaymentSettingsController;
 use App\Http\Controllers\Admin\ProfileController;
 use App\Http\Controllers\Admin\RouterController;
 use App\Http\Controllers\Admin\SalesReportController;
+use App\Http\Controllers\Admin\SecurityActivityController;
 use App\Http\Controllers\Admin\SecurityController;
 use App\Http\Controllers\Admin\ShopController;
 use App\Http\Controllers\Admin\SubscriptionController;
@@ -63,6 +64,7 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::get('profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::put('profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::view('passkeys', 'admin.passkeys.index')->name('passkeys.index');
+    Route::get('security-activity-export', [SecurityActivityController::class, 'export'])->name('security-activity.export');
     Route::view('security-activity', 'admin.security-activity.index')->name('security-activity.index');
     Route::get('security', SecurityController::class)->name('security.index');
     Route::get('billing', [BillingController::class, 'index'])->name('billing.index');

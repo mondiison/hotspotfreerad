@@ -1,4 +1,8 @@
 <div class="space-y-5">
+    <div class="flex justify-end">
+        <flux:button href="{{ route('admin.security-activity.export', $exportQuery) }}" variant="outline" icon="arrow-down-tray">Export CSV</flux:button>
+    </div>
+
     <section class="grid gap-4 md:grid-cols-4">
         <div class="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
             <p class="text-sm text-zinc-500">Total events</p>
@@ -44,11 +48,9 @@
             @endif
 
             <flux:select wire:model.live="date_preset">
-                <flux:select.option value="7">Last 7 days</flux:select.option>
-                <flux:select.option value="30">Last 30 days</flux:select.option>
-                <flux:select.option value="90">Last 90 days</flux:select.option>
-                <flux:select.option value="365">Last 12 months</flux:select.option>
-                <flux:select.option value="all">All time</flux:select.option>
+                @foreach ($datePresets as $value => $label)
+                    <flux:select.option value="{{ $value }}">{{ $label }}</flux:select.option>
+                @endforeach
             </flux:select>
 
             <flux:button type="button" variant="outline" icon="x-mark" wire:click="clearFilters" wire:loading.attr="disabled" wire:target="clearFilters,search,action_group,tenant_id,date_preset">
