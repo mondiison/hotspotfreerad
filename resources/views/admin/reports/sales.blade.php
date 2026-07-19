@@ -167,6 +167,9 @@
                             <th class="px-4 py-3 font-medium">Category</th>
                             <th class="px-4 py-3 text-right font-medium">Count</th>
                             <th class="px-4 py-3 text-right font-medium">Amount</th>
+                            <th class="px-4 py-3 text-right font-medium">Budget</th>
+                            <th class="px-4 py-3 text-right font-medium">Variance</th>
+                            <th class="px-4 py-3 text-right font-medium">Usage</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-zinc-100">
@@ -175,9 +178,22 @@
                                 <td class="px-4 py-3 font-medium">{{ $row['category'] }}</td>
                                 <td class="px-4 py-3 text-right">{{ number_format($row['count']) }}</td>
                                 <td class="px-4 py-3 text-right font-semibold">NGN {{ number_format($row['amount'], 2) }}</td>
+                                <td class="px-4 py-3 text-right">
+                                    {{ is_null($row['budget']) ? 'No budget' : 'NGN '.number_format($row['budget'], 2) }}
+                                </td>
+                                <td class="px-4 py-3 text-right {{ ! is_null($row['variance']) && $row['variance'] < 0 ? 'font-semibold text-red-700' : 'text-zinc-700' }}">
+                                    {{ is_null($row['variance']) ? 'No budget' : 'NGN '.number_format($row['variance'], 2) }}
+                                </td>
+                                <td class="px-4 py-3 text-right">
+                                    @if (is_null($row['usage']))
+                                        <span class="text-zinc-500">No budget</span>
+                                    @else
+                                        <span class="{{ $row['usage'] > 100 ? 'font-semibold text-red-700' : 'text-zinc-700' }}">{{ $row['usage'] }}%</span>
+                                    @endif
+                                </td>
                             </tr>
                         @empty
-                            <tr><td colspan="3" class="px-4 py-8 text-center text-zinc-500">No expenses in this range.</td></tr>
+                            <tr><td colspan="6" class="px-4 py-8 text-center text-zinc-500">No expenses in this range.</td></tr>
                         @endforelse
                     </tbody>
                 </table>

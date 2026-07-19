@@ -75,12 +75,15 @@ class SalesReportController extends Controller
             fputcsv($handle, []);
 
             fputcsv($handle, ['Expenses by Category']);
-            fputcsv($handle, ['Category', 'Count', 'Amount']);
+            fputcsv($handle, ['Category', 'Count', 'Amount', 'Budget', 'Variance', 'Usage']);
             foreach ($report['expenseRows'] as $row) {
                 fputcsv($handle, [
                     $row['category'],
                     $row['count'],
                     number_format($row['amount'], 2, '.', ''),
+                    is_null($row['budget']) ? '' : number_format($row['budget'], 2, '.', ''),
+                    is_null($row['variance']) ? '' : number_format($row['variance'], 2, '.', ''),
+                    $this->formatBudgetUsage($row['usage']),
                 ]);
             }
 
@@ -176,12 +179,23 @@ class SalesReportController extends Controller
             })
             ->values();
         $expenseRows = $expenses
-            ->groupBy(fn (Expense $expense) => $expense->category?->name ?? 'Uncategorized')
-            ->map(fn ($groupedExpenses, string $category) => [
-                'category' => $category,
-                'count' => $groupedExpenses->count(),
-                'amount' => $groupedExpenses->sum(fn (Expense $expense) => (float) $expense->amount),
-            ])
+            ->groupBy(fn (Expense $expense) => $expense->expense_category_id ? 'category-'.$expense->expense_category_id : 'uncategorized')
+            ->map(function ($groupedExpenses) use ($from, $to): array {
+                $expense = $groupedExpenses->first();
+                $amount = $groupedExpenses->sum(fn (Expense $expense) => (float) $expense->amount);
+                $budget = $expense?->category?->monthly_budget
+                    ? $this->proratedBudget((float) $expense->category->monthly_budget, $from, $to)
+                    : null;
+
+                return [
+                    'category' => $expense?->category?->name ?? 'Uncategorized',
+                    'count' => $groupedExpenses->count(),
+                    'amount' => $amount,
+                    'budget' => $budget,
+                    'variance' => is_null($budget) ? null : $budget - $amount,
+                    'usage' => $budget && $budget > 0 ? round(($amount / $budget) * 100, 1) : null,
+                ];
+            })
             ->sortByDesc('amount')
             ->values();
         $expenseTotal = $expenses->sum(fn (Expense $expense) => (float) $expense->amount);
@@ -274,6 +288,31 @@ class SalesReportController extends Controller
     private function formatMargin(?float $margin): string
     {
         return is_null($margin) ? 'No sales' : $margin.'%';
+    }
+
+    private function formatBudgetUsage(?float $usage): string
+    {
+        return is_null($usage) ? 'No budget' : $usage.'%';
+    }
+
+    private function proratedBudget(float $monthlyBudget, Carbon $from, Carbon $to): float
+    {
+        $budget = 0.0;
+        $cursor = $from->copy()->startOfMonth();
+
+        while ($cursor->lte($to)) {
+            $monthStart = $cursor->copy()->startOfMonth();
+            $monthEnd = $cursor->copy()->endOfMonth();
+            $overlapStart = $from->greaterThan($monthStart) ? $from->copy() : $monthStart;
+            $overlapEnd = $to->lessThan($monthEnd) ? $to->copy() : $monthEnd;
+            $daysInRange = $overlapStart->copy()->startOfDay()
+                ->diffInDays($overlapEnd->copy()->startOfDay()) + 1;
+
+            $budget += $monthlyBudget * ($daysInRange / $cursor->daysInMonth);
+            $cursor->addMonthNoOverflow();
+        }
+
+        return round($budget, 2);
     }
 
     private function platformFee(Payment $payment): float
