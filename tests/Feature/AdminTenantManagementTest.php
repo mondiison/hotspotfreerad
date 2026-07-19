@@ -332,6 +332,66 @@ class AdminTenantManagementTest extends TestCase
             ->assertSee('Active Fiber');
     }
 
+    public function test_livewire_tenant_index_filters_two_factor_compliance(): void
+    {
+        $superAdmin = User::factory()->create([
+            'role' => 'super_admin',
+            'tenant_id' => null,
+            'is_active' => true,
+        ]);
+        $readyTenant = Tenant::create([
+            'company_name' => 'Secure Fiber',
+            'owner_email' => 'secure@example.com',
+            'require_two_factor' => true,
+        ]);
+        User::factory()->create([
+            'tenant_id' => $readyTenant->id,
+            'email' => 'secure@example.com',
+            'role' => 'tenant_admin',
+            'is_active' => true,
+            'two_factor_secret' => encrypt('secret'),
+            'two_factor_recovery_codes' => encrypt(json_encode(['code-one'])),
+            'two_factor_confirmed_at' => now(),
+        ]);
+        $missingTenant = Tenant::create([
+            'company_name' => 'Needs Security',
+            'owner_email' => 'missing-2fa@example.com',
+            'require_two_factor' => true,
+        ]);
+        User::factory()->create([
+            'tenant_id' => $missingTenant->id,
+            'email' => 'missing-2fa@example.com',
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+        Tenant::create([
+            'company_name' => 'Optional Tenant',
+            'owner_email' => 'optional@example.com',
+            'require_two_factor' => false,
+        ]);
+
+        Livewire::actingAs($superAdmin)
+            ->test(TenantsIndex::class)
+            ->assertSee('2FA policy')
+            ->assertSee('Ready')
+            ->assertSee('Needs setup')
+            ->set('two_factor_status', 'missing')
+            ->assertSee('Needs Security')
+            ->assertDontSee('Secure Fiber')
+            ->assertDontSee('Optional Tenant')
+            ->set('two_factor_status', 'ready')
+            ->assertSee('Secure Fiber')
+            ->assertDontSee('Needs Security')
+            ->assertDontSee('Optional Tenant')
+            ->set('two_factor_status', 'required')
+            ->assertSee('Secure Fiber')
+            ->assertSee('Needs Security')
+            ->assertDontSee('Optional Tenant')
+            ->call('clearFilters')
+            ->assertSet('two_factor_status', '')
+            ->assertSee('Optional Tenant');
+    }
+
     public function test_livewire_tenant_index_sends_owner_reset_link(): void
     {
         Notification::fake();

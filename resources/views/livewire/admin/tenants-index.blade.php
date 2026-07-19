@@ -20,7 +20,7 @@
     </div>
 
     <section class="mb-4 rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
-        <div class="grid gap-3 lg:grid-cols-[1fr_180px_220px_auto]">
+        <div class="grid gap-3 xl:grid-cols-[1fr_180px_220px_220px_auto]">
             <flux:input wire:model.live.debounce.350ms="search" icon="magnifying-glass" placeholder="Search company, slug, or owner email" />
             <flux:select wire:model.live="status">
                 <flux:select.option value="">All statuses</flux:select.option>
@@ -32,10 +32,36 @@
                 <flux:select.option value="subscription">Subscription</flux:select.option>
                 <flux:select.option value="commission">Commission on sales</flux:select.option>
             </flux:select>
-            <flux:button type="button" variant="outline" icon="x-mark" wire:click="clearFilters" wire:loading.attr="disabled" wire:target="clearFilters,search,status,billing_model">
+            <flux:select wire:model.live="two_factor_status">
+                <flux:select.option value="">All 2FA states</flux:select.option>
+                <flux:select.option value="required">2FA required</flux:select.option>
+                <flux:select.option value="ready">2FA ready</flux:select.option>
+                <flux:select.option value="missing">2FA missing</flux:select.option>
+            </flux:select>
+            <flux:button type="button" variant="outline" icon="x-mark" wire:click="clearFilters" wire:loading.attr="disabled" wire:target="clearFilters,search,status,billing_model,two_factor_status">
                 Reset
             </flux:button>
         </div>
+    </section>
+
+    <section class="mb-4 grid gap-4 md:grid-cols-3">
+        <button type="button" wire:click="$set('two_factor_status', 'required')" class="rounded-lg border border-zinc-200 bg-white p-4 text-left shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50">
+            <span class="text-xs font-semibold uppercase text-zinc-500">2FA policy</span>
+            <span class="mt-2 block text-2xl font-semibold text-zinc-950">{{ number_format($securitySummary['required']) }}</span>
+            <span class="mt-1 block text-sm text-zinc-500">Tenants requiring owner 2FA</span>
+        </button>
+
+        <button type="button" wire:click="$set('two_factor_status', 'ready')" class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-left shadow-sm transition hover:border-emerald-300">
+            <span class="text-xs font-semibold uppercase text-emerald-700">Ready</span>
+            <span class="mt-2 block text-2xl font-semibold text-emerald-950">{{ number_format($securitySummary['ready']) }}</span>
+            <span class="mt-1 block text-sm text-emerald-700">Owners with confirmed 2FA</span>
+        </button>
+
+        <button type="button" wire:click="$set('two_factor_status', 'missing')" class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-left shadow-sm transition hover:border-amber-300">
+            <span class="text-xs font-semibold uppercase text-amber-700">Needs setup</span>
+            <span class="mt-2 block text-2xl font-semibold text-amber-950">{{ number_format($securitySummary['missing']) }}</span>
+            <span class="mt-1 block text-sm text-amber-700">Required tenants still exposed</span>
+        </button>
     </section>
 
     <div class="overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">

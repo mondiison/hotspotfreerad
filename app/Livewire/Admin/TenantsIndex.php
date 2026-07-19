@@ -5,6 +5,7 @@ namespace App\Livewire\Admin;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\TenantManagementService;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -20,6 +21,8 @@ class TenantsIndex extends Component
     public string $status = '';
 
     public string $billing_model = '';
+
+    public string $two_factor_status = '';
 
     public bool $showFormModal = false;
 
@@ -67,6 +70,7 @@ class TenantsIndex extends Component
         'search' => ['except' => ''],
         'status' => ['except' => ''],
         'billing_model' => ['except' => ''],
+        'two_factor_status' => ['except' => ''],
     ];
 
     public function mount(TenantManagementService $tenants, array $filters = []): void
@@ -76,11 +80,12 @@ class TenantsIndex extends Component
         $this->search = (string) ($filters['search'] ?? '');
         $this->status = (string) ($filters['status'] ?? '');
         $this->billing_model = (string) ($filters['billing_model'] ?? '');
+        $this->two_factor_status = (string) ($filters['two_factor_status'] ?? '');
     }
 
     public function updated($property): void
     {
-        if (in_array($property, ['search', 'status', 'billing_model'], true)) {
+        if (in_array($property, ['search', 'status', 'billing_model', 'two_factor_status'], true)) {
             $this->resetPage();
         }
 
@@ -173,7 +178,7 @@ class TenantsIndex extends Component
 
     public function clearFilters(): void
     {
-        $this->reset(['search', 'status', 'billing_model']);
+        $this->reset(['search', 'status', 'billing_model', 'two_factor_status']);
         $this->resetPage();
     }
 
@@ -193,6 +198,13 @@ class TenantsIndex extends Component
             ->when($this->status === 'active', fn ($query) => $query->where('is_active', true))
             ->when($this->status === 'inactive', fn ($query) => $query->where('is_active', false))
             ->when($this->billing_model, fn ($query) => $query->where('billing_model', $this->billing_model))
+            ->when($this->two_factor_status === 'required', fn ($query) => $query->where('require_two_factor', true))
+            ->when($this->two_factor_status === 'ready', fn ($query) => $query
+                ->where('require_two_factor', true)
+                ->whereExists($this->twoFactorOwnerExistsQuery()))
+            ->when($this->two_factor_status === 'missing', fn ($query) => $query
+                ->where('require_two_factor', true)
+                ->whereNotExists($this->twoFactorOwnerExistsQuery()))
             ->latest()
             ->paginate(15);
 
@@ -200,6 +212,7 @@ class TenantsIndex extends Component
             'tenants' => $tenants,
             'ownerUsers' => $this->ownerUsers($tenants->getCollection()->pluck('id'), $tenants->getCollection()->pluck('owner_email')),
             'deletingTenant' => $this->deletingTenantId ? Tenant::find($this->deletingTenantId) : null,
+            'securitySummary' => $this->securitySummary(),
         ]);
     }
 
@@ -265,9 +278,37 @@ class TenantsIndex extends Component
         validator([
             'status' => $this->status ?: null,
             'billing_model' => $this->billing_model ?: null,
+            'two_factor_status' => $this->two_factor_status ?: null,
         ], [
             'status' => ['nullable', Rule::in(['active', 'inactive'])],
             'billing_model' => ['nullable', Rule::in(['subscription', 'commission'])],
+            'two_factor_status' => ['nullable', Rule::in(['required', 'ready', 'missing'])],
         ])->validate();
+    }
+
+    private function securitySummary(): array
+    {
+        $required = Tenant::query()->where('require_two_factor', true)->count();
+        $ready = Tenant::query()
+            ->where('require_two_factor', true)
+            ->whereExists($this->twoFactorOwnerExistsQuery())
+            ->count();
+
+        return [
+            'required' => $required,
+            'ready' => $ready,
+            'missing' => max(0, $required - $ready),
+        ];
+    }
+
+    private function twoFactorOwnerExistsQuery(): \Closure
+    {
+        return fn ($query) => $query
+            ->select(DB::raw(1))
+            ->from('users')
+            ->whereColumn('users.tenant_id', 'tenants.id')
+            ->whereColumn('users.email', 'tenants.owner_email')
+            ->where('users.role', 'tenant_admin')
+            ->whereNotNull('users.two_factor_confirmed_at');
     }
 }
