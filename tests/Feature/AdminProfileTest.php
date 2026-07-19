@@ -127,7 +127,9 @@ class AdminProfileTest extends TestCase
             ->test(ProfileCard::class)
             ->call('startTwoFactorSetup')
             ->assertSee('Scan QR code')
-            ->assertSee('Setup key');
+            ->assertSee('Setup key')
+            ->assertSee('Copy setup key')
+            ->assertSee('Copy URI');
 
         $secret = $user->fresh()->two_factor_secret;
 
@@ -136,7 +138,8 @@ class AdminProfileTest extends TestCase
             ->call('confirmTwoFactor')
             ->assertHasNoErrors()
             ->assertSee('Two-factor authentication is enabled.')
-            ->assertSee('Save these recovery codes now');
+            ->assertSee('Save these recovery codes now')
+            ->assertSee('Copy recovery codes');
 
         $this->assertTrue($user->fresh()->hasTwoFactorEnabled());
         $this->assertCount(8, $user->fresh()->two_factor_recovery_codes);

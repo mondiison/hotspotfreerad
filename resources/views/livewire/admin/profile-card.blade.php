@@ -90,8 +90,28 @@
             </div>
 
             @if ($plainRecoveryCodes)
-                <div class="mt-5 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-                    <p class="font-medium">Save these recovery codes now. They will not be shown again.</p>
+                <div
+                    x-data="{ copied: false }"
+                    class="mt-5 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"
+                >
+                    <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+                        <div>
+                            <p class="font-medium">Save these recovery codes now. They will not be shown again.</p>
+                            <p class="mt-1 text-amber-800">Copy them into a password manager or keep them somewhere private.</p>
+                        </div>
+
+                        <flux:button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            icon="clipboard"
+                            @click="copied = await window.copyText(@js(implode(PHP_EOL, $plainRecoveryCodes))); setTimeout(() => copied = false, 1800)"
+                        >
+                            <span x-show="! copied">Copy recovery codes</span>
+                            <span x-cloak x-show="copied">Copied</span>
+                        </flux:button>
+                    </div>
+
                     <div class="mt-3 grid gap-2 font-mono text-xs sm:grid-cols-2">
                         @foreach ($plainRecoveryCodes as $code)
                             <span class="rounded border border-amber-200 bg-white px-3 py-2">{{ $code }}</span>
@@ -121,13 +141,33 @@
                                 </div>
                             </div>
 
-                            <div class="mt-4 rounded-md border border-zinc-200 bg-white p-3">
-                                <p class="text-xs font-medium uppercase text-zinc-500">Setup key</p>
+                            <div x-data="{ copied: false }" class="mt-4 rounded-md border border-zinc-200 bg-white p-3">
+                                <div class="flex items-center justify-between gap-3">
+                                    <p class="text-xs font-medium uppercase text-zinc-500">Setup key</p>
+                                    <button
+                                        type="button"
+                                        class="text-xs font-medium text-zinc-600 underline decoration-zinc-300 underline-offset-4 hover:text-zinc-950"
+                                        @click="copied = await window.copyText(@js($twoFactorSetupSecret)); setTimeout(() => copied = false, 1800)"
+                                    >
+                                        <span x-show="! copied">Copy setup key</span>
+                                        <span x-cloak x-show="copied">Copied</span>
+                                    </button>
+                                </div>
                                 <p class="mt-2 break-all font-mono text-sm text-zinc-900">{{ $twoFactorSetupSecret }}</p>
                             </div>
 
-                            <div class="mt-3 rounded-md border border-zinc-200 bg-white p-3">
-                                <p class="text-xs font-medium uppercase text-zinc-500">Authenticator URI</p>
+                            <div x-data="{ copied: false }" class="mt-3 rounded-md border border-zinc-200 bg-white p-3">
+                                <div class="flex items-center justify-between gap-3">
+                                    <p class="text-xs font-medium uppercase text-zinc-500">Authenticator URI</p>
+                                    <button
+                                        type="button"
+                                        class="text-xs font-medium text-zinc-600 underline decoration-zinc-300 underline-offset-4 hover:text-zinc-950"
+                                        @click="copied = await window.copyText(@js($twoFactorProvisioningUri)); setTimeout(() => copied = false, 1800)"
+                                    >
+                                        <span x-show="! copied">Copy URI</span>
+                                        <span x-cloak x-show="copied">Copied</span>
+                                    </button>
+                                </div>
                                 <p class="mt-2 break-all font-mono text-xs text-zinc-600">{{ $twoFactorProvisioningUri }}</p>
                             </div>
                         </div>

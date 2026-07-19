@@ -21,3 +21,27 @@ window.renderQrCode = async (element, text) => {
         element.innerHTML = '<p class="text-sm text-red-700">Unable to render QR code. Use the setup key instead.</p>';
     }
 };
+
+window.copyText = async (text) => {
+    if (! text) {
+        return false;
+    }
+
+    if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+
+        return true;
+    }
+
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    const copied = document.execCommand('copy');
+    textarea.remove();
+
+    return copied;
+};
