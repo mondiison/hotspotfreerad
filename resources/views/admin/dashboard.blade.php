@@ -148,12 +148,18 @@
         </div>
     </section>
 
-    @if ($budgetWatch->isNotEmpty())
-        <section class="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-5 shadow-sm">
+    @if ($budgetWatch->isNotEmpty() || $budgetCategoryCount > 0)
+        <section class="mt-6 rounded-lg border {{ $budgetWatch->isNotEmpty() ? 'border-amber-200 bg-amber-50' : 'border-emerald-200 bg-emerald-50' }} p-5 shadow-sm">
             <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
                 <div>
-                    <h2 class="text-base font-semibold text-amber-950">Budget Watch</h2>
-                    <p class="mt-1 text-sm text-amber-700">Current-month expense categories at 80% or more of their monthly budget.</p>
+                    <h2 class="text-base font-semibold {{ $budgetWatch->isNotEmpty() ? 'text-amber-950' : 'text-emerald-950' }}">Budget Watch</h2>
+                    <p class="mt-1 text-sm {{ $budgetWatch->isNotEmpty() ? 'text-amber-700' : 'text-emerald-700' }}">
+                        @if ($budgetWatch->isNotEmpty())
+                            Current-month expense categories at 80% or more of their monthly budget.
+                        @else
+                            {{ number_format($budgetCategoryCount) }} budgeted categories are currently below the 80% watch threshold.
+                        @endif
+                    </p>
                 </div>
                 <flux:button
                     href="{{ route('admin.reports.sales', ['from' => $monthFinanceSummary['from'], 'to' => $monthFinanceSummary['to']]) }}"
@@ -165,6 +171,12 @@
                 </flux:button>
             </div>
 
+            @if ($budgetWatch->isEmpty())
+                <div class="mt-5 rounded-lg border border-emerald-200 bg-white p-4">
+                    <p class="text-sm font-medium text-emerald-950">All budgeted categories are under watch level.</p>
+                    <p class="mt-1 text-sm text-emerald-700">The dashboard will highlight a category here once current-month spending reaches 80% of its monthly budget.</p>
+                </div>
+            @else
             <div class="mt-5 overflow-hidden rounded-lg border border-amber-200 bg-white">
                 <table class="w-full text-left text-sm">
                     <thead class="bg-amber-50 text-amber-800">
@@ -203,6 +215,7 @@
                     </tbody>
                 </table>
             </div>
+            @endif
         </section>
     @endif
 

@@ -2,8 +2,9 @@
 
 namespace App\Support;
 
-use App\Models\Package;
 use App\Models\Expense;
+use App\Models\ExpenseCategory;
+use App\Models\Package;
 use App\Models\Router;
 use App\Models\Shop;
 use App\Models\User;
@@ -46,6 +47,16 @@ class TenantAccess
         return $user->isSuperAdmin()
             ? $query
             : $query->where('tenant_id', $user->tenant_id);
+    }
+
+    public static function scopeExpenseCategories(Builder $query, User $user): Builder
+    {
+        return $user->isSuperAdmin()
+            ? $query
+            : $query->where(function (Builder $query) use ($user): void {
+                $query->whereNull('tenant_id')
+                    ->orWhere('tenant_id', $user->tenant_id);
+            });
     }
 
     public static function scopeSubscriptions(Builder $query, User $user): Builder

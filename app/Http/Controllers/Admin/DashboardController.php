@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\BillingPlan;
 use App\Models\Expense;
+use App\Models\ExpenseCategory;
 use App\Models\Package;
 use App\Models\Payment;
 use App\Models\Router;
@@ -72,6 +73,10 @@ class DashboardController extends Controller
             ->whereDate('incurred_on', '<=', $monthEnd->toDateString())
             ->sum('amount');
         $currentMonthProfit = $currentMonthTenantNet - $currentMonthExpenses;
+        $budgetCategoryCount = TenantAccess::scopeExpenseCategories(ExpenseCategory::query(), $user)
+            ->whereNotNull('monthly_budget')
+            ->where('monthly_budget', '>', 0)
+            ->count();
         $budgetWatch = TenantAccess::scopeExpenses(
             Expense::query()->with(['category', 'tenant']),
             $user
@@ -160,6 +165,7 @@ class DashboardController extends Controller
                 'profit' => $currentMonthProfit,
                 'margin' => $currentMonthTenantNet > 0 ? round(($currentMonthProfit / $currentMonthTenantNet) * 100, 1) : null,
             ],
+            'budgetCategoryCount' => $budgetCategoryCount,
             'budgetWatch' => $budgetWatch,
             'upcomingRecurringExpenses' => $upcomingRecurringExpenses,
             'overdueRecurringExpenses' => $overdueRecurringExpenses,

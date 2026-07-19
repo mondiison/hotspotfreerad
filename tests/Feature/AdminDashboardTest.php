@@ -541,6 +541,43 @@ class AdminDashboardTest extends TestCase
             ->assertDontSee('NGN 950.00');
     }
 
+    public function test_dashboard_shows_budget_watch_all_good_state(): void
+    {
+        $tenant = Tenant::create([
+            'company_name' => 'Mondi Tenant',
+            'owner_email' => 'owner@example.com',
+        ]);
+        $category = ExpenseCategory::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Office supplies',
+            'monthly_budget' => 1000,
+            'is_active' => true,
+        ]);
+        Expense::create([
+            'tenant_id' => $tenant->id,
+            'expense_category_id' => $category->id,
+            'title' => 'Pens',
+            'amount' => 300,
+            'currency' => 'NGN',
+            'incurred_on' => now()->toDateString(),
+        ]);
+
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('admin.dashboard'))
+            ->assertOk()
+            ->assertSee('Budget Watch')
+            ->assertSee('1 budgeted categories are currently below the 80% watch threshold.')
+            ->assertSee('All budgeted categories are under watch level.')
+            ->assertDontSee('Near budget')
+            ->assertDontSee('Over budget');
+    }
+
     public function test_dashboard_shows_upcoming_recurring_expenses(): void
     {
         $ownTenant = Tenant::create([
