@@ -32,12 +32,6 @@ class ForcePasswordChangeController extends Controller
             'must_change_password' => false,
         ])->save();
 
-        if ($request->user()->isTenantAdmin()) {
-            return redirect()
-                ->route('tenant.public-site', $request->user()->tenant)
-                ->with('status', 'Password updated.');
-        }
-
         return redirect()->route('admin.dashboard')->with('status', 'Password updated.');
     }
 }

@@ -24,6 +24,6 @@ class RedirectAfterLoginController extends Controller
             abort(403, 'No active tenant assigned to this account.');
         }
 
-        return redirect()->route('tenant.public-site', $user->tenant);
+        return redirect()->route('admin.dashboard');
     }
 }

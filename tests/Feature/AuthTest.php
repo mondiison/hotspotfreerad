@@ -38,7 +38,7 @@ class AuthTest extends TestCase
             ->assertRedirect(route('admin.dashboard'));
     }
 
-    public function test_tenant_admin_uses_shared_login_and_redirects_to_tenant_slug(): void
+    public function test_tenant_admin_uses_shared_login_and_redirects_to_admin_dashboard(): void
     {
         $tenant = Tenant::create([
             'company_name' => 'Mondi Internet',
@@ -61,10 +61,10 @@ class AuthTest extends TestCase
         $this->assertAuthenticatedAs($user);
 
         $this->get(route('redirect-after-login'))
-            ->assertRedirect(route('tenant.public-site', $tenant));
+            ->assertRedirect(route('admin.dashboard'));
     }
 
-    public function test_tenant_admin_login_ignores_intended_admin_url_and_redirects_to_tenant_slug(): void
+    public function test_tenant_admin_login_ignores_intended_admin_url_and_redirects_to_admin_dashboard(): void
     {
         $tenant = Tenant::create([
             'company_name' => 'Mondi Internet',
@@ -88,7 +88,7 @@ class AuthTest extends TestCase
             ->assertRedirect(route('redirect-after-login'));
 
         $this->get(route('redirect-after-login'))
-            ->assertRedirect(route('tenant.public-site', $tenant));
+            ->assertRedirect(route('admin.dashboard'));
     }
 
     public function test_tenant_admin_with_temporary_password_must_change_password_before_workspace(): void
@@ -141,7 +141,7 @@ class AuthTest extends TestCase
                 'password' => 'private-password',
                 'password_confirmation' => 'private-password',
             ])
-            ->assertRedirect(route('tenant.public-site', $tenant));
+            ->assertRedirect(route('admin.dashboard'));
 
         $this->assertFalse($user->fresh()->must_change_password);
         $this->assertTrue(Hash::check('private-password', $user->fresh()->password));
