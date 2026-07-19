@@ -230,6 +230,17 @@ class AdminUserManagementTest extends TestCase
             'tenant_id' => $tenant->id,
             'is_active' => false,
         ]);
+        $securedUser = User::factory()->create([
+            'name' => 'Secured Admin',
+            'role' => 'super_admin',
+            'tenant_id' => null,
+            'is_active' => true,
+        ]);
+        $securedUser->passkeys()->create([
+            'name' => 'Office laptop',
+            'credential_id' => 'user-index-passkey',
+            'credential' => ['aaguid' => '00000000-0000-0000-0000-000000000000'],
+        ]);
 
         Livewire::actingAs($platformUser)
             ->test(UsersIndex::class)
@@ -238,10 +249,21 @@ class AdminUserManagementTest extends TestCase
             ->set('status', 'inactive')
             ->assertSee('Tenant Staff')
             ->assertDontSee('Platform Admin')
+            ->set('search', '')
+            ->set('role', '')
+            ->set('status', '')
+            ->set('passkey_status', 'registered')
+            ->assertSee('Secured Admin')
+            ->assertSee('1 passkey')
+            ->assertDontSee('Tenant Staff')
+            ->set('passkey_status', 'missing')
+            ->assertSee('Tenant Staff')
+            ->assertDontSee('Secured Admin')
             ->call('clearFilters')
             ->assertSet('search', '')
             ->assertSet('role', '')
             ->assertSet('status', '')
+            ->assertSet('passkey_status', '')
             ->assertSee('Platform Admin');
     }
 

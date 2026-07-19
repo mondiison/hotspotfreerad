@@ -21,6 +21,8 @@ class UsersIndex extends Component
 
     public string $status = '';
 
+    public string $passkey_status = '';
+
     public bool $showFormModal = false;
 
     public bool $showDeleteModal = false;
@@ -47,6 +49,7 @@ class UsersIndex extends Component
         'search' => ['except' => ''],
         'role' => ['except' => ''],
         'status' => ['except' => ''],
+        'passkey_status' => ['except' => ''],
     ];
 
     public function mount(array $filters = []): void
@@ -54,11 +57,12 @@ class UsersIndex extends Component
         $this->search = (string) ($filters['search'] ?? '');
         $this->role = (string) ($filters['role'] ?? '');
         $this->status = (string) ($filters['status'] ?? '');
+        $this->passkey_status = (string) ($filters['passkey_status'] ?? '');
     }
 
     public function updated($property): void
     {
-        if (in_array($property, ['search', 'role', 'status'], true)) {
+        if (in_array($property, ['search', 'role', 'status', 'passkey_status'], true)) {
             $this->resetPage();
         }
     }
@@ -146,7 +150,7 @@ class UsersIndex extends Component
 
     public function clearFilters(): void
     {
-        $this->reset(['search', 'role', 'status']);
+        $this->reset(['search', 'role', 'status', 'passkey_status']);
         $this->resetPage();
     }
 
@@ -158,6 +162,7 @@ class UsersIndex extends Component
 
         $adminUsers = User::query()
             ->with('tenant')
+            ->withCount('passkeys')
             ->when(! $actor->isSuperAdmin(), fn ($query) => $query->where('tenant_id', $actor->tenant_id))
             ->when($this->search, function ($query): void {
                 $query->where(function ($query): void {
@@ -170,6 +175,8 @@ class UsersIndex extends Component
             ->when($this->role, fn ($query) => $query->where('role', $this->role))
             ->when($this->status === 'active', fn ($query) => $query->where('is_active', true))
             ->when($this->status === 'inactive', fn ($query) => $query->where('is_active', false))
+            ->when($this->passkey_status === 'registered', fn ($query) => $query->has('passkeys'))
+            ->when($this->passkey_status === 'missing', fn ($query) => $query->doesntHave('passkeys'))
             ->latest()
             ->paginate(15);
 
@@ -204,9 +211,11 @@ class UsersIndex extends Component
         validator([
             'role' => $this->role ?: null,
             'status' => $this->status ?: null,
+            'passkey_status' => $this->passkey_status ?: null,
         ], [
             'role' => ['nullable', Rule::in(['super_admin', 'tenant_admin'])],
             'status' => ['nullable', Rule::in(['active', 'inactive'])],
+            'passkey_status' => ['nullable', Rule::in(['registered', 'missing'])],
         ])->validate();
     }
 }

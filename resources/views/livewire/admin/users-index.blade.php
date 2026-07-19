@@ -20,7 +20,7 @@
     </div>
 
     <section class="mb-4 rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
-        <div class="grid gap-3 lg:grid-cols-[1fr_180px_180px_auto]">
+        <div class="grid gap-3 lg:grid-cols-[1fr_170px_170px_190px_auto]">
             <flux:input wire:model.live.debounce.350ms="search" icon="magnifying-glass" placeholder="Search name, email, or tenant" />
             <flux:select wire:model.live="role">
                 <flux:select.option value="">All roles</flux:select.option>
@@ -32,7 +32,12 @@
                 <flux:select.option value="active">Active</flux:select.option>
                 <flux:select.option value="inactive">Inactive</flux:select.option>
             </flux:select>
-            <flux:button type="button" variant="outline" icon="x-mark" wire:click="clearFilters" wire:loading.attr="disabled" wire:target="clearFilters,search,role,status">
+            <flux:select wire:model.live="passkey_status">
+                <flux:select.option value="">All passkeys</flux:select.option>
+                <flux:select.option value="registered">Has passkey</flux:select.option>
+                <flux:select.option value="missing">No passkey</flux:select.option>
+            </flux:select>
+            <flux:button type="button" variant="outline" icon="x-mark" wire:click="clearFilters" wire:loading.attr="disabled" wire:target="clearFilters,search,role,status,passkey_status">
                 Reset
             </flux:button>
         </div>
@@ -45,6 +50,7 @@
                     <th class="px-4 py-3 font-medium">User</th>
                     <th class="px-4 py-3 font-medium">Tenant</th>
                     <th class="px-4 py-3 font-medium">Role</th>
+                    <th class="px-4 py-3 font-medium">Security</th>
                     <th class="px-4 py-3 font-medium">Status</th>
                     <th class="px-4 py-3 text-right font-medium">Actions</th>
                 </tr>
@@ -63,6 +69,16 @@
                             </flux:badge>
                         </td>
                         <td class="px-4 py-3">
+                            <div class="flex flex-wrap gap-2">
+                                <flux:badge :color="$managedUser->hasTwoFactorEnabled() ? 'emerald' : 'zinc'">
+                                    {{ $managedUser->hasTwoFactorEnabled() ? '2FA on' : '2FA off' }}
+                                </flux:badge>
+                                <flux:badge :color="$managedUser->passkeys_count > 0 ? 'emerald' : 'zinc'">
+                                    {{ $managedUser->passkeys_count > 0 ? $managedUser->passkeys_count.' '.str('passkey')->plural($managedUser->passkeys_count) : 'No passkey' }}
+                                </flux:badge>
+                            </div>
+                        </td>
+                        <td class="px-4 py-3">
                             <flux:badge :color="$managedUser->is_active ? 'green' : 'zinc'">{{ $managedUser->is_active ? 'Active' : 'Inactive' }}</flux:badge>
                             @if ($managedUser->must_change_password)
                                 <p class="mt-2 text-xs text-amber-700">Password change required</p>
@@ -79,7 +95,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="5" class="px-4 py-10 text-center">
+                        <td colspan="6" class="px-4 py-10 text-center">
                             <p class="font-medium">No users match this view.</p>
                             <p class="mt-1 text-sm text-zinc-500">Create admin accounts for platform operators or tenant workspace managers.</p>
                             <flux:button type="button" variant="primary" icon="plus" class="mt-4" wire:click="create">Add User</flux:button>
