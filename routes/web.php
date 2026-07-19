@@ -1,15 +1,16 @@
 <?php
 
-use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\BillingController;
+use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\ExpenseCategoryController;
 use App\Http\Controllers\Admin\ExpenseController;
 use App\Http\Controllers\Admin\PackageController;
-use App\Http\Controllers\Admin\PaymentSettingsController;
 use App\Http\Controllers\Admin\PaymentController;
+use App\Http\Controllers\Admin\PaymentSettingsController;
 use App\Http\Controllers\Admin\ProfileController;
 use App\Http\Controllers\Admin\RouterController;
 use App\Http\Controllers\Admin\SalesReportController;
+use App\Http\Controllers\Admin\SecurityController;
 use App\Http\Controllers\Admin\ShopController;
 use App\Http\Controllers\Admin\SubscriptionController;
 use App\Http\Controllers\Admin\TenantBrandController;
@@ -61,6 +62,7 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::get('/', DashboardController::class)->name('dashboard');
     Route::get('profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::put('profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::get('security', SecurityController::class)->name('security.index');
     Route::get('billing', [BillingController::class, 'index'])->name('billing.index');
     Route::get('billing/plans/create', [BillingController::class, 'createPlan'])->name('billing.plans.create');
     Route::post('billing/plans', [BillingController::class, 'storePlan'])->name('billing.plans.store');
