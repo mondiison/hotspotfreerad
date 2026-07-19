@@ -127,6 +127,8 @@ class AdminProfileTest extends TestCase
             ->test(ProfileCard::class)
             ->call('startTwoFactorSetup')
             ->assertSee('Scan QR code')
+            ->assertSee('<svg', false)
+            ->assertDontSee('Preparing QR code')
             ->assertSee('Setup key')
             ->assertSee('Copy setup key')
             ->assertSee('Copy URI');

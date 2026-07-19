@@ -33,6 +33,8 @@ class ProfileCard extends Component
 
     public ?string $twoFactorProvisioningUri = null;
 
+    public ?string $twoFactorQrCodeSvg = null;
+
     public array $plainRecoveryCodes = [];
 
     public function mount(): void
@@ -76,6 +78,7 @@ class ProfileCard extends Component
         $this->user->refresh();
         $this->twoFactorSetupSecret = $secret;
         $this->twoFactorProvisioningUri = $twoFactor->provisioningUri($this->user, $secret);
+        $this->twoFactorQrCodeSvg = $twoFactor->qrCodeSvg($this->twoFactorProvisioningUri);
         $this->two_factor_code = '';
         $this->plainRecoveryCodes = [];
         $this->savedMessage = null;
@@ -105,6 +108,7 @@ class ProfileCard extends Component
         $this->two_factor_code = '';
         $this->twoFactorSetupSecret = null;
         $this->twoFactorProvisioningUri = null;
+        $this->twoFactorQrCodeSvg = null;
         $this->plainRecoveryCodes = $codes;
         $this->savedMessage = 'Two-factor authentication is enabled.';
         session()->flash('status', 'Two-factor authentication is enabled.');
@@ -145,6 +149,7 @@ class ProfileCard extends Component
             'two_factor_code',
             'twoFactorSetupSecret',
             'twoFactorProvisioningUri',
+            'twoFactorQrCodeSvg',
             'plainRecoveryCodes',
         ]);
         $this->savedMessage = 'Two-factor authentication is disabled.';

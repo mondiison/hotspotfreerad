@@ -141,14 +141,9 @@
 
                             <div class="mt-4 rounded-md border border-zinc-200 bg-white p-3">
                                 <p class="text-xs font-medium uppercase text-zinc-500">Scan QR code</p>
-                                <div
-                                    wire:ignore
-                                    x-data
-                                    x-init="window.renderQrCode($refs.qr, @js($twoFactorProvisioningUri))"
-                                    class="mt-3 flex justify-center"
-                                >
-                                    <div x-ref="qr" class="grid min-h-48 w-48 place-items-center rounded-md border border-zinc-100 bg-white p-2 text-center text-sm text-zinc-500">
-                                        Preparing QR code...
+                                <div class="mt-3 flex justify-center">
+                                    <div class="[&_svg]:h-48 [&_svg]:w-48 rounded-md border border-zinc-100 bg-white p-2">
+                                        {!! $twoFactorQrCodeSvg !!}
                                     </div>
                                 </div>
                             </div>

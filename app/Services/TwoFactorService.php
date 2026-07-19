@@ -3,6 +3,10 @@
 namespace App\Services;
 
 use App\Models\User;
+use BaconQrCode\Renderer\Image\SvgImageBackEnd;
+use BaconQrCode\Renderer\ImageRenderer;
+use BaconQrCode\Renderer\RendererStyle\RendererStyle;
+use BaconQrCode\Writer;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
@@ -27,6 +31,16 @@ class TwoFactorService
         $label = rawurlencode($issuer.':'.$user->email);
 
         return 'otpauth://totp/'.$label.'?secret='.$secret.'&issuer='.rawurlencode($issuer).'&algorithm=SHA1&digits=6&period=30';
+    }
+
+    public function qrCodeSvg(string $provisioningUri): string
+    {
+        $renderer = new ImageRenderer(
+            new RendererStyle(184),
+            new SvgImageBackEnd
+        );
+
+        return (new Writer($renderer))->writeString($provisioningUri);
     }
 
     public function verifyCode(string $secret, string $code): bool
