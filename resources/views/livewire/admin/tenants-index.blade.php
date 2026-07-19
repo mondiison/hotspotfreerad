@@ -79,6 +79,12 @@
                                     <flux:badge color="green">Ready</flux:badge>
                                 @endif
 
+                                @if ($tenant->require_two_factor)
+                                    <flux:badge :color="$ownerUser?->hasTwoFactorEnabled() ? 'emerald' : 'amber'">
+                                        {{ $ownerUser?->hasTwoFactorEnabled() ? '2FA ready' : '2FA required' }}
+                                    </flux:badge>
+                                @endif
+
                                 <flux:button
                                     type="button"
                                     variant="outline"
@@ -182,6 +188,13 @@
 
                         <div class="md:col-span-2">
                             <flux:checkbox wire:model.live="is_active" label="Active tenant account" />
+                        </div>
+
+                        <div class="md:col-span-2 rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+                            <flux:checkbox wire:model.live="require_two_factor" label="Require 2FA for tenant admins" />
+                            <p class="mt-2 text-sm leading-6 text-zinc-600">
+                                Tenant admins must enable two-factor authentication from Profile before opening the admin dashboard. Super admins are not affected by this tenant policy.
+                            </p>
                         </div>
                     </div>
                 </section>

@@ -45,6 +45,8 @@ class TenantsIndex extends Component
 
     public bool $is_active = true;
 
+    public bool $require_two_factor = false;
+
     public bool $public_site_enabled = true;
 
     public string $brand_color = '#0f766e';
@@ -108,6 +110,7 @@ class TenantsIndex extends Component
         $this->commission_rate = (string) ($tenant->commission_rate ?? '0');
         $this->trial_ends_at = $tenant->trial_ends_at?->format('Y-m-d\TH:i') ?? '';
         $this->is_active = (bool) $tenant->is_active;
+        $this->require_two_factor = (bool) $tenant->require_two_factor;
         $this->public_site_enabled = (bool) $tenant->public_site_enabled;
         $this->brand_color = (string) ($tenant->brand_color ?: '#0f766e');
         $this->public_site_tagline = (string) $tenant->public_site_tagline;
@@ -221,6 +224,7 @@ class TenantsIndex extends Component
             'commission_rate' => $this->commission_rate,
             'trial_ends_at' => $this->trial_ends_at,
             'is_active' => $this->is_active,
+            'require_two_factor' => $this->require_two_factor,
             'public_site_enabled' => $this->public_site_enabled,
             'brand_color' => $this->brand_color,
             'public_site_tagline' => $this->public_site_tagline,
@@ -250,6 +254,7 @@ class TenantsIndex extends Component
         $this->form_billing_model = 'subscription';
         $this->commission_rate = '0';
         $this->is_active = true;
+        $this->require_two_factor = false;
         $this->public_site_enabled = true;
         $this->brand_color = '#0f766e';
         $this->resetValidation();

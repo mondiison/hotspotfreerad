@@ -228,6 +228,7 @@ class AdminTenantManagementTest extends TestCase
             ->set('owner_email', 'modal@example.com')
             ->set('subscription_plan', 'growth')
             ->set('is_active', true)
+            ->set('require_two_factor', true)
             ->set('public_site_enabled', true)
             ->set('brand_color', '#2563eb')
             ->call('save')
@@ -239,6 +240,7 @@ class AdminTenantManagementTest extends TestCase
         $tenantAdmin = User::where('email', 'modal@example.com')->firstOrFail();
 
         $this->assertSame($tenant->id, $tenantAdmin->tenant_id);
+        $this->assertTrue($tenant->require_two_factor);
         $this->assertSame('tenant_admin', $tenantAdmin->role);
         $this->assertTrue($tenantAdmin->must_change_password);
         Notification::assertSentTo($tenantAdmin, TenantAdminTemporaryPassword::class);
@@ -275,6 +277,7 @@ class AdminTenantManagementTest extends TestCase
             ->set('subscription_plan', 'pro')
             ->set('form_billing_model', 'commission')
             ->set('commission_rate', '15.5')
+            ->set('require_two_factor', true)
             ->set('brand_color', '#7c3aed')
             ->call('save')
             ->assertHasNoErrors()
@@ -288,6 +291,7 @@ class AdminTenantManagementTest extends TestCase
         $this->assertSame('pro', $tenant->subscription_plan);
         $this->assertSame('commission', $tenant->billing_model);
         $this->assertSame('15.50', $tenant->commission_rate);
+        $this->assertTrue($tenant->require_two_factor);
         $this->assertSame('#7c3aed', $tenant->brand_color);
         $this->assertSame('updated-modal@example.com', $tenantAdmin->fresh()->email);
     }

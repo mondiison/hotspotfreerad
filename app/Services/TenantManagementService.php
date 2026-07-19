@@ -42,6 +42,7 @@ class TenantManagementService
             'commission_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'trial_ends_at' => ['nullable', 'date'],
             'is_active' => ['nullable', 'boolean'],
+            'require_two_factor' => ['nullable', 'boolean'],
             'public_site_enabled' => ['nullable', 'boolean'],
             'brand_color' => ['required', 'string', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'public_site_tagline' => ['nullable', 'string', 'max:255'],
@@ -58,6 +59,7 @@ class TenantManagementService
 
         return $this->normalize($request->validate($this->rules($tenant)) + [
             'is_active' => false,
+            'require_two_factor' => false,
             'public_site_enabled' => false,
             'brand_color' => '#0f766e',
             'billing_model' => 'subscription',
@@ -165,6 +167,7 @@ class TenantManagementService
             ? round((float) ($data['commission_rate'] ?? 0), 2)
             : 0;
         $data['is_active'] = (bool) ($data['is_active'] ?? false);
+        $data['require_two_factor'] = (bool) ($data['require_two_factor'] ?? false);
         $data['public_site_enabled'] = (bool) ($data['public_site_enabled'] ?? false);
         $data['brand_color'] = $data['brand_color'] ?? '#0f766e';
 

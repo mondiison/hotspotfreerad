@@ -2,9 +2,9 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
 
 class Tenant extends Model
@@ -31,6 +31,7 @@ class Tenant extends Model
         return [
             'trial_ends_at' => 'datetime',
             'is_active' => 'boolean',
+            'require_two_factor' => 'boolean',
             'commission_rate' => 'decimal:2',
             'public_site_enabled' => 'boolean',
             'public_site_slides' => 'array',

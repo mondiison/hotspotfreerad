@@ -153,6 +153,65 @@ class AuthTest extends TestCase
             ->assertRedirect(route('admin.dashboard'));
     }
 
+    public function test_tenant_admin_must_enable_two_factor_when_tenant_policy_requires_it(): void
+    {
+        $tenant = Tenant::create([
+            'company_name' => 'Secure Tenant',
+            'owner_email' => 'owner@example.com',
+            'require_two_factor' => true,
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'email' => 'tenant@example.com',
+            'password' => 'secret-password',
+            'role' => 'tenant_admin',
+            'is_active' => true,
+            'must_change_password' => false,
+        ]);
+
+        $this->post('/login', [
+            'email' => $user->email,
+            'password' => 'secret-password',
+        ])
+            ->assertRedirect(route('redirect-after-login'));
+
+        $this->actingAs($user)
+            ->get(route('admin.dashboard'))
+            ->assertRedirect(route('admin.profile.edit'))
+            ->assertSessionHas('status', 'Your tenant requires two-factor authentication. Enable 2FA before continuing.');
+
+        $this->actingAs($user)
+            ->get(route('admin.profile.edit'))
+            ->assertOk()
+            ->assertSee('Two-Factor Authentication');
+    }
+
+    public function test_tenant_admin_with_required_two_factor_can_access_dashboard_after_enabling_it(): void
+    {
+        $twoFactor = app(TwoFactorService::class);
+        $secret = $twoFactor->generateSecret();
+        $tenant = Tenant::create([
+            'company_name' => 'Secure Tenant',
+            'owner_email' => 'owner@example.com',
+            'require_two_factor' => true,
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'email' => 'tenant@example.com',
+            'password' => 'secret-password',
+            'role' => 'tenant_admin',
+            'is_active' => true,
+            'must_change_password' => false,
+            'two_factor_secret' => $secret,
+            'two_factor_recovery_codes' => $twoFactor->hashRecoveryCodes(['ABCDE-12345']),
+            'two_factor_confirmed_at' => now(),
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('admin.dashboard'))
+            ->assertOk();
+    }
+
     public function test_tenant_admin_login_ignores_intended_admin_url_and_redirects_to_admin_dashboard(): void
     {
         $tenant = Tenant::create([
