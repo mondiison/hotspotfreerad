@@ -7,6 +7,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Services\TwoFactorService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -146,6 +147,49 @@ class AdminProfileTest extends TestCase
 
         $this->assertFalse($user->fresh()->hasTwoFactorEnabled());
         $this->assertNull($user->fresh()->two_factor_secret);
+    }
+
+    public function test_livewire_profile_card_lists_and_logs_out_other_sessions(): void
+    {
+        config(['session.driver' => 'database']);
+
+        $user = User::factory()->create([
+            'password' => 'current-password',
+            'role' => 'super_admin',
+            'is_active' => true,
+        ]);
+
+        session()->setId('current-session');
+
+        DB::table('sessions')->insert([
+            [
+                'id' => 'current-session',
+                'user_id' => $user->id,
+                'ip_address' => '127.0.0.1',
+                'user_agent' => 'Mozilla/5.0 (Windows NT 10.0) AppleWebKit/537.36 Chrome/126.0 Safari/537.36',
+                'payload' => '',
+                'last_activity' => now()->timestamp,
+            ],
+            [
+                'id' => 'other-session',
+                'user_id' => $user->id,
+                'ip_address' => '10.0.0.44',
+                'user_agent' => 'Mozilla/5.0 (iPhone) AppleWebKit/605.1.15 Version/17.0 Mobile Safari/604.1',
+                'payload' => '',
+                'last_activity' => now()->subMinutes(10)->timestamp,
+            ],
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(ProfileCard::class)
+            ->assertSee('Chrome on Windows')
+            ->assertSee('Safari on iOS')
+            ->set('logout_other_sessions_password', 'current-password')
+            ->call('logoutOtherSessions')
+            ->assertHasNoErrors()
+            ->assertSee('Signed out');
+
+        $this->assertDatabaseMissing('sessions', ['id' => 'other-session']);
     }
 
     public function test_profile_password_change_requires_current_password(): void

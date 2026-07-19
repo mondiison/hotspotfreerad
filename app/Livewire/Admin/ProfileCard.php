@@ -4,6 +4,7 @@ namespace App\Livewire\Admin;
 
 use App\Models\User;
 use App\Services\ProfileService;
+use App\Services\SessionSecurityService;
 use App\Services\TwoFactorService;
 use Livewire\Component;
 
@@ -24,6 +25,8 @@ class ProfileCard extends Component
     public string $two_factor_code = '';
 
     public string $two_factor_disable_password = '';
+
+    public string $logout_other_sessions_password = '';
 
     public ?string $twoFactorSetupSecret = null;
 
@@ -138,8 +141,26 @@ class ProfileCard extends Component
         session()->flash('status', 'Two-factor authentication is disabled.');
     }
 
-    public function render()
+    public function logoutOtherSessions(ProfileService $profiles, SessionSecurityService $sessions): void
     {
-        return view('livewire.admin.profile-card');
+        $this->validate([
+            'logout_other_sessions_password' => $profiles->currentPasswordRule(),
+        ]);
+
+        $count = $sessions->logoutOtherSessions($this->user, session()->getId());
+
+        $this->logout_other_sessions_password = '';
+        $this->savedMessage = $count === 1
+            ? 'Signed out 1 other session.'
+            : 'Signed out '.$count.' other sessions.';
+        session()->flash('status', $this->savedMessage);
+    }
+
+    public function render(SessionSecurityService $sessions)
+    {
+        return view('livewire.admin.profile-card', [
+            'activeSessions' => $sessions->sessionsFor($this->user, session()->getId()),
+            'sessionDriverSupported' => config('session.driver') === 'database',
+        ]);
     }
 }

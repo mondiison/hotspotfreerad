@@ -166,6 +166,69 @@
                 </div>
             @endif
         </section>
+
+        <section class="border-t border-zinc-200 pt-6">
+            <div class="flex flex-col justify-between gap-3 md:flex-row md:items-start">
+                <div>
+                    <h2 class="text-base font-semibold">Active Sessions</h2>
+                    <p class="mt-1 text-sm text-zinc-500">Review browsers currently signed in to this admin account.</p>
+                </div>
+
+                <flux:badge color="zinc">
+                    {{ $sessionDriverSupported ? $activeSessions->count().' tracked' : 'Unavailable' }}
+                </flux:badge>
+            </div>
+
+            @if (! $sessionDriverSupported)
+                <div class="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                    Active session management needs the database session driver. Set SESSION_DRIVER=database to enable it.
+                </div>
+            @else
+                <div class="mt-5 overflow-hidden rounded-lg border border-zinc-200">
+                    <div class="divide-y divide-zinc-200 bg-white">
+                        @forelse ($activeSessions as $session)
+                            <div class="flex flex-col justify-between gap-3 p-4 md:flex-row md:items-center">
+                                <div class="min-w-0">
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <p class="font-medium">{{ $session['device'] }}</p>
+                                        @if ($session['is_current'])
+                                            <flux:badge color="emerald" size="sm">Current session</flux:badge>
+                                        @endif
+                                    </div>
+                                    <p class="mt-1 text-sm text-zinc-500">{{ $session['ip_address'] }}</p>
+                                    <p class="mt-1 truncate text-xs text-zinc-400">{{ $session['user_agent'] ?: 'No user agent recorded' }}</p>
+                                </div>
+
+                                <div class="shrink-0 text-sm text-zinc-500">
+                                    {{ $session['last_active']->diffForHumans() }}
+                                </div>
+                            </div>
+                        @empty
+                            <div class="p-4 text-sm text-zinc-500">
+                                No active sessions were found yet.
+                            </div>
+                        @endforelse
+                    </div>
+                </div>
+
+                <div class="mt-5 rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+                    <p class="text-sm font-medium">Sign out other sessions</p>
+                    <p class="mt-2 text-sm leading-6 text-zinc-600">This keeps your current browser signed in and removes every other active session for this account.</p>
+
+                    <div class="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
+                        <flux:field>
+                            <flux:label>Current password</flux:label>
+                            <flux:input type="password" wire:model.blur="logout_other_sessions_password" icon="key" viewable />
+                            <flux:error name="logout_other_sessions_password" />
+                        </flux:field>
+
+                        <flux:button type="button" wire:click="logoutOtherSessions" wire:loading.attr="disabled" wire:target="logoutOtherSessions" variant="outline" icon="arrow-left-start-on-rectangle" class="md:mt-6">
+                            Sign out others
+                        </flux:button>
+                    </div>
+                </div>
+            @endif
+        </section>
     </div>
 
     <div class="mt-6 flex flex-wrap gap-3">
