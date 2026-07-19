@@ -16,21 +16,8 @@ class PackageController extends Controller
 {
     public function index(): View
     {
-        $user = request()->user();
-        $query = TenantAccess::scopePackages(InternetPackage::with('shop.tenant'), $user)
-            ->when(request('search'), function ($query, string $search): void {
-                $query->where(function ($query) use ($search): void {
-                    $query
-                        ->where('name', 'like', "%{$search}%")
-                        ->orWhere('radius_group_name', 'like', "%{$search}%")
-                        ->orWhere('speed_limit_profile', 'like', "%{$search}%")
-                        ->orWhereHas('shop', fn ($shop) => $shop->where('name', 'like', "%{$search}%"));
-                });
-            })
-            ->when(request()->filled('status'), fn ($query) => $query->where('is_active', request('status') === 'active'));
-
         return view('admin.packages.index', [
-            'packages' => $query->latest()->paginate(15)->withQueryString(),
+            'filters' => request()->only(['search', 'status']),
         ]);
     }
 

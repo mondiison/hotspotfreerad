@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Livewire\Admin\PackagesIndex;
 use App\Livewire\Admin\RoutersIndex;
 use App\Livewire\Admin\ShopsIndex;
 use App\Models\ExpenseCategory;
@@ -375,6 +376,145 @@ class AdminIndexFilterTest extends TestCase
             ->assertOk()
             ->assertSee($activePackage->name)
             ->assertDontSee($inactivePackage->name);
+    }
+
+    public function test_livewire_package_index_creates_package_and_syncs_radius(): void
+    {
+        $shop = $this->shop();
+
+        Livewire::actingAs($this->superAdmin())
+            ->test(PackagesIndex::class)
+            ->call('create')
+            ->assertSet('showFormModal', true)
+            ->set('shop_id', (string) $shop->id)
+            ->set('name', 'Modal Weekly')
+            ->set('price', '1500')
+            ->set('currency', 'ngn')
+            ->set('limit_uptime_seconds', '604800')
+            ->set('data_limit_bytes', '')
+            ->set('speed_limit_profile', '10M/10M')
+            ->set('is_active', true)
+            ->call('save')
+            ->assertHasNoErrors()
+            ->assertSet('showFormModal', false)
+            ->assertSee('Package created and synced to RADIUS profile.')
+            ->assertSee('Modal Weekly');
+
+        $package = Package::where('name', 'Modal Weekly')->firstOrFail();
+
+        $this->assertSame('NGN', $package->currency);
+        $this->assertNull($package->data_limit_bytes);
+        $this->assertDatabaseHas('radgroupreply', [
+            'groupname' => $package->radius_group_name,
+            'attribute' => 'Mikrotik-Rate-Limit',
+            'value' => '10M/10M',
+        ]);
+    }
+
+    public function test_livewire_package_index_edits_package_from_flyout(): void
+    {
+        $shop = $this->shop();
+        $package = Package::create([
+            'shop_id' => $shop->id,
+            'name' => 'Old Daily',
+            'price' => 500,
+            'currency' => 'NGN',
+            'limit_uptime_seconds' => 86400,
+            'speed_limit_profile' => '5M/5M',
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs($this->superAdmin())
+            ->test(PackagesIndex::class)
+            ->call('edit', $package->id)
+            ->assertSet('showFormModal', true)
+            ->assertSet('name', 'Old Daily')
+            ->set('name', 'Updated Daily')
+            ->set('price', '750')
+            ->set('data_limit_bytes', '5368709120')
+            ->set('speed_limit_profile', '8M/8M')
+            ->set('fup_data_threshold_bytes', '2147483648')
+            ->set('fup_speed_limit_profile', '1M/1M')
+            ->set('is_active', false)
+            ->call('save')
+            ->assertHasNoErrors()
+            ->assertSet('showFormModal', false)
+            ->assertSee('Package updated and synced to RADIUS profile.');
+
+        $package->refresh();
+
+        $this->assertSame('Updated Daily', $package->name);
+        $this->assertSame('750.00', $package->price);
+        $this->assertSame(5368709120, $package->data_limit_bytes);
+        $this->assertSame('8M/8M', $package->speed_limit_profile);
+        $this->assertSame(2147483648, $package->fup_data_threshold_bytes);
+        $this->assertSame('1M/1M', $package->fup_speed_limit_profile);
+        $this->assertFalse($package->is_active);
+    }
+
+    public function test_livewire_package_index_sets_presets_and_filters_without_reload(): void
+    {
+        $shop = $this->shop();
+        Package::create([
+            'shop_id' => $shop->id,
+            'name' => 'Daily 5GB',
+            'price' => 1000,
+            'currency' => 'NGN',
+            'limit_uptime_seconds' => 86400,
+            'speed_limit_profile' => '5M/5M',
+            'is_active' => true,
+        ]);
+        Package::create([
+            'shop_id' => $shop->id,
+            'name' => 'Legacy Plan',
+            'price' => 500,
+            'currency' => 'NGN',
+            'limit_uptime_seconds' => 3600,
+            'speed_limit_profile' => '1M/1M',
+            'is_active' => false,
+        ]);
+
+        Livewire::actingAs($this->superAdmin())
+            ->test(PackagesIndex::class)
+            ->call('setPreset', 'limit_uptime_seconds', '2592000')
+            ->call('setPreset', 'data_limit_bytes', '5368709120')
+            ->call('setPreset', 'speed_limit_profile', '20M/20M')
+            ->assertSet('limit_uptime_seconds', '2592000')
+            ->assertSet('data_limit_bytes', '5368709120')
+            ->assertSet('speed_limit_profile', '20M/20M')
+            ->set('search', 'Daily')
+            ->set('status', 'active')
+            ->assertSee('Daily 5GB')
+            ->assertDontSee('Legacy Plan')
+            ->call('clearFilters')
+            ->assertSet('search', '')
+            ->assertSet('status', '')
+            ->assertSee('Legacy Plan');
+    }
+
+    public function test_livewire_package_index_deletes_package_with_confirmation(): void
+    {
+        $shop = $this->shop();
+        $package = Package::create([
+            'shop_id' => $shop->id,
+            'name' => 'Delete Plan',
+            'price' => 500,
+            'currency' => 'NGN',
+            'limit_uptime_seconds' => 3600,
+            'speed_limit_profile' => '1M/1M',
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs($this->superAdmin())
+            ->test(PackagesIndex::class)
+            ->call('confirmDelete', $package->id)
+            ->assertSet('showDeleteModal', true)
+            ->assertSee('Delete Plan')
+            ->call('delete')
+            ->assertSet('showDeleteModal', false)
+            ->assertSee('Package deleted.');
+
+        $this->assertDatabaseMissing('packages', ['id' => $package->id]);
     }
 
     public function test_expense_category_index_can_search_and_filter_scope_status_and_budget(): void
