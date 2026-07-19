@@ -79,8 +79,10 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::get('payments', [PaymentController::class, 'index'])->name('payments.index');
     Route::resource('expense-categories', ExpenseCategoryController::class)->except('show');
     Route::get('expenses/{expense}/receipt', [ExpenseController::class, 'receipt'])->name('expenses.receipt');
+    Route::get('expenses-export', [ExpenseController::class, 'export'])->name('expenses.export');
     Route::resource('expenses', ExpenseController::class)->except('show');
     Route::get('reports/sales', [SalesReportController::class, 'index'])->name('reports.sales');
+    Route::get('reports/sales/export', [SalesReportController::class, 'export'])->name('reports.sales.export');
     Route::get('payment-settings', [PaymentSettingsController::class, 'index'])->name('payment-settings.index');
     Route::put('payment-settings/{shop}', [PaymentSettingsController::class, 'update'])->name('payment-settings.update');
 });

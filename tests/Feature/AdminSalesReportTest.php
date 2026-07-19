@@ -129,6 +129,50 @@ class AdminSalesReportTest extends TestCase
             ->assertSessionHasErrors('to');
     }
 
+    public function test_sales_report_can_be_exported_as_csv(): void
+    {
+        $this->paymentFixture('CSV Tenant', 'csv@example.com', 'CSV Shop', 3000, 'successful', '2026-05-05 10:00:00', [
+            'billing_model' => 'commission',
+            'commission_rate' => 10,
+        ]);
+        $tenant = Tenant::where('owner_email', 'csv@example.com')->firstOrFail();
+        $category = ExpenseCategory::where('name', 'Equipment')->firstOrFail();
+        Expense::create([
+            'tenant_id' => $tenant->id,
+            'expense_category_id' => $category->id,
+            'title' => 'Access point',
+            'amount' => 800,
+            'currency' => 'NGN',
+            'incurred_on' => '2026-05-06',
+        ]);
+        $user = User::factory()->create([
+            'role' => 'super_admin',
+            'is_active' => true,
+        ]);
+
+        $response = $this->actingAs($user)
+            ->get(route('admin.reports.sales.export', [
+                'from' => '2026-05-01',
+                'to' => '2026-05-31',
+                'group' => 'month',
+            ]));
+
+        $response
+            ->assertOk()
+            ->assertHeader('content-type', 'text/csv; charset=UTF-8');
+
+        $content = $response->streamedContent();
+
+        $this->assertStringContainsString('Sales Report', $content);
+        $this->assertStringContainsString('"Gross Sales",3000.00', $content);
+        $this->assertStringContainsString('"Platform Commission",300.00', $content);
+        $this->assertStringContainsString('"Tenant Net",2700.00', $content);
+        $this->assertStringContainsString('Expenses,800.00', $content);
+        $this->assertStringContainsString('"Estimated Profit",1900.00', $content);
+        $this->assertStringContainsString('CSV Shop', $content);
+        $this->assertStringContainsString('Equipment', $content);
+    }
+
     private function paymentFixture(string $tenantName, string $ownerEmail, string $shopName, int $amount, string $status, ?string $paidAt, array $tenantOverrides = []): array
     {
         $tenant = Tenant::create(array_merge([

@@ -8,11 +8,82 @@ use App\Models\Payment;
 use App\Support\TenantAccess;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Illuminate\View\View;
 
 class SalesReportController extends Controller
 {
     public function index(Request $request): View
+    {
+        $report = $this->buildReport($request);
+
+        return view('admin.reports.sales', $report);
+    }
+
+    public function export(Request $request): StreamedResponse
+    {
+        $report = $this->buildReport($request);
+        $filename = 'sales-report-'.$report['filters']['from'].'-to-'.$report['filters']['to'].'.csv';
+
+        return response()->streamDownload(function () use ($report): void {
+            $handle = fopen('php://output', 'w');
+
+            fputcsv($handle, ['Sales Report']);
+            fputcsv($handle, ['From', $report['filters']['from']]);
+            fputcsv($handle, ['To', $report['filters']['to']]);
+            fputcsv($handle, ['Group', $report['filters']['group']]);
+            fputcsv($handle, []);
+            fputcsv($handle, ['Summary']);
+            fputcsv($handle, ['Sales Count', $report['summary']['sales_count']]);
+            fputcsv($handle, ['Gross Sales', number_format($report['summary']['revenue'], 2, '.', '')]);
+            fputcsv($handle, ['Platform Commission', number_format($report['summary']['platform_fee'], 2, '.', '')]);
+            fputcsv($handle, ['Tenant Net', number_format($report['summary']['tenant_net'], 2, '.', '')]);
+            fputcsv($handle, ['Expenses', number_format($report['summary']['expenses'], 2, '.', '')]);
+            fputcsv($handle, ['Estimated Profit', number_format($report['summary']['estimated_profit'], 2, '.', '')]);
+            fputcsv($handle, []);
+
+            fputcsv($handle, ['Sales by Period']);
+            fputcsv($handle, ['Period', 'Sales', 'Average Sale', 'Gross Sales', 'Platform Commission', 'Tenant Net']);
+            foreach ($report['rows'] as $row) {
+                fputcsv($handle, [
+                    $row['period'],
+                    $row['sales_count'],
+                    number_format($row['average_sale'], 2, '.', ''),
+                    number_format($row['revenue'], 2, '.', ''),
+                    number_format($row['platform_fee'], 2, '.', ''),
+                    number_format($row['tenant_net'], 2, '.', ''),
+                ]);
+            }
+            fputcsv($handle, []);
+
+            fputcsv($handle, ['Sales by Shop']);
+            fputcsv($handle, ['Shop', 'Sales', 'Gross Sales', 'Platform Commission', 'Tenant Net']);
+            foreach ($report['shopRows'] as $row) {
+                fputcsv($handle, [
+                    $row['shop'],
+                    $row['sales_count'],
+                    number_format($row['revenue'], 2, '.', ''),
+                    number_format($row['platform_fee'], 2, '.', ''),
+                    number_format($row['tenant_net'], 2, '.', ''),
+                ]);
+            }
+            fputcsv($handle, []);
+
+            fputcsv($handle, ['Expenses by Category']);
+            fputcsv($handle, ['Category', 'Count', 'Amount']);
+            foreach ($report['expenseRows'] as $row) {
+                fputcsv($handle, [
+                    $row['category'],
+                    $row['count'],
+                    number_format($row['amount'], 2, '.', ''),
+                ]);
+            }
+
+            fclose($handle);
+        }, $filename, ['Content-Type' => 'text/csv']);
+    }
+
+    private function buildReport(Request $request): array
     {
         $data = $request->validate([
             'from' => ['nullable', 'date'],
@@ -87,7 +158,7 @@ class SalesReportController extends Controller
         $expenseTotal = $expenses->sum(fn (Expense $expense) => (float) $expense->amount);
         $tenantNet = $payments->sum(fn (Payment $payment) => $this->tenantNet($payment));
 
-        return view('admin.reports.sales', [
+        return [
             'filters' => [
                 'from' => $from->toDateString(),
                 'to' => $to->toDateString(),
@@ -106,7 +177,7 @@ class SalesReportController extends Controller
             'rows' => $rows,
             'shopRows' => $shopRows,
             'expenseRows' => $expenseRows,
-        ]);
+        ];
     }
 
     private function periodKey(Carbon $date, string $group): string

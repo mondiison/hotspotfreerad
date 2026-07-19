@@ -252,4 +252,57 @@ class AdminExpenseTest extends TestCase
         $this->assertNull($expense->fresh()->receipt_path);
         Storage::disk('local')->assertMissing($newPath);
     }
+
+    public function test_tenant_admin_can_export_only_own_expenses(): void
+    {
+        $ownTenant = Tenant::create([
+            'company_name' => 'Own Tenant',
+            'owner_email' => 'own@example.com',
+        ]);
+        $otherTenant = Tenant::create([
+            'company_name' => 'Other Tenant',
+            'owner_email' => 'other@example.com',
+        ]);
+        $category = ExpenseCategory::where('name', 'Maintenance')->firstOrFail();
+        Expense::create([
+            'tenant_id' => $ownTenant->id,
+            'expense_category_id' => $category->id,
+            'title' => 'Own router repair',
+            'amount' => 2200,
+            'currency' => 'NGN',
+            'incurred_on' => '2026-07-16',
+            'vendor' => 'Own Technician',
+            'notes' => 'Tenant scoped export.',
+        ]);
+        Expense::create([
+            'tenant_id' => $otherTenant->id,
+            'title' => 'Other expense',
+            'amount' => 9900,
+            'currency' => 'NGN',
+            'incurred_on' => '2026-07-16',
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $ownTenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $response = $this->actingAs($user)
+            ->get(route('admin.expenses.export', [
+                'from' => '2026-07-01',
+                'to' => '2026-07-31',
+            ]));
+
+        $response
+            ->assertOk()
+            ->assertHeader('content-type', 'text/csv; charset=UTF-8');
+
+        $content = $response->streamedContent();
+
+        $this->assertStringContainsString('Own router repair', $content);
+        $this->assertStringContainsString('Maintenance', $content);
+        $this->assertStringContainsString('2200.00', $content);
+        $this->assertStringNotContainsString('Other expense', $content);
+        $this->assertStringNotContainsString('9900.00', $content);
+    }
 }

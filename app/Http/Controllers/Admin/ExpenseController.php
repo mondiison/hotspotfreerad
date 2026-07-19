@@ -11,6 +11,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
@@ -18,32 +19,7 @@ class ExpenseController extends Controller
 {
     public function index(Request $request): View
     {
-        $data = $request->validate([
-            'from' => ['nullable', 'date'],
-            'to' => ['nullable', 'date', 'after_or_equal:from'],
-            'category' => ['nullable', 'integer', 'exists:expense_categories,id'],
-            'search' => ['nullable', 'string', 'max:255'],
-        ]);
-
-        $from = filled($data['from'] ?? null) ? Carbon::parse($data['from'])->startOfDay() : now()->startOfMonth();
-        $to = filled($data['to'] ?? null) ? Carbon::parse($data['to'])->endOfDay() : now()->endOfDay();
-
-        $query = TenantAccess::scopeExpenses(
-            Expense::query()->with(['tenant', 'category']),
-            $request->user()
-        )
-            ->whereBetween('incurred_on', [$from->toDateString(), $to->toDateString()])
-            ->when($request->filled('category'), fn ($query) => $query->where('expense_category_id', $request->integer('category')))
-            ->when($request->filled('search'), function ($query) use ($request): void {
-                $search = $request->string('search')->toString();
-
-                $query->where(function ($query) use ($search): void {
-                    $query
-                        ->where('title', 'like', "%{$search}%")
-                        ->orWhere('vendor', 'like', "%{$search}%")
-                        ->orWhere('notes', 'like', "%{$search}%");
-                });
-            });
+        [$data, $from, $to, $query] = $this->filteredQuery($request);
 
         $summaryQuery = clone $query;
         $expenses = $query->latest('incurred_on')->latest()->paginate(20)->withQueryString();
@@ -75,6 +51,50 @@ class ExpenseController extends Controller
             ],
             'categoryRows' => $categoryRows,
         ]);
+    }
+
+    public function export(Request $request): StreamedResponse
+    {
+        [, $from, $to, $query] = $this->filteredQuery($request);
+        $filename = 'expenses-'.$from->toDateString().'-to-'.$to->toDateString().'.csv';
+
+        return response()->streamDownload(function () use ($query): void {
+            $handle = fopen('php://output', 'w');
+
+            fputcsv($handle, [
+                'Date',
+                'Tenant',
+                'Title',
+                'Category',
+                'Vendor',
+                'Amount',
+                'Currency',
+                'Recurring',
+                'Receipt',
+                'Notes',
+            ]);
+
+            $query
+                ->oldest('incurred_on')
+                ->oldest()
+                ->get()
+                ->each(function (Expense $expense) use ($handle): void {
+                    fputcsv($handle, [
+                        $expense->incurred_on->toDateString(),
+                        $expense->tenant?->company_name,
+                        $expense->title,
+                        $expense->category?->name ?? 'Uncategorized',
+                        $expense->vendor,
+                        number_format((float) $expense->amount, 2, '.', ''),
+                        $expense->currency,
+                        $expense->is_recurring ? 'Yes' : 'No',
+                        $expense->receipt_path ? 'Attached' : 'None',
+                        $expense->notes,
+                    ]);
+                });
+
+            fclose($handle);
+        }, $filename, ['Content-Type' => 'text/csv']);
     }
 
     public function create(Request $request): View
@@ -196,6 +216,38 @@ class ExpenseController extends Controller
     private function storeReceipt(Request $request, int $tenantId): string
     {
         return $request->file('receipt')->store("tenant-expenses/{$tenantId}", 'local');
+    }
+
+    private function filteredQuery(Request $request): array
+    {
+        $data = $request->validate([
+            'from' => ['nullable', 'date'],
+            'to' => ['nullable', 'date', 'after_or_equal:from'],
+            'category' => ['nullable', 'integer', 'exists:expense_categories,id'],
+            'search' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $from = filled($data['from'] ?? null) ? Carbon::parse($data['from'])->startOfDay() : now()->startOfMonth();
+        $to = filled($data['to'] ?? null) ? Carbon::parse($data['to'])->endOfDay() : now()->endOfDay();
+
+        $query = TenantAccess::scopeExpenses(
+            Expense::query()->with(['tenant', 'category']),
+            $request->user()
+        )
+            ->whereBetween('incurred_on', [$from->toDateString(), $to->toDateString()])
+            ->when($request->filled('category'), fn ($query) => $query->where('expense_category_id', $request->integer('category')))
+            ->when($request->filled('search'), function ($query) use ($request): void {
+                $search = $request->string('search')->toString();
+
+                $query->where(function ($query) use ($search): void {
+                    $query
+                        ->where('title', 'like', "%{$search}%")
+                        ->orWhere('vendor', 'like', "%{$search}%")
+                        ->orWhere('notes', 'like', "%{$search}%");
+                });
+            });
+
+        return [$data, $from, $to, $query];
     }
 
     private function categoriesFor(Request $request)

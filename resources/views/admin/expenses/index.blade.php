@@ -2,6 +2,7 @@
     <x-slot:action>
         <div class="flex gap-2">
             <flux:button href="{{ route('admin.expense-categories.index') }}" variant="outline" icon="tag">Categories</flux:button>
+            <flux:button href="{{ route('admin.expenses.export', request()->query()) }}" variant="outline" icon="arrow-down-tray">Export CSV</flux:button>
             <flux:button href="{{ route('admin.expenses.create') }}" variant="primary" icon="plus">Add Expense</flux:button>
         </div>
     </x-slot:action>

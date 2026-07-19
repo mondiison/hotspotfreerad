@@ -1,4 +1,8 @@
 <x-layouts.admin title="Sales Report" heading="Sales Report" subheading="Successful hotspot sales by date range and period.">
+    <x-slot:action>
+        <flux:button href="{{ route('admin.reports.sales.export', request()->query()) }}" variant="outline" icon="arrow-down-tray">Export CSV</flux:button>
+    </x-slot:action>
+
     <form method="GET" class="grid gap-4 rounded-lg border border-zinc-200 bg-white p-5 md:grid-cols-[1fr_1fr_180px_auto]">
         <flux:field>
             <flux:label>From</flux:label>
