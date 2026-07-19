@@ -2,10 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Livewire\Admin\ProfileCard;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Livewire\Livewire;
 use Tests\TestCase;
 
 class AdminProfileTest extends TestCase
@@ -73,6 +75,36 @@ class AdminProfileTest extends TestCase
 
         $this->assertTrue(Hash::check('new-private-password', $user->fresh()->password));
         $this->assertFalse($user->fresh()->must_change_password);
+    }
+
+    public function test_livewire_profile_card_updates_name_and_password_without_page_reload(): void
+    {
+        $user = User::factory()->create([
+            'name' => 'Old Name',
+            'password' => 'current-password',
+            'role' => 'tenant_admin',
+            'is_active' => true,
+            'must_change_password' => true,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(ProfileCard::class)
+            ->set('name', 'Updated Owner')
+            ->set('current_password', 'current-password')
+            ->set('password', 'new-private-password')
+            ->set('password_confirmation', 'new-private-password')
+            ->call('save')
+            ->assertHasNoErrors()
+            ->assertSet('name', 'Updated Owner')
+            ->assertSet('current_password', '')
+            ->assertSet('password', '')
+            ->assertSee('Profile updated.');
+
+        $freshUser = $user->fresh();
+
+        $this->assertSame('Updated Owner', $freshUser->name);
+        $this->assertTrue(Hash::check('new-private-password', $freshUser->password));
+        $this->assertFalse($freshUser->must_change_password);
     }
 
     public function test_profile_password_change_requires_current_password(): void
