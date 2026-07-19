@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Livewire\Admin\ShopsIndex;
 use App\Models\ExpenseCategory;
 use App\Models\Package;
 use App\Models\Router;
@@ -9,6 +10,7 @@ use App\Models\Shop;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Livewire;
 use Tests\TestCase;
 
 class AdminIndexFilterTest extends TestCase
@@ -70,6 +72,122 @@ class AdminIndexFilterTest extends TestCase
             ->assertSee('Not configured')
             ->assertSee('Customer payments disabled')
             ->assertDontSee($configuredShop->name);
+    }
+
+    public function test_livewire_shop_index_creates_shop_from_flyout(): void
+    {
+        $tenant = $this->tenant();
+
+        Livewire::actingAs($this->superAdmin())
+            ->test(ShopsIndex::class)
+            ->call('create')
+            ->assertSet('showFormModal', true)
+            ->set('tenant_id', (string) $tenant->id)
+            ->set('name', 'Livewire Shop')
+            ->set('location_city', 'Abeokuta')
+            ->set('flutterwave_client_id', 'tenant-client-id')
+            ->set('flutterwave_client_secret', 'tenant-client-secret')
+            ->set('flutterwave_webhook_secret', 'tenant-webhook-secret')
+            ->set('is_active', true)
+            ->call('save')
+            ->assertHasNoErrors()
+            ->assertSet('showFormModal', false)
+            ->assertSee('Shop created.')
+            ->assertSee('Livewire Shop');
+
+        $this->assertDatabaseHas('shops', [
+            'tenant_id' => $tenant->id,
+            'name' => 'Livewire Shop',
+            'location_city' => 'Abeokuta',
+            'is_active' => true,
+        ]);
+
+        $shop = Shop::where('name', 'Livewire Shop')->firstOrFail();
+        $this->assertTrue($shop->hasCompleteFlutterwaveCredentials());
+        $this->assertTrue($shop->hasFlutterwaveWebhookSecret());
+    }
+
+    public function test_livewire_shop_index_edits_shop_from_flyout(): void
+    {
+        $tenant = $this->tenant();
+        $shop = Shop::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Old Shop',
+            'location_city' => 'Old City',
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs($this->superAdmin())
+            ->test(ShopsIndex::class)
+            ->call('edit', $shop->id)
+            ->assertSet('showFormModal', true)
+            ->assertSet('name', 'Old Shop')
+            ->set('name', 'Updated Shop')
+            ->set('location_city', 'New City')
+            ->set('is_active', false)
+            ->call('save')
+            ->assertHasNoErrors()
+            ->assertSet('showFormModal', false)
+            ->assertSee('Shop updated.')
+            ->assertSee('Updated Shop');
+
+        $this->assertDatabaseHas('shops', [
+            'id' => $shop->id,
+            'name' => 'Updated Shop',
+            'location_city' => 'New City',
+            'is_active' => false,
+        ]);
+    }
+
+    public function test_livewire_shop_index_filters_without_page_reload(): void
+    {
+        $tenant = $this->tenant();
+        Shop::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Main Hall',
+            'location_city' => 'Ibadan',
+            'is_active' => true,
+        ]);
+        Shop::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Closed Annex',
+            'location_city' => 'Lagos',
+            'is_active' => false,
+        ]);
+
+        Livewire::actingAs($this->superAdmin())
+            ->test(ShopsIndex::class)
+            ->set('search', 'Ibadan')
+            ->set('status', 'active')
+            ->assertSee('Main Hall')
+            ->assertDontSee('Closed Annex')
+            ->call('clearFilters')
+            ->assertSet('search', '')
+            ->assertSet('status', '')
+            ->assertSee('Closed Annex');
+    }
+
+    public function test_livewire_shop_index_deletes_shop_with_confirmation(): void
+    {
+        $tenant = $this->tenant();
+        $shop = Shop::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Delete Me Shop',
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs($this->superAdmin())
+            ->test(ShopsIndex::class)
+            ->call('confirmDelete', $shop->id)
+            ->assertSet('showDeleteModal', true)
+            ->assertSee('Delete Me Shop')
+            ->call('delete')
+            ->assertSet('showDeleteModal', false)
+            ->assertSee('Shop deleted.');
+
+        $this->assertDatabaseMissing('shops', [
+            'id' => $shop->id,
+        ]);
     }
 
     public function test_router_index_can_search_and_filter_by_online_status(): void

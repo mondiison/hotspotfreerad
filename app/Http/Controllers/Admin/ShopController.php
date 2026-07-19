@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Shop;
 use App\Models\Tenant;
+use App\Services\ShopManagementService;
 use App\Support\BillingPlanLimits;
 use App\Support\TenantAccess;
 use Illuminate\Http\RedirectResponse;
@@ -36,6 +37,7 @@ class ShopController extends Controller
 
         return view('admin.shops.index', [
             'shops' => $query->latest()->paginate(15)->withQueryString(),
+            'filters' => request()->only(['search', 'status', 'payments']),
         ]);
     }
 
@@ -44,7 +46,7 @@ class ShopController extends Controller
         $user = request()->user();
 
         return view('admin.shops.form', [
-            'shop' => new Shop(),
+            'shop' => new Shop,
             'tenants' => $user->isSuperAdmin()
                 ? Tenant::orderBy('company_name')->get()
                 : Tenant::whereKey($user->tenant_id)->get(),
@@ -52,13 +54,9 @@ class ShopController extends Controller
         ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request, ShopManagementService $shops): RedirectResponse
     {
-        $data = $this->validated($request);
-        BillingPlanLimits::assertCanCreateShop($request->user());
-        $data = $this->withoutBlankPaymentCredentials($data);
-
-        Shop::create($data);
+        $shops->create($shops->validated($request), $request->user());
 
         return redirect()->route('admin.shops.index')->with('status', 'Shop created.');
     }
@@ -77,54 +75,17 @@ class ShopController extends Controller
         ]);
     }
 
-    public function update(Request $request, Shop $shop): RedirectResponse
+    public function update(Request $request, Shop $shop, ShopManagementService $shops): RedirectResponse
     {
-        TenantAccess::assertShop($shop, $request->user());
-
-        $data = $this->validated($request);
-        $data = $this->withoutBlankPaymentCredentials($data);
-
-        $shop->update($data);
+        $shops->update($shop, $shops->validated($request), $request->user());
 
         return redirect()->route('admin.shops.index')->with('status', 'Shop updated.');
     }
 
-    public function destroy(Shop $shop): RedirectResponse
+    public function destroy(Request $request, Shop $shop, ShopManagementService $shops): RedirectResponse
     {
-        TenantAccess::assertShop($shop, request()->user());
-
-        $shop->delete();
+        $shops->delete($shop, $request->user());
 
         return redirect()->route('admin.shops.index')->with('status', 'Shop deleted.');
-    }
-
-    private function validated(Request $request): array
-    {
-        $data = $request->validate([
-            'tenant_id' => ['required', 'exists:tenants,id'],
-            'name' => ['required', 'string', 'max:255'],
-            'location_city' => ['nullable', 'string', 'max:255'],
-            'flutterwave_client_id' => ['nullable', 'string'],
-            'flutterwave_client_secret' => ['nullable', 'string'],
-            'flutterwave_webhook_secret' => ['nullable', 'string'],
-            'is_active' => ['nullable', 'boolean'],
-        ]) + ['is_active' => false];
-
-        if (! $request->user()->isSuperAdmin()) {
-            $data['tenant_id'] = $request->user()->tenant_id;
-        }
-
-        return $data;
-    }
-
-    private function withoutBlankPaymentCredentials(array $data): array
-    {
-        foreach (['flutterwave_client_id', 'flutterwave_client_secret', 'flutterwave_webhook_secret'] as $field) {
-            if (blank($data[$field] ?? null)) {
-                unset($data[$field]);
-            }
-        }
-
-        return $data;
     }
 }
