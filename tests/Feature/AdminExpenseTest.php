@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Livewire\Admin\ExpensesIndex;
 use App\Models\Expense;
 use App\Models\ExpenseCategory;
 use App\Models\Tenant;
@@ -10,6 +11,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
+use Livewire\Livewire;
 use Tests\TestCase;
 
 class AdminExpenseTest extends TestCase
@@ -509,12 +511,18 @@ class AdminExpenseTest extends TestCase
                 ]))
                 ->assertOk()
                 ->assertSee('7 days')
-                ->assertSee('2026-07-13')
-                ->assertSee('2026-07-19')
                 ->assertSee('Recent diesel')
                 ->assertSee('NGN 15,000.00')
                 ->assertDontSee('Old diesel')
                 ->assertDontSee('NGN 50,000.00');
+
+            Livewire::actingAs($user)
+                ->test(ExpensesIndex::class)
+                ->call('setPreset', 'last_7_days')
+                ->assertSet('from', '2026-07-13')
+                ->assertSet('to', '2026-07-19')
+                ->assertSee('Recent diesel')
+                ->assertDontSee('Old diesel');
         } finally {
             Carbon::setTestNow();
         }
@@ -552,6 +560,121 @@ class AdminExpenseTest extends TestCase
             ->assertSee('Add Category')
             ->assertSee('Tower lease')
             ->assertDontSee('Export CSV');
+    }
+
+    public function test_livewire_expenses_index_creates_expense_from_modal(): void
+    {
+        $tenant = Tenant::create([
+            'company_name' => 'Mondi Tenant',
+            'owner_email' => 'owner@example.com',
+        ]);
+        $category = ExpenseCategory::where('name', 'Maintenance')->firstOrFail();
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(ExpensesIndex::class)
+            ->call('create')
+            ->assertSet('showFormModal', true)
+            ->set('expense_category_id', (string) $category->id)
+            ->set('title', 'Livewire router repair')
+            ->set('amount', '4500')
+            ->set('currency', 'ngn')
+            ->set('incurred_on', '2026-07-18')
+            ->set('vendor', 'Technician')
+            ->call('save')
+            ->assertHasNoErrors()
+            ->assertSet('showFormModal', false)
+            ->assertSee('Expense recorded.')
+            ->assertSee('Livewire router repair');
+
+        $this->assertDatabaseHas('expenses', [
+            'tenant_id' => $tenant->id,
+            'expense_category_id' => $category->id,
+            'title' => 'Livewire router repair',
+            'amount' => 4500,
+            'currency' => 'NGN',
+        ]);
+    }
+
+    public function test_livewire_expenses_index_edits_expense_from_modal(): void
+    {
+        $tenant = Tenant::create([
+            'company_name' => 'Mondi Tenant',
+            'owner_email' => 'owner@example.com',
+        ]);
+        $expense = Expense::create([
+            'tenant_id' => $tenant->id,
+            'title' => 'Old expense',
+            'amount' => 1000,
+            'currency' => 'NGN',
+            'incurred_on' => '2026-07-10',
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(ExpensesIndex::class)
+            ->call('edit', $expense->id)
+            ->assertSet('showFormModal', true)
+            ->assertSet('title', 'Old expense')
+            ->set('title', 'Updated expense')
+            ->set('amount', '2000')
+            ->set('currency', 'usd')
+            ->set('incurred_on', '2026-07-11')
+            ->set('is_recurring', true)
+            ->set('recurring_frequency', 'monthly')
+            ->set('next_due_on', '2026-08-11')
+            ->call('save')
+            ->assertHasNoErrors()
+            ->assertSet('showFormModal', false)
+            ->assertSee('Expense updated.');
+
+        $expense->refresh();
+
+        $this->assertSame('Updated expense', $expense->title);
+        $this->assertSame('USD', $expense->currency);
+        $this->assertTrue($expense->is_recurring);
+        $this->assertSame('monthly', $expense->recurring_frequency);
+    }
+
+    public function test_livewire_expenses_index_deletes_expense_with_confirmation(): void
+    {
+        $tenant = Tenant::create([
+            'company_name' => 'Mondi Tenant',
+            'owner_email' => 'owner@example.com',
+        ]);
+        $expense = Expense::create([
+            'tenant_id' => $tenant->id,
+            'title' => 'Delete expense',
+            'amount' => 1000,
+            'currency' => 'NGN',
+            'incurred_on' => '2026-07-10',
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(ExpensesIndex::class)
+            ->call('confirmDelete', $expense->id)
+            ->assertSet('showDeleteModal', true)
+            ->assertSee('Delete expense')
+            ->call('delete')
+            ->assertSet('showDeleteModal', false)
+            ->assertSee('Expense deleted.');
+
+        $this->assertDatabaseMissing('expenses', [
+            'id' => $expense->id,
+        ]);
     }
 
     public function test_tenant_admin_cannot_record_another_tenants_recurring_expense(): void
