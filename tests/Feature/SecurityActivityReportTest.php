@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Livewire\Admin\SecurityActivitiesIndex;
 use App\Models\Tenant;
 use App\Models\User;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -141,6 +142,80 @@ class SecurityActivityReportTest extends TestCase
             ->assertSee('Own tenant login.')
             ->assertDontSee('Other tenant login.')
             ->assertDontSee('All tenants');
+    }
+
+    public function test_admin_can_open_security_activity_detail_modal(): void
+    {
+        $tenant = Tenant::create([
+            'company_name' => 'Detail Tenant',
+            'owner_email' => 'detail@example.com',
+        ]);
+        $admin = User::factory()->create([
+            'name' => 'Detail Owner',
+            'email' => 'detail-owner@example.com',
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $activity = $admin->securityActivities()->create([
+            'tenant_id' => $tenant->id,
+            'action' => 'passkey_registered',
+            'label' => 'Passkey registered: Detail laptop.',
+            'ip_address' => '10.8.0.60',
+            'user_agent' => 'Feature Test Detail Browser',
+            'metadata' => [
+                'passkey_name' => 'Detail laptop',
+                'transport' => ['internal'],
+            ],
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test(SecurityActivitiesIndex::class)
+            ->call('viewActivity', $activity->id)
+            ->assertSet('showDetailModal', true)
+            ->assertSet('selectedActivityId', $activity->id)
+            ->assertSee('Feature Test Detail Browser')
+            ->assertSee('passkey_name')
+            ->assertSee('Detail laptop')
+            ->call('closeDetailModal')
+            ->assertSet('showDetailModal', false)
+            ->assertSet('selectedActivityId', null);
+    }
+
+    public function test_tenant_admin_cannot_open_another_tenants_security_activity_detail(): void
+    {
+        $ownTenant = Tenant::create([
+            'company_name' => 'Own Detail Tenant',
+            'owner_email' => 'own-detail@example.com',
+        ]);
+        $otherTenant = Tenant::create([
+            'company_name' => 'Other Detail Tenant',
+            'owner_email' => 'other-detail@example.com',
+        ]);
+        $actor = User::factory()->create([
+            'tenant_id' => $ownTenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+        $otherUser = User::factory()->create([
+            'tenant_id' => $otherTenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $activity = $otherUser->securityActivities()->create([
+            'tenant_id' => $otherTenant->id,
+            'action' => 'login',
+            'label' => 'Other tenant detail login.',
+            'ip_address' => '10.8.0.61',
+        ]);
+
+        $this->expectException(ModelNotFoundException::class);
+
+        Livewire::actingAs($actor)
+            ->test(SecurityActivitiesIndex::class)
+            ->call('viewActivity', $activity->id);
     }
 
     public function test_security_activity_report_can_be_exported_as_csv(): void

@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Admin;
 
+use App\Models\SecurityActivity;
 use App\Models\Tenant;
 use App\Services\SecurityActivityReportService;
 use Illuminate\Support\Collection;
@@ -19,6 +20,10 @@ class SecurityActivitiesIndex extends Component
     public string $tenant_id = '';
 
     public string $date_preset = '30';
+
+    public bool $showDetailModal = false;
+
+    public ?int $selectedActivityId = null;
 
     protected $queryString = [
         'search' => ['except' => ''],
@@ -41,6 +46,22 @@ class SecurityActivitiesIndex extends Component
         $this->resetPage();
     }
 
+    public function viewActivity(int $activityId): void
+    {
+        $activity = SecurityActivity::query()
+            ->when(! auth()->user()->isSuperAdmin(), fn ($query) => $query->where('tenant_id', auth()->user()->tenant_id))
+            ->findOrFail($activityId);
+
+        $this->selectedActivityId = $activity->id;
+        $this->showDetailModal = true;
+    }
+
+    public function closeDetailModal(): void
+    {
+        $this->showDetailModal = false;
+        $this->selectedActivityId = null;
+    }
+
     public function render(SecurityActivityReportService $reports)
     {
         $filters = $reports->filters([
@@ -57,6 +78,7 @@ class SecurityActivitiesIndex extends Component
             'actionGroups' => $reports->actionGroups(),
             'datePresets' => $reports->datePresets(),
             'exportQuery' => $reports->queryParams($filters),
+            'selectedActivity' => $this->selectedActivity(),
         ]);
     }
 
@@ -67,5 +89,17 @@ class SecurityActivitiesIndex extends Component
         }
 
         return Tenant::query()->orderBy('company_name')->get();
+    }
+
+    private function selectedActivity(): ?SecurityActivity
+    {
+        if (! $this->selectedActivityId) {
+            return null;
+        }
+
+        return SecurityActivity::query()
+            ->with(['tenant', 'user'])
+            ->when(! auth()->user()->isSuperAdmin(), fn ($query) => $query->where('tenant_id', auth()->user()->tenant_id))
+            ->find($this->selectedActivityId);
     }
 }

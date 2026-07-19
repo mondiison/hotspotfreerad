@@ -69,6 +69,7 @@
                         <th class="px-4 py-3 font-medium">Tenant</th>
                         <th class="px-4 py-3 font-medium">IP</th>
                         <th class="px-4 py-3 font-medium">When</th>
+                        <th class="px-4 py-3 text-right font-medium">Details</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-zinc-100">
@@ -112,10 +113,15 @@
                                 <p>{{ $activity->created_at->format('M j, Y H:i') }}</p>
                                 <p class="mt-1 text-xs text-zinc-500">{{ $activity->created_at->diffForHumans() }}</p>
                             </td>
+                            <td class="px-4 py-3 text-right">
+                                <flux:button type="button" size="sm" variant="ghost" icon="eye" wire:click="viewActivity({{ $activity->id }})" wire:loading.attr="disabled" wire:target="viewActivity({{ $activity->id }})">
+                                    View
+                                </flux:button>
+                            </td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="5" class="px-4 py-10 text-center">
+                            <td colspan="6" class="px-4 py-10 text-center">
                                 <p class="font-medium">No security activity matches this view.</p>
                                 <p class="mt-1 text-sm text-zinc-500">Try a wider date range or clear filters.</p>
                             </td>
@@ -127,4 +133,70 @@
     </section>
 
     <div>{{ $activities->links() }}</div>
+
+    <flux:modal wire:model.self="showDetailModal" class="md:w-3xl" :dismissible="true">
+        @if ($selectedActivity)
+            <div class="space-y-5">
+                <div class="flex items-start gap-3">
+                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-zinc-100 text-zinc-700">
+                        @if (str_contains($selectedActivity->action, 'two_factor'))
+                            <flux:icon.shield-check class="size-5" />
+                        @elseif (str_contains($selectedActivity->action, 'passkey') || str_contains($selectedActivity->action, 'password'))
+                            <flux:icon.key class="size-5" />
+                        @elseif (str_contains($selectedActivity->action, 'login') || str_contains($selectedActivity->action, 'logout'))
+                            <flux:icon.arrow-left-start-on-rectangle class="size-5" />
+                        @else
+                            <flux:icon.clock class="size-5" />
+                        @endif
+                    </span>
+                    <div class="min-w-0">
+                        <flux:heading size="lg">{{ $selectedActivity->label }}</flux:heading>
+                        <p class="mt-1 text-sm text-zinc-500">{{ str($selectedActivity->action)->replace('_', ' ')->title() }} / {{ $selectedActivity->created_at->format('M j, Y H:i:s') }}</p>
+                    </div>
+                </div>
+
+                <div class="grid gap-3 md:grid-cols-2">
+                    <div class="rounded-lg border border-zinc-200 p-4">
+                        <p class="text-xs font-medium uppercase text-zinc-500">Admin</p>
+                        <p class="mt-2 font-medium text-zinc-950">{{ $selectedActivity->user?->name ?? 'Deleted user' }}</p>
+                        <p class="mt-1 text-sm text-zinc-500">{{ $selectedActivity->user?->email ?? '-' }}</p>
+                    </div>
+
+                    <div class="rounded-lg border border-zinc-200 p-4">
+                        <p class="text-xs font-medium uppercase text-zinc-500">Tenant</p>
+                        <p class="mt-2 font-medium text-zinc-950">{{ $selectedActivity->tenant?->company_name ?? 'Platform' }}</p>
+                        <p class="mt-1 text-sm text-zinc-500">{{ $selectedActivity->tenant?->slug ?? '-' }}</p>
+                    </div>
+
+                    <div class="rounded-lg border border-zinc-200 p-4">
+                        <p class="text-xs font-medium uppercase text-zinc-500">IP Address</p>
+                        <p class="mt-2 font-mono text-sm text-zinc-950">{{ $selectedActivity->ip_address ?: '-' }}</p>
+                    </div>
+
+                    <div class="rounded-lg border border-zinc-200 p-4">
+                        <p class="text-xs font-medium uppercase text-zinc-500">Recorded</p>
+                        <p class="mt-2 text-sm text-zinc-950">{{ $selectedActivity->created_at->toDayDateTimeString() }}</p>
+                    </div>
+                </div>
+
+                <div class="rounded-lg border border-zinc-200 p-4">
+                    <p class="text-xs font-medium uppercase text-zinc-500">User Agent</p>
+                    <p class="mt-2 break-words text-sm text-zinc-700">{{ $selectedActivity->user_agent ?: '-' }}</p>
+                </div>
+
+                <div class="rounded-lg border border-zinc-200 p-4">
+                    <p class="text-xs font-medium uppercase text-zinc-500">Metadata</p>
+                    @if (! empty($selectedActivity->metadata))
+                        <pre class="mt-2 max-h-64 overflow-auto rounded-md bg-zinc-950 p-3 text-xs leading-5 text-zinc-100">{{ json_encode($selectedActivity->metadata, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) }}</pre>
+                    @else
+                        <p class="mt-2 text-sm text-zinc-500">No additional metadata was recorded.</p>
+                    @endif
+                </div>
+
+                <div class="flex justify-end">
+                    <flux:button type="button" variant="outline" wire:click="closeDetailModal">Close</flux:button>
+                </div>
+            </div>
+        @endif
+    </flux:modal>
 </div>
