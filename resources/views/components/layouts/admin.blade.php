@@ -71,6 +71,7 @@
                         ['label' => 'Dashboard', 'route' => 'admin.dashboard', 'icon' => 'squares-2x2'],
                         ['label' => 'Tenants', 'route' => 'admin.tenants.index', 'icon' => 'building-storefront', 'super_admin' => true],
                         ['label' => 'Security', 'route' => 'admin.security.index', 'icon' => 'shield-check', 'super_admin' => true],
+                        ['label' => 'Activity', 'route' => 'admin.security-activity.index', 'icon' => 'clock'],
                         ['label' => 'Brand', 'route' => 'admin.brand.edit', 'icon' => 'swatch', 'tenant_admin' => true],
                         ['label' => 'Billing', 'route' => 'admin.billing.index', 'icon' => 'credit-card'],
                         ['label' => 'Users', 'route' => 'admin.users.index', 'icon' => 'users'],

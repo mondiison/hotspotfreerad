@@ -1,0 +1,128 @@
+<div class="space-y-5">
+    <section class="grid gap-4 md:grid-cols-4">
+        <div class="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+            <p class="text-sm text-zinc-500">Total events</p>
+            <p class="mt-2 text-3xl font-semibold">{{ number_format($summary['total']) }}</p>
+        </div>
+
+        <div class="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+            <p class="text-sm text-zinc-500">Sign-ins</p>
+            <p class="mt-2 text-3xl font-semibold">{{ number_format($summary['sign_ins']) }}</p>
+        </div>
+
+        <div class="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+            <p class="text-sm text-zinc-500">Passkey events</p>
+            <p class="mt-2 text-3xl font-semibold text-emerald-700">{{ number_format($summary['passkeys']) }}</p>
+        </div>
+
+        <div class="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+            <p class="text-sm text-zinc-500">Password events</p>
+            <p class="mt-2 text-3xl font-semibold text-amber-700">{{ number_format($summary['passwords']) }}</p>
+        </div>
+    </section>
+
+    <section class="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
+        <div class="grid gap-3 lg:grid-cols-[1fr_180px_180px_180px_auto]">
+            <flux:input wire:model.live.debounce.350ms="search" icon="magnifying-glass" placeholder="Search user, action, IP, tenant" />
+
+            <flux:select wire:model.live="action_group">
+                <flux:select.option value="">All events</flux:select.option>
+                @foreach ($actionGroups as $value => $label)
+                    <flux:select.option value="{{ $value }}">{{ $label }}</flux:select.option>
+                @endforeach
+            </flux:select>
+
+            @if (auth()->user()->isSuperAdmin())
+                <flux:select wire:model.live="tenant_id">
+                    <flux:select.option value="">All tenants</flux:select.option>
+                    @foreach ($tenants as $tenant)
+                        <flux:select.option value="{{ $tenant->id }}">{{ $tenant->company_name }}</flux:select.option>
+                    @endforeach
+                </flux:select>
+            @else
+                <div></div>
+            @endif
+
+            <flux:select wire:model.live="date_preset">
+                <flux:select.option value="7">Last 7 days</flux:select.option>
+                <flux:select.option value="30">Last 30 days</flux:select.option>
+                <flux:select.option value="90">Last 90 days</flux:select.option>
+                <flux:select.option value="365">Last 12 months</flux:select.option>
+                <flux:select.option value="all">All time</flux:select.option>
+            </flux:select>
+
+            <flux:button type="button" variant="outline" icon="x-mark" wire:click="clearFilters" wire:loading.attr="disabled" wire:target="clearFilters,search,action_group,tenant_id,date_preset">
+                Reset
+            </flux:button>
+        </div>
+    </section>
+
+    <section class="overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-sm">
+                <thead class="border-b border-zinc-200 bg-zinc-50 text-zinc-500">
+                    <tr>
+                        <th class="px-4 py-3 font-medium">Event</th>
+                        <th class="px-4 py-3 font-medium">Admin</th>
+                        <th class="px-4 py-3 font-medium">Tenant</th>
+                        <th class="px-4 py-3 font-medium">IP</th>
+                        <th class="px-4 py-3 font-medium">When</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-zinc-100">
+                    @forelse ($activities as $activity)
+                        <tr wire:key="security-activity-{{ $activity->id }}">
+                            <td class="px-4 py-3">
+                                <div class="flex items-start gap-3">
+                                    <span class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-zinc-100 text-zinc-600">
+                                        @if (str_contains($activity->action, 'two_factor'))
+                                            <flux:icon.shield-check class="size-4" />
+                                        @elseif (str_contains($activity->action, 'passkey') || str_contains($activity->action, 'password'))
+                                            <flux:icon.key class="size-4" />
+                                        @elseif (str_contains($activity->action, 'login') || str_contains($activity->action, 'logout'))
+                                            <flux:icon.arrow-left-start-on-rectangle class="size-4" />
+                                        @else
+                                            <flux:icon.clock class="size-4" />
+                                        @endif
+                                    </span>
+                                    <div class="min-w-0">
+                                        <p class="font-medium text-zinc-950">{{ $activity->label }}</p>
+                                        <p class="mt-1 text-xs text-zinc-500">{{ str($activity->action)->replace('_', ' ')->title() }}</p>
+                                        @php
+                                            $metadata = collect($activity->metadata ?? [])
+                                                ->filter(fn ($value) => filled($value))
+                                                ->map(fn ($value, $key) => str($key)->replace('_', ' ')->title().': '.(is_scalar($value) ? (string) $value : json_encode($value)))
+                                                ->implode(' / ');
+                                        @endphp
+                                        @if ($metadata !== '')
+                                            <p class="mt-1 truncate text-xs text-zinc-400">{{ $metadata }}</p>
+                                        @endif
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-4 py-3">
+                                <p class="font-medium">{{ $activity->user?->name ?? 'Deleted user' }}</p>
+                                <p class="mt-1 text-xs text-zinc-500">{{ $activity->user?->email ?? '-' }}</p>
+                            </td>
+                            <td class="px-4 py-3 text-zinc-600">{{ $activity->tenant?->company_name ?? 'Platform' }}</td>
+                            <td class="px-4 py-3 font-mono text-xs text-zinc-600">{{ $activity->ip_address ?: '-' }}</td>
+                            <td class="px-4 py-3 text-zinc-600">
+                                <p>{{ $activity->created_at->format('M j, Y H:i') }}</p>
+                                <p class="mt-1 text-xs text-zinc-500">{{ $activity->created_at->diffForHumans() }}</p>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="5" class="px-4 py-10 text-center">
+                                <p class="font-medium">No security activity matches this view.</p>
+                                <p class="mt-1 text-sm text-zinc-500">Try a wider date range or clear filters.</p>
+                            </td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <div>{{ $activities->links() }}</div>
+</div>
