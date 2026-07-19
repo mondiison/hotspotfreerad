@@ -211,6 +211,7 @@ class TenantsIndex extends Component
         return view('livewire.admin.tenants-index', [
             'tenants' => $tenants,
             'ownerUsers' => $this->ownerUsers($tenants->getCollection()->pluck('id'), $tenants->getCollection()->pluck('owner_email')),
+            'editingOwnerUser' => $this->editingOwnerUser(),
             'deletingTenant' => $this->deletingTenantId ? Tenant::find($this->deletingTenantId) : null,
             'securitySummary' => $this->securitySummary(),
         ]);
@@ -224,6 +225,19 @@ class TenantsIndex extends Component
             ->where('role', 'tenant_admin')
             ->get()
             ->keyBy('tenant_id');
+    }
+
+    private function editingOwnerUser(): ?User
+    {
+        if (! $this->editingTenantId || ! $this->owner_email) {
+            return null;
+        }
+
+        return User::query()
+            ->where('tenant_id', $this->editingTenantId)
+            ->where('email', $this->owner_email)
+            ->where('role', 'tenant_admin')
+            ->first();
     }
 
     private function formData(): array

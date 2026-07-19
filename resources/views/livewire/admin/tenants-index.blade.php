@@ -221,6 +221,35 @@
                             <p class="mt-2 text-sm leading-6 text-zinc-600">
                                 Tenant admins must enable two-factor authentication from Profile before opening the admin dashboard. Super admins are not affected by this tenant policy.
                             </p>
+
+                            @if ($editingTenantId)
+                                <div class="mt-4 rounded-lg border border-white bg-white p-3 shadow-sm">
+                                    <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                        <div>
+                                            <p class="text-sm font-semibold text-zinc-950">Owner 2FA readiness</p>
+                                            @if (! $editingOwnerUser)
+                                                <p class="mt-1 text-sm leading-6 text-zinc-600">No tenant admin login matches this owner email yet. Use the reset link action after saving to create or recover access.</p>
+                                            @elseif ($editingOwnerUser->hasTwoFactorEnabled())
+                                                <p class="mt-1 text-sm leading-6 text-zinc-600">The owner login has confirmed two-factor authentication and can satisfy this tenant policy.</p>
+                                            @else
+                                                <p class="mt-1 text-sm leading-6 text-zinc-600">The owner login exists, but two-factor authentication is not confirmed yet. If this policy is enabled, they will be sent to Profile before using the dashboard.</p>
+                                            @endif
+                                        </div>
+
+                                        @if (! $editingOwnerUser)
+                                            <flux:badge color="amber">Login missing</flux:badge>
+                                        @elseif ($editingOwnerUser->hasTwoFactorEnabled())
+                                            <flux:badge color="green">2FA ready</flux:badge>
+                                        @else
+                                            <flux:badge color="amber">Needs setup</flux:badge>
+                                        @endif
+                                    </div>
+                                </div>
+                            @else
+                                <p class="mt-3 text-sm leading-6 text-zinc-600">
+                                    New tenant owners receive their login first. If this is enabled now, their first dashboard visit will guide them through Profile and Security.
+                                </p>
+                            @endif
                         </div>
                     </div>
                 </section>
