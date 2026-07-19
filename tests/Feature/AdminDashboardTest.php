@@ -537,9 +537,15 @@ class AdminDashboardTest extends TestCase
             ->assertSee('NGN 150.00')
             ->assertSee('85%')
             ->assertSee('View expenses')
+            ->assertSee('Details')
             ->assertSee(route('admin.expenses.index', [
                 'from' => now()->startOfMonth()->toDateString(),
                 'to' => now()->endOfDay()->toDateString(),
+            ]))
+            ->assertSee(route('admin.expenses.index', [
+                'from' => now()->startOfMonth()->toDateString(),
+                'to' => now()->endOfDay()->toDateString(),
+                'category' => $watchedCategory->id,
             ]))
             ->assertDontSee('Office supplies')
             ->assertDontSee('Other fuel')

@@ -93,6 +93,7 @@ class DashboardController extends Controller
                 $usage = round(($spent / $budget) * 100, 1);
 
                 return [
+                    'category_id' => $expense->category->id,
                     'category' => $expense->category->name,
                     'tenant' => $expense->tenant?->company_name,
                     'budget' => $budget,

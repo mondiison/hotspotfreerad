@@ -197,6 +197,7 @@
                             <th class="px-4 py-3 text-right font-medium">Budget</th>
                             <th class="px-4 py-3 text-right font-medium">Variance</th>
                             <th class="px-4 py-3 text-right font-medium">Usage</th>
+                            <th class="px-4 py-3 text-right font-medium">Action</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-amber-100">
@@ -219,6 +220,16 @@
                                             <span class="block h-full rounded-full {{ $row['usage'] > 100 ? 'bg-red-600' : 'bg-amber-500' }}" style="width: {{ min($row['usage'], 100) }}%"></span>
                                         </span>
                                     </div>
+                                </td>
+                                <td class="px-4 py-3 text-right">
+                                    <flux:button
+                                        href="{{ route('admin.expenses.index', ['from' => $monthFinanceSummary['from'], 'to' => $monthFinanceSummary['to'], 'category' => $row['category_id']]) }}"
+                                        variant="outline"
+                                        size="sm"
+                                        icon="magnifying-glass"
+                                    >
+                                        Details
+                                    </flux:button>
                                 </td>
                             </tr>
                         @endforeach
