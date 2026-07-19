@@ -24,16 +24,30 @@ class ExpenseController extends Controller
 
         $summaryQuery = clone $query;
         $expenses = $query->latest('incurred_on')->latest()->paginate(20)->withQueryString();
-        $categoryRows = (clone $summaryQuery)
-            ->get()
-            ->groupBy(fn (Expense $expense) => $expense->category?->name ?? 'Uncategorized')
-            ->map(fn ($group, string $category) => [
-                'category' => $category,
-                'count' => $group->count(),
-                'amount' => $group->sum(fn (Expense $expense) => (float) $expense->amount),
-            ])
+        $filteredExpenses = (clone $summaryQuery)->get();
+        $categoryRows = $filteredExpenses
+            ->groupBy(fn (Expense $expense) => $expense->expense_category_id ? 'category-'.$expense->expense_category_id : 'uncategorized')
+            ->map(function ($group) use ($from, $to): array {
+                $expense = $group->first();
+                $amount = $group->sum(fn (Expense $expense) => (float) $expense->amount);
+                $budget = $expense?->category?->monthly_budget
+                    ? $this->proratedBudget((float) $expense->category->monthly_budget, $from, $to)
+                    : null;
+
+                return [
+                    'category' => $expense?->category?->name ?? 'Uncategorized',
+                    'count' => $group->count(),
+                    'amount' => $amount,
+                    'budget' => $budget,
+                    'variance' => is_null($budget) ? null : $budget - $amount,
+                    'usage' => $budget && $budget > 0 ? round(($amount / $budget) * 100, 1) : null,
+                ];
+            })
             ->sortByDesc('amount')
             ->values();
+        $budgetTotal = $categoryRows->sum(fn (array $row) => (float) ($row['budget'] ?? 0));
+        $expenseTotal = $filteredExpenses->sum(fn (Expense $expense) => (float) $expense->amount);
+        $budgetVariance = $budgetTotal > 0 ? $budgetTotal - $expenseTotal : null;
 
         return view('admin.expenses.index', [
             'expenses' => $expenses,
@@ -46,9 +60,12 @@ class ExpenseController extends Controller
                 'schedule' => $data['schedule'] ?? '',
             ],
             'summary' => [
-                'count' => (clone $summaryQuery)->count(),
-                'total' => (clone $summaryQuery)->sum('amount'),
-                'recurring' => (clone $summaryQuery)->where('is_recurring', true)->sum('amount'),
+                'count' => $filteredExpenses->count(),
+                'total' => $expenseTotal,
+                'recurring' => $filteredExpenses->where('is_recurring', true)->sum(fn (Expense $expense) => (float) $expense->amount),
+                'budget' => $budgetTotal,
+                'budget_variance' => $budgetVariance,
+                'budget_usage' => $budgetTotal > 0 ? round(($expenseTotal / $budgetTotal) * 100, 1) : null,
                 'overdue_count' => TenantAccess::scopeExpenses(Expense::query(), $request->user())
                     ->where('is_recurring', true)
                     ->whereDate('next_due_on', '<', now()->toDateString())
@@ -272,6 +289,26 @@ class ExpenseController extends Controller
             'yearly' => $date->copy()->addYearNoOverflow(),
             default => $date->copy()->addMonthNoOverflow(),
         };
+    }
+
+    private function proratedBudget(float $monthlyBudget, Carbon $from, Carbon $to): float
+    {
+        $budget = 0.0;
+        $cursor = $from->copy()->startOfMonth();
+
+        while ($cursor->lte($to)) {
+            $monthStart = $cursor->copy()->startOfMonth();
+            $monthEnd = $cursor->copy()->endOfMonth();
+            $overlapStart = $from->greaterThan($monthStart) ? $from->copy() : $monthStart;
+            $overlapEnd = $to->lessThan($monthEnd) ? $to->copy() : $monthEnd;
+            $daysInRange = $overlapStart->copy()->startOfDay()
+                ->diffInDays($overlapEnd->copy()->startOfDay()) + 1;
+
+            $budget += $monthlyBudget * ($daysInRange / $cursor->daysInMonth);
+            $cursor->addMonthNoOverflow();
+        }
+
+        return round($budget, 2);
     }
 
     private function filteredQuery(Request $request): array

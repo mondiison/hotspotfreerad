@@ -22,6 +22,7 @@ class AdminExpenseTest extends TestCase
             'owner_email' => 'owner@example.com',
         ]);
         $category = ExpenseCategory::where('name', 'Maintenance')->firstOrFail();
+        $category->update(['monthly_budget' => 5000]);
         $user = User::factory()->create([
             'tenant_id' => $tenant->id,
             'role' => 'tenant_admin',
@@ -62,6 +63,11 @@ class AdminExpenseTest extends TestCase
             ->assertSee('Router repair')
             ->assertSee('Maintenance')
             ->assertSee('NGN 2,500.00')
+            ->assertSee('Budget')
+            ->assertSee('Remaining')
+            ->assertSee('Budget Usage')
+            ->assertSee('NGN 5,000.00')
+            ->assertSee('50%')
             ->assertSee('Recurring')
             ->assertSee('Monthly')
             ->assertSee('Aug 10, 2026');

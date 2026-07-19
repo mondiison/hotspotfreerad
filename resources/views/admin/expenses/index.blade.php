@@ -11,6 +11,9 @@
         @foreach ([
             ['label' => 'Expenses', 'value' => number_format($summary['count']), 'hint' => 'Matching current filters'],
             ['label' => 'Total Spent', 'value' => 'NGN '.number_format($summary['total'], 2), 'hint' => 'All recorded expenses'],
+            ['label' => 'Budget', 'value' => $summary['budget'] > 0 ? 'NGN '.number_format($summary['budget'], 2) : 'No budget', 'hint' => 'Prorated budget for used categories'],
+            ['label' => 'Remaining', 'value' => is_null($summary['budget_variance']) ? 'No budget' : 'NGN '.number_format($summary['budget_variance'], 2), 'hint' => 'Budget minus filtered spend'],
+            ['label' => 'Budget Usage', 'value' => is_null($summary['budget_usage']) ? 'No budget' : $summary['budget_usage'].'%', 'hint' => 'Filtered spend against budget'],
             ['label' => 'Recurring', 'value' => 'NGN '.number_format($summary['recurring'], 2), 'hint' => 'Marked as recurring'],
             ['label' => 'Overdue', 'value' => number_format($summary['overdue_count']), 'hint' => 'Recurring schedules past due'],
             ['label' => 'Categories', 'value' => number_format($summary['category_count']), 'hint' => 'Expense groups used'],
@@ -111,6 +114,9 @@
                         <th class="px-4 py-3 font-medium">Category</th>
                         <th class="px-4 py-3 text-right font-medium">Count</th>
                         <th class="px-4 py-3 text-right font-medium">Amount</th>
+                        <th class="px-4 py-3 text-right font-medium">Budget</th>
+                        <th class="px-4 py-3 text-right font-medium">Variance</th>
+                        <th class="px-4 py-3 text-right font-medium">Usage</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-zinc-100">
@@ -119,9 +125,20 @@
                             <td class="px-4 py-3 font-medium">{{ $row['category'] }}</td>
                             <td class="px-4 py-3 text-right">{{ number_format($row['count']) }}</td>
                             <td class="px-4 py-3 text-right font-semibold">NGN {{ number_format($row['amount'], 2) }}</td>
+                            <td class="px-4 py-3 text-right">{{ is_null($row['budget']) ? 'No budget' : 'NGN '.number_format($row['budget'], 2) }}</td>
+                            <td class="px-4 py-3 text-right {{ ! is_null($row['variance']) && $row['variance'] < 0 ? 'font-semibold text-red-700' : 'text-zinc-700' }}">
+                                {{ is_null($row['variance']) ? 'No budget' : 'NGN '.number_format($row['variance'], 2) }}
+                            </td>
+                            <td class="px-4 py-3 text-right">
+                                @if (is_null($row['usage']))
+                                    <span class="text-zinc-500">No budget</span>
+                                @else
+                                    <span class="{{ $row['usage'] > 100 ? 'font-semibold text-red-700' : 'text-zinc-700' }}">{{ $row['usage'] }}%</span>
+                                @endif
+                            </td>
                         </tr>
                     @empty
-                        <tr><td colspan="3" class="px-4 py-8 text-center text-zinc-500">No category spend yet.</td></tr>
+                        <tr><td colspan="6" class="px-4 py-8 text-center text-zinc-500">No category spend yet.</td></tr>
                     @endforelse
                 </tbody>
             </table>
