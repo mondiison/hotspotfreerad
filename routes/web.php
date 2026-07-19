@@ -15,6 +15,7 @@ use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Auth\ForcePasswordChangeController;
 use App\Http\Controllers\Auth\ForgotPasswordController;
 use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\Auth\RedirectAfterLoginController;
 use App\Http\Controllers\Auth\ResetPasswordController;
 use App\Http\Controllers\Hotspot\PortalController;
 use App\Http\Controllers\TenantPublicSiteController;
@@ -34,6 +35,7 @@ Route::middleware('guest')->group(function () {
 
 Route::post('/logout', [LoginController::class, 'destroy'])->middleware('auth')->name('logout');
 Route::middleware('auth')->group(function () {
+    Route::get('/redirect-after-login', RedirectAfterLoginController::class)->name('redirect-after-login');
     Route::get('/change-password', [ForcePasswordChangeController::class, 'edit'])->name('password.force-change');
     Route::put('/change-password', [ForcePasswordChangeController::class, 'update'])->name('password.force-update');
 });

@@ -65,7 +65,7 @@
                 <div class="flex items-center gap-2">
                     <a href="#plans" class="hidden rounded-md border border-zinc-200 px-3 py-2 text-sm font-medium hover:bg-zinc-50 sm:inline-flex">Plans</a>
                     @auth
-                        <a href="{{ route('admin.dashboard') }}" class="rounded-md bg-zinc-950 px-3 py-2 text-sm font-medium text-white">Open dashboard</a>
+                        <a href="{{ route('redirect-after-login') }}" class="rounded-md bg-zinc-950 px-3 py-2 text-sm font-medium text-white">Open dashboard</a>
                     @else
                         <a href="{{ route('login') }}" class="rounded-md bg-zinc-950 px-3 py-2 text-sm font-medium text-white">Admin sign in</a>
                     @endauth

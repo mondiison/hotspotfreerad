@@ -30,9 +30,12 @@ class AuthTest extends TestCase
             'email' => $user->email,
             'password' => 'secret-password',
         ])
-            ->assertRedirect(route('admin.dashboard'));
+            ->assertRedirect(route('redirect-after-login'));
 
         $this->assertAuthenticatedAs($user);
+
+        $this->get(route('redirect-after-login'))
+            ->assertRedirect(route('admin.dashboard'));
     }
 
     public function test_tenant_admin_uses_shared_login_and_redirects_to_tenant_slug(): void
@@ -53,9 +56,12 @@ class AuthTest extends TestCase
             'email' => $user->email,
             'password' => 'secret-password',
         ])
-            ->assertRedirect(route('tenant.public-site', $tenant));
+            ->assertRedirect(route('redirect-after-login'));
 
         $this->assertAuthenticatedAs($user);
+
+        $this->get(route('redirect-after-login'))
+            ->assertRedirect(route('tenant.public-site', $tenant));
     }
 
     public function test_tenant_admin_login_ignores_intended_admin_url_and_redirects_to_tenant_slug(): void
@@ -79,6 +85,9 @@ class AuthTest extends TestCase
             'email' => $user->email,
             'password' => 'secret-password',
         ])
+            ->assertRedirect(route('redirect-after-login'));
+
+        $this->get(route('redirect-after-login'))
             ->assertRedirect(route('tenant.public-site', $tenant));
     }
 
@@ -101,6 +110,9 @@ class AuthTest extends TestCase
             'email' => $user->email,
             'password' => 'temporary-password',
         ])
+            ->assertRedirect(route('redirect-after-login'));
+
+        $this->get(route('redirect-after-login'))
             ->assertRedirect(route('password.force-change'));
 
         $this->actingAs($user)
