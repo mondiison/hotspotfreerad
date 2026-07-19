@@ -99,6 +99,7 @@ WIREGUARD_ENDPOINT_PORT=13231
 WIREGUARD_PUBLIC_KEY=your_pi_wireguard_public_key
 
 HOTSPOT_DNS_NAME=hotspot.local
+SECURITY_ACTIVITY_RETENTION_DAYS=180
 ```
 
 Passkeys need a secure browser origin. They work on `localhost` for development, but most browsers will not register passkeys on a plain LAN URL like `http://192.168.190.244`. For production, use your HTTPS domain in `APP_URL`, set `PASSKEYS_RELYING_PARTY_ID` to only the hostname, and set `PASSKEYS_ALLOWED_ORIGINS` to the full HTTPS origin.
@@ -242,7 +243,35 @@ php artisan queue:failed
 sudo journalctl -u hotspotfreerad-worker -n 100 --no-pager
 ```
 
-## 10. Verify
+## 10. Run Scheduled Maintenance
+
+Laravel's scheduler keeps housekeeping jobs running, including pruning old security activity logs according to `SECURITY_ACTIVITY_RETENTION_DAYS`.
+
+Open the `www-data` crontab:
+
+```bash
+sudo crontab -u www-data -e
+```
+
+Add:
+
+```cron
+* * * * * cd /var/www/hotspotfreerad && /usr/bin/php artisan schedule:run >> /dev/null 2>&1
+```
+
+Before deleting old audit records, you can preview the cleanup:
+
+```bash
+php artisan hotspot:prune-security-activity --days=180 --dry-run
+```
+
+Run it manually only when needed:
+
+```bash
+php artisan hotspot:prune-security-activity --days=180
+```
+
+## 11. Verify
 
 ```bash
 php artisan test
@@ -256,7 +285,7 @@ Then open:
 http://your-public-portal-domain/hotspot/portal?mac=AA:BB:CC:DD:EE:FF&nasid=YOUR_ROUTER_NAS_ID
 ```
 
-## 11. Updating Later
+## 12. Updating Later
 
 After new code is pushed to GitHub:
 

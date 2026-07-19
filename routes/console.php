@@ -1,12 +1,15 @@
 <?php
 
+use App\Mail\HotspotTestMail;
+use App\Models\SecurityActivity;
+use App\Models\Tenant;
+use App\Models\User;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
-use App\Mail\HotspotTestMail;
-use App\Models\Tenant;
-use App\Models\User;
+use Illuminate\Support\Facades\Schedule;
+use Symfony\Component\Console\Command\Command;
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
@@ -74,7 +77,40 @@ Artisan::command('hotspot:test-mail {email}', function (string $email): void {
     $this->line('Port: '.(config('mail.mailers.smtp.port') ?: 'not configured'));
     $this->line('From: '.config('mail.from.address'));
 
-    Mail::to($email)->send(new HotspotTestMail());
+    Mail::to($email)->send(new HotspotTestMail);
 
     $this->info("Test email handed to mailer for {$email}");
 })->purpose('Send a test email and show the active mail transport without secrets');
+
+Artisan::command('hotspot:prune-security-activity {--days=} {--dry-run}', function (): int {
+    $optionDays = $this->option('days');
+    $days = (int) ($optionDays !== null && $optionDays !== ''
+        ? $optionDays
+        : config('hotspot.security_activity_retention_days', 180));
+
+    if ($days < 1) {
+        $this->error('Retention days must be at least 1.');
+
+        return Command::FAILURE;
+    }
+
+    $cutoff = now()->subDays($days);
+    $query = SecurityActivity::query()->where('created_at', '<', $cutoff);
+    $count = (clone $query)->count();
+
+    if ($this->option('dry-run')) {
+        $this->info("{$count} security activity record(s) older than {$days} day(s) would be pruned.");
+
+        return Command::SUCCESS;
+    }
+
+    $deleted = $query->delete();
+
+    $this->info("Pruned {$deleted} security activity record(s) older than {$days} day(s).");
+
+    return Command::SUCCESS;
+})->purpose('Prune old security activity audit records');
+
+Schedule::command('hotspot:prune-security-activity')
+    ->dailyAt('02:15')
+    ->withoutOverlapping();
