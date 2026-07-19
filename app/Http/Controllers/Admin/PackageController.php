@@ -5,12 +5,11 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Package as InternetPackage;
 use App\Models\Shop;
-use App\Services\RadiusProvisioningService;
+use App\Services\PackageManagementService;
 use App\Support\BillingPlanLimits;
 use App\Support\TenantAccess;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class PackageController extends Controller
@@ -40,19 +39,15 @@ class PackageController extends Controller
         $user = request()->user();
 
         return view('admin.packages.form', [
-            'package' => new InternetPackage(),
+            'package' => new InternetPackage,
             'shops' => TenantAccess::scopeShops(Shop::with('tenant'), $user)->orderBy('name')->get(),
             'billingUsage' => BillingPlanLimits::usageSummary($user, 'packages'),
         ]);
     }
 
-    public function store(Request $request, RadiusProvisioningService $radius): RedirectResponse
+    public function store(Request $request, PackageManagementService $packages): RedirectResponse
     {
-        $data = $this->validated($request);
-        BillingPlanLimits::assertCanCreatePackage($request->user());
-
-        $package = InternetPackage::create($data);
-        $radius->syncPackageProfile($package);
+        $packages->create($packages->validated($request), $request->user());
 
         return redirect()->route('admin.packages.index')->with('status', 'Package created and synced to RADIUS profile.');
     }
@@ -69,12 +64,9 @@ class PackageController extends Controller
         ]);
     }
 
-    public function update(Request $request, InternetPackage $package, RadiusProvisioningService $radius): RedirectResponse
+    public function update(Request $request, InternetPackage $package, PackageManagementService $packages): RedirectResponse
     {
-        TenantAccess::assertPackage($package, $request->user());
-
-        $package->update($this->validated($request, $package));
-        $radius->syncPackageProfile($package);
+        $packages->update($package, $packages->validated($request, $package), $request->user());
 
         return redirect()->route('admin.packages.index')->with('status', 'Package updated and synced to RADIUS profile.');
     }
@@ -86,26 +78,5 @@ class PackageController extends Controller
         $package->delete();
 
         return redirect()->route('admin.packages.index')->with('status', 'Package deleted.');
-    }
-
-    private function validated(Request $request, ?InternetPackage $package = null): array
-    {
-        $data = $request->validate([
-            'shop_id' => ['required', TenantAccess::shopExistsRule($request->user())],
-            'name' => ['required', 'string', 'max:255'],
-            'radius_group_name' => ['nullable', 'string', 'max:64', Rule::unique('packages')->ignore($package)],
-            'price' => ['required', 'numeric', 'min:0'],
-            'currency' => ['required', 'string', 'size:3'],
-            'limit_uptime_seconds' => ['required', 'integer', 'min:60'],
-            'data_limit_bytes' => ['nullable', 'integer', 'min:1'],
-            'speed_limit_profile' => ['required', 'string', 'max:255'],
-            'fup_data_threshold_bytes' => ['nullable', 'integer', 'min:1'],
-            'fup_speed_limit_profile' => ['nullable', 'required_with:fup_data_threshold_bytes', 'string', 'max:255'],
-            'is_active' => ['nullable', 'boolean'],
-        ]) + ['is_active' => false];
-
-        $data['currency'] = strtoupper($data['currency']);
-
-        return $data;
     }
 }

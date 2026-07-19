@@ -2,10 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Livewire\Admin\PackageForm;
+use App\Models\Package;
 use App\Models\Shop;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Livewire\Livewire;
 use Tests\TestCase;
 
 class AdminPackageFormTest extends TestCase
@@ -43,6 +47,64 @@ class AdminPackageFormTest extends TestCase
                 'is_active' => 1,
             ])
             ->assertSessionHasErrors('fup_speed_limit_profile');
+    }
+
+    public function test_livewire_package_form_updates_plan_presets(): void
+    {
+        $shop = $this->shop();
+
+        $this->actingAs($this->superAdmin());
+
+        Livewire::test(PackageForm::class, [
+            'package' => new Package,
+            'shops' => collect([$shop->load('tenant')]),
+            'billingUsage' => null,
+        ])
+            ->call('setPreset', 'limit_uptime_seconds', '604800')
+            ->call('setPreset', 'data_limit_bytes', '5368709120')
+            ->call('setPreset', 'speed_limit_profile', '10M/10M')
+            ->assertSet('limit_uptime_seconds', '604800')
+            ->assertSet('data_limit_bytes', '5368709120')
+            ->assertSet('speed_limit_profile', '10M/10M');
+    }
+
+    public function test_livewire_package_form_saves_and_syncs_radius_profile(): void
+    {
+        $shop = $this->shop();
+
+        $this->actingAs($this->superAdmin());
+
+        Livewire::test(PackageForm::class, [
+            'package' => new Package,
+            'shops' => collect([$shop->load('tenant')]),
+            'billingUsage' => null,
+        ])
+            ->set('shop_id', (string) $shop->id)
+            ->set('name', 'Livewire Weekly')
+            ->set('price', '1500')
+            ->set('currency', 'ngn')
+            ->set('limit_uptime_seconds', '604800')
+            ->set('data_limit_bytes', '')
+            ->set('speed_limit_profile', '10M/10M')
+            ->set('is_active', true)
+            ->call('save')
+            ->assertRedirect(route('admin.packages.index'));
+
+        $this->assertDatabaseHas('packages', [
+            'shop_id' => $shop->id,
+            'name' => 'Livewire Weekly',
+            'currency' => 'NGN',
+            'data_limit_bytes' => null,
+        ]);
+
+        $groupName = DB::table('packages')->where('name', 'Livewire Weekly')->value('radius_group_name');
+
+        $this->assertNotEmpty($groupName);
+        $this->assertDatabaseHas('radgroupreply', [
+            'groupname' => $groupName,
+            'attribute' => 'Mikrotik-Rate-Limit',
+            'value' => '10M/10M',
+        ]);
     }
 
     private function shop(): Shop
