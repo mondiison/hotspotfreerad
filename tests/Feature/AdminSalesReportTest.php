@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Livewire\Admin\SalesReport;
 use App\Models\Customer;
 use App\Models\Expense;
 use App\Models\ExpenseCategory;
@@ -12,6 +13,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Livewire\Livewire;
 use Tests\TestCase;
 
 class AdminSalesReportTest extends TestCase
@@ -229,6 +231,67 @@ class AdminSalesReportTest extends TestCase
         $this->assertStringContainsString('Equipment,1,800.00,1000.00,200.00,80%', $content);
         $this->assertStringContainsString('CSV Shop', $content);
         $this->assertStringContainsString('Equipment', $content);
+    }
+
+    public function test_livewire_sales_report_updates_presets_and_custom_range_without_page_reload(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-19 12:00:00'));
+
+        try {
+            $this->paymentFixture('Preset Tenant', 'preset@example.com', 'Recent Shop', 1800, 'successful', '2026-07-14 10:00:00');
+            $this->paymentFixture('Old Preset Tenant', 'old-preset@example.com', 'Old Shop', 9000, 'successful', '2026-07-01 10:00:00');
+            $user = User::factory()->create([
+                'role' => 'super_admin',
+                'is_active' => true,
+            ]);
+
+            Livewire::actingAs($user)
+                ->test(SalesReport::class)
+                ->call('setPreset', 'last_7_days')
+                ->assertSet('preset', 'last_7_days')
+                ->assertSet('from', '2026-07-13')
+                ->assertSet('to', '2026-07-19')
+                ->assertSet('group', 'day')
+                ->assertSee('Recent Shop')
+                ->assertSee('NGN 1,800.00')
+                ->assertDontSee('Old Shop')
+                ->assertSee(route('admin.reports.sales.export', ['preset' => 'last_7_days', 'group' => 'day']))
+                ->call('useCustomRange')
+                ->set('from', '2026-07-01')
+                ->set('to', '2026-07-02')
+                ->set('group', 'month')
+                ->assertSet('preset', '')
+                ->assertSee('Old Shop')
+                ->assertDontSee('Recent Shop');
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
+    public function test_livewire_sales_report_respects_tenant_scope(): void
+    {
+        [$ownPayment, $ownTenant] = $this->paymentFixture('Own Tenant', 'own@example.com', 'Own Live Shop', 1500, 'successful', '2026-02-01 10:00:00');
+        $this->paymentFixture('Other Tenant', 'other@example.com', 'Other Live Shop', 9000, 'successful', '2026-02-01 10:00:00');
+        $user = User::factory()->create([
+            'tenant_id' => $ownTenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(SalesReport::class, [
+                'filters' => [
+                    'from' => '2026-02-01',
+                    'to' => '2026-02-28',
+                    'group' => 'day',
+                ],
+            ])
+            ->assertSee('Own Live Shop')
+            ->assertSee('NGN 1,500.00')
+            ->assertDontSee('Other Live Shop')
+            ->assertDontSee('NGN 9,000.00');
+
+        $this->assertSame('successful', $ownPayment->status);
     }
 
     private function paymentFixture(string $tenantName, string $ownerEmail, string $shopName, int $amount, string $status, ?string $paidAt, array $tenantOverrides = []): array
