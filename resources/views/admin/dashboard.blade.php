@@ -121,6 +121,20 @@
             </flux:button>
         </div>
 
+        @if ($securityAttention['reasons']->isNotEmpty())
+            <div class="mt-4 flex flex-wrap gap-2">
+                @foreach ($securityAttention['reasons'] as $reason)
+                    <a
+                        href="{{ route('admin.security-activity.index', ['attention' => '1', 'action' => $reason['action']]) }}"
+                        class="inline-flex items-center gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-1.5 text-sm font-medium text-rose-700 hover:bg-rose-100"
+                    >
+                        <span>{{ $reason['label'] }}</span>
+                        <span class="rounded bg-white px-1.5 py-0.5 text-xs">{{ number_format($reason['count']) }}</span>
+                    </a>
+                @endforeach
+            </div>
+        @endif
+
         <div class="mt-5 overflow-hidden rounded-lg border border-zinc-200">
             <table class="w-full text-left text-sm">
                 <thead class="bg-zinc-50 text-zinc-500">

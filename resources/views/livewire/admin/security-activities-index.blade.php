@@ -26,12 +26,19 @@
     </section>
 
     <section class="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
-        <div class="grid gap-3 lg:grid-cols-[1fr_180px_160px_180px_180px_auto]">
+        <div class="grid gap-3 lg:grid-cols-[1fr_170px_190px_150px_170px_170px_auto]">
             <flux:input wire:model.live.debounce.350ms="search" icon="magnifying-glass" placeholder="Search user, action, IP, tenant" />
 
             <flux:select wire:model.live="action_group">
                 <flux:select.option value="">All events</flux:select.option>
                 @foreach ($actionGroups as $value => $label)
+                    <flux:select.option value="{{ $value }}">{{ $label }}</flux:select.option>
+                @endforeach
+            </flux:select>
+
+            <flux:select wire:model.live="action">
+                <flux:select.option value="">All reasons</flux:select.option>
+                @foreach ($actionOptions as $value => $label)
                     <flux:select.option value="{{ $value }}">{{ $label }}</flux:select.option>
                 @endforeach
             </flux:select>
@@ -58,7 +65,7 @@
                 @endforeach
             </flux:select>
 
-            <flux:button type="button" variant="outline" icon="x-mark" wire:click="clearFilters" wire:loading.attr="disabled" wire:target="clearFilters,search,action_group,attention,tenant_id,date_preset">
+            <flux:button type="button" variant="outline" icon="x-mark" wire:click="clearFilters" wire:loading.attr="disabled" wire:target="clearFilters,search,action_group,action,attention,tenant_id,date_preset">
                 Reset
             </flux:button>
         </div>

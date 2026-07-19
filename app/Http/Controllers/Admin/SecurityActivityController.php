@@ -20,6 +20,7 @@ class SecurityActivityController extends Controller
             fputcsv($handle, ['Security Activity Report']);
             fputcsv($handle, ['Date Range', $reports->dateLabel($filters['date_preset'])]);
             fputcsv($handle, ['Event Group', $reports->groupLabel($filters['action_group'])]);
+            fputcsv($handle, ['Event Reason', $reports->actionLabel($filters['action'])]);
             fputcsv($handle, ['Attention Only', $filters['attention'] === '1' ? 'Yes' : 'No']);
             fputcsv($handle, ['Search', $filters['search']]);
             fputcsv($handle, []);

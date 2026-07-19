@@ -630,6 +630,13 @@ class AdminDashboardTest extends TestCase
         ]);
         $admin->securityActivities()->create([
             'tenant_id' => $tenant->id,
+            'action' => 'password_updated',
+            'label' => 'Password changed from dashboard test.',
+            'ip_address' => '10.8.0.82',
+            'created_at' => now(),
+        ]);
+        $admin->securityActivities()->create([
+            'tenant_id' => $tenant->id,
             'action' => 'login',
             'label' => 'Normal sign-in event.',
             'ip_address' => '10.8.0.81',
@@ -640,10 +647,15 @@ class AdminDashboardTest extends TestCase
             ->get(route('admin.dashboard'))
             ->assertOk()
             ->assertSee('Security Attention')
-            ->assertSee('1 event in the last 30 days')
+            ->assertSee('2 events in the last 30 days')
             ->assertSee('Two-factor challenge failed.')
+            ->assertSee('Failed 2FA challenge')
+            ->assertSee('Password changed')
             ->assertSee('Review activity')
             ->assertSee(route('admin.security-activity.index', ['attention' => '1']), false)
+            ->assertSee('action=two_factor_challenge_failed', false)
+            ->assertSee('action=password_updated', false)
+            ->assertSee('attention=1', false)
             ->assertDontSee('Normal sign-in event.');
     }
 

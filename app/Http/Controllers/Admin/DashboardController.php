@@ -223,6 +223,17 @@ class DashboardController extends Controller
                 ->latest()
                 ->take(5)
                 ->get(),
+            'reasons' => (clone $query)
+                ->select('action', DB::raw('count(*) as aggregate'))
+                ->groupBy('action')
+                ->pluck('aggregate', 'action')
+                ->map(fn ($count, string $action): array => [
+                    'action' => $action,
+                    'label' => $securityActivities->actionLabel($action),
+                    'count' => (int) $count,
+                ])
+                ->sortByDesc('count')
+                ->values(),
         ];
     }
 

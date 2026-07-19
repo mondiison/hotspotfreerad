@@ -91,6 +91,7 @@ class SecurityActivityReportTest extends TestCase
             ->assertSee('Passkey registered: Office laptop.')
             ->call('clearFilters')
             ->assertSet('action_group', '')
+            ->assertSet('action', '')
             ->assertSet('search', '')
             ->assertSet('attention', '')
             ->assertSet('date_preset', '30');
@@ -128,7 +129,11 @@ class SecurityActivityReportTest extends TestCase
             ->assertSee('Normal sign-in event.')
             ->set('attention', '1')
             ->assertSee('Two-factor challenge failed.')
-            ->assertDontSee('Normal sign-in event.');
+            ->assertDontSee('Normal sign-in event.')
+            ->set('action', 'two_factor_challenge_failed')
+            ->assertSee('Two-factor challenge failed.')
+            ->set('action', 'password_updated')
+            ->assertDontSee('Two-factor challenge failed.');
     }
 
     public function test_tenant_admin_only_sees_own_tenant_security_activity(): void
@@ -316,6 +321,7 @@ class SecurityActivityReportTest extends TestCase
 
         $this->assertStringContainsString('Security Activity Report', $content);
         $this->assertStringContainsString('"Event Group",Passkeys', $content);
+        $this->assertStringContainsString('"Event Reason",All', $content);
         $this->assertStringContainsString('"Attention Only",No', $content);
         $this->assertStringContainsString('"Created At",Event,Action,Priority', $content);
         $this->assertStringContainsString('Passkey registered: Export laptop.', $content);

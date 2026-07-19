@@ -17,6 +17,8 @@ class SecurityActivitiesIndex extends Component
 
     public string $action_group = '';
 
+    public string $action = '';
+
     public string $attention = '';
 
     public string $tenant_id = '';
@@ -30,6 +32,7 @@ class SecurityActivitiesIndex extends Component
     protected $queryString = [
         'search' => ['except' => ''],
         'action_group' => ['except' => ''],
+        'action' => ['except' => ''],
         'attention' => ['except' => ''],
         'tenant_id' => ['except' => ''],
         'date_preset' => ['except' => '30'],
@@ -37,14 +40,14 @@ class SecurityActivitiesIndex extends Component
 
     public function updated($property): void
     {
-        if (in_array($property, ['search', 'action_group', 'attention', 'tenant_id', 'date_preset'], true)) {
+        if (in_array($property, ['search', 'action_group', 'action', 'attention', 'tenant_id', 'date_preset'], true)) {
             $this->resetPage();
         }
     }
 
     public function clearFilters(): void
     {
-        $this->reset(['search', 'action_group', 'attention', 'tenant_id']);
+        $this->reset(['search', 'action_group', 'action', 'attention', 'tenant_id']);
         $this->date_preset = '30';
         $this->resetPage();
     }
@@ -70,6 +73,7 @@ class SecurityActivitiesIndex extends Component
         $filters = $reports->filters([
             'search' => $this->search,
             'action_group' => $this->action_group,
+            'action' => $this->action,
             'attention' => $this->attention,
             'tenant_id' => $this->tenant_id,
             'date_preset' => $this->date_preset,
@@ -80,6 +84,7 @@ class SecurityActivitiesIndex extends Component
             'tenants' => $this->tenants(),
             'summary' => $reports->summary(auth()->user()),
             'actionGroups' => $reports->actionGroups(),
+            'actionOptions' => $reports->actionOptions(),
             'datePresets' => $reports->datePresets(),
             'exportQuery' => $reports->queryParams($filters),
             'selectedActivity' => $this->selectedActivity(),

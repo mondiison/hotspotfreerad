@@ -33,11 +33,37 @@ class SecurityActivityReportService
         ];
     }
 
+    public function actionOptions(): array
+    {
+        return [
+            'tenant_inactive_login_blocked' => 'Inactive tenant blocked',
+            'two_factor_challenge_failed' => 'Failed 2FA challenge',
+            'managed_user_password_reset_sent' => 'Password reset link sent',
+            'password_updated' => 'Password changed',
+            'two_factor_disabled' => '2FA disabled',
+            'login' => 'Password sign-in',
+            'two_factor_login' => '2FA sign-in',
+            'passkey_login' => 'Passkey sign-in',
+            'logout' => 'Signed out',
+            'passkey_registered' => 'Passkey registered',
+            'passkey_deleted' => 'Passkey removed',
+            'two_factor_setup_started' => '2FA setup started',
+            'two_factor_challenge_started' => '2FA challenge started',
+            'two_factor_enabled' => '2FA enabled',
+            'recovery_codes_regenerated' => 'Recovery codes regenerated',
+            'profile_updated' => 'Profile updated',
+            'other_sessions_logged_out' => 'Other sessions logged out',
+            'platform_security_updated' => 'Platform security policy updated',
+            'tenant_two_factor_policy_updated' => 'Tenant 2FA policy updated',
+        ];
+    }
+
     public function filters(array $input): array
     {
         $data = Validator::make($input, [
             'search' => ['nullable', 'string', 'max:255'],
             'action_group' => ['nullable', Rule::in(array_keys($this->actionGroups()))],
+            'action' => ['nullable', Rule::in(array_keys($this->actionOptions()))],
             'attention' => ['nullable', 'in:1'],
             'tenant_id' => ['nullable', 'integer', 'exists:tenants,id'],
             'date_preset' => ['nullable', Rule::in(array_keys($this->datePresets()))],
@@ -46,6 +72,7 @@ class SecurityActivityReportService
         return [
             'search' => $data['search'] ?? '',
             'action_group' => $data['action_group'] ?? '',
+            'action' => $data['action'] ?? '',
             'attention' => $data['attention'] ?? '',
             'tenant_id' => (string) ($data['tenant_id'] ?? ''),
             'date_preset' => $data['date_preset'] ?? '30',
@@ -59,6 +86,7 @@ class SecurityActivityReportService
             ->when(! $user->isSuperAdmin(), fn ($query) => $query->where('tenant_id', $user->tenant_id))
             ->when($user->isSuperAdmin() && $filters['tenant_id'] !== '', fn ($query) => $query->where('tenant_id', $filters['tenant_id']))
             ->when($filters['action_group'] !== '', fn ($query) => $query->whereIn('action', $this->actionsForGroup($filters['action_group'])))
+            ->when($filters['action'] !== '', fn ($query) => $query->where('action', $filters['action']))
             ->when($filters['attention'] === '1', fn ($query) => $query->whereIn('action', $this->attentionActions()))
             ->when($filters['date_preset'] !== 'all', fn ($query) => $query->where('created_at', '>=', now()->subDays((int) $filters['date_preset'])))
             ->when($filters['search'] !== '', function ($query) use ($filters): void {
@@ -96,6 +124,7 @@ class SecurityActivityReportService
         return array_filter([
             'search' => $filters['search'],
             'action_group' => $filters['action_group'],
+            'action' => $filters['action'],
             'attention' => $filters['attention'],
             'tenant_id' => $filters['tenant_id'],
             'date_preset' => $filters['date_preset'] === '30' ? null : $filters['date_preset'],
@@ -110,6 +139,11 @@ class SecurityActivityReportService
     public function dateLabel(string $preset): string
     {
         return $this->datePresets()[$preset] ?? 'Last 30 days';
+    }
+
+    public function actionLabel(?string $action): string
+    {
+        return $action ? ($this->actionOptions()[$action] ?? str($action)->replace('_', ' ')->title()->toString()) : 'All';
     }
 
     public function actionsForGroup(string $group): array
