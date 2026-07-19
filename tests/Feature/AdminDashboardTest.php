@@ -536,6 +536,11 @@ class AdminDashboardTest extends TestCase
             ->assertSee('NGN 1,000.00')
             ->assertSee('NGN 150.00')
             ->assertSee('85%')
+            ->assertSee('View expenses')
+            ->assertSee(route('admin.expenses.index', [
+                'from' => now()->startOfMonth()->toDateString(),
+                'to' => now()->endOfDay()->toDateString(),
+            ]))
             ->assertDontSee('Office supplies')
             ->assertDontSee('Other fuel')
             ->assertDontSee('NGN 950.00');
@@ -574,6 +579,7 @@ class AdminDashboardTest extends TestCase
             ->assertSee('Budget Watch')
             ->assertSee('1 budgeted categories are currently below the 80% watch threshold.')
             ->assertSee('All budgeted categories are under watch level.')
+            ->assertSee('View expenses')
             ->assertDontSee('Near budget')
             ->assertDontSee('Over budget');
     }

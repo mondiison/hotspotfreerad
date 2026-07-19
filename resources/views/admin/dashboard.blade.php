@@ -161,14 +161,24 @@
                         @endif
                     </p>
                 </div>
-                <flux:button
-                    href="{{ route('admin.reports.sales', ['from' => $monthFinanceSummary['from'], 'to' => $monthFinanceSummary['to']]) }}"
-                    variant="outline"
-                    size="sm"
-                    icon="chart-bar"
-                >
-                    Review report
-                </flux:button>
+                <div class="flex flex-wrap gap-2">
+                    <flux:button
+                        href="{{ route('admin.reports.sales', ['from' => $monthFinanceSummary['from'], 'to' => $monthFinanceSummary['to']]) }}"
+                        variant="outline"
+                        size="sm"
+                        icon="chart-bar"
+                    >
+                        Review report
+                    </flux:button>
+                    <flux:button
+                        href="{{ route('admin.expenses.index', ['from' => $monthFinanceSummary['from'], 'to' => $monthFinanceSummary['to']]) }}"
+                        variant="outline"
+                        size="sm"
+                        icon="receipt-percent"
+                    >
+                        View expenses
+                    </flux:button>
+                </div>
             </div>
 
             @if ($budgetWatch->isEmpty())
