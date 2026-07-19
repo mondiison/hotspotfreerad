@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Livewire\Admin\TenantsIndex;
+use App\Models\SecurityActivity;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Notifications\TenantAdminTemporaryPassword;
@@ -155,6 +156,78 @@ class AdminTenantManagementTest extends TestCase
             ->assertRedirect(route('admin.tenants.index'));
 
         $this->assertSame('new@example.com', $tenantAdmin->fresh()->email);
+    }
+
+    public function test_super_admin_tenant_two_factor_policy_change_is_audited(): void
+    {
+        $superAdmin = User::factory()->create([
+            'role' => 'super_admin',
+            'tenant_id' => null,
+            'is_active' => true,
+        ]);
+        $tenant = Tenant::create([
+            'company_name' => 'Audit ISP',
+            'owner_email' => 'audit@example.com',
+            'require_two_factor' => false,
+        ]);
+        User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'email' => 'audit@example.com',
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($superAdmin)
+            ->put(route('admin.tenants.update', $tenant), [
+                'company_name' => 'Audit ISP',
+                'slug' => $tenant->slug,
+                'owner_email' => 'audit@example.com',
+                'subscription_plan' => 'basic',
+                'is_active' => 1,
+                'require_two_factor' => 1,
+                'public_site_enabled' => 1,
+                'brand_color' => '#0f766e',
+            ])
+            ->assertRedirect(route('admin.tenants.index'));
+
+        $activity = SecurityActivity::where('action', 'tenant_two_factor_policy_updated')->firstOrFail();
+
+        $this->assertSame($superAdmin->id, $activity->user_id);
+        $this->assertNull($activity->tenant_id);
+        $this->assertSame($tenant->id, $activity->metadata['tenant_id']);
+        $this->assertSame('Audit ISP', $activity->metadata['tenant']);
+        $this->assertSame('audit@example.com', $activity->metadata['owner_email']);
+        $this->assertTrue($activity->metadata['required']);
+    }
+
+    public function test_super_admin_tenant_edit_without_two_factor_policy_change_is_not_audited(): void
+    {
+        $superAdmin = User::factory()->create([
+            'role' => 'super_admin',
+            'tenant_id' => null,
+            'is_active' => true,
+        ]);
+        $tenant = Tenant::create([
+            'company_name' => 'Quiet Audit ISP',
+            'owner_email' => 'quiet-audit@example.com',
+            'require_two_factor' => false,
+        ]);
+
+        $this->actingAs($superAdmin)
+            ->put(route('admin.tenants.update', $tenant), [
+                'company_name' => 'Quiet Audit ISP Updated',
+                'slug' => $tenant->slug,
+                'owner_email' => 'quiet-audit@example.com',
+                'subscription_plan' => 'growth',
+                'is_active' => 1,
+                'public_site_enabled' => 1,
+                'brand_color' => '#2563eb',
+            ])
+            ->assertRedirect(route('admin.tenants.index'));
+
+        $this->assertDatabaseMissing('security_activities', [
+            'action' => 'tenant_two_factor_policy_updated',
+        ]);
     }
 
     public function test_super_admin_can_send_owner_password_reset_link(): void

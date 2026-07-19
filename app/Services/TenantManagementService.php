@@ -94,11 +94,13 @@ class TenantManagementService
     public function update(Tenant $tenant, array $data, User $actor): Tenant
     {
         $this->assertSuperAdmin($actor);
+        $normalized = $this->normalize($data);
+        $previousRequireTwoFactor = (bool) $tenant->require_two_factor;
 
-        DB::transaction(function () use ($tenant, $data): void {
+        DB::transaction(function () use ($tenant, $normalized): void {
             $ownerUser = $this->ownerUserFor($tenant);
 
-            $tenant->update($this->normalize($data));
+            $tenant->update($normalized);
 
             if ($ownerUser) {
                 $ownerUser->update([
@@ -107,6 +109,20 @@ class TenantManagementService
                 ]);
             }
         });
+
+        if ($previousRequireTwoFactor !== (bool) $tenant->require_two_factor) {
+            app(SecurityActivityService::class)->log(
+                $actor,
+                'tenant_two_factor_policy_updated',
+                'Tenant two-factor policy updated.',
+                [
+                    'tenant_id' => $tenant->id,
+                    'tenant' => $tenant->company_name,
+                    'owner_email' => $tenant->owner_email,
+                    'required' => (bool) $tenant->require_two_factor,
+                ]
+            );
+        }
 
         return $tenant;
     }
