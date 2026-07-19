@@ -45,6 +45,8 @@ class AdminSalesReportTest extends TestCase
             ->assertSee('28.6%')
             ->assertSee('Main Hall')
             ->assertSee('Annex')
+            ->assertSee('Sales by Package')
+            ->assertSee('Daily Access')
             ->assertDontSee('Old Shop')
             ->assertDontSee('Pending Shop');
     }
@@ -69,6 +71,7 @@ class AdminSalesReportTest extends TestCase
             ->assertSee('2026-02-01')
             ->assertSee('NGN 1,500.00')
             ->assertSee('Own Shop')
+            ->assertSee('Daily Access')
             ->assertDontSee('NGN 9,000.00')
             ->assertDontSee('Other Shop');
 
@@ -219,6 +222,9 @@ class AdminSalesReportTest extends TestCase
         $this->assertStringContainsString('2026-05,1,3000.00,3000.00,300.00,2700.00,800.00,1900.00,70.4%', $content);
         $this->assertStringContainsString('Shop,Sales,"Gross Sales",Share,"Platform Commission","Tenant Net"', $content);
         $this->assertStringContainsString('"CSV Shop",1,3000.00,100%,300.00,2700.00', $content);
+        $this->assertStringContainsString('"Sales by Package"', $content);
+        $this->assertStringContainsString('Package,Shop,Sales,"Average Sale","Gross Sales",Share,"Platform Commission","Tenant Net"', $content);
+        $this->assertStringContainsString('"Daily Access","CSV Shop",1,3000.00,3000.00,100%,300.00,2700.00', $content);
         $this->assertStringContainsString('Category,Count,Amount,Budget,Variance,Usage', $content);
         $this->assertStringContainsString('Equipment,1,800.00,1000.00,200.00,80%', $content);
         $this->assertStringContainsString('CSV Shop', $content);

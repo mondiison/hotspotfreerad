@@ -74,6 +74,22 @@ class SalesReportController extends Controller
             }
             fputcsv($handle, []);
 
+            fputcsv($handle, ['Sales by Package']);
+            fputcsv($handle, ['Package', 'Shop', 'Sales', 'Average Sale', 'Gross Sales', 'Share', 'Platform Commission', 'Tenant Net']);
+            foreach ($report['packageRows'] as $row) {
+                fputcsv($handle, [
+                    $row['package'],
+                    $row['shop'],
+                    $row['sales_count'],
+                    number_format($row['average_sale'], 2, '.', ''),
+                    number_format($row['revenue'], 2, '.', ''),
+                    $this->formatMargin($row['share']),
+                    number_format($row['platform_fee'], 2, '.', ''),
+                    number_format($row['tenant_net'], 2, '.', ''),
+                ]);
+            }
+            fputcsv($handle, []);
+
             fputcsv($handle, ['Expenses by Category']);
             fputcsv($handle, ['Category', 'Count', 'Amount', 'Budget', 'Variance', 'Usage']);
             foreach ($report['expenseRows'] as $row) {
@@ -140,6 +156,25 @@ class SalesReportController extends Controller
                 return [
                     'shop' => $shopName,
                     'sales_count' => $groupedPayments->count(),
+                    'revenue' => $revenue,
+                    'share' => $grossRevenue > 0 ? round(($revenue / $grossRevenue) * 100, 1) : null,
+                    'platform_fee' => $groupedPayments->sum(fn (Payment $payment) => $this->platformFee($payment)),
+                    'tenant_net' => $groupedPayments->sum(fn (Payment $payment) => $this->tenantNet($payment)),
+                ];
+            })
+            ->sortByDesc('revenue')
+            ->values();
+        $packageRows = $payments
+            ->groupBy(fn (Payment $payment) => ($payment->package_id ?: 'deleted').'-'.($payment->shop_id ?: 'deleted'))
+            ->map(function ($groupedPayments) use ($grossRevenue): array {
+                $payment = $groupedPayments->first();
+                $revenue = $groupedPayments->sum(fn (Payment $payment) => $this->grossAmount($payment));
+
+                return [
+                    'package' => $payment->package?->name ?? 'Deleted package',
+                    'shop' => $payment->shop?->name ?? 'Deleted shop',
+                    'sales_count' => $groupedPayments->count(),
+                    'average_sale' => $groupedPayments->avg(fn (Payment $payment) => $this->grossAmount($payment)) ?? 0,
                     'revenue' => $revenue,
                     'share' => $grossRevenue > 0 ? round(($revenue / $grossRevenue) * 100, 1) : null,
                     'platform_fee' => $groupedPayments->sum(fn (Payment $payment) => $this->platformFee($payment)),
@@ -223,6 +258,7 @@ class SalesReportController extends Controller
             ],
             'rows' => $rows,
             'shopRows' => $shopRows,
+            'packageRows' => $packageRows,
             'expenseRows' => $expenseRows,
         ];
     }

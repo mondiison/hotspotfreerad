@@ -157,6 +157,51 @@
 
             <div class="overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
                 <div class="border-b border-zinc-200 p-5">
+                    <h2 class="text-base font-semibold">Sales by Package</h2>
+                    <p class="mt-1 text-sm text-zinc-500">Best-selling data plans in the selected range.</p>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full min-w-[760px] text-left text-sm">
+                        <thead class="border-b border-zinc-200 bg-zinc-50 text-zinc-500">
+                            <tr>
+                                <th class="px-4 py-3 font-medium">Package</th>
+                                <th class="px-4 py-3 font-medium">Shop</th>
+                                <th class="px-4 py-3 text-right font-medium">Sales</th>
+                                <th class="px-4 py-3 text-right font-medium">Average</th>
+                                <th class="px-4 py-3 text-right font-medium">Gross</th>
+                                <th class="px-4 py-3 text-right font-medium">Share</th>
+                                <th class="px-4 py-3 text-right font-medium">Tenant Net</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-zinc-100">
+                            @forelse ($packageRows as $row)
+                                <tr>
+                                    <td class="px-4 py-3 font-medium">{{ $row['package'] }}</td>
+                                    <td class="px-4 py-3 text-zinc-600">{{ $row['shop'] }}</td>
+                                    <td class="px-4 py-3 text-right">{{ number_format($row['sales_count']) }}</td>
+                                    <td class="px-4 py-3 text-right">NGN {{ number_format($row['average_sale'], 2) }}</td>
+                                    <td class="px-4 py-3 text-right font-semibold">NGN {{ number_format($row['revenue'], 2) }}</td>
+                                    <td class="px-4 py-3 text-right">
+                                        <div class="ml-auto flex w-24 flex-col items-end gap-1">
+                                            <span>{{ is_null($row['share']) ? 'No sales' : $row['share'].'%' }}</span>
+                                            <span class="block h-1.5 w-full overflow-hidden rounded-full bg-zinc-100">
+                                                <span class="block h-full rounded-full bg-emerald-600" style="width: {{ $row['share'] ?? 0 }}%"></span>
+                                            </span>
+                                        </div>
+                                    </td>
+                                    <td class="px-4 py-3 text-right">NGN {{ number_format($row['tenant_net'], 2) }}</td>
+                                </tr>
+                            @empty
+                                <tr><td colspan="7" class="px-4 py-8 text-center text-zinc-500">No package sales in this range.</td></tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
+                <div class="border-b border-zinc-200 p-5">
                     <h2 class="text-base font-semibold">Expenses by Category</h2>
                     <p class="mt-1 text-sm text-zinc-500">Costs recorded in the selected report range.</p>
                 </div>
