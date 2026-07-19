@@ -356,4 +356,82 @@ class AdminExpenseTest extends TestCase
         $this->assertStringNotContainsString('Other expense', $content);
         $this->assertStringNotContainsString('9900.00', $content);
     }
+
+    public function test_tenant_admin_can_record_recurring_expense_occurrence(): void
+    {
+        $tenant = Tenant::create([
+            'company_name' => 'Mondi Tenant',
+            'owner_email' => 'owner@example.com',
+        ]);
+        $category = ExpenseCategory::where('name', 'Subscription')->firstOrFail();
+        $expense = Expense::create([
+            'tenant_id' => $tenant->id,
+            'expense_category_id' => $category->id,
+            'title' => 'Monthly upstream internet',
+            'amount' => 25000,
+            'currency' => 'NGN',
+            'incurred_on' => '2026-07-01',
+            'vendor' => 'Fiber Provider',
+            'is_recurring' => true,
+            'recurring_frequency' => 'monthly',
+            'next_due_on' => '2026-08-01',
+            'notes' => 'Main upstream link.',
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->post(route('admin.expenses.record-recurring', $expense))
+            ->assertSessionHas('status');
+
+        $expense->refresh();
+        $occurrence = Expense::where('recurring_source_expense_id', $expense->id)->firstOrFail();
+
+        $this->assertSame('2026-09-01', $expense->next_due_on->toDateString());
+        $this->assertSame($tenant->id, $occurrence->tenant_id);
+        $this->assertSame($category->id, $occurrence->expense_category_id);
+        $this->assertSame('Monthly upstream internet', $occurrence->title);
+        $this->assertSame('25000.00', $occurrence->amount);
+        $this->assertFalse($occurrence->is_recurring);
+        $this->assertSame('2026-08-01', $occurrence->incurred_on->toDateString());
+        $this->assertStringContainsString('Recorded from recurring schedule due 2026-08-01.', $occurrence->notes);
+    }
+
+    public function test_tenant_admin_cannot_record_another_tenants_recurring_expense(): void
+    {
+        $ownTenant = Tenant::create([
+            'company_name' => 'Own Tenant',
+            'owner_email' => 'own@example.com',
+        ]);
+        $otherTenant = Tenant::create([
+            'company_name' => 'Other Tenant',
+            'owner_email' => 'other@example.com',
+        ]);
+        $expense = Expense::create([
+            'tenant_id' => $otherTenant->id,
+            'title' => 'Other recurring cost',
+            'amount' => 15000,
+            'currency' => 'NGN',
+            'incurred_on' => '2026-07-01',
+            'is_recurring' => true,
+            'recurring_frequency' => 'monthly',
+            'next_due_on' => '2026-08-01',
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $ownTenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->post(route('admin.expenses.record-recurring', $expense))
+            ->assertForbidden();
+
+        $this->assertDatabaseMissing('expenses', [
+            'recurring_source_expense_id' => $expense->id,
+        ]);
+    }
 }

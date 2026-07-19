@@ -71,6 +71,12 @@
                             <td class="px-4 py-3 text-right font-semibold">{{ $expense->currency }} {{ number_format($expense->amount, 2) }}</td>
                             <td class="px-4 py-3">
                                 <div class="flex justify-end gap-2">
+                                    @if ($expense->is_recurring && $expense->next_due_on)
+                                        <form method="POST" action="{{ route('admin.expenses.record-recurring', $expense) }}">
+                                            @csrf
+                                            <flux:button type="submit" variant="outline" size="sm" icon="check">Record</flux:button>
+                                        </form>
+                                    @endif
                                     <flux:button href="{{ route('admin.expenses.edit', $expense) }}" variant="outline" size="sm" icon="pencil-square">Edit</flux:button>
                                     <form method="POST" action="{{ route('admin.expenses.destroy', $expense) }}" onsubmit="return confirm('Delete this expense?')">
                                         @csrf

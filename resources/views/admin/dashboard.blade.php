@@ -176,6 +176,7 @@
                         <th class="px-4 py-3 font-medium">Frequency</th>
                         <th class="px-4 py-3 font-medium">Due</th>
                         <th class="px-4 py-3 text-right font-medium">Amount</th>
+                        <th class="px-4 py-3 text-right font-medium">Action</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-zinc-100">
@@ -189,9 +190,15 @@
                             <td class="px-4 py-3 text-zinc-600">{{ $expense->recurring_frequency ? str($expense->recurring_frequency)->title() : 'Not set' }}</td>
                             <td class="px-4 py-3 text-zinc-600">{{ $expense->next_due_on?->toFormattedDateString() }}</td>
                             <td class="px-4 py-3 text-right font-semibold">{{ $expense->currency }} {{ number_format($expense->amount, 2) }}</td>
+                            <td class="px-4 py-3">
+                                <form method="POST" action="{{ route('admin.expenses.record-recurring', $expense) }}" class="flex justify-end">
+                                    @csrf
+                                    <flux:button type="submit" variant="outline" size="sm" icon="check">Record</flux:button>
+                                </form>
+                            </td>
                         </tr>
                     @empty
-                        <tr><td colspan="5" class="px-4 py-8 text-center text-zinc-500">No recurring expenses are due in the next 30 days.</td></tr>
+                        <tr><td colspan="6" class="px-4 py-8 text-center text-zinc-500">No recurring expenses are due in the next 30 days.</td></tr>
                     @endforelse
                 </tbody>
             </table>

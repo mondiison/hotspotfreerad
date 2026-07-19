@@ -10,6 +10,7 @@ use App\Support\TenantAccess;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Illuminate\Validation\Rule;
@@ -170,6 +171,34 @@ class ExpenseController extends Controller
         return Storage::disk('local')->download($expense->receipt_path);
     }
 
+    public function recordRecurring(Request $request, Expense $expense): RedirectResponse
+    {
+        TenantAccess::assertExpense($expense, $request->user());
+
+        abort_unless($expense->is_recurring && $expense->recurring_frequency && $expense->next_due_on, 404);
+
+        DB::transaction(function () use ($expense): void {
+            Expense::create([
+                'tenant_id' => $expense->tenant_id,
+                'expense_category_id' => $expense->expense_category_id,
+                'recurring_source_expense_id' => $expense->id,
+                'title' => $expense->title,
+                'amount' => $expense->amount,
+                'currency' => $expense->currency,
+                'incurred_on' => $expense->next_due_on,
+                'vendor' => $expense->vendor,
+                'is_recurring' => false,
+                'notes' => trim(($expense->notes ? $expense->notes."\n\n" : '').'Recorded from recurring schedule due '.$expense->next_due_on->toDateString().'.'),
+            ]);
+
+            $expense->update([
+                'next_due_on' => $this->nextDueDate($expense->next_due_on, $expense->recurring_frequency),
+            ]);
+        });
+
+        return back()->with('status', 'Recurring expense recorded and next due date advanced.');
+    }
+
     public function destroy(Request $request, Expense $expense): RedirectResponse
     {
         TenantAccess::assertExpense($expense, $request->user());
@@ -228,6 +257,16 @@ class ExpenseController extends Controller
     private function storeReceipt(Request $request, int $tenantId): string
     {
         return $request->file('receipt')->store("tenant-expenses/{$tenantId}", 'local');
+    }
+
+    private function nextDueDate(Carbon $date, string $frequency): Carbon
+    {
+        return match ($frequency) {
+            'weekly' => $date->copy()->addWeek(),
+            'quarterly' => $date->copy()->addQuarterNoOverflow(),
+            'yearly' => $date->copy()->addYearNoOverflow(),
+            default => $date->copy()->addMonthNoOverflow(),
+        };
     }
 
     private function filteredQuery(Request $request): array

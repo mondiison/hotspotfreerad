@@ -380,6 +380,7 @@ class AdminDashboardTest extends TestCase
             ->assertOk()
             ->assertSee('Upcoming Recurring Expenses')
             ->assertSee('Monthly upstream internet')
+            ->assertSee(route('admin.expenses.record-recurring', Expense::where('title', 'Monthly upstream internet')->first()), false)
             ->assertSee('Monthly')
             ->assertSee('NGN 25,000.00')
             ->assertDontSee('Other recurring cost')
