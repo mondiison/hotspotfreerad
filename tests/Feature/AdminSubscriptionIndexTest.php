@@ -9,6 +9,7 @@ use App\Models\Subscription;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 class AdminSubscriptionIndexTest extends TestCase
@@ -73,6 +74,48 @@ class AdminSubscriptionIndexTest extends TestCase
             ->assertDontSee($expiredSubscription->mac_address);
     }
 
+    public function test_access_report_can_filter_by_start_date_presets_and_custom_range(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-19 12:00:00'));
+
+        try {
+            [$recentSubscription, $tenant] = $this->subscriptionFixture('Date Tenant', 'date@example.com', 'Recent Shop', 'AA:BB:CC:DD:EE:10', true, 'Recent Plan');
+            [$oldSubscription] = $this->subscriptionFixture('Date Tenant', 'date@example.com', 'Old Shop', 'AA:BB:CC:DD:EE:11', true, 'Old Plan', $tenant);
+            $oldSubscription->update([
+                'starts_at' => '2026-07-01 10:00:00',
+                'expires_at' => '2026-07-01 11:00:00',
+            ]);
+
+            $user = User::factory()->create([
+                'role' => 'super_admin',
+                'is_active' => true,
+            ]);
+
+            $this->actingAs($user)
+                ->get(route('admin.subscriptions.index', [
+                    'preset' => 'last_7_days',
+                ]))
+                ->assertOk()
+                ->assertSee('7 days')
+                ->assertSee('2026-07-13')
+                ->assertSee('2026-07-19')
+                ->assertSee($recentSubscription->mac_address)
+                ->assertDontSee($oldSubscription->mac_address)
+                ->assertDontSee('Old Shop');
+
+            $this->actingAs($user)
+                ->get(route('admin.subscriptions.index', [
+                    'from' => '2026-07-01',
+                    'to' => '2026-07-02',
+                ]))
+                ->assertOk()
+                ->assertSee($oldSubscription->mac_address)
+                ->assertDontSee($recentSubscription->mac_address);
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
     public function test_tenant_admin_can_export_filtered_access_report(): void
     {
         [$ownSubscription, $ownTenant] = $this->subscriptionFixture('Own Export Tenant', 'own-export@example.com', 'Own Export Shop', 'AA:BB:CC:DD:EE:07', true, 'Export Plan');
@@ -86,6 +129,8 @@ class AdminSubscriptionIndexTest extends TestCase
 
         $response = $this->actingAs($user)
             ->get(route('admin.subscriptions.export', [
+                'from' => now()->startOfMonth()->toDateString(),
+                'to' => now()->endOfDay()->toDateString(),
                 'status' => 'active',
                 'source' => 'paid',
                 'search' => 'Export Plan',
@@ -98,6 +143,8 @@ class AdminSubscriptionIndexTest extends TestCase
         $content = $response->streamedContent();
 
         $this->assertStringContainsString('Access Report', $content);
+        $this->assertStringContainsString('From,'.now()->startOfMonth()->toDateString(), $content);
+        $this->assertStringContainsString('To,'.now()->endOfDay()->toDateString(), $content);
         $this->assertStringContainsString('Status,active', $content);
         $this->assertStringContainsString('Source,paid', $content);
         $this->assertStringContainsString('Search,"Export Plan"', $content);

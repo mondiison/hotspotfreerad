@@ -20,7 +20,35 @@
         @endforeach
     </section>
 
-    <form method="GET" class="mt-6 grid gap-3 rounded-lg border border-zinc-200 bg-white p-4 lg:grid-cols-[1fr_160px_160px_160px_auto]">
+    <section class="mt-6 flex flex-wrap gap-2">
+        @foreach ([
+            'today' => 'Today',
+            'last_7_days' => '7 days',
+            'this_month' => 'This month',
+            'last_month' => 'Last month',
+            'this_year' => 'This year',
+        ] as $key => $label)
+            <flux:button
+                href="{{ route('admin.subscriptions.index', array_filter(['preset' => $key, 'status' => $filters['status'], 'source' => $filters['source'], 'throttled' => $filters['throttled'], 'search' => $filters['search']])) }}"
+                variant="{{ $filters['preset'] === $key ? 'primary' : 'outline' }}"
+                size="sm"
+            >
+                {{ $label }}
+            </flux:button>
+        @endforeach
+
+        <flux:button
+            href="{{ route('admin.subscriptions.index', array_filter(['status' => $filters['status'], 'source' => $filters['source'], 'throttled' => $filters['throttled'], 'search' => $filters['search']])) }}"
+            variant="{{ $filters['preset'] || $filters['from'] ? 'outline' : 'primary' }}"
+            size="sm"
+        >
+            All dates
+        </flux:button>
+    </section>
+
+    <form method="GET" class="mt-4 grid gap-3 rounded-lg border border-zinc-200 bg-white p-4 lg:grid-cols-[140px_140px_1fr_150px_150px_150px_auto]">
+        <flux:input type="date" name="from" value="{{ $filters['from'] }}" />
+        <flux:input type="date" name="to" value="{{ $filters['to'] }}" />
         <flux:input name="search" value="{{ $filters['search'] }}" placeholder="Search MAC, shop, package, payment ref" />
         <flux:select name="status">
             <flux:select.option value="">All statuses</flux:select.option>

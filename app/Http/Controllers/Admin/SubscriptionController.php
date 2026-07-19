@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Subscription;
 use App\Support\TenantAccess;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -41,6 +42,8 @@ class SubscriptionController extends Controller
             $handle = fopen('php://output', 'w');
 
             fputcsv($handle, ['Access Report']);
+            fputcsv($handle, ['From', $filters['from'] ?: 'All']);
+            fputcsv($handle, ['To', $filters['to'] ?: 'All']);
             fputcsv($handle, ['Status', $filters['status'] ?: 'All']);
             fputcsv($handle, ['Source', $filters['source'] ?: 'All']);
             fputcsv($handle, ['Throttled', $filters['throttled'] === '1' ? 'Yes' : 'All']);
@@ -94,6 +97,7 @@ class SubscriptionController extends Controller
             Subscription::query()->with(['shop.tenant', 'package', 'payment']),
             $request->user()
         )
+            ->when($filters['from_date'] && $filters['to_date'], fn ($query) => $query->whereBetween('starts_at', [$filters['from_date'], $filters['to_date']]))
             ->when(filled($filters['search']), function ($query) use ($filters): void {
                 $search = $filters['search'];
 
@@ -115,17 +119,68 @@ class SubscriptionController extends Controller
     private function filters(Request $request): array
     {
         $data = $request->validate([
+            'preset' => ['nullable', 'in:today,last_7_days,this_month,last_month,this_year'],
+            'from' => ['nullable', 'date'],
+            'to' => ['nullable', 'date', 'after_or_equal:from'],
             'search' => ['nullable', 'string', 'max:255'],
             'status' => ['nullable', 'in:active,expired'],
             'source' => ['nullable', 'in:paid,test'],
             'throttled' => ['nullable', 'in:1'],
         ]);
 
+        $preset = $data['preset'] ?? null;
+        $from = null;
+        $to = null;
+
+        if ($preset) {
+            [$from, $to] = $this->presetRange($preset);
+        } elseif (filled($data['from'] ?? null) || filled($data['to'] ?? null)) {
+            $from = filled($data['from'] ?? null)
+                ? Carbon::parse($data['from'])->startOfDay()
+                : now()->startOfMonth();
+            $to = filled($data['to'] ?? null)
+                ? Carbon::parse($data['to'])->endOfDay()
+                : now()->endOfDay();
+        }
+
         return [
+            'preset' => $preset,
+            'from' => $from?->toDateString(),
+            'to' => $to?->toDateString(),
+            'from_date' => $from,
+            'to_date' => $to,
             'search' => $data['search'] ?? null,
             'status' => $data['status'] ?? null,
             'source' => $data['source'] ?? null,
             'throttled' => $data['throttled'] ?? null,
         ];
+    }
+
+    private function presetRange(string $preset): array
+    {
+        $today = now();
+
+        return match ($preset) {
+            'today' => [
+                $today->copy()->startOfDay(),
+                $today->copy()->endOfDay(),
+            ],
+            'last_7_days' => [
+                $today->copy()->subDays(6)->startOfDay(),
+                $today->copy()->endOfDay(),
+            ],
+            'last_month' => [
+                $today->copy()->subMonthNoOverflow()->startOfMonth(),
+                $today->copy()->subMonthNoOverflow()->endOfMonth(),
+            ],
+            'this_year' => [
+                $today->copy()->startOfYear(),
+                $today->copy()->endOfDay(),
+            ],
+            default => [
+                $today->copy()->startOfMonth(),
+                $today->copy()->endOfDay(),
+            ],
+        };
     }
 }
