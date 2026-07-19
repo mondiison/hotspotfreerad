@@ -36,12 +36,14 @@ class ExpenseController extends Controller
             'expenses' => $expenses,
             'categories' => $this->categoriesFor($request),
             'filters' => [
+                'preset' => $data['preset'] ?? null,
                 'from' => $from->toDateString(),
                 'to' => $to->toDateString(),
                 'category' => $data['category'] ?? '',
                 'search' => $data['search'] ?? '',
                 'schedule' => $data['schedule'] ?? '',
             ],
+            'presets' => $this->presets(),
             'summary' => [
                 ...$summary,
             ],
@@ -364,6 +366,7 @@ class ExpenseController extends Controller
     private function filteredQuery(Request $request): array
     {
         $data = $request->validate([
+            'preset' => ['nullable', Rule::in(['today', 'last_7_days', 'this_month', 'last_month', 'this_year'])],
             'from' => ['nullable', 'date'],
             'to' => ['nullable', 'date', 'after_or_equal:from'],
             'category' => ['nullable', 'integer', 'exists:expense_categories,id'],
@@ -371,8 +374,12 @@ class ExpenseController extends Controller
             'schedule' => ['nullable', Rule::in(['recurring', 'due_soon', 'overdue'])],
         ]);
 
-        $from = filled($data['from'] ?? null) ? Carbon::parse($data['from'])->startOfDay() : now()->startOfMonth();
-        $to = filled($data['to'] ?? null) ? Carbon::parse($data['to'])->endOfDay() : now()->endOfDay();
+        if (filled($data['preset'] ?? null)) {
+            [$from, $to] = $this->presetRange($data['preset']);
+        } else {
+            $from = filled($data['from'] ?? null) ? Carbon::parse($data['from'])->startOfDay() : now()->startOfMonth();
+            $to = filled($data['to'] ?? null) ? Carbon::parse($data['to'])->endOfDay() : now()->endOfDay();
+        }
 
         $query = TenantAccess::scopeExpenses(
             Expense::query()->with(['tenant', 'category']),
@@ -408,6 +415,45 @@ class ExpenseController extends Controller
             });
 
         return [$data, $from, $to, $query];
+    }
+
+    private function presets(): array
+    {
+        return [
+            'today' => 'Today',
+            'last_7_days' => '7 days',
+            'this_month' => 'This month',
+            'last_month' => 'Last month',
+            'this_year' => 'This year',
+        ];
+    }
+
+    private function presetRange(string $preset): array
+    {
+        $today = now();
+
+        return match ($preset) {
+            'today' => [
+                $today->copy()->startOfDay(),
+                $today->copy()->endOfDay(),
+            ],
+            'last_7_days' => [
+                $today->copy()->subDays(6)->startOfDay(),
+                $today->copy()->endOfDay(),
+            ],
+            'last_month' => [
+                $today->copy()->subMonthNoOverflow()->startOfMonth(),
+                $today->copy()->subMonthNoOverflow()->endOfMonth(),
+            ],
+            'this_year' => [
+                $today->copy()->startOfYear(),
+                $today->copy()->endOfDay(),
+            ],
+            default => [
+                $today->copy()->startOfMonth(),
+                $today->copy()->endOfDay(),
+            ],
+        };
     }
 
     private function categoriesFor(Request $request)

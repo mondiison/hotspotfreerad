@@ -8,6 +8,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -471,6 +472,52 @@ class AdminExpenseTest extends TestCase
             ->assertSee('Upcoming staff salary')
             ->assertDontSee('Overdue upstream internet')
             ->assertDontSee('Future equipment lease');
+    }
+
+    public function test_expense_index_can_use_date_presets(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-19 12:00:00'));
+
+        try {
+            $tenant = Tenant::create([
+                'company_name' => 'Mondi Tenant',
+                'owner_email' => 'owner@example.com',
+            ]);
+            Expense::create([
+                'tenant_id' => $tenant->id,
+                'title' => 'Recent diesel',
+                'amount' => 15000,
+                'currency' => 'NGN',
+                'incurred_on' => '2026-07-14',
+            ]);
+            Expense::create([
+                'tenant_id' => $tenant->id,
+                'title' => 'Old diesel',
+                'amount' => 50000,
+                'currency' => 'NGN',
+                'incurred_on' => '2026-07-01',
+            ]);
+            $user = User::factory()->create([
+                'tenant_id' => $tenant->id,
+                'role' => 'tenant_admin',
+                'is_active' => true,
+            ]);
+
+            $this->actingAs($user)
+                ->get(route('admin.expenses.index', [
+                    'preset' => 'last_7_days',
+                ]))
+                ->assertOk()
+                ->assertSee('7 days')
+                ->assertSee('2026-07-13')
+                ->assertSee('2026-07-19')
+                ->assertSee('Recent diesel')
+                ->assertSee('NGN 15,000.00')
+                ->assertDontSee('Old diesel')
+                ->assertDontSee('NGN 50,000.00');
+        } finally {
+            Carbon::setTestNow();
+        }
     }
 
     public function test_tenant_admin_cannot_record_another_tenants_recurring_expense(): void

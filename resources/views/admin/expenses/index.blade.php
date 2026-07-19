@@ -26,6 +26,26 @@
         @endforeach
     </section>
 
+    <section class="mt-6 flex flex-wrap gap-2">
+        @foreach ($presets as $key => $label)
+            <flux:button
+                href="{{ route('admin.expenses.index', array_merge(request()->except(['from', 'to', 'preset', 'page']), ['preset' => $key])) }}"
+                variant="{{ $filters['preset'] === $key ? 'primary' : 'outline' }}"
+                size="sm"
+            >
+                {{ $label }}
+            </flux:button>
+        @endforeach
+
+        <flux:button
+            href="{{ route('admin.expenses.index', array_merge(request()->except(['preset', 'page']), ['from' => $filters['from'], 'to' => $filters['to']])) }}"
+            variant="{{ $filters['preset'] ? 'outline' : 'primary' }}"
+            size="sm"
+        >
+            Custom
+        </flux:button>
+    </section>
+
     <form method="GET" class="mt-6 grid gap-3 rounded-lg border border-zinc-200 bg-white p-4 md:grid-cols-[1fr_1fr_190px_190px_1fr_auto]">
         <flux:input type="date" name="from" value="{{ $filters['from'] }}" />
         <flux:input type="date" name="to" value="{{ $filters['to'] }}" />
