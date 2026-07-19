@@ -183,7 +183,54 @@ php artisan route:cache
 php artisan view:cache
 ```
 
-## 9. Verify
+## 9. Run The Queue Worker
+
+The app uses queued jobs for heavier production work such as payment webhooks, tenant admin email notifications, and future report exports. Keep `QUEUE_CONNECTION=database` in `.env`, then create a worker service:
+
+```bash
+sudo nano /etc/systemd/system/hotspotfreerad-worker.service
+```
+
+Use:
+
+```ini
+[Unit]
+Description=HotspotFreeRAD Laravel queue worker
+After=network.target mysql.service
+
+[Service]
+User=www-data
+Group=www-data
+Restart=always
+WorkingDirectory=/var/www/hotspotfreerad
+ExecStart=/usr/bin/php artisan queue:work database --queue=payments,default --sleep=3 --tries=5 --timeout=120
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable it:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now hotspotfreerad-worker
+sudo systemctl status hotspotfreerad-worker
+```
+
+After every deployment, restart the worker so it loads the newest code:
+
+```bash
+sudo systemctl restart hotspotfreerad-worker
+```
+
+If jobs pile up, check:
+
+```bash
+php artisan queue:failed
+sudo journalctl -u hotspotfreerad-worker -n 100 --no-pager
+```
+
+## 10. Verify
 
 ```bash
 php artisan test
@@ -197,7 +244,7 @@ Then open:
 http://your-public-portal-domain/hotspot/portal?mac=AA:BB:CC:DD:EE:FF&nasid=YOUR_ROUTER_NAS_ID
 ```
 
-## 10. Updating Later
+## 11. Updating Later
 
 After new code is pushed to GitHub:
 
@@ -210,4 +257,5 @@ php artisan config:cache
 php artisan route:cache
 php artisan view:cache
 sudo systemctl reload nginx
+sudo systemctl restart hotspotfreerad-worker
 ```

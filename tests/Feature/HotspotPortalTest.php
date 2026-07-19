@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\VerifyHotspotPaymentWebhook;
 use App\Models\Package;
 use App\Models\Router;
 use App\Models\Shop;
@@ -10,6 +11,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
@@ -452,6 +454,40 @@ class HotspotPortalTest extends TestCase
         $this->assertDatabaseHas('subscriptions', [
             'payment_id' => $payment->id,
             'mac_address' => 'AA:BB:CC:DD:EE:FF',
+        ]);
+    }
+
+    public function test_flutterwave_webhook_dispatches_payment_verification_job(): void
+    {
+        Queue::fake();
+        [$router, $package] = $this->routerWithPackage();
+
+        $this->post(route('hotspot.pay'), [
+            'mac' => 'AA:BB:CC:DD:EE:FF',
+            'nasid' => $router->nas_identifier,
+            'package_id' => $package->id,
+            'email' => 'customer@example.com',
+        ]);
+
+        $payment = \App\Models\Payment::firstOrFail();
+        $router->shop->update(['flutterwave_webhook_secret' => 'webhook-secret']);
+
+        $this->postJson(route('hotspot.payment.webhook'), [
+            'data' => [
+                'id' => 'ord_12345',
+                'reference' => $payment->tx_ref,
+                'status' => 'succeeded',
+            ],
+        ], [
+            'verif-hash' => 'webhook-secret',
+        ])
+            ->assertOk()
+            ->assertSee('ok');
+
+        Queue::assertPushed(VerifyHotspotPaymentWebhook::class);
+        $this->assertDatabaseHas('payments', [
+            'id' => $payment->id,
+            'status' => 'pending',
         ]);
     }
 

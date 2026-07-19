@@ -3,12 +3,14 @@
 namespace App\Http\Controllers\Hotspot;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\VerifyHotspotPaymentWebhook;
 use App\Models\Customer;
 use App\Models\Package;
 use App\Models\Payment;
 use App\Models\Router;
 use App\Models\Subscription;
 use App\Services\FlutterwaveService;
+use App\Services\HotspotPaymentConfirmationService;
 use App\Services\RadiusProvisioningService;
 use App\Support\PaymentCommission;
 use Illuminate\Http\RedirectResponse;
@@ -233,7 +235,7 @@ class PortalController extends Controller
         ]);
     }
 
-    public function callback(Request $request, FlutterwaveService $flutterwave, RadiusProvisioningService $radius): View
+    public function callback(Request $request, HotspotPaymentConfirmationService $payments): View
     {
         $txRef = $request->query('tx_ref') ?: $request->query('reference');
 
@@ -256,7 +258,7 @@ class PortalController extends Controller
         }
 
         try {
-            $verification = $flutterwave->verifyPayment(
+            $subscription = $payments->verifyAndGrant(
                 $payment,
                 (string) $providerReference,
                 $this->paymentResourceType((string) $providerReference, $request->query('type'))
@@ -271,16 +273,11 @@ class PortalController extends Controller
             return view('hotspot.payment-failed', compact('payment'));
         }
 
-        if (! $this->verificationMatchesPayment($verification, $payment)) {
-            $payment->update([
-                'status' => 'verification_failed',
-                'payload' => array_merge($payment->payload ?? [], ['verification' => $verification]),
-            ]);
-
+        if (! $subscription) {
             return view('hotspot.payment-failed', compact('payment'));
         }
 
-        $subscription = $this->markPaidAndGrantAccess($payment, $verification, $radius);
+        $payment->refresh();
 
         return view('hotspot.access-granted', [
             'router' => Router::with('shop.tenant')->where('shop_id', $payment->shop_id)->first(),
@@ -294,7 +291,7 @@ class PortalController extends Controller
         ]);
     }
 
-    public function webhook(Request $request, FlutterwaveService $flutterwave, RadiusProvisioningService $radius): \Illuminate\Http\Response
+    public function webhook(Request $request, FlutterwaveService $flutterwave): \Illuminate\Http\Response
     {
         $payload = $request->all();
         $txRef = data_get($payload, 'data.reference') ?: data_get($payload, 'data.tx_ref');
@@ -322,66 +319,13 @@ class PortalController extends Controller
             return response('ignored', 200);
         }
 
-        try {
-            $verification = $flutterwave->verifyPayment(
-                $payment,
-                (string) $providerReference,
-                $this->paymentResourceType((string) $providerReference, data_get($payload, 'event'))
-            );
-        } catch (\Throwable $exception) {
-            Log::warning('Flutterwave webhook verification failed', [
-                'payment_id' => $payment->id,
-                'tx_ref' => $payment->tx_ref,
-                'message' => $exception->getMessage(),
-            ]);
-
-            return response('ok', 200);
-        }
-
-        if ($this->verificationMatchesPayment($verification, $payment)) {
-            $this->markPaidAndGrantAccess($payment, $verification, $radius);
-        }
+        VerifyHotspotPaymentWebhook::dispatch(
+            $payment->id,
+            (string) $providerReference,
+            $this->paymentResourceType((string) $providerReference, data_get($payload, 'event'))
+        );
 
         return response('ok', 200);
-    }
-
-    private function verificationMatchesPayment(array $verification, Payment $payment): bool
-    {
-        return in_array(strtolower((string) data_get($verification, 'status')), ['success', 'successful', 'succeeded'], true)
-            && $this->statusIsSuccessful(data_get($verification, 'data.status'))
-            && (data_get($verification, 'data.reference') === $payment->tx_ref || data_get($verification, 'data.tx_ref') === $payment->tx_ref)
-            && strtoupper((string) data_get($verification, 'data.currency')) === strtoupper($payment->currency)
-            && (float) data_get($verification, 'data.amount') >= (float) $payment->amount;
-    }
-
-    private function markPaidAndGrantAccess(Payment $payment, array $verification, RadiusProvisioningService $radius): Subscription
-    {
-        return DB::transaction(function () use ($payment, $verification, $radius) {
-            $payment->update([
-                'status' => 'successful',
-                'provider_reference' => (string) (data_get($verification, 'data.id') ?: $payment->provider_reference),
-                'paid_at' => now(),
-                'payload' => array_merge($payment->payload ?? [], ['verification' => $verification]),
-            ]);
-
-            $subscription = Subscription::updateOrCreate(
-                [
-                    'shop_id' => $payment->shop_id,
-                    'mac_address' => $payment->payload['mac'],
-                ],
-                [
-                    'package_id' => $payment->package_id,
-                    'payment_id' => $payment->id,
-                    'starts_at' => now(),
-                    'expires_at' => now()->addSeconds($payment->package->limit_uptime_seconds),
-                    'is_throttled' => false,
-                ]
-            );
-
-            $radius->grantSubscriptionAccess($subscription, self::TEST_ACCESS_PASSWORD);
-
-            return $subscription;
-        });
     }
 
     private function providerReferenceFromRequest(Request $request): ?string

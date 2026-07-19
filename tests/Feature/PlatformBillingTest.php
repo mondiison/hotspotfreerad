@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\VerifyPlatformBillingWebhook;
 use App\Models\BillingPlan;
 use App\Models\PlatformBillingPayment;
 use App\Models\Tenant;
@@ -10,6 +11,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 class PlatformBillingTest extends TestCase
@@ -363,6 +365,48 @@ class PlatformBillingTest extends TestCase
             'status' => 'successful',
         ]);
         $this->assertSame(1, TenantBillingSubscription::where('tenant_id', $tenant->id)->count());
+    }
+
+    public function test_platform_subscription_webhook_dispatches_billing_verification_job(): void
+    {
+        Queue::fake();
+        $this->configurePlatformFlutterwave();
+        config(['services.flutterwave.webhook_secret_hash' => 'platform-webhook-secret']);
+        $tenant = Tenant::create([
+            'company_name' => 'Tenant One',
+            'owner_email' => 'one@example.com',
+        ]);
+        $plan = BillingPlan::where('slug', 'starter')->firstOrFail();
+        $payment = PlatformBillingPayment::create([
+            'tenant_id' => $tenant->id,
+            'billing_plan_id' => $plan->id,
+            'provider' => 'flutterwave',
+            'tx_ref' => 'PBF-WEBHOOK-QUEUED',
+            'provider_reference' => 'ord_platform_123',
+            'amount' => $plan->monthly_price,
+            'currency' => $plan->currency,
+            'status' => 'pending',
+        ]);
+        $payload = [
+            'type' => 'charge.completed',
+            'data' => [
+                'id' => 'ord_platform_123',
+                'reference' => $payment->tx_ref,
+                'status' => 'succeeded',
+            ],
+        ];
+        $signature = base64_encode(hash_hmac('sha256', json_encode($payload), 'platform-webhook-secret', true));
+
+        $this->withHeaders(['flutterwave-signature' => $signature])
+            ->postJson(route('billing.payment.webhook'), $payload)
+            ->assertOk()
+            ->assertSee('ok');
+
+        Queue::assertPushed(VerifyPlatformBillingWebhook::class);
+        $this->assertDatabaseHas('platform_billing_payments', [
+            'id' => $payment->id,
+            'status' => 'pending',
+        ]);
     }
 
     public function test_platform_subscription_webhook_rejects_invalid_signature(): void

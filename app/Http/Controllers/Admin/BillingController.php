@@ -3,14 +3,15 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\VerifyPlatformBillingWebhook;
 use App\Models\BillingPlan;
 use App\Models\PlatformBillingPayment;
 use App\Models\Tenant;
 use App\Models\TenantBillingSubscription;
+use App\Services\PlatformBillingConfirmationService;
 use App\Services\PlatformFlutterwaveService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -193,7 +194,7 @@ class BillingController extends Controller
             ->withErrors(['billing' => 'Unable to start platform billing checkout. Please try again.']);
     }
 
-    public function callback(Request $request, PlatformFlutterwaveService $flutterwave): RedirectResponse
+    public function callback(Request $request, PlatformBillingConfirmationService $billing): RedirectResponse
     {
         $txRef = $request->query('tx_ref') ?: $request->query('reference');
         $payment = PlatformBillingPayment::with(['tenant', 'billingPlan'])
@@ -217,7 +218,8 @@ class BillingController extends Controller
         }
 
         try {
-            $verification = $flutterwave->verifyPayment(
+            $confirmed = $billing->verifyAndActivate(
+                $payment,
                 (string) $providerReference,
                 $this->paymentResourceType((string) $providerReference, $request->query('type'))
             );
@@ -231,16 +233,9 @@ class BillingController extends Controller
             return redirect()->route('admin.billing.index')->withErrors(['billing' => 'Could not verify platform billing payment.']);
         }
 
-        if (! $this->verificationMatchesPayment($verification, $payment)) {
-            $payment->update([
-                'status' => 'verification_failed',
-                'payload' => array_merge($payment->payload ?? [], ['verification' => $verification]),
-            ]);
-
+        if (! $confirmed) {
             return redirect()->route('admin.billing.index')->withErrors(['billing' => 'Flutterwave verification did not match this billing payment.']);
         }
-
-        $this->activateBillingSubscription($payment, $verification);
 
         return redirect()->route('admin.billing.index')->with('status', 'Platform subscription payment confirmed.');
     }
@@ -279,24 +274,11 @@ class BillingController extends Controller
             return response('ignored', 200);
         }
 
-        try {
-            $verification = $flutterwave->verifyPayment(
-                (string) $providerReference,
-                $this->paymentResourceType((string) $providerReference, data_get($payload, 'type'))
-            );
-        } catch (\Throwable $exception) {
-            Log::warning('Platform billing webhook verification failed', [
-                'payment_id' => $payment->id,
-                'tx_ref' => $payment->tx_ref,
-                'message' => $exception->getMessage(),
-            ]);
-
-            return response('ok', 200);
-        }
-
-        if ($this->verificationMatchesPayment($verification, $payment)) {
-            $this->activateBillingSubscription($payment, $verification);
-        }
+        VerifyPlatformBillingWebhook::dispatch(
+            $payment->id,
+            (string) $providerReference,
+            $this->paymentResourceType((string) $providerReference, data_get($payload, 'type'))
+        );
 
         return response('ok', 200);
     }
@@ -332,50 +314,6 @@ class BillingController extends Controller
             ->all();
 
         return $data;
-    }
-
-    private function verificationMatchesPayment(array $verification, PlatformBillingPayment $payment): bool
-    {
-        return in_array(strtolower((string) data_get($verification, 'status')), ['success', 'successful', 'succeeded'], true)
-            && $this->statusIsSuccessful(data_get($verification, 'data.status'))
-            && (data_get($verification, 'data.reference') === $payment->tx_ref || data_get($verification, 'data.tx_ref') === $payment->tx_ref)
-            && strtoupper((string) data_get($verification, 'data.currency')) === strtoupper($payment->currency)
-            && (float) data_get($verification, 'data.amount') >= (float) $payment->amount;
-    }
-
-    private function activateBillingSubscription(PlatformBillingPayment $payment, array $verification): void
-    {
-        DB::transaction(function () use ($payment, $verification): void {
-            $payment->refresh();
-
-            if ($payment->status === 'successful' && $payment->tenant_billing_subscription_id) {
-                return;
-            }
-
-            $subscription = TenantBillingSubscription::create([
-                'tenant_id' => $payment->tenant_id,
-                'billing_plan_id' => $payment->billing_plan_id,
-                'status' => 'active',
-                'amount' => $payment->amount,
-                'currency' => $payment->currency,
-                'current_period_starts_at' => now(),
-                'current_period_ends_at' => now()->addMonth(),
-                'provider' => $payment->provider,
-                'provider_reference' => (string) (data_get($verification, 'data.id') ?: $payment->provider_reference),
-                'payload' => [
-                    'payment_id' => $payment->id,
-                    'payment_reference' => $payment->tx_ref,
-                ],
-            ]);
-
-            $payment->update([
-                'tenant_billing_subscription_id' => $subscription->id,
-                'status' => 'successful',
-                'provider_reference' => (string) (data_get($verification, 'data.id') ?: $payment->provider_reference),
-                'paid_at' => now(),
-                'payload' => array_merge($payment->payload ?? [], ['verification' => $verification]),
-            ]);
-        });
     }
 
     private function providerReferenceFromRequest(Request $request): ?string
