@@ -3,7 +3,8 @@
         @foreach ([
             ['label' => 'Transactions', 'value' => number_format($summary['count']), 'hint' => 'Matching current filters'],
             ['label' => 'Successful', 'value' => number_format($summary['successful_count']), 'hint' => 'Confirmed customer payments'],
-            ['label' => 'Pending', 'value' => number_format($summary['pending_count']), 'hint' => 'Awaiting payment confirmation'],
+            ['label' => 'Pending', 'value' => number_format($summary['pending_count']), 'hint' => 'NGN '.number_format($summary['pending_value'], 2).' awaiting confirmation'],
+            ['label' => 'Failed', 'value' => number_format($summary['failed_count']), 'hint' => 'NGN '.number_format($summary['failed_value'], 2).' not confirmed'],
             ['label' => 'Gross Sales', 'value' => 'NGN '.number_format($summary['successful_revenue'], 2), 'hint' => 'Successful customer payments'],
             ['label' => 'Platform Commission', 'value' => 'NGN '.number_format($summary['platform_fee'], 2), 'hint' => 'Commission from successful sales'],
             ['label' => 'Tenant Net', 'value' => 'NGN '.number_format($summary['tenant_net'], 2), 'hint' => 'Gross sales after commission'],
@@ -16,19 +17,41 @@
         @endforeach
     </section>
 
-    <form method="GET" class="mt-6 grid gap-3 rounded-lg border border-zinc-200 bg-white p-4 md:grid-cols-[1fr_180px_180px_auto]">
-        <input name="search" value="{{ request('search') }}" placeholder="Search ref, customer, shop, package" class="rounded-md border border-zinc-300 px-3 py-2 text-sm">
-        <select name="status" class="rounded-md border border-zinc-300 px-3 py-2 text-sm">
-            <option value="">All statuses</option>
+    <section class="mt-6 flex flex-wrap gap-2">
+        @foreach ($presets as $key => $label)
+            <flux:button
+                href="{{ route('admin.payments.index', array_filter(['preset' => $key, 'status' => $filters['status'], 'provider' => $filters['provider'], 'search' => $filters['search']])) }}"
+                variant="{{ $filters['preset'] === $key ? 'primary' : 'outline' }}"
+                size="sm"
+            >
+                {{ $label }}
+            </flux:button>
+        @endforeach
+
+        <flux:button
+            href="{{ route('admin.payments.index', array_filter(['from' => $filters['from'], 'to' => $filters['to'], 'status' => $filters['status'], 'provider' => $filters['provider'], 'search' => $filters['search']])) }}"
+            variant="{{ $filters['preset'] ? 'outline' : 'primary' }}"
+            size="sm"
+        >
+            Custom
+        </flux:button>
+    </section>
+
+    <form method="GET" class="mt-4 grid gap-3 rounded-lg border border-zinc-200 bg-white p-4 md:grid-cols-[1fr_1fr_1fr_170px_170px_auto]">
+        <flux:input type="date" name="from" value="{{ $filters['from'] }}" />
+        <flux:input type="date" name="to" value="{{ $filters['to'] }}" />
+        <flux:input name="search" value="{{ $filters['search'] }}" placeholder="Search ref, customer, shop, package" />
+        <flux:select name="status">
+            <flux:select.option value="">All statuses</flux:select.option>
             @foreach (['pending', 'successful', 'failed', 'verification_failed'] as $status)
-                <option value="{{ $status }}" @selected(request('status') === $status)>{{ str_replace('_', ' ', ucfirst($status)) }}</option>
+                <flux:select.option value="{{ $status }}" :selected="$filters['status'] === $status">{{ str_replace('_', ' ', ucfirst($status)) }}</flux:select.option>
             @endforeach
-        </select>
-        <select name="provider" class="rounded-md border border-zinc-300 px-3 py-2 text-sm">
-            <option value="">All providers</option>
-            <option value="flutterwave" @selected(request('provider') === 'flutterwave')>Flutterwave</option>
-        </select>
-        <button class="rounded-md bg-zinc-950 px-4 py-2 text-sm font-medium text-white">Filter</button>
+        </flux:select>
+        <flux:select name="provider">
+            <flux:select.option value="">All providers</flux:select.option>
+            <flux:select.option value="flutterwave" :selected="$filters['provider'] === 'flutterwave'">Flutterwave</flux:select.option>
+        </flux:select>
+        <flux:button type="submit" variant="primary" icon="funnel">Filter</flux:button>
     </form>
 
     <div class="mt-6 overflow-hidden rounded-lg border border-zinc-200 bg-white">

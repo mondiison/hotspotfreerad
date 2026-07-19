@@ -10,6 +10,7 @@ use App\Models\Subscription;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 class AdminPaymentIndexTest extends TestCase
@@ -94,6 +95,53 @@ class AdminPaymentIndexTest extends TestCase
             ->assertSee('NGN 100.00')
             ->assertSee('NGN 400.00')
             ->assertSee('20.00%');
+    }
+
+    public function test_payment_report_can_filter_by_date_presets_and_show_attention_totals(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-19 12:00:00'));
+
+        try {
+            [$recentPending] = $this->paymentFixture('Preset Tenant', 'preset@example.com', 'Recent Shop', 'RECENT-PENDING', 'pending');
+            [$recentFailed] = $this->paymentFixture('Failed Preset Tenant', 'failed-preset@example.com', 'Failed Shop', 'RECENT-FAILED', 'failed');
+            [$oldPayment] = $this->paymentFixture('Old Preset Tenant', 'old-preset@example.com', 'Old Shop', 'OLD-PENDING', 'pending');
+            $oldPayment->update([
+                'created_at' => '2026-07-01 10:00:00',
+                'updated_at' => '2026-07-01 10:00:00',
+            ]);
+
+            $user = User::factory()->create([
+                'role' => 'super_admin',
+                'is_active' => true,
+            ]);
+
+            $this->actingAs($user)
+                ->get(route('admin.payments.index', [
+                    'preset' => 'last_7_days',
+                ]))
+                ->assertOk()
+                ->assertSee('7 days')
+                ->assertSee('2026-07-13')
+                ->assertSee('2026-07-19')
+                ->assertSee($recentPending->tx_ref)
+                ->assertSee($recentFailed->tx_ref)
+                ->assertSee('Failed')
+                ->assertSee('NGN 500.00 awaiting confirmation')
+                ->assertSee('NGN 500.00 not confirmed')
+                ->assertDontSee($oldPayment->tx_ref)
+                ->assertDontSee('Old Shop');
+
+            $this->actingAs($user)
+                ->get(route('admin.payments.index', [
+                    'from' => '2026-07-01',
+                    'to' => '2026-07-02',
+                ]))
+                ->assertOk()
+                ->assertSee($oldPayment->tx_ref)
+                ->assertDontSee($recentPending->tx_ref);
+        } finally {
+            Carbon::setTestNow();
+        }
     }
 
     private function paymentFixture(string $tenantName, string $ownerEmail, string $shopName, string $txRef, string $status, array $tenantOverrides = []): array
