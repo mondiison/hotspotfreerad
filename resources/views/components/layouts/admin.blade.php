@@ -87,7 +87,6 @@
                         ['label' => 'Access', 'route' => 'admin.subscriptions.index', 'icon' => 'key'],
                         ['label' => 'Payments', 'route' => 'admin.payments.index', 'icon' => 'banknotes'],
                         ['label' => 'Expenses', 'route' => 'admin.expenses.index', 'icon' => 'receipt-percent'],
-                        ['label' => 'Expense Categories', 'route' => 'admin.expense-categories.index', 'icon' => 'tag'],
                         ['label' => 'Reports', 'route' => 'admin.reports.sales', 'icon' => 'chart-bar'],
                         ['label' => 'Payment Setup', 'route' => 'admin.payment-settings.index', 'icon' => 'credit-card', 'tenant_admin' => true],
                     ];

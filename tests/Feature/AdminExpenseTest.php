@@ -520,6 +520,40 @@ class AdminExpenseTest extends TestCase
         }
     }
 
+    public function test_expenses_workspace_can_show_categories_tab(): void
+    {
+        $tenant = Tenant::create([
+            'company_name' => 'Mondi Tenant',
+            'owner_email' => 'owner@example.com',
+        ]);
+        ExpenseCategory::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Tower lease',
+            'monthly_budget' => 25000,
+            'is_active' => true,
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('admin.expenses.index'))
+            ->assertOk()
+            ->assertSee('Expenses')
+            ->assertSee('Categories')
+            ->assertSee('Export CSV')
+            ->assertDontSee('Add Category');
+
+        $this->actingAs($user)
+            ->get(route('admin.expenses.index', ['tab' => 'categories']))
+            ->assertOk()
+            ->assertSee('Add Category')
+            ->assertSee('Tower lease')
+            ->assertDontSee('Export CSV');
+    }
+
     public function test_tenant_admin_cannot_record_another_tenants_recurring_expense(): void
     {
         $ownTenant = Tenant::create([
