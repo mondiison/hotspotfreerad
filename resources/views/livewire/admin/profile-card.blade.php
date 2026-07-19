@@ -339,6 +339,8 @@
                                     <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-zinc-100 text-zinc-600">
                                         @if (str_contains($activity->action, 'two_factor'))
                                             <flux:icon.shield-check class="size-4" />
+                                        @elseif (str_contains($activity->action, 'passkey'))
+                                            <flux:icon.key class="size-4" />
                                         @elseif (str_contains($activity->action, 'login') || str_contains($activity->action, 'logout'))
                                             <flux:icon.arrow-left-start-on-rectangle class="size-4" />
                                         @else

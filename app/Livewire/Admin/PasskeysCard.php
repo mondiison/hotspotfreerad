@@ -2,18 +2,29 @@
 
 namespace App\Livewire\Admin;
 
+use App\Services\SecurityActivityService;
 use Illuminate\Support\Collection;
 use Laravel\Passkeys\Passkey;
 use Livewire\Component;
 
 class PasskeysCard extends Component
 {
-    public function deletePasskey(int $passkeyId): void
+    public function deletePasskey(int $passkeyId, SecurityActivityService $activity): void
     {
-        $deleted = Passkey::query()
+        $passkey = Passkey::query()
             ->where('user_id', auth()->id())
             ->whereKey($passkeyId)
-            ->delete();
+            ->first();
+
+        $deleted = (bool) $passkey?->delete();
+
+        if ($deleted) {
+            $activity->log(auth()->user(), 'passkey_deleted', 'Passkey removed.', [
+                'passkey_id' => $passkey->id,
+                'passkey_name' => $passkey->name,
+                'authenticator' => $passkey->authenticator,
+            ]);
+        }
 
         $this->dispatch(
             'notify',

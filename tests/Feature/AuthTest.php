@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Livewire\Admin\PasskeysCard;
 use App\Mail\HotspotTestMail;
 use App\Models\Tenant;
 use App\Models\User;
@@ -13,6 +14,8 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Password;
 use Laravel\Passkeys\Contracts\PasskeyUser;
+use Laravel\Passkeys\Events\PasskeyRegistered;
+use Livewire\Livewire;
 use Tests\TestCase;
 
 class AuthTest extends TestCase
@@ -364,6 +367,58 @@ class AuthTest extends TestCase
             ->assertSee('Add a trusted device')
             ->assertSee('Office laptop')
             ->assertSee('Passkeys work on localhost');
+    }
+
+    public function test_passkey_registration_is_logged_to_security_activity(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'super_admin',
+            'is_active' => true,
+        ]);
+
+        $passkey = $user->passkeys()->create([
+            'name' => 'Office laptop',
+            'credential_id' => 'credential-three',
+            'credential' => ['aaguid' => '00000000-0000-0000-0000-000000000000'],
+        ]);
+
+        $this->actingAs($user);
+
+        PasskeyRegistered::dispatch($user, $passkey);
+
+        $this->assertDatabaseHas('security_activities', [
+            'user_id' => $user->id,
+            'action' => 'passkey_registered',
+            'label' => 'Passkey registered.',
+        ]);
+    }
+
+    public function test_passkey_removal_is_logged_to_security_activity(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'super_admin',
+            'is_active' => true,
+        ]);
+
+        $passkey = $user->passkeys()->create([
+            'name' => 'Office laptop',
+            'credential_id' => 'credential-four',
+            'credential' => ['aaguid' => '00000000-0000-0000-0000-000000000000'],
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(PasskeysCard::class)
+            ->call('deletePasskey', $passkey->id)
+            ->assertDispatched('notify');
+
+        $this->assertDatabaseMissing('passkeys', [
+            'id' => $passkey->id,
+        ]);
+        $this->assertDatabaseHas('security_activities', [
+            'user_id' => $user->id,
+            'action' => 'passkey_deleted',
+            'label' => 'Passkey removed.',
+        ]);
     }
 
     public function test_tenant_admin_cannot_login_when_tenant_is_inactive(): void

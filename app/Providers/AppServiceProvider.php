@@ -4,8 +4,11 @@ namespace App\Providers;
 
 use App\Http\Responses\PasskeyLoginResponse;
 use App\Models\User;
+use App\Services\SecurityActivityService;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Passkeys\Contracts\PasskeyLoginResponse as PasskeyLoginResponseContract;
+use Laravel\Passkeys\Events\PasskeyRegistered;
 use Laravel\Passkeys\Passkey;
 use Laravel\Passkeys\Passkeys;
 
@@ -32,6 +35,23 @@ class AppServiceProvider extends ServiceProvider
             $user->loadMissing('tenant');
 
             return ! $user->isTenantAdmin() || (bool) $user->tenant?->is_active;
+        });
+
+        Event::listen(PasskeyRegistered::class, function (PasskeyRegistered $event): void {
+            if (! $event->user instanceof User) {
+                return;
+            }
+
+            app(SecurityActivityService::class)->log(
+                $event->user,
+                'passkey_registered',
+                'Passkey registered.',
+                [
+                    'passkey_id' => $event->passkey->id,
+                    'passkey_name' => $event->passkey->name,
+                    'authenticator' => $event->passkey->authenticator,
+                ]
+            );
         });
     }
 }
