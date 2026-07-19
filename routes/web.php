@@ -75,6 +75,7 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::resource('shops', ShopController::class)->except('show');
     Route::resource('routers', RouterController::class);
     Route::resource('packages', PackageController::class)->except('show');
+    Route::get('subscriptions-export', [SubscriptionController::class, 'export'])->name('subscriptions.export');
     Route::get('subscriptions', [SubscriptionController::class, 'index'])->name('subscriptions.index');
     Route::get('payments-export', [PaymentController::class, 'export'])->name('payments.export');
     Route::get('payments', [PaymentController::class, 'index'])->name('payments.index');

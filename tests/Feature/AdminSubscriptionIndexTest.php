@@ -73,6 +73,44 @@ class AdminSubscriptionIndexTest extends TestCase
             ->assertDontSee($expiredSubscription->mac_address);
     }
 
+    public function test_tenant_admin_can_export_filtered_access_report(): void
+    {
+        [$ownSubscription, $ownTenant] = $this->subscriptionFixture('Own Export Tenant', 'own-export@example.com', 'Own Export Shop', 'AA:BB:CC:DD:EE:07', true, 'Export Plan');
+        [$expiredSubscription] = $this->subscriptionFixture('Own Export Tenant', 'own-export@example.com', 'Own Export Shop', 'AA:BB:CC:DD:EE:08', false, 'Expired Export Plan', $ownTenant);
+        [$otherSubscription] = $this->subscriptionFixture('Other Export Tenant', 'other-export@example.com', 'Other Export Shop', 'AA:BB:CC:DD:EE:09', true, 'Other Export Plan');
+        $user = User::factory()->create([
+            'tenant_id' => $ownTenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $response = $this->actingAs($user)
+            ->get(route('admin.subscriptions.export', [
+                'status' => 'active',
+                'source' => 'paid',
+                'search' => 'Export Plan',
+            ]));
+
+        $response
+            ->assertOk()
+            ->assertHeader('content-type', 'text/csv; charset=UTF-8');
+
+        $content = $response->streamedContent();
+
+        $this->assertStringContainsString('Access Report', $content);
+        $this->assertStringContainsString('Status,active', $content);
+        $this->assertStringContainsString('Source,paid', $content);
+        $this->assertStringContainsString('Search,"Export Plan"', $content);
+        $this->assertStringContainsString('"MAC Address",Package,Shop,Tenant,Source,"Payment Ref",Status', $content);
+        $this->assertStringContainsString($ownSubscription->mac_address, $content);
+        $this->assertStringContainsString('"Export Plan","Own Export Shop","Own Export Tenant",Paid', $content);
+        $this->assertStringContainsString(',Active,', $content);
+        $this->assertStringContainsString(',No,5M/5M,', $content);
+        $this->assertStringNotContainsString($expiredSubscription->mac_address, $content);
+        $this->assertStringNotContainsString($otherSubscription->mac_address, $content);
+        $this->assertStringNotContainsString('Other Export Shop', $content);
+    }
+
     private function subscriptionFixture(
         string $tenantName,
         string $ownerEmail,

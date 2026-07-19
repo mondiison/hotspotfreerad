@@ -1,4 +1,8 @@
 <x-layouts.admin title="Access" heading="Access" subheading="Current and expired customer internet access provisioned through hotspot packages.">
+    <x-slot:action>
+        <flux:button href="{{ route('admin.subscriptions.export', request()->query()) }}" variant="outline" icon="arrow-down-tray">Export CSV</flux:button>
+    </x-slot:action>
+
     <section class="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
         @foreach ([
             ['label' => 'Access records', 'value' => number_format($summary['count']), 'hint' => 'Matching current filters'],
@@ -17,22 +21,22 @@
     </section>
 
     <form method="GET" class="mt-6 grid gap-3 rounded-lg border border-zinc-200 bg-white p-4 lg:grid-cols-[1fr_160px_160px_160px_auto]">
-        <input name="search" value="{{ request('search') }}" placeholder="Search MAC, shop, package, payment ref" class="rounded-md border border-zinc-300 px-3 py-2 text-sm">
-        <select name="status" class="rounded-md border border-zinc-300 px-3 py-2 text-sm">
-            <option value="">All statuses</option>
-            <option value="active" @selected(request('status') === 'active')>Active now</option>
-            <option value="expired" @selected(request('status') === 'expired')>Expired</option>
-        </select>
-        <select name="source" class="rounded-md border border-zinc-300 px-3 py-2 text-sm">
-            <option value="">All sources</option>
-            <option value="paid" @selected(request('source') === 'paid')>Paid access</option>
-            <option value="test" @selected(request('source') === 'test')>Test access</option>
-        </select>
-        <select name="throttled" class="rounded-md border border-zinc-300 px-3 py-2 text-sm">
-            <option value="">Any speed state</option>
-            <option value="1" @selected(request('throttled') === '1')>Throttled only</option>
-        </select>
-        <button class="rounded-md bg-zinc-950 px-4 py-2 text-sm font-medium text-white">Filter</button>
+        <flux:input name="search" value="{{ $filters['search'] }}" placeholder="Search MAC, shop, package, payment ref" />
+        <flux:select name="status">
+            <flux:select.option value="">All statuses</flux:select.option>
+            <flux:select.option value="active" :selected="$filters['status'] === 'active'">Active now</flux:select.option>
+            <flux:select.option value="expired" :selected="$filters['status'] === 'expired'">Expired</flux:select.option>
+        </flux:select>
+        <flux:select name="source">
+            <flux:select.option value="">All sources</flux:select.option>
+            <flux:select.option value="paid" :selected="$filters['source'] === 'paid'">Paid access</flux:select.option>
+            <flux:select.option value="test" :selected="$filters['source'] === 'test'">Test access</flux:select.option>
+        </flux:select>
+        <flux:select name="throttled">
+            <flux:select.option value="">Any speed state</flux:select.option>
+            <flux:select.option value="1" :selected="$filters['throttled'] === '1'">Throttled only</flux:select.option>
+        </flux:select>
+        <flux:button type="submit" variant="primary" icon="funnel">Filter</flux:button>
     </form>
 
     <div class="mt-6 overflow-hidden rounded-lg border border-zinc-200 bg-white">
