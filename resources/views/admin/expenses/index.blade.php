@@ -1,6 +1,9 @@
 <x-layouts.admin title="Expenses" heading="Expenses" subheading="Track operating costs so sales reports can show practical profit.">
     <x-slot:action>
-        <flux:button href="{{ route('admin.expenses.create') }}" variant="primary" icon="plus">Add Expense</flux:button>
+        <div class="flex gap-2">
+            <flux:button href="{{ route('admin.expense-categories.index') }}" variant="outline" icon="tag">Categories</flux:button>
+            <flux:button href="{{ route('admin.expenses.create') }}" variant="primary" icon="plus">Add Expense</flux:button>
+        </div>
     </x-slot:action>
 
     <section class="grid gap-4 md:grid-cols-4">
