@@ -8,13 +8,15 @@ use App\Models\BillingPlan;
 use App\Models\PlatformBillingPayment;
 use App\Models\Tenant;
 use App\Models\TenantBillingSubscription;
+use App\Services\BillingPlanManagementService;
 use App\Services\PlatformBillingConfirmationService;
 use App\Services\PlatformFlutterwaveService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class BillingController extends Controller
@@ -78,53 +80,47 @@ class BillingController extends Controller
         return redirect()->route('admin.billing.index')->with('status', 'Tenant billing subscription recorded.');
     }
 
-    public function createPlan(Request $request): View
+    public function createPlan(Request $request, BillingPlanManagementService $plans): View
     {
-        abort_unless($request->user()->isSuperAdmin(), 403);
+        $plans->assertSuperAdmin($request->user());
 
         return view('admin.billing.plan-form', [
-            'plan' => new BillingPlan(),
+            'plan' => new BillingPlan,
         ]);
     }
 
-    public function storePlan(Request $request): RedirectResponse
+    public function storePlan(Request $request, BillingPlanManagementService $plans): RedirectResponse
     {
-        abort_unless($request->user()->isSuperAdmin(), 403);
-
-        BillingPlan::create($this->validatedPlan($request));
+        $plans->create($plans->validated($request), $request->user());
 
         return redirect()->route('admin.billing.index')->with('status', 'Billing plan created.');
     }
 
-    public function editPlan(Request $request, BillingPlan $billingPlan): View
+    public function editPlan(Request $request, BillingPlan $billingPlan, BillingPlanManagementService $plans): View
     {
-        abort_unless($request->user()->isSuperAdmin(), 403);
+        $plans->assertSuperAdmin($request->user());
 
         return view('admin.billing.plan-form', [
             'plan' => $billingPlan,
         ]);
     }
 
-    public function updatePlan(Request $request, BillingPlan $billingPlan): RedirectResponse
+    public function updatePlan(Request $request, BillingPlan $billingPlan, BillingPlanManagementService $plans): RedirectResponse
     {
-        abort_unless($request->user()->isSuperAdmin(), 403);
-
-        $billingPlan->update($this->validatedPlan($request, $billingPlan));
+        $plans->update($billingPlan, $plans->validated($request, $billingPlan), $request->user());
 
         return redirect()->route('admin.billing.index')->with('status', 'Billing plan updated.');
     }
 
-    public function destroyPlan(Request $request, BillingPlan $billingPlan): RedirectResponse
+    public function destroyPlan(Request $request, BillingPlan $billingPlan, BillingPlanManagementService $plans): RedirectResponse
     {
-        abort_unless($request->user()->isSuperAdmin(), 403);
-
-        if ($billingPlan->tenantSubscriptions()->exists()) {
+        try {
+            $plans->delete($billingPlan, $request->user());
+        } catch (ValidationException $exception) {
             return redirect()
                 ->route('admin.billing.index')
-                ->withErrors(['billing_plan' => 'This billing plan is already used by tenant subscriptions. Hide it instead of deleting it.']);
+                ->withErrors($exception->errors());
         }
-
-        $billingPlan->delete();
 
         return redirect()->route('admin.billing.index')->with('status', 'Billing plan deleted.');
     }
@@ -154,7 +150,7 @@ class BillingController extends Controller
             'tenant_id' => $tenant->id,
             'billing_plan_id' => $plan->id,
             'provider' => 'flutterwave',
-            'tx_ref' => 'PBF-'.now()->format('YmdHis').'-'.Str::upper(Str::random(8)),
+            'tx_ref' => 'PBF-'.now()->format('YmdHis').'-'.str()->upper(str()->random(8)),
             'amount' => $plan->monthly_price,
             'currency' => $plan->currency,
             'status' => 'pending',
@@ -240,7 +236,7 @@ class BillingController extends Controller
         return redirect()->route('admin.billing.index')->with('status', 'Platform subscription payment confirmed.');
     }
 
-    public function webhook(Request $request, PlatformFlutterwaveService $flutterwave): \Illuminate\Http\Response
+    public function webhook(Request $request, PlatformFlutterwaveService $flutterwave): Response
     {
         if (! $flutterwave->webhookIsValid($request->getContent(), $request->header('flutterwave-signature') ?: $request->header('verif-hash'))) {
             abort(401);
@@ -281,39 +277,6 @@ class BillingController extends Controller
         );
 
         return response('ok', 200);
-    }
-
-    private function validatedPlan(Request $request, ?BillingPlan $plan = null): array
-    {
-        $data = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'slug' => [
-                'nullable',
-                'string',
-                'max:255',
-                'alpha_dash:ascii',
-                Rule::unique('billing_plans', 'slug')->ignore($plan?->id),
-            ],
-            'monthly_price' => ['required', 'numeric', 'min:0', 'max:99999999.99'],
-            'currency' => ['required', 'string', 'size:3'],
-            'shop_limit' => ['nullable', 'integer', 'min:1'],
-            'router_limit' => ['nullable', 'integer', 'min:1'],
-            'package_limit' => ['nullable', 'integer', 'min:1'],
-            'features' => ['nullable', 'string', 'max:5000'],
-            'is_active' => ['nullable', 'boolean'],
-        ]) + [
-            'is_active' => false,
-        ];
-
-        $data['slug'] = Str::slug(($data['slug'] ?? null) ?: $data['name']);
-        $data['currency'] = strtoupper($data['currency']);
-        $data['features'] = collect(preg_split('/\r\n|\r|\n/', (string) ($data['features'] ?? '')))
-            ->map(fn (string $feature): string => trim($feature))
-            ->filter()
-            ->values()
-            ->all();
-
-        return $data;
     }
 
     private function providerReferenceFromRequest(Request $request): ?string

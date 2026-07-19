@@ -4,55 +4,7 @@
     subheading="Platform subscriptions are separate from hotspot customer payments."
 >
     @if (auth()->user()->isSuperAdmin())
-        <x-slot:action>
-            <flux:button href="{{ route('admin.billing.plans.create') }}" variant="primary" icon="plus">Add Plan</flux:button>
-        </x-slot:action>
-    @endif
-
-    @if (auth()->user()->isSuperAdmin())
-        <div class="grid gap-4 md:grid-cols-3">
-            @foreach ($plans as $plan)
-                <section class="rounded-lg border border-zinc-200 bg-white p-5">
-                    <div class="flex items-start justify-between gap-3">
-                        <div>
-                            <h2 class="font-semibold">{{ $plan->name }}</h2>
-                            <p class="mt-1 text-sm text-zinc-500">{{ $plan->slug }}</p>
-                        </div>
-                        <flux:badge :color="$plan->is_active ? 'emerald' : 'zinc'" size="sm">{{ $plan->is_active ? 'Active' : 'Hidden' }}</flux:badge>
-                    </div>
-                    <p class="mt-4 text-2xl font-semibold">{{ $plan->currency }} {{ number_format($plan->monthly_price, 2) }}</p>
-                    <dl class="mt-4 grid grid-cols-3 gap-2 text-xs text-zinc-500">
-                        <div>
-                            <dt>Shops</dt>
-                            <dd class="mt-1 font-medium text-zinc-950">{{ $plan->shop_limit ?? 'Unlimited' }}</dd>
-                        </div>
-                        <div>
-                            <dt>Routers</dt>
-                            <dd class="mt-1 font-medium text-zinc-950">{{ $plan->router_limit ?? 'Unlimited' }}</dd>
-                        </div>
-                        <div>
-                            <dt>Plans</dt>
-                            <dd class="mt-1 font-medium text-zinc-950">{{ $plan->package_limit ?? 'Unlimited' }}</dd>
-                        </div>
-                    </dl>
-                    @if ($plan->features)
-                        <ul class="mt-4 space-y-1 text-sm text-zinc-600">
-                            @foreach ($plan->features as $feature)
-                                <li>{{ $feature }}</li>
-                            @endforeach
-                        </ul>
-                    @endif
-                    <div class="mt-5 flex gap-2">
-                        <flux:button href="{{ route('admin.billing.plans.edit', $plan) }}" size="sm" variant="outline" icon="pencil-square">Edit</flux:button>
-                        <form method="POST" action="{{ route('admin.billing.plans.destroy', $plan) }}" onsubmit="return confirm('Delete this billing plan? Hide it instead if tenants already use it.')">
-                            @csrf
-                            @method('DELETE')
-                            <flux:button type="submit" size="sm" variant="danger" icon="trash">Delete</flux:button>
-                        </form>
-                    </div>
-                </section>
-            @endforeach
-        </div>
+        <livewire:admin.billing-plans-manager />
 
         <section class="mt-6 rounded-lg border border-zinc-200 bg-white p-5">
             <h2 class="font-semibold">Assign Tenant Subscription</h2>

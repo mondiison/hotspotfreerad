@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Jobs\VerifyPlatformBillingWebhook;
+use App\Livewire\Admin\BillingPlansManager;
 use App\Models\BillingPlan;
 use App\Models\PlatformBillingPayment;
 use App\Models\Tenant;
@@ -12,6 +13,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
+use Livewire\Livewire;
 use Tests\TestCase;
 
 class PlatformBillingTest extends TestCase
@@ -40,7 +42,7 @@ class PlatformBillingTest extends TestCase
         $this->actingAs($user)
             ->get(route('admin.billing.index'))
             ->assertOk()
-            ->assertSee(route('admin.billing.plans.create'), false)
+            ->assertSee('Add Plan')
             ->assertSee('Assign Tenant Subscription')
             ->assertSee('Growth')
             ->assertSee('Mondi Internet');
@@ -137,6 +139,128 @@ class PlatformBillingTest extends TestCase
             ->delete(route('admin.billing.plans.destroy', $plan))
             ->assertRedirect(route('admin.billing.index'))
             ->assertSessionHasErrors('billing_plan');
+
+        $this->assertDatabaseHas('billing_plans', [
+            'id' => $plan->id,
+        ]);
+    }
+
+    public function test_livewire_billing_plan_manager_creates_plan_from_modal(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'super_admin',
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(BillingPlansManager::class)
+            ->call('create')
+            ->assertSet('showFormModal', true)
+            ->set('name', 'Scale Plus')
+            ->set('monthly_price', '85000')
+            ->set('currency', 'ngn')
+            ->set('shop_limit', '10')
+            ->set('router_limit', '20')
+            ->set('package_limit', '')
+            ->set('features', "Priority support\nAdvanced analytics")
+            ->call('save')
+            ->assertHasNoErrors()
+            ->assertSet('showFormModal', false)
+            ->assertSee('Billing plan created.')
+            ->assertSee('Scale Plus');
+
+        $plan = BillingPlan::where('slug', 'scale-plus')->firstOrFail();
+
+        $this->assertSame('NGN', $plan->currency);
+        $this->assertSame(['Priority support', 'Advanced analytics'], $plan->features);
+        $this->assertNull($plan->package_limit);
+    }
+
+    public function test_livewire_billing_plan_manager_edits_plan_from_modal(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'super_admin',
+            'is_active' => true,
+        ]);
+        $plan = BillingPlan::where('slug', 'starter')->firstOrFail();
+
+        Livewire::actingAs($user)
+            ->test(BillingPlansManager::class)
+            ->call('edit', $plan->id)
+            ->assertSet('showFormModal', true)
+            ->assertSet('name', 'Starter')
+            ->set('name', 'Starter Plus')
+            ->set('slug', 'starter-plus')
+            ->set('monthly_price', '18000')
+            ->set('currency', 'usd')
+            ->set('features', 'Basic support')
+            ->set('is_active', false)
+            ->call('save')
+            ->assertHasNoErrors()
+            ->assertSet('showFormModal', false)
+            ->assertSee('Billing plan updated.');
+
+        $plan->refresh();
+
+        $this->assertSame('Starter Plus', $plan->name);
+        $this->assertSame('starter-plus', $plan->slug);
+        $this->assertSame('USD', $plan->currency);
+        $this->assertFalse($plan->is_active);
+    }
+
+    public function test_livewire_billing_plan_manager_deletes_unused_plan_with_confirmation(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'super_admin',
+            'is_active' => true,
+        ]);
+        $plan = BillingPlan::create([
+            'name' => 'Temporary',
+            'slug' => 'temporary',
+            'monthly_price' => 1000,
+            'currency' => 'NGN',
+            'features' => [],
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(BillingPlansManager::class)
+            ->call('confirmDelete', $plan->id)
+            ->assertSet('showDeleteModal', true)
+            ->assertSee('Temporary')
+            ->call('delete')
+            ->assertSet('showDeleteModal', false)
+            ->assertSee('Billing plan deleted.');
+
+        $this->assertDatabaseMissing('billing_plans', [
+            'id' => $plan->id,
+        ]);
+    }
+
+    public function test_livewire_billing_plan_manager_shows_delete_error_for_used_plan(): void
+    {
+        $tenant = Tenant::create([
+            'company_name' => 'Mondi Internet',
+            'owner_email' => 'owner@example.com',
+        ]);
+        $plan = BillingPlan::where('slug', 'starter')->firstOrFail();
+        TenantBillingSubscription::create([
+            'tenant_id' => $tenant->id,
+            'billing_plan_id' => $plan->id,
+            'status' => 'active',
+            'amount' => $plan->monthly_price,
+            'currency' => $plan->currency,
+        ]);
+        $user = User::factory()->create([
+            'role' => 'super_admin',
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(BillingPlansManager::class)
+            ->set('deletingPlanId', $plan->id)
+            ->call('delete')
+            ->assertHasErrors('billing_plan');
 
         $this->assertDatabaseHas('billing_plans', [
             'id' => $plan->id,
