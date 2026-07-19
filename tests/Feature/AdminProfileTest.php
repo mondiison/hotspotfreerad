@@ -35,7 +35,10 @@ class AdminProfileTest extends TestCase
             ->assertOk()
             ->assertSee('Tenant Owner')
             ->assertSee('owner@example.com')
-            ->assertSee('Mondi Internet');
+            ->assertSee('Mondi Internet')
+            ->assertSee('Passkeys')
+            ->assertSee('Not configured')
+            ->assertSee(route('admin.passkeys.index'), false);
     }
 
     public function test_admin_can_update_profile_name_without_password_change(): void
@@ -240,6 +243,26 @@ class AdminProfileTest extends TestCase
             ->assertSee('Signed in successfully.')
             ->assertSee('127.0.0.1')
             ->assertSee('Feature Test Browser');
+    }
+
+    public function test_livewire_profile_card_shows_passkey_status(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'super_admin',
+            'is_active' => true,
+        ]);
+
+        $user->passkeys()->create([
+            'name' => 'Office laptop',
+            'credential_id' => 'profile-passkey',
+            'credential' => ['aaguid' => '00000000-0000-0000-0000-000000000000'],
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(ProfileCard::class)
+            ->assertSee('Trusted device sign-in')
+            ->assertSee('1 registered')
+            ->assertSee('Manage passkeys');
     }
 
     public function test_profile_password_change_requires_current_password(): void

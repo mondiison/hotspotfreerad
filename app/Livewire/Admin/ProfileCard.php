@@ -181,6 +181,7 @@ class ProfileCard extends Component
             'activeSessions' => $sessions->sessionsFor($this->user, session()->getId()),
             'securityActivities' => $activity->recentFor($this->user),
             'sessionDriverSupported' => config('session.driver') === 'database',
+            'passkeyCount' => $this->user->passkeys()->count(),
         ]);
     }
 }

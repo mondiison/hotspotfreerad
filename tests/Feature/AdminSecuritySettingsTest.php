@@ -84,6 +84,11 @@ class AdminSecuritySettingsTest extends TestCase
             'two_factor_recovery_codes' => $twoFactor->hashRecoveryCodes(['ABCDE-12345']),
             'two_factor_confirmed_at' => now(),
         ]);
+        $readyAdmin->passkeys()->create([
+            'name' => 'Office laptop',
+            'credential_id' => 'security-passkey',
+            'credential' => ['aaguid' => '00000000-0000-0000-0000-000000000000'],
+        ]);
         $missingAdmin = User::factory()->create([
             'name' => 'Missing Admin',
             'email' => 'missing@example.com',
@@ -97,9 +102,12 @@ class AdminSecuritySettingsTest extends TestCase
             ->assertSee('Ready Admin')
             ->assertSee('ready@example.com')
             ->assertSee('2FA enabled')
+            ->assertSee('1 registered')
             ->assertSee('Missing Admin')
             ->assertSee('missing@example.com')
             ->assertSee('2FA not enabled')
+            ->assertSee('No passkeys')
+            ->assertSee('Passkey Readiness')
             ->assertSee('Need setup');
 
         $this->assertFalse($missingAdmin->hasTwoFactorEnabled());

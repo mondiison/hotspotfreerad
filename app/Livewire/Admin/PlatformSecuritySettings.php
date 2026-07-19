@@ -37,6 +37,7 @@ class PlatformSecuritySettings extends Component
     public function render()
     {
         $superAdmins = User::query()
+            ->withCount('passkeys')
             ->where('role', 'super_admin')
             ->orderBy('name')
             ->get();
@@ -46,6 +47,8 @@ class PlatformSecuritySettings extends Component
             'superAdminCount' => $superAdmins->count(),
             'superAdminsWithTwoFactor' => $superAdmins->filter->hasTwoFactorEnabled()->count(),
             'superAdminsMissingTwoFactor' => $superAdmins->reject->hasTwoFactorEnabled()->count(),
+            'superAdminsWithPasskeys' => $superAdmins->where('passkeys_count', '>', 0)->count(),
+            'superAdminsMissingPasskeys' => $superAdmins->where('passkeys_count', 0)->count(),
         ]);
     }
 }

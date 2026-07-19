@@ -80,6 +80,33 @@
         <section class="border-t border-zinc-200 pt-6">
             <div class="flex flex-col justify-between gap-3 md:flex-row md:items-start">
                 <div>
+                    <h2 class="text-base font-semibold">Passkeys</h2>
+                    <p class="mt-1 text-sm text-zinc-500">Use fingerprint, face unlock, Windows Hello, or a hardware security key for quicker passwordless sign-in.</p>
+                </div>
+
+                <flux:badge :color="$passkeyCount > 0 ? 'emerald' : 'zinc'">
+                    {{ $passkeyCount > 0 ? $passkeyCount.' registered' : 'Not configured' }}
+                </flux:badge>
+            </div>
+
+            <div class="mt-5 rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+                <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+                    <div>
+                        <p class="text-sm font-medium text-zinc-900">Trusted device sign-in</p>
+                        <p class="mt-2 text-sm leading-6 text-zinc-600">Passkeys are separate from authenticator 2FA. They make sign-in smoother, while 2FA policy still controls whether admins can open protected dashboard screens.</p>
+                        <p class="mt-2 text-xs leading-5 text-zinc-500">Registration works on localhost during development and on HTTPS domains in production.</p>
+                    </div>
+
+                    <flux:button href="{{ route('admin.passkeys.index') }}" variant="outline" icon="key">
+                        Manage passkeys
+                    </flux:button>
+                </div>
+            </div>
+        </section>
+
+        <section class="border-t border-zinc-200 pt-6">
+            <div class="flex flex-col justify-between gap-3 md:flex-row md:items-start">
+                <div>
                     <h2 class="text-base font-semibold">Two-Factor Authentication</h2>
                     <p class="mt-1 text-sm text-zinc-500">Require a one-time code from an authenticator app when signing in.</p>
                 </div>

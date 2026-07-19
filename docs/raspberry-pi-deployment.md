@@ -80,6 +80,8 @@ APP_NAME=HotspotFreeRAD
 APP_ENV=production
 APP_DEBUG=false
 APP_URL=https://your-public-portal-domain
+PASSKEYS_RELYING_PARTY_ID=your-public-portal-domain
+PASSKEYS_ALLOWED_ORIGINS=https://your-public-portal-domain
 
 DB_CONNECTION=mysql
 DB_HOST=127.0.0.1
@@ -97,6 +99,16 @@ WIREGUARD_ENDPOINT_PORT=13231
 WIREGUARD_PUBLIC_KEY=your_pi_wireguard_public_key
 
 HOTSPOT_DNS_NAME=hotspot.local
+```
+
+Passkeys need a secure browser origin. They work on `localhost` for development, but most browsers will not register passkeys on a plain LAN URL like `http://192.168.190.244`. For production, use your HTTPS domain in `APP_URL`, set `PASSKEYS_RELYING_PARTY_ID` to only the hostname, and set `PASSKEYS_ALLOWED_ORIGINS` to the full HTTPS origin.
+
+For example:
+
+```env
+APP_URL=https://mondiison.16mb.com
+PASSKEYS_RELYING_PARTY_ID=mondiison.16mb.com
+PASSKEYS_ALLOWED_ORIGINS=https://mondiison.16mb.com
 ```
 
 ## 5. Run Migrations Carefully
