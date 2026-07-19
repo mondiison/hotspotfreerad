@@ -1,10 +1,12 @@
 <x-layouts.admin title="Payments" heading="Payments" subheading="Customer hotspot payment attempts, confirmations, and provisioning status.">
-    <section class="grid gap-4 md:grid-cols-4">
+    <section class="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
         @foreach ([
             ['label' => 'Transactions', 'value' => number_format($summary['count']), 'hint' => 'Matching current filters'],
             ['label' => 'Successful', 'value' => number_format($summary['successful_count']), 'hint' => 'Confirmed customer payments'],
             ['label' => 'Pending', 'value' => number_format($summary['pending_count']), 'hint' => 'Awaiting payment confirmation'],
-            ['label' => 'Revenue', 'value' => 'NGN '.number_format($summary['successful_revenue'], 2), 'hint' => 'Successful payments only'],
+            ['label' => 'Gross Sales', 'value' => 'NGN '.number_format($summary['successful_revenue'], 2), 'hint' => 'Successful customer payments'],
+            ['label' => 'Platform Commission', 'value' => 'NGN '.number_format($summary['platform_fee'], 2), 'hint' => 'Commission from successful sales'],
+            ['label' => 'Tenant Net', 'value' => 'NGN '.number_format($summary['tenant_net'], 2), 'hint' => 'Gross sales after commission'],
         ] as $stat)
             <div class="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
                 <p class="text-sm font-medium text-zinc-500">{{ $stat['label'] }}</p>
@@ -38,7 +40,9 @@
                     <th class="px-4 py-3 font-medium">Plan</th>
                     <th class="px-4 py-3 font-medium">Shop</th>
                     <th class="px-4 py-3 font-medium">Status</th>
-                    <th class="px-4 py-3 text-right font-medium">Amount</th>
+                    <th class="px-4 py-3 text-right font-medium">Gross</th>
+                    <th class="px-4 py-3 text-right font-medium">Commission</th>
+                    <th class="px-4 py-3 text-right font-medium">Tenant Net</th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-zinc-100">
@@ -70,10 +74,19 @@
                                 <p class="mt-1 text-xs text-zinc-500">Paid {{ $payment->paid_at->diffForHumans() }}</p>
                             @endif
                         </td>
-                        <td class="px-4 py-3 text-right font-medium">{{ $payment->currency }} {{ number_format($payment->amount, 2) }}</td>
+                        <td class="px-4 py-3 text-right font-medium">{{ $payment->currency }} {{ number_format($payment->gross_amount ?: $payment->amount, 2) }}</td>
+                        <td class="px-4 py-3 text-right">
+                            <p>{{ $payment->currency }} {{ number_format($payment->platform_fee_amount, 2) }}</p>
+                            @if (($payment->billing_model ?? 'subscription') === 'commission')
+                                <p class="mt-1 text-xs text-zinc-500">{{ number_format((float) $payment->commission_rate, 2) }}%</p>
+                            @else
+                                <p class="mt-1 text-xs text-zinc-500">Subscription</p>
+                            @endif
+                        </td>
+                        <td class="px-4 py-3 text-right font-medium">{{ $payment->currency }} {{ number_format($payment->tenant_net_amount ?: ($payment->gross_amount ?: $payment->amount), 2) }}</td>
                     </tr>
                 @empty
-                    <tr><td colspan="6" class="px-4 py-8 text-center text-zinc-500">No payments found.</td></tr>
+                    <tr><td colspan="8" class="px-4 py-8 text-center text-zinc-500">No payments found.</td></tr>
                 @endforelse
             </tbody>
         </table>

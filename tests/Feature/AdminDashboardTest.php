@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\BillingPlan;
 use App\Models\Package;
+use App\Models\Payment;
 use App\Models\Router;
 use App\Models\Shop;
 use App\Models\Subscription;
@@ -280,5 +281,59 @@ class AdminDashboardTest extends TestCase
             ->assertSee('Quiet Router')
             ->assertSee('No accounting yet')
             ->assertSee('No users are online right now.');
+    }
+
+    public function test_dashboard_shows_commission_revenue_breakdown(): void
+    {
+        $tenant = Tenant::create([
+            'company_name' => 'Commission Tenant',
+            'owner_email' => 'commission@example.com',
+            'billing_model' => 'commission',
+            'commission_rate' => 10,
+        ]);
+        $shop = Shop::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Commission Shop',
+        ]);
+        $package = Package::create([
+            'shop_id' => $shop->id,
+            'name' => 'Daily',
+            'price' => 1000,
+            'currency' => 'NGN',
+            'limit_uptime_seconds' => 86400,
+            'speed_limit_profile' => '5M/5M',
+            'is_active' => true,
+        ]);
+        Payment::create([
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'provider' => 'flutterwave',
+            'tx_ref' => 'DASH-COMMISSION',
+            'amount' => 1000,
+            'gross_amount' => 1000,
+            'platform_fee_amount' => 100,
+            'tenant_net_amount' => 900,
+            'commission_rate' => 10,
+            'billing_model' => 'commission',
+            'currency' => 'NGN',
+            'status' => 'successful',
+            'paid_at' => now(),
+            'payload' => [],
+        ]);
+
+        $user = User::factory()->create([
+            'role' => 'super_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('admin.dashboard'))
+            ->assertOk()
+            ->assertSee('Gross Sales')
+            ->assertSee('Platform Commission')
+            ->assertSee('Tenant Net')
+            ->assertSee('NGN 1,000.00')
+            ->assertSee('NGN 100.00')
+            ->assertSee('NGN 900.00');
     }
 }

@@ -89,7 +89,9 @@
             ['label' => 'RADIUS Sessions', 'value' => is_null($activeSessionCount) ? 'Not ready' : $activeSessionCount, 'hint' => $radiusAccountingReady ? 'Live accounting sessions' : 'radacct table has not been created'],
             ['label' => 'Usage Today', 'value' => $formatBytes($todayUsageBytes), 'hint' => 'Upload + download from sessions started today'],
             ['label' => 'Total Usage', 'value' => $formatBytes($totalUsageBytes), 'hint' => 'All accounting traffic for scoped routers'],
-            ['label' => 'Paid Revenue', 'value' => 'NGN '.number_format($paidRevenue, 2), 'hint' => 'Successful payments recorded'],
+            ['label' => 'Gross Sales', 'value' => 'NGN '.number_format($paidRevenue, 2), 'hint' => 'Successful customer payments'],
+            ['label' => auth()->user()->isSuperAdmin() ? 'Platform Commission' : 'Platform Fees', 'value' => 'NGN '.number_format($platformCommission, 2), 'hint' => 'Commission deducted from sales'],
+            ['label' => 'Tenant Net', 'value' => 'NGN '.number_format($tenantNetRevenue, 2), 'hint' => 'Successful sales after commission'],
         ] as $stat)
             <div class="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
                 <p class="text-sm font-medium text-zinc-500">{{ $stat['label'] }}</p>

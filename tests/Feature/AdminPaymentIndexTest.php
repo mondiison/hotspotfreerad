@@ -32,7 +32,7 @@ class AdminPaymentIndexTest extends TestCase
             ->assertSee($otherPayment->tx_ref)
             ->assertSee('NGN 500.00')
             ->assertSee('Transactions')
-            ->assertSee('Revenue');
+            ->assertSee('Gross Sales');
     }
 
     public function test_tenant_admin_only_sees_own_payments(): void
@@ -74,12 +74,34 @@ class AdminPaymentIndexTest extends TestCase
             ->assertDontSee($successfulPayment->tx_ref);
     }
 
-    private function paymentFixture(string $tenantName, string $ownerEmail, string $shopName, string $txRef, string $status): array
+    public function test_payment_report_shows_commission_totals(): void
     {
-        $tenant = Tenant::create([
+        [$payment] = $this->paymentFixture('Commission Tenant', 'commission@example.com', 'Commission Shop', 'COMMISSION-REF', 'successful', [
+            'billing_model' => 'commission',
+            'commission_rate' => 20,
+        ]);
+        $user = User::factory()->create([
+            'role' => 'super_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('admin.payments.index'))
+            ->assertOk()
+            ->assertSee($payment->tx_ref)
+            ->assertSee('Platform Commission')
+            ->assertSee('Tenant Net')
+            ->assertSee('NGN 100.00')
+            ->assertSee('NGN 400.00')
+            ->assertSee('20.00%');
+    }
+
+    private function paymentFixture(string $tenantName, string $ownerEmail, string $shopName, string $txRef, string $status, array $tenantOverrides = []): array
+    {
+        $tenant = Tenant::create(array_merge([
             'company_name' => $tenantName,
             'owner_email' => $ownerEmail,
-        ]);
+        ], $tenantOverrides));
         $shop = Shop::create([
             'tenant_id' => $tenant->id,
             'name' => $shopName,
@@ -99,6 +121,9 @@ class AdminPaymentIndexTest extends TestCase
             'email' => strtolower($txRef).'@example.com',
             'phone' => '08000000000',
         ]);
+        $commissionRate = ($tenant->billing_model ?? 'subscription') === 'commission' ? (float) $tenant->commission_rate : 0.0;
+        $platformFee = round(500 * ($commissionRate / 100), 2);
+
         $payment = Payment::create([
             'shop_id' => $shop->id,
             'package_id' => $package->id,
@@ -107,6 +132,11 @@ class AdminPaymentIndexTest extends TestCase
             'tx_ref' => $txRef,
             'provider_reference' => $status === 'successful' ? 'ord_'.$txRef : null,
             'amount' => 500,
+            'gross_amount' => 500,
+            'platform_fee_amount' => $platformFee,
+            'tenant_net_amount' => 500 - $platformFee,
+            'commission_rate' => $commissionRate,
+            'billing_model' => $tenant->billing_model ?? 'subscription',
             'currency' => 'NGN',
             'status' => $status,
             'paid_at' => $status === 'successful' ? now() : null,

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Payment;
 use App\Support\TenantAccess;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class PaymentController extends Controller
@@ -35,6 +36,7 @@ class PaymentController extends Controller
             ->when($request->filled('provider'), fn ($query) => $query->where('provider', $request->string('provider')->toString()));
 
         $summaryQuery = clone $query;
+        $successfulQuery = (clone $summaryQuery)->where('status', 'successful');
 
         return view('admin.payments.index', [
             'payments' => $query->latest()->paginate(20)->withQueryString(),
@@ -42,7 +44,9 @@ class PaymentController extends Controller
                 'count' => (clone $summaryQuery)->count(),
                 'successful_count' => (clone $summaryQuery)->where('status', 'successful')->count(),
                 'pending_count' => (clone $summaryQuery)->where('status', 'pending')->count(),
-                'successful_revenue' => (clone $summaryQuery)->where('status', 'successful')->sum('amount'),
+                'successful_revenue' => (clone $successfulQuery)->sum(DB::raw('coalesce(nullif(gross_amount, 0), amount)')),
+                'platform_fee' => (clone $successfulQuery)->sum('platform_fee_amount'),
+                'tenant_net' => (clone $successfulQuery)->sum(DB::raw('coalesce(nullif(tenant_net_amount, 0), coalesce(nullif(gross_amount, 0), amount) - platform_fee_amount)')),
             ],
         ]);
     }

@@ -16,6 +16,7 @@ use App\Support\RadiusAccountingStats;
 use App\Support\TenantAccess;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
@@ -37,7 +38,15 @@ class DashboardController extends Controller
         $paidRevenue = Payment::query()
             ->whereIn('shop_id', $shopIds)
             ->where('status', 'successful')
-            ->sum('amount');
+            ->sum(DB::raw('coalesce(nullif(gross_amount, 0), amount)'));
+        $platformCommission = Payment::query()
+            ->whereIn('shop_id', $shopIds)
+            ->where('status', 'successful')
+            ->sum('platform_fee_amount');
+        $tenantNetRevenue = Payment::query()
+            ->whereIn('shop_id', $shopIds)
+            ->where('status', 'successful')
+            ->sum(DB::raw('coalesce(nullif(tenant_net_amount, 0), coalesce(nullif(gross_amount, 0), amount) - platform_fee_amount)'));
 
         return view('admin.dashboard', [
             'tenantCount' => $user->isSuperAdmin() ? Tenant::count() : 1,
@@ -62,6 +71,8 @@ class DashboardController extends Controller
             'radiusAccountingReady' => $radiusSummary['ready'],
             'activeSubscriptionCount' => $activeSubscriptionCount,
             'paidRevenue' => $paidRevenue,
+            'platformCommission' => $platformCommission,
+            'tenantNetRevenue' => $tenantNetRevenue,
             'onlineSessions' => $radiusStats->onlineSessions($routers),
             'recentSubscriptions' => Subscription::query()
                 ->with(['shop.tenant', 'package'])
