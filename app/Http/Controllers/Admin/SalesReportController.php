@@ -1,0 +1,92 @@
+<?php
+
+namespace App\Http\Controllers\Admin;
+
+use App\Http\Controllers\Controller;
+use App\Models\Payment;
+use App\Support\TenantAccess;
+use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\View\View;
+
+class SalesReportController extends Controller
+{
+    public function index(Request $request): View
+    {
+        $data = $request->validate([
+            'from' => ['nullable', 'date'],
+            'to' => ['nullable', 'date', 'after_or_equal:from'],
+            'group' => ['nullable', 'in:day,month,year'],
+        ]);
+
+        $group = $data['group'] ?? 'day';
+        $from = filled($data['from'] ?? null)
+            ? Carbon::parse($data['from'])->startOfDay()
+            : now()->startOfMonth();
+        $to = filled($data['to'] ?? null)
+            ? Carbon::parse($data['to'])->endOfDay()
+            : now()->endOfDay();
+
+        $payments = TenantAccess::scopePayments(
+            Payment::query()->with(['shop.tenant', 'package'])->where('status', 'successful'),
+            $request->user()
+        )
+            ->where(function ($query) use ($from, $to): void {
+                $query
+                    ->whereBetween('paid_at', [$from, $to])
+                    ->orWhere(function ($query) use ($from, $to): void {
+                        $query
+                            ->whereNull('paid_at')
+                            ->whereBetween('created_at', [$from, $to]);
+                    });
+            })
+            ->oldest('paid_at')
+            ->oldest()
+            ->get();
+
+        $rows = $payments
+            ->groupBy(fn (Payment $payment) => $this->periodKey($payment->paid_at ?? $payment->created_at, $group))
+            ->map(fn ($groupedPayments, string $period) => [
+                'period' => $period,
+                'sales_count' => $groupedPayments->count(),
+                'revenue' => $groupedPayments->sum(fn (Payment $payment) => (float) $payment->amount),
+                'average_sale' => $groupedPayments->avg(fn (Payment $payment) => (float) $payment->amount) ?? 0,
+            ])
+            ->values();
+
+        $shopRows = $payments
+            ->groupBy(fn (Payment $payment) => $payment->shop?->name ?? 'Deleted shop')
+            ->map(fn ($groupedPayments, string $shopName) => [
+                'shop' => $shopName,
+                'sales_count' => $groupedPayments->count(),
+                'revenue' => $groupedPayments->sum(fn (Payment $payment) => (float) $payment->amount),
+            ])
+            ->sortByDesc('revenue')
+            ->values();
+
+        return view('admin.reports.sales', [
+            'filters' => [
+                'from' => $from->toDateString(),
+                'to' => $to->toDateString(),
+                'group' => $group,
+            ],
+            'summary' => [
+                'sales_count' => $payments->count(),
+                'revenue' => $payments->sum(fn (Payment $payment) => (float) $payment->amount),
+                'average_sale' => $payments->avg(fn (Payment $payment) => (float) $payment->amount) ?? 0,
+                'period_count' => $rows->count(),
+            ],
+            'rows' => $rows,
+            'shopRows' => $shopRows,
+        ]);
+    }
+
+    private function periodKey(Carbon $date, string $group): string
+    {
+        return match ($group) {
+            'year' => $date->format('Y'),
+            'month' => $date->format('Y-m'),
+            default => $date->format('Y-m-d'),
+        };
+    }
+}
