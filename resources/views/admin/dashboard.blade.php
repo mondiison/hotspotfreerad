@@ -148,6 +148,64 @@
         </div>
     </section>
 
+    @if ($budgetWatch->isNotEmpty())
+        <section class="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-5 shadow-sm">
+            <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+                <div>
+                    <h2 class="text-base font-semibold text-amber-950">Budget Watch</h2>
+                    <p class="mt-1 text-sm text-amber-700">Current-month expense categories at 80% or more of their monthly budget.</p>
+                </div>
+                <flux:button
+                    href="{{ route('admin.reports.sales', ['from' => $monthFinanceSummary['from'], 'to' => $monthFinanceSummary['to']]) }}"
+                    variant="outline"
+                    size="sm"
+                    icon="chart-bar"
+                >
+                    Review report
+                </flux:button>
+            </div>
+
+            <div class="mt-5 overflow-hidden rounded-lg border border-amber-200 bg-white">
+                <table class="w-full text-left text-sm">
+                    <thead class="bg-amber-50 text-amber-800">
+                        <tr>
+                            <th class="px-4 py-3 font-medium">Category</th>
+                            <th class="px-4 py-3 font-medium">Tenant</th>
+                            <th class="px-4 py-3 text-right font-medium">Spent</th>
+                            <th class="px-4 py-3 text-right font-medium">Budget</th>
+                            <th class="px-4 py-3 text-right font-medium">Variance</th>
+                            <th class="px-4 py-3 text-right font-medium">Usage</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-amber-100">
+                        @foreach ($budgetWatch as $row)
+                            <tr>
+                                <td class="px-4 py-3">
+                                    <p class="font-medium">{{ $row['category'] }}</p>
+                                    <p class="mt-1 text-xs {{ $row['usage'] > 100 ? 'text-red-700' : 'text-amber-700' }}">{{ $row['status'] }}</p>
+                                </td>
+                                <td class="px-4 py-3 text-zinc-600">{{ $row['tenant'] ?: 'All tenants' }}</td>
+                                <td class="px-4 py-3 text-right font-semibold">NGN {{ number_format($row['spent'], 2) }}</td>
+                                <td class="px-4 py-3 text-right">NGN {{ number_format($row['budget'], 2) }}</td>
+                                <td class="px-4 py-3 text-right {{ $row['variance'] < 0 ? 'font-semibold text-red-700' : 'text-zinc-700' }}">
+                                    NGN {{ number_format($row['variance'], 2) }}
+                                </td>
+                                <td class="px-4 py-3 text-right">
+                                    <div class="ml-auto flex w-28 flex-col items-end gap-1">
+                                        <span class="{{ $row['usage'] > 100 ? 'font-semibold text-red-700' : 'text-zinc-700' }}">{{ $row['usage'] }}%</span>
+                                        <span class="block h-1.5 w-full overflow-hidden rounded-full bg-amber-100">
+                                            <span class="block h-full rounded-full {{ $row['usage'] > 100 ? 'bg-red-600' : 'bg-amber-500' }}" style="width: {{ min($row['usage'], 100) }}%"></span>
+                                        </span>
+                                    </div>
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    @endif
+
     @if ($tenantBillingSummary)
         <section class="mt-6 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
             <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">

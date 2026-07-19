@@ -72,6 +72,35 @@ class DashboardController extends Controller
             ->whereDate('incurred_on', '<=', $monthEnd->toDateString())
             ->sum('amount');
         $currentMonthProfit = $currentMonthTenantNet - $currentMonthExpenses;
+        $budgetWatch = TenantAccess::scopeExpenses(
+            Expense::query()->with(['category', 'tenant']),
+            $user
+        )
+            ->whereDate('incurred_on', '>=', $monthStart->toDateString())
+            ->whereDate('incurred_on', '<=', $monthEnd->toDateString())
+            ->get()
+            ->filter(fn (Expense $expense) => (float) ($expense->category?->monthly_budget ?? 0) > 0)
+            ->groupBy(fn (Expense $expense) => $expense->expense_category_id)
+            ->map(function ($expenses): array {
+                $expense = $expenses->first();
+                $budget = (float) $expense->category->monthly_budget;
+                $spent = $expenses->sum(fn (Expense $expense) => (float) $expense->amount);
+                $usage = round(($spent / $budget) * 100, 1);
+
+                return [
+                    'category' => $expense->category->name,
+                    'tenant' => $expense->tenant?->company_name,
+                    'budget' => $budget,
+                    'spent' => $spent,
+                    'variance' => $budget - $spent,
+                    'usage' => $usage,
+                    'status' => $usage > 100 ? 'Over budget' : 'Near budget',
+                ];
+            })
+            ->filter(fn (array $row) => $row['usage'] >= 80)
+            ->sortByDesc('usage')
+            ->take(5)
+            ->values();
         $upcomingRecurringExpenses = TenantAccess::scopeExpenses(
             Expense::query()->with(['tenant', 'category']),
             $user
@@ -131,6 +160,7 @@ class DashboardController extends Controller
                 'profit' => $currentMonthProfit,
                 'margin' => $currentMonthTenantNet > 0 ? round(($currentMonthProfit / $currentMonthTenantNet) * 100, 1) : null,
             ],
+            'budgetWatch' => $budgetWatch,
             'upcomingRecurringExpenses' => $upcomingRecurringExpenses,
             'overdueRecurringExpenses' => $overdueRecurringExpenses,
             'onlineSessions' => $radiusStats->onlineSessions($routers),

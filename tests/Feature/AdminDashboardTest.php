@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\BillingPlan;
 use App\Models\Expense;
+use App\Models\ExpenseCategory;
 use App\Models\Package;
 use App\Models\Payment;
 use App\Models\Router;
@@ -455,6 +456,89 @@ class AdminDashboardTest extends TestCase
             ->assertSee('NGN 1,000.00')
             ->assertSee('55.6%')
             ->assertDontSee('NGN 9,999.00');
+    }
+
+    public function test_dashboard_shows_current_month_budget_watch(): void
+    {
+        $tenant = Tenant::create([
+            'company_name' => 'Mondi Tenant',
+            'owner_email' => 'owner@example.com',
+        ]);
+        $watchedCategory = ExpenseCategory::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Generator fuel',
+            'monthly_budget' => 1000,
+            'is_active' => true,
+        ]);
+        $quietCategory = ExpenseCategory::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Office supplies',
+            'monthly_budget' => 1000,
+            'is_active' => true,
+        ]);
+        Expense::create([
+            'tenant_id' => $tenant->id,
+            'expense_category_id' => $watchedCategory->id,
+            'title' => 'Diesel',
+            'amount' => 850,
+            'currency' => 'NGN',
+            'incurred_on' => now()->toDateString(),
+        ]);
+        Expense::create([
+            'tenant_id' => $tenant->id,
+            'expense_category_id' => $quietCategory->id,
+            'title' => 'Pens',
+            'amount' => 250,
+            'currency' => 'NGN',
+            'incurred_on' => now()->toDateString(),
+        ]);
+        Expense::create([
+            'tenant_id' => $tenant->id,
+            'expense_category_id' => $watchedCategory->id,
+            'title' => 'Old diesel',
+            'amount' => 900,
+            'currency' => 'NGN',
+            'incurred_on' => now()->subMonth()->toDateString(),
+        ]);
+
+        $otherTenant = Tenant::create([
+            'company_name' => 'Other Tenant',
+            'owner_email' => 'other@example.com',
+        ]);
+        $otherCategory = ExpenseCategory::create([
+            'tenant_id' => $otherTenant->id,
+            'name' => 'Other fuel',
+            'monthly_budget' => 1000,
+            'is_active' => true,
+        ]);
+        Expense::create([
+            'tenant_id' => $otherTenant->id,
+            'expense_category_id' => $otherCategory->id,
+            'title' => 'Other diesel',
+            'amount' => 950,
+            'currency' => 'NGN',
+            'incurred_on' => now()->toDateString(),
+        ]);
+
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('admin.dashboard'))
+            ->assertOk()
+            ->assertSee('Budget Watch')
+            ->assertSee('Generator fuel')
+            ->assertSee('Near budget')
+            ->assertSee('NGN 850.00')
+            ->assertSee('NGN 1,000.00')
+            ->assertSee('NGN 150.00')
+            ->assertSee('85%')
+            ->assertDontSee('Office supplies')
+            ->assertDontSee('Other fuel')
+            ->assertDontSee('NGN 950.00');
     }
 
     public function test_dashboard_shows_upcoming_recurring_expenses(): void
