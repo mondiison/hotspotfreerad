@@ -67,9 +67,10 @@
 
                         <h3 class="mt-4 text-sm font-semibold">{{ $item['label'] }}</h3>
                         <p class="mt-2 flex-1 text-xs leading-5 text-zinc-500">{{ $item['detail'] }}</p>
+                        <p class="mt-3 text-xs leading-5 text-zinc-600">{{ $item['status'] }}</p>
 
                         <flux:button href="{{ route($item['route']) }}" variant="{{ $item['complete'] ? 'outline' : 'primary' }}" size="sm" class="mt-4">
-                            {{ $item['complete'] ? 'Review' : 'Start' }}
+                            {{ $item['action'] }}
                         </flux:button>
                     </article>
                 @endforeach

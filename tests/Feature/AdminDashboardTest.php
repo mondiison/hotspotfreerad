@@ -157,9 +157,31 @@ class AdminDashboardTest extends TestCase
             ->assertSee('Connect payment account')
             ->assertSee(route('admin.payment-settings.index'), false)
             ->assertSee(route('admin.brand.edit'), false)
+            ->assertSee(route('admin.shops.index'), false)
+            ->assertSee(route('admin.routers.index'), false)
             ->assertSee(route('tenant.public-site', $ownTenant), false)
             ->assertSee('Own Router')
             ->assertDontSee('Other Router');
+    }
+
+    public function test_tenant_launch_checklist_points_payment_to_shop_creation_before_shops_exist(): void
+    {
+        $tenant = Tenant::create([
+            'company_name' => 'New Tenant',
+            'owner_email' => 'new@example.com',
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('admin.dashboard'))
+            ->assertOk()
+            ->assertSee('Create a shop first, then add Flutterwave credentials.')
+            ->assertSee('Add shop')
+            ->assertSee(route('admin.shops.create'), false);
     }
 
     public function test_tenant_admin_dashboard_shows_billing_plan_usage(): void

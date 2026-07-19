@@ -162,30 +162,42 @@ class DashboardController extends Controller
                 'detail' => 'Logo, hero images, public copy, and brand color.',
                 'complete' => filled($tenant->brand_color) && ($tenant->logo_image_path || $tenant->hero_image_path || filled($tenant->public_site_tagline)),
                 'route' => 'admin.brand.edit',
+                'action' => 'Brand',
+                'status' => 'Brand assets and public copy make the tenant page credible.',
             ],
             [
                 'label' => 'Add hotspot location',
                 'detail' => 'Create the shop or coverage area customers will buy from.',
                 'complete' => $shops->isNotEmpty(),
-                'route' => 'admin.shops.create',
+                'route' => $shops->isNotEmpty() ? 'admin.shops.index' : 'admin.shops.create',
+                'action' => $shops->isNotEmpty() ? 'Review shops' : 'Add shop',
+                'status' => $shops->isNotEmpty() ? $shops->count().' location added.' : 'A shop is required before routers, packages, and payments are useful.',
             ],
             [
                 'label' => 'Register MikroTik router',
                 'detail' => 'Add NAS details and sync it to FreeRADIUS.',
                 'complete' => $routerCount > 0,
-                'route' => 'admin.routers.create',
+                'route' => $routerCount > 0 ? 'admin.routers.index' : 'admin.routers.create',
+                'action' => $routerCount > 0 ? 'Review routers' : 'Add router',
+                'status' => $routerCount > 0 ? $routerCount.' router registered.' : 'Router setup connects MikroTik to FreeRADIUS.',
             ],
             [
                 'label' => 'Publish customer package',
                 'detail' => 'Set data, speed, uptime, and pricing for the captive portal.',
                 'complete' => $activePackageCount > 0,
-                'route' => 'admin.packages.create',
+                'route' => $activePackageCount > 0 ? 'admin.packages.index' : 'admin.packages.create',
+                'action' => $activePackageCount > 0 ? 'Review plans' : 'Add package',
+                'status' => $activePackageCount > 0 ? $activePackageCount.' active package published.' : 'Customers need an active package before they can buy access.',
             ],
             [
                 'label' => 'Connect payment account',
-                'detail' => 'At least one shop should have complete Flutterwave credentials.',
+                'detail' => $shops->isEmpty()
+                    ? 'Create a shop first, then add Flutterwave credentials.'
+                    : 'At least one shop should have complete Flutterwave credentials.',
                 'complete' => $paymentReadyShopCount > 0,
-                'route' => 'admin.payment-settings.index',
+                'route' => $shops->isEmpty() ? 'admin.shops.create' : 'admin.payment-settings.index',
+                'action' => $shops->isEmpty() ? 'Add shop' : 'Payment setup',
+                'status' => $paymentReadyShopCount > 0 ? $paymentReadyShopCount.' shop ready for customer payments.' : 'Payments can use tenant-owned credentials when configured.',
             ],
         ];
     }
