@@ -14,6 +14,7 @@ class ExpenseCategory extends Model
     {
         return [
             'is_active' => 'boolean',
+            'monthly_budget' => 'decimal:2',
         ];
     }
 

@@ -29,6 +29,7 @@ class AdminExpenseCategoryTest extends TestCase
             ->post(route('admin.expense-categories.store'), [
                 'name' => 'Generator fuel',
                 'description' => 'Diesel and petrol used for hotspot locations.',
+                'monthly_budget' => 75000,
                 'is_active' => 1,
             ])
             ->assertRedirect(route('admin.expense-categories.index'));
@@ -36,6 +37,7 @@ class AdminExpenseCategoryTest extends TestCase
         $this->assertDatabaseHas('expense_categories', [
             'tenant_id' => $tenant->id,
             'name' => 'Generator fuel',
+            'monthly_budget' => 75000,
             'is_active' => true,
         ]);
 
@@ -43,6 +45,7 @@ class AdminExpenseCategoryTest extends TestCase
             ->get(route('admin.expense-categories.index'))
             ->assertOk()
             ->assertSee('Generator fuel')
+            ->assertSee('NGN 75,000.00')
             ->assertSee('Tenant custom')
             ->assertSee('Subscription')
             ->assertSee('Read only');
@@ -98,6 +101,27 @@ class AdminExpenseCategoryTest extends TestCase
             ->assertOk()
             ->assertSee('Licensing')
             ->assertSee('Platform default');
+    }
+
+    public function test_monthly_budget_must_be_positive(): void
+    {
+        $tenant = Tenant::create([
+            'company_name' => 'Mondi Tenant',
+            'owner_email' => 'owner@example.com',
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->post(route('admin.expense-categories.store'), [
+                'name' => 'Generator fuel',
+                'monthly_budget' => -100,
+                'is_active' => 1,
+            ])
+            ->assertSessionHasErrors('monthly_budget');
     }
 
     public function test_used_category_cannot_be_deleted(): void

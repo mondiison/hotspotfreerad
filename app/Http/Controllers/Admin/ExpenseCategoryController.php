@@ -93,12 +93,16 @@ class ExpenseCategoryController extends Controller
                     ->ignore($category?->id),
             ],
             'description' => ['nullable', 'string', 'max:500'],
+            'monthly_budget' => ['nullable', 'numeric', 'min:0', 'max:9999999999.99'],
             'is_active' => ['nullable', 'boolean'],
         ]) + [
             'is_active' => false,
         ];
 
         $data['tenant_id'] = $tenantId;
+        $data['monthly_budget'] = filled($data['monthly_budget'] ?? null)
+            ? round((float) $data['monthly_budget'], 2)
+            : null;
 
         return $data;
     }

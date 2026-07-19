@@ -9,6 +9,7 @@
                 <tr>
                     <th class="px-4 py-3 font-medium">Category</th>
                     <th class="px-4 py-3 font-medium">Scope</th>
+                    <th class="px-4 py-3 text-right font-medium">Monthly Budget</th>
                     <th class="px-4 py-3 text-right font-medium">Expenses</th>
                     <th class="px-4 py-3 font-medium">Status</th>
                     <th class="px-4 py-3 text-right font-medium">Actions</th>
@@ -26,6 +27,13 @@
                                 <flux:badge color="green">Tenant custom</flux:badge>
                             @else
                                 <flux:badge color="blue">Platform default</flux:badge>
+                            @endif
+                        </td>
+                        <td class="px-4 py-3 text-right">
+                            @if ($category->monthly_budget)
+                                NGN {{ number_format((float) $category->monthly_budget, 2) }}
+                            @else
+                                <span class="text-zinc-500">No budget</span>
                             @endif
                         </td>
                         <td class="px-4 py-3 text-right">{{ number_format($category->expenses_count) }}</td>
@@ -49,7 +57,7 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="5" class="px-4 py-8 text-center text-zinc-500">No expense categories yet.</td></tr>
+                    <tr><td colspan="6" class="px-4 py-8 text-center text-zinc-500">No expense categories yet.</td></tr>
                 @endforelse
             </tbody>
         </table>

@@ -22,6 +22,21 @@
                 <flux:error name="description" />
             </flux:field>
 
+            <flux:field>
+                <flux:label>Monthly budget</flux:label>
+                <flux:input
+                    type="number"
+                    name="monthly_budget"
+                    value="{{ old('monthly_budget', $category->monthly_budget) }}"
+                    min="0"
+                    step="0.01"
+                    icon="banknotes"
+                    placeholder="Example: 50000"
+                />
+                <flux:description>Optional planning target for this category. Leave empty for no budget limit.</flux:description>
+                <flux:error name="monthly_budget" />
+            </flux:field>
+
             <flux:checkbox name="is_active" value="1" :checked="(bool) old('is_active', $category->is_active ?? true)" label="Active category" />
 
             <div class="rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-600">
