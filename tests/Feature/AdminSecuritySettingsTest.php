@@ -100,7 +100,7 @@ class AdminSecuritySettingsTest extends TestCase
             ->assertSee('Missing Admin')
             ->assertSee('missing@example.com')
             ->assertSee('2FA not enabled')
-            ->assertSee('1 need setup');
+            ->assertSee('Need setup');
 
         $this->assertFalse($missingAdmin->hasTwoFactorEnabled());
     }

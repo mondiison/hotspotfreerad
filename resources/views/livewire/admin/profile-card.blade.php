@@ -100,16 +100,28 @@
                             <p class="mt-1 text-amber-800">Copy them into a password manager or keep them somewhere private.</p>
                         </div>
 
-                        <flux:button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            icon="clipboard"
-                            @click="copied = await window.copyText(@js(implode(PHP_EOL, $plainRecoveryCodes))); setTimeout(() => copied = false, 1800)"
-                        >
-                            <span x-show="! copied">Copy recovery codes</span>
-                            <span x-cloak x-show="copied">Copied</span>
-                        </flux:button>
+                        <div class="flex flex-wrap gap-2">
+                            <flux:button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                icon="clipboard"
+                                @click="copied = await window.copyText(@js(implode(PHP_EOL, $plainRecoveryCodes))); setTimeout(() => copied = false, 1800)"
+                            >
+                                <span x-show="! copied">Copy recovery codes</span>
+                                <span x-cloak x-show="copied">Copied</span>
+                            </flux:button>
+
+                            <flux:button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                icon="arrow-down-tray"
+                                @click="window.downloadTextFile(@js('hotspotfreerad-recovery-codes-'.str($user->email)->replace(['@', '.'], '-')->slug().'.txt'), @js('HotspotFreeRAD recovery codes for '.$user->email.PHP_EOL.PHP_EOL.implode(PHP_EOL, $plainRecoveryCodes).PHP_EOL))"
+                            >
+                                Download
+                            </flux:button>
+                        </div>
                     </div>
 
                     <div class="mt-3 grid gap-2 font-mono text-xs sm:grid-cols-2">

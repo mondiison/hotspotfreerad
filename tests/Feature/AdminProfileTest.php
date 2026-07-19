@@ -139,7 +139,8 @@ class AdminProfileTest extends TestCase
             ->assertHasNoErrors()
             ->assertSee('Two-factor authentication is enabled.')
             ->assertSee('Save these recovery codes now')
-            ->assertSee('Copy recovery codes');
+            ->assertSee('Copy recovery codes')
+            ->assertSee('Download');
 
         $this->assertTrue($user->fresh()->hasTwoFactorEnabled());
         $this->assertCount(8, $user->fresh()->two_factor_recovery_codes);
