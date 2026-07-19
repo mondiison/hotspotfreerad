@@ -3,11 +3,10 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\Tenant;
 use App\Models\User;
+use App\Services\UserManagementService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class UserController extends Controller
@@ -33,110 +32,46 @@ class UserController extends Controller
 
         return view('admin.users.index', [
             'users' => $query->latest()->paginate(15)->withQueryString(),
+            'filters' => $request->only(['search', 'role', 'status']),
         ]);
     }
 
-    public function create(Request $request): View
+    public function create(Request $request, UserManagementService $users): View
     {
         return view('admin.users.form', [
-            'managedUser' => new User(),
-            'tenants' => $this->tenantOptions($request->user()),
+            'managedUser' => new User,
+            'tenants' => $users->tenantOptions($request->user()),
         ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request, UserManagementService $users): RedirectResponse
     {
-        $data = $this->validated($request);
-
-        User::create($data);
+        $users->create($users->validated($request), $request->user());
 
         return redirect()->route('admin.users.index')->with('status', 'User created.');
     }
 
-    public function edit(Request $request, User $user): View
+    public function edit(Request $request, User $user, UserManagementService $users): View
     {
-        $this->assertCanManage($request->user(), $user);
+        $users->assertCanManage($request->user(), $user);
 
         return view('admin.users.form', [
             'managedUser' => $user,
-            'tenants' => $this->tenantOptions($request->user()),
+            'tenants' => $users->tenantOptions($request->user()),
         ]);
     }
 
-    public function update(Request $request, User $user): RedirectResponse
+    public function update(Request $request, User $user, UserManagementService $users): RedirectResponse
     {
-        $this->assertCanManage($request->user(), $user);
-        $data = $this->validated($request, $user);
-
-        if (blank($data['password'] ?? null)) {
-            unset($data['password']);
-        }
-
-        if ($request->user()->is($user)) {
-            $data['is_active'] = true;
-        }
-
-        $user->update($data);
+        $users->update($user, $users->validated($request, $user), $request->user());
 
         return redirect()->route('admin.users.index')->with('status', 'User updated.');
     }
 
-    public function destroy(Request $request, User $user): RedirectResponse
+    public function destroy(Request $request, User $user, UserManagementService $users): RedirectResponse
     {
-        $this->assertCanManage($request->user(), $user);
-
-        if ($request->user()->is($user)) {
-            return back()->withErrors(['user' => 'You cannot delete your own account while signed in.']);
-        }
-
-        $user->delete();
+        $users->delete($user, $request->user());
 
         return redirect()->route('admin.users.index')->with('status', 'User deleted.');
-    }
-
-    private function validated(Request $request, ?User $managedUser = null): array
-    {
-        $actor = $request->user();
-        $managedUserId = $managedUser?->id ?? 'NULL';
-        $roles = $actor->isSuperAdmin() ? ['super_admin', 'tenant_admin'] : ['tenant_admin'];
-
-        if (! $actor->isSuperAdmin()) {
-            $request->merge([
-                'tenant_id' => $actor->tenant_id,
-                'role' => 'tenant_admin',
-            ]);
-        }
-
-        $data = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:255', "unique:users,email,{$managedUserId}"],
-            'tenant_id' => [$actor->isSuperAdmin() ? 'nullable' : 'required', Rule::exists('tenants', 'id')],
-            'role' => ['required', Rule::in($roles)],
-            'is_active' => ['nullable', 'boolean'],
-            'password' => [$managedUser ? 'nullable' : 'required', 'string', 'min:8'],
-        ]) + ['is_active' => false];
-
-        if (! $actor->isSuperAdmin()) {
-            $data['tenant_id'] = $actor->tenant_id;
-            $data['role'] = 'tenant_admin';
-        }
-
-        if (($data['role'] ?? null) === 'super_admin') {
-            $data['tenant_id'] = null;
-        }
-
-        return $data;
-    }
-
-    private function tenantOptions(User $user)
-    {
-        return $user->isSuperAdmin()
-            ? Tenant::orderBy('company_name')->get()
-            : Tenant::whereKey($user->tenant_id)->get();
-    }
-
-    private function assertCanManage(User $actor, User $managedUser): void
-    {
-        abort_unless($actor->isSuperAdmin() || $managedUser->tenant_id === $actor->tenant_id, 403);
     }
 }
