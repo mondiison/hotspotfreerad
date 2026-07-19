@@ -14,6 +14,7 @@ use App\Models\Subscription;
 use App\Models\Tenant;
 use App\Models\TenantBillingSubscription;
 use App\Models\User;
+use App\Services\SecurityActivityReportService;
 use App\Support\RadiusAccountingStats;
 use App\Support\TenantAccess;
 use Illuminate\Contracts\View\View;
@@ -22,7 +23,7 @@ use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
-    public function __invoke(Request $request, RadiusAccountingStats $radiusStats): View
+    public function __invoke(Request $request, RadiusAccountingStats $radiusStats, SecurityActivityReportService $securityActivities): View
     {
         $user = $request->user();
         $shopQuery = TenantAccess::scopeShops(Shop::query(), $user);
@@ -182,6 +183,7 @@ class DashboardController extends Controller
                 ->take(6)
                 ->get(),
             'routerHealth' => $routers->sortByDesc('last_seen_at')->take(6),
+            'securityAttention' => $this->securityAttention($user, $securityActivities),
             'setupSteps' => [
                 [
                     'label' => 'Create tenant profile',
@@ -205,6 +207,23 @@ class DashboardController extends Controller
                 ],
             ],
         ]);
+    }
+
+    private function securityAttention(User $user, SecurityActivityReportService $securityActivities): array
+    {
+        $filters = $securityActivities->filters([
+            'attention' => '1',
+            'date_preset' => '30',
+        ]);
+        $query = $securityActivities->query($user, $filters);
+
+        return [
+            'count' => (clone $query)->count(),
+            'events' => (clone $query)
+                ->latest()
+                ->take(5)
+                ->get(),
+        ];
     }
 
     private function topShops($shopIds, $monthStart, $monthEnd): array

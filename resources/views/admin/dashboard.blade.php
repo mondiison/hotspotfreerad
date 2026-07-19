@@ -111,6 +111,53 @@
     <section class="mt-6 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
         <div class="flex flex-col justify-between gap-3 md:flex-row md:items-center">
             <div>
+                <p class="text-sm font-medium text-zinc-500">Security Attention</p>
+                <h2 class="mt-1 text-xl font-semibold">{{ number_format($securityAttention['count']) }} event{{ $securityAttention['count'] === 1 ? '' : 's' }} in the last 30 days</h2>
+                <p class="mt-1 text-sm text-zinc-500">Failed 2FA, blocked tenant access, password changes, reset links, and disabled 2FA.</p>
+            </div>
+
+            <flux:button href="{{ route('admin.security-activity.index', ['attention' => '1']) }}" variant="outline" size="sm" icon="shield-exclamation">
+                Review activity
+            </flux:button>
+        </div>
+
+        <div class="mt-5 overflow-hidden rounded-lg border border-zinc-200">
+            <table class="w-full text-left text-sm">
+                <thead class="bg-zinc-50 text-zinc-500">
+                    <tr>
+                        <th class="px-4 py-3 font-medium">Event</th>
+                        <th class="px-4 py-3 font-medium">Admin</th>
+                        <th class="px-4 py-3 font-medium">Tenant</th>
+                        <th class="px-4 py-3 font-medium">When</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-zinc-100">
+                    @forelse ($securityAttention['events'] as $activity)
+                        <tr>
+                            <td class="px-4 py-3">
+                                <p class="font-medium text-zinc-950">{{ $activity->label }}</p>
+                                <p class="mt-1 text-xs text-zinc-500">{{ str($activity->action)->replace('_', ' ')->title() }}</p>
+                            </td>
+                            <td class="px-4 py-3">
+                                <p class="font-medium">{{ $activity->user?->name ?? 'Deleted user' }}</p>
+                                <p class="mt-1 text-xs text-zinc-500">{{ $activity->user?->email ?? '-' }}</p>
+                            </td>
+                            <td class="px-4 py-3 text-zinc-600">{{ $activity->tenant?->company_name ?? 'Platform' }}</td>
+                            <td class="px-4 py-3 text-zinc-600">{{ $activity->created_at->diffForHumans() }}</td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="4" class="px-4 py-8 text-center text-zinc-500">No security attention events in the last 30 days.</td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="mt-6 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+        <div class="flex flex-col justify-between gap-3 md:flex-row md:items-center">
+            <div>
                 <p class="text-sm font-medium text-zinc-500">This Month Finance</p>
                 <h2 class="mt-1 text-xl font-semibold">{{ $monthFinanceSummary['period'] }} performance</h2>
             </div>

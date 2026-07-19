@@ -609,6 +609,92 @@ class AdminDashboardTest extends TestCase
             ->assertDontSee('NGN 9,999.00');
     }
 
+    public function test_dashboard_shows_recent_security_attention(): void
+    {
+        $tenant = Tenant::create([
+            'company_name' => 'Security Tenant',
+            'owner_email' => 'security@example.com',
+        ]);
+        $admin = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $admin->securityActivities()->create([
+            'tenant_id' => $tenant->id,
+            'action' => 'two_factor_challenge_failed',
+            'label' => 'Two-factor challenge failed.',
+            'ip_address' => '10.8.0.80',
+            'created_at' => now(),
+        ]);
+        $admin->securityActivities()->create([
+            'tenant_id' => $tenant->id,
+            'action' => 'login',
+            'label' => 'Normal sign-in event.',
+            'ip_address' => '10.8.0.81',
+            'created_at' => now(),
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.dashboard'))
+            ->assertOk()
+            ->assertSee('Security Attention')
+            ->assertSee('1 event in the last 30 days')
+            ->assertSee('Two-factor challenge failed.')
+            ->assertSee('Review activity')
+            ->assertSee(route('admin.security-activity.index', ['attention' => '1']), false)
+            ->assertDontSee('Normal sign-in event.');
+    }
+
+    public function test_dashboard_security_attention_is_tenant_scoped(): void
+    {
+        $ownTenant = Tenant::create([
+            'company_name' => 'Own Security Tenant',
+            'owner_email' => 'own-security@example.com',
+        ]);
+        $otherTenant = Tenant::create([
+            'company_name' => 'Other Security Tenant',
+            'owner_email' => 'other-security@example.com',
+        ]);
+        $actor = User::factory()->create([
+            'tenant_id' => $ownTenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+        $ownAdmin = User::factory()->create([
+            'tenant_id' => $ownTenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+        $otherAdmin = User::factory()->create([
+            'tenant_id' => $otherTenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $ownAdmin->securityActivities()->create([
+            'tenant_id' => $ownTenant->id,
+            'action' => 'password_updated',
+            'label' => 'Own tenant password changed.',
+            'ip_address' => '10.8.0.82',
+            'created_at' => now(),
+        ]);
+        $otherAdmin->securityActivities()->create([
+            'tenant_id' => $otherTenant->id,
+            'action' => 'two_factor_challenge_failed',
+            'label' => 'Other tenant failed challenge.',
+            'ip_address' => '10.8.0.83',
+            'created_at' => now(),
+        ]);
+
+        $this->actingAs($actor)
+            ->get(route('admin.dashboard'))
+            ->assertOk()
+            ->assertSee('Own tenant password changed.')
+            ->assertDontSee('Other tenant failed challenge.');
+    }
+
     public function test_dashboard_shows_six_month_finance_trend(): void
     {
         $tenant = Tenant::create([
