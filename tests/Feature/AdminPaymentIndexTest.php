@@ -144,6 +144,29 @@ class AdminPaymentIndexTest extends TestCase
         }
     }
 
+    public function test_payment_report_attention_filter_groups_unresolved_payments(): void
+    {
+        [$pendingPayment] = $this->paymentFixture('Attention Tenant', 'attention@example.com', 'Pending Shop', 'ATTENTION-PENDING', 'pending');
+        [$failedPayment] = $this->paymentFixture('Attention Failed Tenant', 'attention-failed@example.com', 'Failed Shop', 'ATTENTION-FAILED', 'failed');
+        [$verificationPayment] = $this->paymentFixture('Attention Verification Tenant', 'attention-verification@example.com', 'Verification Shop', 'ATTENTION-VERIFY', 'verification_failed');
+        [$successfulPayment] = $this->paymentFixture('Attention Success Tenant', 'attention-success@example.com', 'Success Shop', 'ATTENTION-SUCCESS', 'successful');
+        $user = User::factory()->create([
+            'role' => 'super_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('admin.payments.index', [
+                'status' => 'attention',
+            ]))
+            ->assertOk()
+            ->assertSee('Needs attention')
+            ->assertSee($pendingPayment->tx_ref)
+            ->assertSee($failedPayment->tx_ref)
+            ->assertSee($verificationPayment->tx_ref)
+            ->assertDontSee($successfulPayment->tx_ref);
+    }
+
     public function test_tenant_admin_can_export_filtered_payment_report(): void
     {
         [$ownPayment, $ownTenant] = $this->paymentFixture('Own Export Tenant', 'own-export@example.com', 'Own Export Shop', 'EXPORT-OWN', 'successful', [
@@ -172,7 +195,7 @@ class AdminPaymentIndexTest extends TestCase
         $content = $response->streamedContent();
 
         $this->assertStringContainsString('Payment Report', $content);
-        $this->assertStringContainsString('Status,successful', $content);
+        $this->assertStringContainsString('Status,Successful', $content);
         $this->assertStringContainsString('Search,"Own Export"', $content);
         $this->assertStringContainsString('"Transaction Ref","Provider Ref",Provider,Status', $content);
         $this->assertStringContainsString($ownPayment->tx_ref, $content);

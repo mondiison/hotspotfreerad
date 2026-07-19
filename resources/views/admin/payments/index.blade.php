@@ -47,6 +47,7 @@
         <flux:input name="search" value="{{ $filters['search'] }}" placeholder="Search ref, customer, shop, package" />
         <flux:select name="status">
             <flux:select.option value="">All statuses</flux:select.option>
+            <flux:select.option value="attention" :selected="$filters['status'] === 'attention'">Needs attention</flux:select.option>
             @foreach (['pending', 'successful', 'failed', 'verification_failed'] as $status)
                 <flux:select.option value="{{ $status }}" :selected="$filters['status'] === $status">{{ str_replace('_', ' ', ucfirst($status)) }}</flux:select.option>
             @endforeach

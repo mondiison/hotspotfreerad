@@ -573,6 +573,7 @@ class AdminDashboardTest extends TestCase
             ->assertSee('NGN 3,500.00 pending or failed')
             ->assertSee(route('admin.payments.index', ['status' => 'pending']), false)
             ->assertSee(route('admin.payments.index', ['status' => 'failed']), false)
+            ->assertSee(route('admin.payments.index', ['status' => 'attention']), false)
             ->assertDontSee('NGN 9,999.00');
     }
 

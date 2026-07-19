@@ -59,7 +59,7 @@ class PaymentController extends Controller
             fputcsv($handle, ['Payment Report']);
             fputcsv($handle, ['From', $filters['from']]);
             fputcsv($handle, ['To', $filters['to']]);
-            fputcsv($handle, ['Status', $filters['status'] ?: 'All']);
+            fputcsv($handle, ['Status', $this->statusLabel($filters['status'])]);
             fputcsv($handle, ['Provider', $filters['provider'] ?: 'All']);
             fputcsv($handle, ['Search', $filters['search'] ?: '']);
             fputcsv($handle, []);
@@ -139,7 +139,8 @@ class PaymentController extends Controller
                         ->orWhereHas('package', fn ($package) => $package->where('name', 'like', "%{$search}%"));
                 });
             })
-            ->when(filled($filters['status']), fn ($query) => $query->where('status', $filters['status']))
+            ->when($filters['status'] === 'attention', fn ($query) => $query->whereIn('status', ['pending', 'failed', 'verification_failed']))
+            ->when(filled($filters['status']) && $filters['status'] !== 'attention', fn ($query) => $query->where('status', $filters['status']))
             ->when(filled($filters['provider']), fn ($query) => $query->where('provider', $filters['provider']));
     }
 
@@ -150,7 +151,7 @@ class PaymentController extends Controller
             'from' => ['nullable', 'date'],
             'to' => ['nullable', 'date', 'after_or_equal:from'],
             'search' => ['nullable', 'string', 'max:255'],
-            'status' => ['nullable', 'in:pending,successful,failed,verification_failed'],
+            'status' => ['nullable', 'in:attention,pending,successful,failed,verification_failed'],
             'provider' => ['nullable', 'in:flutterwave'],
         ]);
 
@@ -177,6 +178,18 @@ class PaymentController extends Controller
             'status' => $data['status'] ?? null,
             'provider' => $data['provider'] ?? null,
         ];
+    }
+
+    private function statusLabel(?string $status): string
+    {
+        return match ($status) {
+            'attention' => 'Needs attention',
+            'verification_failed' => 'Verification failed',
+            'successful' => 'Successful',
+            'pending' => 'Pending',
+            'failed' => 'Failed',
+            default => 'All',
+        };
     }
 
     private function presets(): array

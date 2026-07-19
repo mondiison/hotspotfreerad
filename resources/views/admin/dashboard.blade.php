@@ -163,6 +163,9 @@
                 <flux:button href="{{ route('admin.payments.index', ['status' => 'failed']) }}" variant="outline" size="sm" icon="exclamation-triangle">
                     Failed
                 </flux:button>
+                <flux:button href="{{ route('admin.payments.index', ['status' => 'attention']) }}" variant="outline" size="sm" icon="exclamation-triangle">
+                    Needs attention
+                </flux:button>
                 <flux:button href="{{ route('admin.payments.index') }}" variant="outline" size="sm" icon="credit-card">
                     All payments
                 </flux:button>
