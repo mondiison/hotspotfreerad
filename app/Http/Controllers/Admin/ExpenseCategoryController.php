@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\ExpenseCategory;
+use App\Support\TenantAccess;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -13,17 +14,25 @@ class ExpenseCategoryController extends Controller
 {
     public function index(Request $request): View
     {
-        $tenantId = $request->user()->tenant_id;
+        $user = $request->user();
+        $monthStart = now()->startOfMonth()->toDateString();
+        $monthEnd = now()->endOfDay()->toDateString();
 
-        $categories = ExpenseCategory::query()
-            ->withCount('expenses')
-            ->where(function ($query) use ($request, $tenantId): void {
-                if ($request->user()->isSuperAdmin()) {
-                    return;
+        $categories = TenantAccess::scopeExpenseCategories(ExpenseCategory::query(), $user)
+            ->withCount(['expenses' => function ($query) use ($user): void {
+                if (! $user->isSuperAdmin()) {
+                    $query->where('tenant_id', $user->tenant_id);
+                }
+            }])
+            ->withSum(['expenses as current_month_spent' => function ($query) use ($user, $monthStart, $monthEnd): void {
+                if (! $user->isSuperAdmin()) {
+                    $query->where('tenant_id', $user->tenant_id);
                 }
 
-                $query->whereNull('tenant_id')->orWhere('tenant_id', $tenantId);
-            })
+                $query
+                    ->whereDate('incurred_on', '>=', $monthStart)
+                    ->whereDate('incurred_on', '<=', $monthEnd);
+            }], 'amount')
             ->orderByRaw('tenant_id is not null')
             ->orderBy('name')
             ->paginate(20);

@@ -41,11 +41,31 @@ class AdminExpenseCategoryTest extends TestCase
             'is_active' => true,
         ]);
 
+        $category = ExpenseCategory::where('name', 'Generator fuel')->firstOrFail();
+        Expense::create([
+            'tenant_id' => $tenant->id,
+            'expense_category_id' => $category->id,
+            'title' => 'Diesel refill',
+            'amount' => 15000,
+            'currency' => 'NGN',
+            'incurred_on' => now()->toDateString(),
+        ]);
+        Expense::create([
+            'tenant_id' => $tenant->id,
+            'expense_category_id' => $category->id,
+            'title' => 'Old diesel refill',
+            'amount' => 50000,
+            'currency' => 'NGN',
+            'incurred_on' => now()->subMonth()->toDateString(),
+        ]);
+
         $this->actingAs($user)
             ->get(route('admin.expense-categories.index'))
             ->assertOk()
             ->assertSee('Generator fuel')
             ->assertSee('NGN 75,000.00')
+            ->assertSee('NGN 15,000.00')
+            ->assertSee('20%')
             ->assertSee('Tenant custom')
             ->assertSee('Subscription')
             ->assertSee('Read only');

@@ -10,6 +10,8 @@
                     <th class="px-4 py-3 font-medium">Category</th>
                     <th class="px-4 py-3 font-medium">Scope</th>
                     <th class="px-4 py-3 text-right font-medium">Monthly Budget</th>
+                    <th class="px-4 py-3 text-right font-medium">This Month</th>
+                    <th class="px-4 py-3 text-right font-medium">Usage</th>
                     <th class="px-4 py-3 text-right font-medium">Expenses</th>
                     <th class="px-4 py-3 font-medium">Status</th>
                     <th class="px-4 py-3 text-right font-medium">Actions</th>
@@ -36,6 +38,20 @@
                                 <span class="text-zinc-500">No budget</span>
                             @endif
                         </td>
+                        <td class="px-4 py-3 text-right font-semibold">NGN {{ number_format((float) ($category->current_month_spent ?? 0), 2) }}</td>
+                        <td class="px-4 py-3 text-right">
+                            @if ($category->monthly_budget)
+                                @php($usage = round((((float) ($category->current_month_spent ?? 0)) / (float) $category->monthly_budget) * 100, 1))
+                                <div class="ml-auto flex w-28 flex-col items-end gap-1">
+                                    <span class="{{ $usage > 100 ? 'font-semibold text-red-700' : 'text-zinc-700' }}">{{ $usage }}%</span>
+                                    <span class="block h-1.5 w-full overflow-hidden rounded-full bg-zinc-100">
+                                        <span class="block h-full rounded-full {{ $usage >= 80 ? ($usage > 100 ? 'bg-red-600' : 'bg-amber-500') : 'bg-zinc-950' }}" style="width: {{ min($usage, 100) }}%"></span>
+                                    </span>
+                                </div>
+                            @else
+                                <span class="text-zinc-500">No budget</span>
+                            @endif
+                        </td>
                         <td class="px-4 py-3 text-right">{{ number_format($category->expenses_count) }}</td>
                         <td class="px-4 py-3">
                             <flux:badge :color="$category->is_active ? 'green' : 'zinc'">{{ $category->is_active ? 'Active' : 'Inactive' }}</flux:badge>
@@ -57,7 +73,7 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="6" class="px-4 py-8 text-center text-zinc-500">No expense categories yet.</td></tr>
+                    <tr><td colspan="8" class="px-4 py-8 text-center text-zinc-500">No expense categories yet.</td></tr>
                 @endforelse
             </tbody>
         </table>
