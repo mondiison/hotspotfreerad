@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Livewire\Admin\SubscriptionsIndex;
 use App\Models\Package;
 use App\Models\Payment;
 use App\Models\Shop;
@@ -10,6 +11,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Livewire\Livewire;
 use Tests\TestCase;
 
 class AdminSubscriptionIndexTest extends TestCase
@@ -156,6 +158,84 @@ class AdminSubscriptionIndexTest extends TestCase
         $this->assertStringNotContainsString($expiredSubscription->mac_address, $content);
         $this->assertStringNotContainsString($otherSubscription->mac_address, $content);
         $this->assertStringNotContainsString('Other Export Shop', $content);
+    }
+
+    public function test_livewire_access_report_filters_without_page_reload(): void
+    {
+        [$activeSubscription, $tenant] = $this->subscriptionFixture('Own Tenant', 'own@example.com', 'Main Hall', 'AA:BB:CC:DD:EE:15', true, 'Active Live Plan');
+        [$expiredSubscription] = $this->subscriptionFixture('Own Tenant', 'own@example.com', 'Main Hall', 'AA:BB:CC:DD:EE:16', false, 'Expired Live Plan', $tenant);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(SubscriptionsIndex::class)
+            ->set('status', 'active')
+            ->set('source', 'paid')
+            ->set('search', 'Active Live Plan')
+            ->assertSee($activeSubscription->mac_address)
+            ->assertDontSee($expiredSubscription->mac_address)
+            ->assertSee('Paid access')
+            ->call('clearFilters')
+            ->assertSet('status', '')
+            ->assertSet('source', '')
+            ->assertSet('search', '')
+            ->assertSee($expiredSubscription->mac_address);
+    }
+
+    public function test_livewire_access_report_presets_all_dates_and_export_link(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-19 12:00:00'));
+
+        try {
+            [$recentSubscription, $tenant] = $this->subscriptionFixture('Date Tenant', 'date@example.com', 'Recent Shop', 'AA:BB:CC:DD:EE:20', true, 'Recent Live Plan');
+            [$oldSubscription] = $this->subscriptionFixture('Date Tenant', 'date@example.com', 'Old Shop', 'AA:BB:CC:DD:EE:21', true, 'Old Live Plan', $tenant);
+            $oldSubscription->update([
+                'starts_at' => '2026-07-01 10:00:00',
+                'expires_at' => '2026-07-01 11:00:00',
+            ]);
+            $user = User::factory()->create([
+                'role' => 'super_admin',
+                'is_active' => true,
+            ]);
+
+            Livewire::actingAs($user)
+                ->test(SubscriptionsIndex::class)
+                ->call('setPreset', 'last_7_days')
+                ->assertSet('preset', 'last_7_days')
+                ->assertSet('from', '2026-07-13')
+                ->assertSet('to', '2026-07-19')
+                ->assertSee($recentSubscription->mac_address)
+                ->assertDontSee($oldSubscription->mac_address)
+                ->assertSee(route('admin.subscriptions.export', ['preset' => 'last_7_days']), false)
+                ->call('showAllDates')
+                ->assertSet('preset', '')
+                ->assertSet('from', '')
+                ->assertSet('to', '')
+                ->assertSee($oldSubscription->mac_address);
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
+    public function test_livewire_access_report_respects_tenant_scope(): void
+    {
+        [$ownSubscription, $ownTenant] = $this->subscriptionFixture('Own Live Tenant', 'own-live@example.com', 'Own Live Shop', 'AA:BB:CC:DD:EE:30', true);
+        [$otherSubscription] = $this->subscriptionFixture('Other Live Tenant', 'other-live@example.com', 'Other Live Shop', 'AA:BB:CC:DD:EE:31', true);
+        $user = User::factory()->create([
+            'tenant_id' => $ownTenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(SubscriptionsIndex::class)
+            ->assertSee($ownSubscription->mac_address)
+            ->assertDontSee($otherSubscription->mac_address)
+            ->assertSee('Own Live Shop')
+            ->assertDontSee('Other Live Shop');
     }
 
     private function subscriptionFixture(
