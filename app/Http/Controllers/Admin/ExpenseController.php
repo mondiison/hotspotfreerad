@@ -25,29 +25,12 @@ class ExpenseController extends Controller
         $summaryQuery = clone $query;
         $expenses = $query->latest('incurred_on')->latest()->paginate(20)->withQueryString();
         $filteredExpenses = (clone $summaryQuery)->get();
-        $categoryRows = $filteredExpenses
-            ->groupBy(fn (Expense $expense) => $expense->expense_category_id ? 'category-'.$expense->expense_category_id : 'uncategorized')
-            ->map(function ($group) use ($from, $to): array {
-                $expense = $group->first();
-                $amount = $group->sum(fn (Expense $expense) => (float) $expense->amount);
-                $budget = $expense?->category?->monthly_budget
-                    ? $this->proratedBudget((float) $expense->category->monthly_budget, $from, $to)
-                    : null;
-
-                return [
-                    'category' => $expense?->category?->name ?? 'Uncategorized',
-                    'count' => $group->count(),
-                    'amount' => $amount,
-                    'budget' => $budget,
-                    'variance' => is_null($budget) ? null : $budget - $amount,
-                    'usage' => $budget && $budget > 0 ? round(($amount / $budget) * 100, 1) : null,
-                ];
-            })
-            ->sortByDesc('amount')
-            ->values();
-        $budgetTotal = $categoryRows->sum(fn (array $row) => (float) ($row['budget'] ?? 0));
-        $expenseTotal = $filteredExpenses->sum(fn (Expense $expense) => (float) $expense->amount);
-        $budgetVariance = $budgetTotal > 0 ? $budgetTotal - $expenseTotal : null;
+        ['summary' => $summary, 'categoryRows' => $categoryRows] = $this->expenseSummary(
+            $filteredExpenses,
+            $from,
+            $to,
+            $request
+        );
 
         return view('admin.expenses.index', [
             'expenses' => $expenses,
@@ -60,17 +43,7 @@ class ExpenseController extends Controller
                 'schedule' => $data['schedule'] ?? '',
             ],
             'summary' => [
-                'count' => $filteredExpenses->count(),
-                'total' => $expenseTotal,
-                'recurring' => $filteredExpenses->where('is_recurring', true)->sum(fn (Expense $expense) => (float) $expense->amount),
-                'budget' => $budgetTotal,
-                'budget_variance' => $budgetVariance,
-                'budget_usage' => $budgetTotal > 0 ? round(($expenseTotal / $budgetTotal) * 100, 1) : null,
-                'overdue_count' => TenantAccess::scopeExpenses(Expense::query(), $request->user())
-                    ->where('is_recurring', true)
-                    ->whereDate('next_due_on', '<', now()->toDateString())
-                    ->count(),
-                'category_count' => $categoryRows->count(),
+                ...$summary,
             ],
             'categoryRows' => $categoryRows,
         ]);
@@ -80,8 +53,19 @@ class ExpenseController extends Controller
     {
         [, $from, $to, $query] = $this->filteredQuery($request);
         $filename = 'expenses-'.$from->toDateString().'-to-'.$to->toDateString().'.csv';
+        $exportQuery = clone $query;
+        $filteredExpenses = $exportQuery
+            ->oldest('incurred_on')
+            ->oldest()
+            ->get();
+        ['summary' => $summary, 'categoryRows' => $categoryRows] = $this->expenseSummary(
+            $filteredExpenses,
+            $from,
+            $to,
+            $request
+        );
 
-        return response()->streamDownload(function () use ($query): void {
+        return response()->streamDownload(function () use ($filteredExpenses, $summary, $categoryRows): void {
             $handle = fopen('php://output', 'w');
 
             fputcsv($handle, [
@@ -99,10 +83,7 @@ class ExpenseController extends Controller
                 'Notes',
             ]);
 
-            $query
-                ->oldest('incurred_on')
-                ->oldest()
-                ->get()
+            $filteredExpenses
                 ->each(function (Expense $expense) use ($handle): void {
                     fputcsv($handle, [
                         $expense->incurred_on->toDateString(),
@@ -119,6 +100,31 @@ class ExpenseController extends Controller
                         $expense->notes,
                     ]);
                 });
+            fputcsv($handle, []);
+
+            fputcsv($handle, ['Summary']);
+            fputcsv($handle, ['Expenses', $summary['count']]);
+            fputcsv($handle, ['Total Spent', number_format($summary['total'], 2, '.', '')]);
+            fputcsv($handle, ['Budget', $summary['budget'] > 0 ? number_format($summary['budget'], 2, '.', '') : '']);
+            fputcsv($handle, ['Remaining', is_null($summary['budget_variance']) ? '' : number_format($summary['budget_variance'], 2, '.', '')]);
+            fputcsv($handle, ['Budget Usage', is_null($summary['budget_usage']) ? 'No budget' : $summary['budget_usage'].'%']);
+            fputcsv($handle, ['Recurring', number_format($summary['recurring'], 2, '.', '')]);
+            fputcsv($handle, ['Overdue', $summary['overdue_count']]);
+            fputcsv($handle, ['Categories', $summary['category_count']]);
+            fputcsv($handle, []);
+
+            fputcsv($handle, ['Spend by Category']);
+            fputcsv($handle, ['Category', 'Count', 'Amount', 'Budget', 'Variance', 'Usage']);
+            foreach ($categoryRows as $row) {
+                fputcsv($handle, [
+                    $row['category'],
+                    $row['count'],
+                    number_format($row['amount'], 2, '.', ''),
+                    is_null($row['budget']) ? '' : number_format($row['budget'], 2, '.', ''),
+                    is_null($row['variance']) ? '' : number_format($row['variance'], 2, '.', ''),
+                    is_null($row['usage']) ? 'No budget' : $row['usage'].'%',
+                ]);
+            }
 
             fclose($handle);
         }, $filename, ['Content-Type' => 'text/csv']);
@@ -279,6 +285,50 @@ class ExpenseController extends Controller
     private function storeReceipt(Request $request, int $tenantId): string
     {
         return $request->file('receipt')->store("tenant-expenses/{$tenantId}", 'local');
+    }
+
+    private function expenseSummary($expenses, Carbon $from, Carbon $to, Request $request): array
+    {
+        $categoryRows = $expenses
+            ->groupBy(fn (Expense $expense) => $expense->expense_category_id ? 'category-'.$expense->expense_category_id : 'uncategorized')
+            ->map(function ($group) use ($from, $to): array {
+                $expense = $group->first();
+                $amount = $group->sum(fn (Expense $expense) => (float) $expense->amount);
+                $budget = $expense?->category?->monthly_budget
+                    ? $this->proratedBudget((float) $expense->category->monthly_budget, $from, $to)
+                    : null;
+
+                return [
+                    'category' => $expense?->category?->name ?? 'Uncategorized',
+                    'count' => $group->count(),
+                    'amount' => $amount,
+                    'budget' => $budget,
+                    'variance' => is_null($budget) ? null : $budget - $amount,
+                    'usage' => $budget && $budget > 0 ? round(($amount / $budget) * 100, 1) : null,
+                ];
+            })
+            ->sortByDesc('amount')
+            ->values();
+        $budgetTotal = $categoryRows->sum(fn (array $row) => (float) ($row['budget'] ?? 0));
+        $expenseTotal = $expenses->sum(fn (Expense $expense) => (float) $expense->amount);
+        $budgetVariance = $budgetTotal > 0 ? $budgetTotal - $expenseTotal : null;
+
+        return [
+            'summary' => [
+                'count' => $expenses->count(),
+                'total' => $expenseTotal,
+                'recurring' => $expenses->where('is_recurring', true)->sum(fn (Expense $expense) => (float) $expense->amount),
+                'budget' => $budgetTotal,
+                'budget_variance' => $budgetVariance,
+                'budget_usage' => $budgetTotal > 0 ? round(($expenseTotal / $budgetTotal) * 100, 1) : null,
+                'overdue_count' => TenantAccess::scopeExpenses(Expense::query(), $request->user())
+                    ->where('is_recurring', true)
+                    ->whereDate('next_due_on', '<', now()->toDateString())
+                    ->count(),
+                'category_count' => $categoryRows->count(),
+            ],
+            'categoryRows' => $categoryRows,
+        ];
     }
 
     private function nextDueDate(Carbon $date, string $frequency): Carbon

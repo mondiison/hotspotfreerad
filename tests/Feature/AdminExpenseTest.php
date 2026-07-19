@@ -316,6 +316,7 @@ class AdminExpenseTest extends TestCase
             'owner_email' => 'other@example.com',
         ]);
         $category = ExpenseCategory::where('name', 'Maintenance')->firstOrFail();
+        $category->update(['monthly_budget' => 4400]);
         Expense::create([
             'tenant_id' => $ownTenant->id,
             'expense_category_id' => $category->id,
@@ -359,6 +360,14 @@ class AdminExpenseTest extends TestCase
         $this->assertStringContainsString('2200.00', $content);
         $this->assertStringContainsString('monthly', $content);
         $this->assertStringContainsString('2026-08-16', $content);
+        $this->assertStringContainsString('Summary', $content);
+        $this->assertStringContainsString('"Total Spent",2200.00', $content);
+        $this->assertStringContainsString('Budget,4400.00', $content);
+        $this->assertStringContainsString('Remaining,2200.00', $content);
+        $this->assertStringContainsString('"Budget Usage",50%', $content);
+        $this->assertStringContainsString('"Spend by Category"', $content);
+        $this->assertStringContainsString('Category,Count,Amount,Budget,Variance,Usage', $content);
+        $this->assertStringContainsString('Maintenance,1,2200.00,4400.00,2200.00,50%', $content);
         $this->assertStringNotContainsString('Other expense', $content);
         $this->assertStringNotContainsString('9900.00', $content);
     }
