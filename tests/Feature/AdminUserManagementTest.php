@@ -5,8 +5,10 @@ namespace Tests\Feature;
 use App\Livewire\Admin\UsersIndex;
 use App\Models\Tenant;
 use App\Models\User;
+use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Notification;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -265,6 +267,72 @@ class AdminUserManagementTest extends TestCase
             ->assertSet('status', '')
             ->assertSet('passkey_status', '')
             ->assertSee('Platform Admin');
+    }
+
+    public function test_livewire_user_index_sends_password_reset_link_to_managed_user(): void
+    {
+        Notification::fake();
+
+        $tenant = Tenant::create([
+            'company_name' => 'Mondi Internet',
+            'owner_email' => 'owner@example.com',
+        ]);
+        $actor = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+        $managedUser = User::factory()->create([
+            'name' => 'Tenant Staff',
+            'email' => 'staff@example.com',
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs($actor)
+            ->test(UsersIndex::class)
+            ->call('sendPasswordResetLink', $managedUser->id)
+            ->assertHasNoErrors()
+            ->assertSee('Password reset link sent to staff@example.com.');
+
+        Notification::assertSentTo($managedUser, ResetPassword::class);
+        $this->assertDatabaseHas('security_activities', [
+            'user_id' => $actor->id,
+            'action' => 'managed_user_password_reset_sent',
+        ]);
+    }
+
+    public function test_livewire_user_index_cannot_send_reset_link_to_other_tenant_user(): void
+    {
+        Notification::fake();
+
+        $ownTenant = Tenant::create([
+            'company_name' => 'Own Tenant',
+            'owner_email' => 'own@example.com',
+        ]);
+        $otherTenant = Tenant::create([
+            'company_name' => 'Other Tenant',
+            'owner_email' => 'other@example.com',
+        ]);
+        $actor = User::factory()->create([
+            'tenant_id' => $ownTenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+        $otherUser = User::factory()->create([
+            'email' => 'other-staff@example.com',
+            'tenant_id' => $otherTenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs($actor)
+            ->test(UsersIndex::class)
+            ->call('sendPasswordResetLink', $otherUser->id)
+            ->assertForbidden();
+
+        Notification::assertNothingSent();
     }
 
     public function test_livewire_user_index_deletes_user_with_confirmation(): void

@@ -3,8 +3,10 @@
 namespace App\Livewire\Admin;
 
 use App\Models\User;
+use App\Services\SecurityActivityService;
 use App\Services\UserManagementService;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -125,6 +127,29 @@ class UsersIndex extends Component
 
         $this->deletingUserId = $managedUser->id;
         $this->showDeleteModal = true;
+    }
+
+    public function sendPasswordResetLink(int $userId, UserManagementService $users, SecurityActivityService $activity): void
+    {
+        $managedUser = User::findOrFail($userId);
+        $users->assertCanManage(auth()->user(), $managedUser);
+
+        $status = Password::sendResetLink([
+            'email' => $managedUser->email,
+        ]);
+
+        if ($status !== Password::RESET_LINK_SENT) {
+            $this->addError('user', 'Unable to send a password reset link right now.');
+
+            return;
+        }
+
+        $this->savedMessage = 'Password reset link sent to '.$managedUser->email.'.';
+
+        $activity->log(auth()->user(), 'managed_user_password_reset_sent', 'Password reset link sent to managed user.', [
+            'managed_user_id' => $managedUser->id,
+            'managed_user_email' => $managedUser->email,
+        ]);
     }
 
     public function delete(UserManagementService $users): void
