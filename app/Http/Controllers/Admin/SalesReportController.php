@@ -40,6 +40,7 @@ class SalesReportController extends Controller
             fputcsv($handle, ['Tenant Net', number_format($report['summary']['tenant_net'], 2, '.', '')]);
             fputcsv($handle, ['Expenses', number_format($report['summary']['expenses'], 2, '.', '')]);
             fputcsv($handle, ['Estimated Profit', number_format($report['summary']['estimated_profit'], 2, '.', '')]);
+            fputcsv($handle, ['Profit Margin', $this->formatMargin($report['summary']['profit_margin'])]);
             fputcsv($handle, []);
 
             fputcsv($handle, ['Sales by Period']);
@@ -164,6 +165,7 @@ class SalesReportController extends Controller
             ->values();
         $expenseTotal = $expenses->sum(fn (Expense $expense) => (float) $expense->amount);
         $tenantNet = $payments->sum(fn (Payment $payment) => $this->tenantNet($payment));
+        $estimatedProfit = $tenantNet - $expenseTotal;
 
         return [
             'filters' => [
@@ -179,7 +181,8 @@ class SalesReportController extends Controller
                 'platform_fee' => $payments->sum(fn (Payment $payment) => $this->platformFee($payment)),
                 'tenant_net' => $tenantNet,
                 'expenses' => $expenseTotal,
-                'estimated_profit' => $tenantNet - $expenseTotal,
+                'estimated_profit' => $estimatedProfit,
+                'profit_margin' => $tenantNet > 0 ? round(($estimatedProfit / $tenantNet) * 100, 1) : null,
                 'average_sale' => $payments->avg(fn (Payment $payment) => $this->grossAmount($payment)) ?? 0,
                 'period_count' => $rows->count(),
             ],
@@ -245,6 +248,11 @@ class SalesReportController extends Controller
     private function grossAmount(Payment $payment): float
     {
         return (float) ($payment->gross_amount ?: $payment->amount);
+    }
+
+    private function formatMargin(?float $margin): string
+    {
+        return is_null($margin) ? 'No sales' : $margin.'%';
     }
 
     private function platformFee(Payment $payment): float
