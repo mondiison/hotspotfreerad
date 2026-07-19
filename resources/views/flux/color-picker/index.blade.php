@@ -8,11 +8,18 @@
 ])
 
 @php
+    if ($attributes->has(':swatches') && is_array($attributes->get(':swatches'))) {
+        $swatches = $attributes->get(':swatches');
+    }
+
+    $wireModel = $attributes->wire('model');
+    $modelName = $wireModel->value();
     $fieldId = $attributes->get('id') ?? 'color-picker-'.str()->random(8);
-    $currentValue = old($name, $value ?: '#0f766e');
+    $inputName = $name ?? $modelName;
+    $currentValue = old($inputName, $value ?: '#0f766e');
 @endphp
 
-<div {{ $attributes->except(['id'])->class(['space-y-2']) }} data-flux-color-picker>
+<div {{ $attributes->except(['id', ':swatches'])->whereDoesntStartWith('wire:model')->class(['space-y-2']) }} data-flux-color-picker>
     @if ($label)
         <label for="{{ $fieldId }}" class="block text-sm font-medium">{{ $label }}</label>
     @endif
@@ -27,12 +34,13 @@
             aria-label="{{ $label ?? 'Color picker' }}"
         >
         <input
-            name="{{ $name }}"
+            name="{{ $inputName }}"
             value="{{ $currentValue }}"
             inputmode="text"
             pattern="#[0-9A-Fa-f]{6}"
             class="min-w-0 flex-1 border-0 px-3 py-2 font-mono text-sm uppercase focus:ring-0"
             data-color-picker-value
+            {{ $wireModel }}
             @required($attributes->has('required'))
         >
         @if ($copyable)

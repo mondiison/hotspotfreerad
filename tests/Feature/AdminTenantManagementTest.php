@@ -2,12 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Livewire\Admin\TenantsIndex;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Notifications\TenantAdminTemporaryPassword;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
+use Livewire\Livewire;
 use Tests\TestCase;
 
 class AdminTenantManagementTest extends TestCase
@@ -205,5 +207,177 @@ class AdminTenantManagementTest extends TestCase
         $this->assertSame($tenant->id, $tenantAdmin->tenant_id);
         $this->assertTrue($tenantAdmin->must_change_password);
         Notification::assertSentTo($tenantAdmin, ResetPassword::class);
+    }
+
+    public function test_livewire_tenant_index_creates_tenant_from_modal(): void
+    {
+        Notification::fake();
+
+        $superAdmin = User::factory()->create([
+            'role' => 'super_admin',
+            'tenant_id' => null,
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs($superAdmin)
+            ->test(TenantsIndex::class)
+            ->call('create')
+            ->assertSet('showFormModal', true)
+            ->set('company_name', 'Modal ISP')
+            ->set('slug', 'modal-isp')
+            ->set('owner_email', 'modal@example.com')
+            ->set('subscription_plan', 'growth')
+            ->set('is_active', true)
+            ->set('public_site_enabled', true)
+            ->set('brand_color', '#2563eb')
+            ->call('save')
+            ->assertHasNoErrors()
+            ->assertSet('showFormModal', false)
+            ->assertSee('Tenant created and temporary password sent to owner email.');
+
+        $tenant = Tenant::where('owner_email', 'modal@example.com')->firstOrFail();
+        $tenantAdmin = User::where('email', 'modal@example.com')->firstOrFail();
+
+        $this->assertSame($tenant->id, $tenantAdmin->tenant_id);
+        $this->assertSame('tenant_admin', $tenantAdmin->role);
+        $this->assertTrue($tenantAdmin->must_change_password);
+        Notification::assertSentTo($tenantAdmin, TenantAdminTemporaryPassword::class);
+    }
+
+    public function test_livewire_tenant_index_edits_tenant_from_modal(): void
+    {
+        $superAdmin = User::factory()->create([
+            'role' => 'super_admin',
+            'tenant_id' => null,
+            'is_active' => true,
+        ]);
+        $tenant = Tenant::create([
+            'company_name' => 'Old ISP',
+            'owner_email' => 'old-modal@example.com',
+            'subscription_plan' => 'basic',
+            'billing_model' => 'subscription',
+            'commission_rate' => 0,
+            'brand_color' => '#0f766e',
+        ]);
+        $tenantAdmin = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'email' => 'old-modal@example.com',
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs($superAdmin)
+            ->test(TenantsIndex::class)
+            ->call('edit', $tenant->id)
+            ->assertSet('showFormModal', true)
+            ->set('company_name', 'Updated ISP')
+            ->set('owner_email', 'updated-modal@example.com')
+            ->set('subscription_plan', 'pro')
+            ->set('form_billing_model', 'commission')
+            ->set('commission_rate', '15.5')
+            ->set('brand_color', '#7c3aed')
+            ->call('save')
+            ->assertHasNoErrors()
+            ->assertSet('showFormModal', false)
+            ->assertSee('Tenant updated.');
+
+        $tenant->refresh();
+
+        $this->assertSame('Updated ISP', $tenant->company_name);
+        $this->assertSame('updated-modal@example.com', $tenant->owner_email);
+        $this->assertSame('pro', $tenant->subscription_plan);
+        $this->assertSame('commission', $tenant->billing_model);
+        $this->assertSame('15.50', $tenant->commission_rate);
+        $this->assertSame('#7c3aed', $tenant->brand_color);
+        $this->assertSame('updated-modal@example.com', $tenantAdmin->fresh()->email);
+    }
+
+    public function test_livewire_tenant_index_filters_without_page_reload(): void
+    {
+        $superAdmin = User::factory()->create([
+            'role' => 'super_admin',
+            'tenant_id' => null,
+            'is_active' => true,
+        ]);
+        Tenant::create([
+            'company_name' => 'Active Fiber',
+            'owner_email' => 'active-fiber@example.com',
+            'is_active' => true,
+            'billing_model' => 'subscription',
+        ]);
+        Tenant::create([
+            'company_name' => 'Commission WiFi',
+            'owner_email' => 'commission-wifi@example.com',
+            'is_active' => false,
+            'billing_model' => 'commission',
+            'commission_rate' => 10,
+        ]);
+
+        Livewire::actingAs($superAdmin)
+            ->test(TenantsIndex::class)
+            ->set('search', 'Commission')
+            ->set('status', 'inactive')
+            ->set('billing_model', 'commission')
+            ->assertSee('Commission WiFi')
+            ->assertDontSee('Active Fiber')
+            ->call('clearFilters')
+            ->assertSet('search', '')
+            ->assertSet('status', '')
+            ->assertSet('billing_model', '')
+            ->assertSee('Commission WiFi')
+            ->assertSee('Active Fiber');
+    }
+
+    public function test_livewire_tenant_index_sends_owner_reset_link(): void
+    {
+        Notification::fake();
+
+        $superAdmin = User::factory()->create([
+            'role' => 'super_admin',
+            'tenant_id' => null,
+            'is_active' => true,
+        ]);
+        $tenant = Tenant::create([
+            'company_name' => 'Reset Tenant',
+            'owner_email' => 'reset-modal@example.com',
+            'is_active' => true,
+        ]);
+        $tenantAdmin = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'email' => 'reset-modal@example.com',
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs($superAdmin)
+            ->test(TenantsIndex::class)
+            ->call('sendResetLink', $tenant->id)
+            ->assertHasNoErrors()
+            ->assertSee('Password reset link sent to reset-modal@example.com.');
+
+        Notification::assertSentTo($tenantAdmin, ResetPassword::class);
+    }
+
+    public function test_livewire_tenant_index_deletes_tenant_with_confirmation(): void
+    {
+        $superAdmin = User::factory()->create([
+            'role' => 'super_admin',
+            'tenant_id' => null,
+            'is_active' => true,
+        ]);
+        $tenant = Tenant::create([
+            'company_name' => 'Delete Tenant',
+            'owner_email' => 'delete-modal@example.com',
+        ]);
+
+        Livewire::actingAs($superAdmin)
+            ->test(TenantsIndex::class)
+            ->call('confirmDelete', $tenant->id)
+            ->assertSet('showDeleteModal', true)
+            ->call('delete')
+            ->assertSet('showDeleteModal', false)
+            ->assertSee('Tenant deleted.');
+
+        $this->assertDatabaseMissing('tenants', ['id' => $tenant->id]);
     }
 }
