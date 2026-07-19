@@ -149,6 +149,11 @@
     </section>
 
     <section class="mt-6 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+        @php
+            $financeTrendMax = max(1, (float) collect($financeTrend)
+                ->flatMap(fn (array $row) => [(float) $row['sales'], (float) $row['expenses'], abs((float) $row['profit'])])
+                ->max());
+        @endphp
         <div class="flex flex-col justify-between gap-3 md:flex-row md:items-center">
             <div>
                 <p class="text-sm font-medium text-zinc-500">Finance Trend</p>
@@ -157,6 +162,32 @@
             <flux:button href="{{ route('admin.reports.sales', ['preset' => 'this_year', 'group' => 'month']) }}" variant="outline" size="sm" icon="chart-bar">
                 Full report
             </flux:button>
+        </div>
+
+        <div class="mt-5 rounded-lg border border-zinc-200 bg-zinc-50 p-4" aria-label="Finance trend chart">
+            <div class="flex items-center gap-4 text-xs text-zinc-500">
+                <span class="inline-flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-sm bg-zinc-950"></span>Gross</span>
+                <span class="inline-flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-sm bg-amber-500"></span>Expense</span>
+                <span class="inline-flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-sm bg-emerald-600"></span>Profit</span>
+            </div>
+
+            <div class="mt-5 grid min-h-44 grid-cols-6 items-end gap-3">
+                @foreach ($financeTrend as $row)
+                    @php
+                        $salesHeight = max(4, round(((float) $row['sales'] / $financeTrendMax) * 100));
+                        $expenseHeight = max(4, round(((float) $row['expenses'] / $financeTrendMax) * 100));
+                        $profitHeight = max(4, round((abs((float) $row['profit']) / $financeTrendMax) * 100));
+                    @endphp
+                    <div class="flex min-w-0 flex-col items-center gap-2">
+                        <div class="flex h-32 w-full items-end justify-center gap-1">
+                            <span class="w-3 rounded-t-sm bg-zinc-950" title="Gross sales: NGN {{ number_format($row['sales'], 2) }}" style="height: {{ $salesHeight }}%"></span>
+                            <span class="w-3 rounded-t-sm bg-amber-500" title="Expenses: NGN {{ number_format($row['expenses'], 2) }}" style="height: {{ $expenseHeight }}%"></span>
+                            <span class="w-3 rounded-t-sm {{ $row['profit'] < 0 ? 'bg-red-600' : 'bg-emerald-600' }}" title="Profit: NGN {{ number_format($row['profit'], 2) }}" style="height: {{ $profitHeight }}%"></span>
+                        </div>
+                        <span class="truncate text-xs font-medium text-zinc-600">{{ str($row['label'])->before(' ') }}</span>
+                    </div>
+                @endforeach
+            </div>
         </div>
 
         <div class="mt-5 overflow-hidden rounded-lg border border-zinc-200">
