@@ -33,7 +33,7 @@
                             {{ $tenantWorkspaceSummary['public_site_enabled'] ? 'Public site live' : 'Public site disabled' }}
                         </flux:badge>
                     </div>
-                    <p class="mt-2 text-sm text-zinc-500">/{{ $tenantWorkspaceSummary['slug'] }} · {{ $tenantWorkspaceSummary['owner_email'] }}</p>
+                    <p class="mt-2 text-sm text-zinc-500">/{{ $tenantWorkspaceSummary['slug'] }} - {{ $tenantWorkspaceSummary['owner_email'] }}</p>
                 </div>
 
                 <div class="flex flex-wrap gap-2">
@@ -41,6 +41,38 @@
                     <flux:button href="{{ route('admin.payment-settings.index') }}" variant="outline" icon="credit-card">Payment Setup</flux:button>
                     <flux:button href="{{ $tenantWorkspaceSummary['public_url'] }}" target="_blank" variant="primary" icon="arrow-top-right-on-square">Public Page</flux:button>
                 </div>
+            </div>
+        </section>
+    @endif
+
+    @if ($tenantLaunchChecklist)
+        <section class="mb-6 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+            <div class="flex flex-col justify-between gap-3 md:flex-row md:items-end">
+                <div>
+                    <p class="text-sm font-medium text-zinc-500">Launch Checklist</p>
+                    <h2 class="mt-2 text-xl font-semibold">Tenant setup path</h2>
+                </div>
+                <flux:badge color="zinc">{{ collect($tenantLaunchChecklist)->where('complete', true)->count() }} / {{ count($tenantLaunchChecklist) }} complete</flux:badge>
+            </div>
+
+            <div class="mt-5 grid gap-3 lg:grid-cols-5">
+                @foreach ($tenantLaunchChecklist as $item)
+                    <article class="flex min-h-44 flex-col rounded-lg border border-zinc-200 p-4">
+                        <div class="flex items-start justify-between gap-3">
+                            <span class="flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold {{ $item['complete'] ? 'bg-emerald-50 text-emerald-700' : 'bg-zinc-100 text-zinc-500' }}">
+                                {{ $item['complete'] ? 'OK' : $loop->iteration }}
+                            </span>
+                            <flux:badge :color="$item['complete'] ? 'green' : 'amber'">{{ $item['complete'] ? 'Done' : 'Next' }}</flux:badge>
+                        </div>
+
+                        <h3 class="mt-4 text-sm font-semibold">{{ $item['label'] }}</h3>
+                        <p class="mt-2 flex-1 text-xs leading-5 text-zinc-500">{{ $item['detail'] }}</p>
+
+                        <flux:button href="{{ route($item['route']) }}" variant="{{ $item['complete'] ? 'outline' : 'primary' }}" size="sm" class="mt-4">
+                            {{ $item['complete'] ? 'Review' : 'Start' }}
+                        </flux:button>
+                    </article>
+                @endforeach
             </div>
         </section>
     @endif

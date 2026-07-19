@@ -99,6 +99,7 @@ class AdminDashboardTest extends TestCase
             ->assertSee('Platform Admin')
             ->assertDontSee('Tenant Admin')
             ->assertDontSee('Tenant Workspace')
+            ->assertDontSee('Launch Checklist')
             ->assertDontSee('Public Page');
     }
 
@@ -151,7 +152,11 @@ class AdminDashboardTest extends TestCase
             ->assertSee('/'.$ownTenant->slug)
             ->assertSee('Public Page')
             ->assertSee('Payment Setup')
+            ->assertSee('Launch Checklist')
+            ->assertSee('Customize tenant brand')
+            ->assertSee('Connect payment account')
             ->assertSee(route('admin.payment-settings.index'), false)
+            ->assertSee(route('admin.brand.edit'), false)
             ->assertSee(route('tenant.public-site', $ownTenant), false)
             ->assertSee('Own Router')
             ->assertDontSee('Other Router');

@@ -33,6 +33,7 @@ class DashboardController extends Controller
             ->whereIn('shop_id', $shopIds)
             ->where('expires_at', '>', now())
             ->count();
+        $shops = (clone $shopQuery)->get();
         $paidRevenue = Payment::query()
             ->whereIn('shop_id', $shopIds)
             ->where('status', 'successful')
@@ -48,6 +49,12 @@ class DashboardController extends Controller
             'tenantBillingSummary' => $this->tenantBillingSummary($user, $shopIds->count(), $routers->count(), (clone $packageQuery)->count()),
             'platformBillingSummary' => $this->platformBillingSummary($user),
             'tenantWorkspaceSummary' => $this->tenantWorkspaceSummary($user),
+            'tenantLaunchChecklist' => $this->tenantLaunchChecklist(
+                $user,
+                $shops,
+                $routers->count(),
+                (clone $packageQuery)->where('is_active', true)->count()
+            ),
             'activeSessionCount' => $radiusSummary['active_session_count'],
             'onlineUserCount' => $radiusSummary['online_user_count'],
             'totalUsageBytes' => $radiusSummary['total_bytes'],
@@ -132,6 +139,54 @@ class DashboardController extends Controller
             'owner_email' => $tenant->owner_email,
             'public_url' => $tenant->publicUrl(),
             'public_site_enabled' => $tenant->public_site_enabled,
+        ];
+    }
+
+    private function tenantLaunchChecklist(User $user, $shops, int $routerCount, int $activePackageCount): ?array
+    {
+        if ($user->isSuperAdmin() || ! $user->tenant_id) {
+            return null;
+        }
+
+        $tenant = Tenant::find($user->tenant_id);
+
+        if (! $tenant) {
+            return null;
+        }
+
+        $paymentReadyShopCount = $shops->filter(fn (Shop $shop) => $shop->hasCompleteFlutterwaveCredentials())->count();
+
+        return [
+            [
+                'label' => 'Customize tenant brand',
+                'detail' => 'Logo, hero images, public copy, and brand color.',
+                'complete' => filled($tenant->brand_color) && ($tenant->logo_image_path || $tenant->hero_image_path || filled($tenant->public_site_tagline)),
+                'route' => 'admin.brand.edit',
+            ],
+            [
+                'label' => 'Add hotspot location',
+                'detail' => 'Create the shop or coverage area customers will buy from.',
+                'complete' => $shops->isNotEmpty(),
+                'route' => 'admin.shops.create',
+            ],
+            [
+                'label' => 'Register MikroTik router',
+                'detail' => 'Add NAS details and sync it to FreeRADIUS.',
+                'complete' => $routerCount > 0,
+                'route' => 'admin.routers.create',
+            ],
+            [
+                'label' => 'Publish customer package',
+                'detail' => 'Set data, speed, uptime, and pricing for the captive portal.',
+                'complete' => $activePackageCount > 0,
+                'route' => 'admin.packages.create',
+            ],
+            [
+                'label' => 'Connect payment account',
+                'detail' => 'At least one shop should have complete Flutterwave credentials.',
+                'complete' => $paymentReadyShopCount > 0,
+                'route' => 'admin.payment-settings.index',
+            ],
         ];
     }
 
