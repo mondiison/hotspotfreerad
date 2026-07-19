@@ -32,12 +32,17 @@
                         <flux:badge :color="$tenantWorkspaceSummary['public_site_enabled'] ? 'green' : 'zinc'">
                             {{ $tenantWorkspaceSummary['public_site_enabled'] ? 'Public site live' : 'Public site disabled' }}
                         </flux:badge>
+                        <flux:badge :color="$tenantWorkspaceSummary['security']['color']">
+                            {{ $tenantWorkspaceSummary['security']['label'] }}
+                        </flux:badge>
                     </div>
                     <p class="mt-2 text-sm text-zinc-500">/{{ $tenantWorkspaceSummary['slug'] }} - {{ $tenantWorkspaceSummary['owner_email'] }}</p>
+                    <p class="mt-2 max-w-2xl text-sm leading-6 text-zinc-600">{{ $tenantWorkspaceSummary['security']['description'] }}</p>
                 </div>
 
                 <div class="flex flex-wrap gap-2">
                     <flux:button href="{{ route('admin.brand.edit') }}" variant="outline" icon="swatch">Brand</flux:button>
+                    <flux:button href="{{ route('admin.profile.edit') }}" variant="outline" icon="shield-check">{{ $tenantWorkspaceSummary['security']['action'] }}</flux:button>
                     <flux:button href="{{ route('admin.payment-settings.index') }}" variant="outline" icon="credit-card">Payment Setup</flux:button>
                     <flux:button href="{{ $tenantWorkspaceSummary['public_url'] }}" target="_blank" variant="primary" icon="arrow-top-right-on-square">Public Page</flux:button>
                 </div>

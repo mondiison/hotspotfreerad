@@ -414,6 +414,32 @@ class DashboardController extends Controller
             'owner_email' => $tenant->owner_email,
             'public_url' => $tenant->publicUrl(),
             'public_site_enabled' => $tenant->public_site_enabled,
+            'security' => $this->tenantSecuritySummary($tenant, $user),
+        ];
+    }
+
+    private function tenantSecuritySummary(Tenant $tenant, User $user): array
+    {
+        $twoFactorEnabled = $user->hasTwoFactorEnabled();
+
+        if ($tenant->require_two_factor) {
+            return [
+                'label' => $twoFactorEnabled ? '2FA enforced' : '2FA required',
+                'color' => $twoFactorEnabled ? 'green' : 'amber',
+                'description' => $twoFactorEnabled
+                    ? 'Tenant policy is active and your owner login has confirmed two-factor protection.'
+                    : 'Tenant policy requires two-factor protection before dashboard access continues.',
+                'action' => $twoFactorEnabled ? 'Review security' : 'Enable 2FA',
+            ];
+        }
+
+        return [
+            'label' => $twoFactorEnabled ? '2FA enabled' : '2FA optional',
+            'color' => $twoFactorEnabled ? 'green' : 'zinc',
+            'description' => $twoFactorEnabled
+                ? 'Your login is protected with two-factor authentication.'
+                : 'Two-factor authentication is optional for this tenant, but enabling it protects owner access.',
+            'action' => $twoFactorEnabled ? 'Review security' : 'Set up 2FA',
         ];
     }
 

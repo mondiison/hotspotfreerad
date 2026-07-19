@@ -153,6 +153,10 @@ class AdminDashboardTest extends TestCase
             ->assertSee('Tenant Workspace')
             ->assertSee('Own Tenant')
             ->assertSee('/'.$ownTenant->slug)
+            ->assertSee('2FA optional')
+            ->assertSee('Two-factor authentication is optional for this tenant, but enabling it protects owner access.')
+            ->assertSee('Set up 2FA')
+            ->assertSee(route('admin.profile.edit'), false)
             ->assertSee('Public Page')
             ->assertSee('Payment Setup')
             ->assertSee('Launch Checklist')
@@ -165,6 +169,34 @@ class AdminDashboardTest extends TestCase
             ->assertSee(route('tenant.public-site', $ownTenant), false)
             ->assertSee('Own Router')
             ->assertDontSee('Other Router');
+    }
+
+    public function test_tenant_admin_dashboard_shows_enforced_two_factor_status(): void
+    {
+        $tenant = Tenant::create([
+            'company_name' => 'Secure Tenant',
+            'owner_email' => 'secure@example.com',
+            'require_two_factor' => true,
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'email' => 'secure@example.com',
+            'role' => 'tenant_admin',
+            'is_active' => true,
+            'two_factor_secret' => encrypt('secret'),
+            'two_factor_recovery_codes' => encrypt(json_encode(['code-one'])),
+            'two_factor_confirmed_at' => now(),
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('admin.dashboard'))
+            ->assertOk()
+            ->assertSee('Tenant Workspace')
+            ->assertSee('Secure Tenant')
+            ->assertSee('2FA enforced')
+            ->assertSee('Tenant policy is active and your owner login has confirmed two-factor protection.')
+            ->assertSee('Review security')
+            ->assertSee(route('admin.profile.edit'), false);
     }
 
     public function test_tenant_launch_checklist_points_payment_to_shop_creation_before_shops_exist(): void
