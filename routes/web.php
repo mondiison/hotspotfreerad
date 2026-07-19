@@ -78,6 +78,7 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::get('subscriptions', [SubscriptionController::class, 'index'])->name('subscriptions.index');
     Route::get('payments', [PaymentController::class, 'index'])->name('payments.index');
     Route::resource('expense-categories', ExpenseCategoryController::class)->except('show');
+    Route::get('expenses/{expense}/receipt', [ExpenseController::class, 'receipt'])->name('expenses.receipt');
     Route::resource('expenses', ExpenseController::class)->except('show');
     Route::get('reports/sales', [SalesReportController::class, 'index'])->name('reports.sales');
     Route::get('payment-settings', [PaymentSettingsController::class, 'index'])->name('payment-settings.index');

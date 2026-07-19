@@ -10,6 +10,7 @@ use App\Support\TenantAccess;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
@@ -90,7 +91,13 @@ class ExpenseController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        Expense::create($this->validated($request));
+        $data = $this->validated($request);
+
+        if ($request->hasFile('receipt')) {
+            $data['receipt_path'] = $this->storeReceipt($request, $data['tenant_id']);
+        }
+
+        Expense::create($data);
 
         return redirect()->route('admin.expenses.index')->with('status', 'Expense recorded.');
     }
@@ -110,14 +117,42 @@ class ExpenseController extends Controller
     {
         TenantAccess::assertExpense($expense, $request->user());
 
-        $expense->update($this->validated($request, $expense));
+        $data = $this->validated($request, $expense);
+
+        if ($request->boolean('remove_receipt') && $expense->receipt_path) {
+            Storage::disk('local')->delete($expense->receipt_path);
+            $data['receipt_path'] = null;
+        }
+
+        if ($request->hasFile('receipt')) {
+            if ($expense->receipt_path) {
+                Storage::disk('local')->delete($expense->receipt_path);
+            }
+
+            $data['receipt_path'] = $this->storeReceipt($request, $data['tenant_id']);
+        }
+
+        $expense->update($data);
 
         return redirect()->route('admin.expenses.index')->with('status', 'Expense updated.');
+    }
+
+    public function receipt(Request $request, Expense $expense)
+    {
+        TenantAccess::assertExpense($expense, $request->user());
+
+        abort_unless($expense->receipt_path && Storage::disk('local')->exists($expense->receipt_path), 404);
+
+        return Storage::disk('local')->download($expense->receipt_path);
     }
 
     public function destroy(Request $request, Expense $expense): RedirectResponse
     {
         TenantAccess::assertExpense($expense, $request->user());
+
+        if ($expense->receipt_path) {
+            Storage::disk('local')->delete($expense->receipt_path);
+        }
 
         $expense->delete();
 
@@ -144,6 +179,8 @@ class ExpenseController extends Controller
             'incurred_on' => ['required', 'date'],
             'vendor' => ['nullable', 'string', 'max:255'],
             'is_recurring' => ['nullable', 'boolean'],
+            'receipt' => ['nullable', 'file', 'mimes:jpg,jpeg,png,pdf,webp', 'max:4096'],
+            'remove_receipt' => ['nullable', 'boolean'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ]) + [
             'is_recurring' => false,
@@ -151,8 +188,14 @@ class ExpenseController extends Controller
 
         $data['tenant_id'] = $tenantId;
         $data['currency'] = strtoupper($data['currency']);
+        unset($data['receipt'], $data['remove_receipt']);
 
         return $data;
+    }
+
+    private function storeReceipt(Request $request, int $tenantId): string
+    {
+        return $request->file('receipt')->store("tenant-expenses/{$tenantId}", 'local');
     }
 
     private function categoriesFor(Request $request)

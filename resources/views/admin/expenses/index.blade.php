@@ -55,6 +55,9 @@
                                 @if ($expense->is_recurring)
                                     <p class="mt-1 text-xs font-medium text-blue-700">Recurring</p>
                                 @endif
+                                @if ($expense->receipt_path)
+                                    <a href="{{ route('admin.expenses.receipt', $expense) }}" class="mt-1 inline-flex text-xs font-medium text-zinc-950 underline decoration-zinc-300 underline-offset-4">Receipt attached</a>
+                                @endif
                             </td>
                             <td class="px-4 py-3">{{ $expense->category?->name ?? 'Uncategorized' }}</td>
                             <td class="px-4 py-3 text-zinc-600">{{ $expense->tenant?->company_name }}</td>

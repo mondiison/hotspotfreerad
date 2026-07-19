@@ -7,6 +7,8 @@ use App\Models\ExpenseCategory;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class AdminExpenseTest extends TestCase
@@ -121,5 +123,133 @@ class AdminExpenseTest extends TestCase
             'title' => 'Generator fuel',
             'amount' => 4000,
         ]);
+    }
+
+    public function test_tenant_admin_can_upload_and_download_expense_receipt(): void
+    {
+        Storage::fake('local');
+
+        $tenant = Tenant::create([
+            'company_name' => 'Mondi Tenant',
+            'owner_email' => 'owner@example.com',
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->post(route('admin.expenses.store'), [
+                'title' => 'Router receipt',
+                'amount' => 3500,
+                'currency' => 'NGN',
+                'incurred_on' => '2026-07-15',
+                'receipt' => UploadedFile::fake()->image('receipt.jpg'),
+            ])
+            ->assertRedirect(route('admin.expenses.index'));
+
+        $expense = Expense::where('title', 'Router receipt')->firstOrFail();
+
+        $this->assertNotNull($expense->receipt_path);
+        Storage::disk('local')->assertExists($expense->receipt_path);
+
+        $this->actingAs($user)
+            ->get(route('admin.expenses.receipt', $expense))
+            ->assertOk()
+            ->assertDownload();
+
+        $this->actingAs($user)
+            ->get(route('admin.expenses.index', [
+                'from' => '2026-07-01',
+                'to' => '2026-07-31',
+            ]))
+            ->assertOk()
+            ->assertSee('Receipt attached');
+    }
+
+    public function test_tenant_admin_cannot_download_another_tenants_receipt(): void
+    {
+        Storage::fake('local');
+
+        $ownTenant = Tenant::create([
+            'company_name' => 'Own Tenant',
+            'owner_email' => 'own@example.com',
+        ]);
+        $otherTenant = Tenant::create([
+            'company_name' => 'Other Tenant',
+            'owner_email' => 'other@example.com',
+        ]);
+        $receiptPath = UploadedFile::fake()->image('receipt.jpg')->store("tenant-expenses/{$otherTenant->id}", 'local');
+        $expense = Expense::create([
+            'tenant_id' => $otherTenant->id,
+            'title' => 'Other receipt',
+            'amount' => 1000,
+            'currency' => 'NGN',
+            'incurred_on' => '2026-07-15',
+            'receipt_path' => $receiptPath,
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $ownTenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('admin.expenses.receipt', $expense))
+            ->assertForbidden();
+    }
+
+    public function test_receipt_can_be_replaced_and_removed(): void
+    {
+        Storage::fake('local');
+
+        $tenant = Tenant::create([
+            'company_name' => 'Mondi Tenant',
+            'owner_email' => 'owner@example.com',
+        ]);
+        $oldPath = UploadedFile::fake()->image('old.jpg')->store("tenant-expenses/{$tenant->id}", 'local');
+        $expense = Expense::create([
+            'tenant_id' => $tenant->id,
+            'title' => 'Replace receipt',
+            'amount' => 1000,
+            'currency' => 'NGN',
+            'incurred_on' => '2026-07-15',
+            'receipt_path' => $oldPath,
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->put(route('admin.expenses.update', $expense), [
+                'title' => 'Replace receipt',
+                'amount' => 1000,
+                'currency' => 'NGN',
+                'incurred_on' => '2026-07-15',
+                'receipt' => UploadedFile::fake()->image('new.jpg'),
+            ])
+            ->assertRedirect(route('admin.expenses.index'));
+
+        $expense->refresh();
+        Storage::disk('local')->assertMissing($oldPath);
+        Storage::disk('local')->assertExists($expense->receipt_path);
+
+        $newPath = $expense->receipt_path;
+
+        $this->actingAs($user)
+            ->put(route('admin.expenses.update', $expense), [
+                'title' => 'Replace receipt',
+                'amount' => 1000,
+                'currency' => 'NGN',
+                'incurred_on' => '2026-07-15',
+                'remove_receipt' => 1,
+            ])
+            ->assertRedirect(route('admin.expenses.index'));
+
+        $this->assertNull($expense->fresh()->receipt_path);
+        Storage::disk('local')->assertMissing($newPath);
     }
 }

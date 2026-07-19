@@ -3,7 +3,7 @@
     :heading="$expense->exists ? 'Edit Expense' : 'Add Expense'"
     subheading="Record business costs that affect tenant profitability."
 >
-    <form method="POST" action="{{ $expense->exists ? route('admin.expenses.update', $expense) : route('admin.expenses.store') }}" class="max-w-4xl rounded-lg border border-zinc-200 bg-white p-6">
+    <form method="POST" action="{{ $expense->exists ? route('admin.expenses.update', $expense) : route('admin.expenses.store') }}" enctype="multipart/form-data" class="max-w-4xl rounded-lg border border-zinc-200 bg-white p-6">
         @csrf
         @if ($expense->exists)
             @method('PUT')
@@ -68,6 +68,28 @@
             <div class="md:col-span-2">
                 <flux:checkbox name="is_recurring" value="1" :checked="(bool) old('is_recurring', $expense->is_recurring)" label="Recurring expense" />
             </div>
+
+            <flux:field class="md:col-span-2">
+                <flux:label>Receipt</flux:label>
+                <flux:input type="file" name="receipt" accept=".jpg,.jpeg,.png,.pdf,.webp" />
+                <flux:description>Optional receipt or invoice. Accepted formats: JPG, PNG, WEBP, PDF. Maximum size: 4 MB.</flux:description>
+                <flux:error name="receipt" />
+            </flux:field>
+
+            @if ($expense->receipt_path)
+                <div class="md:col-span-2 rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+                    <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+                        <div>
+                            <p class="text-sm font-medium">Receipt attached</p>
+                            <p class="mt-1 text-xs text-zinc-500">{{ basename($expense->receipt_path) }}</p>
+                        </div>
+                        <flux:button href="{{ route('admin.expenses.receipt', $expense) }}" variant="outline" icon="arrow-down-tray">Download</flux:button>
+                    </div>
+                    <div class="mt-3">
+                        <flux:checkbox name="remove_receipt" value="1" label="Remove current receipt" />
+                    </div>
+                </div>
+            @endif
 
             <flux:field class="md:col-span-2">
                 <flux:label>Notes</flux:label>
