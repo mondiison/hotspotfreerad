@@ -455,6 +455,11 @@ class AdminDashboardTest extends TestCase
             ->assertSee('NGN 800.00')
             ->assertSee('NGN 1,000.00')
             ->assertSee('55.6%')
+            ->assertSee('Top Packages')
+            ->assertSee('Jul 2026 best sellers')
+            ->assertSee('Daily')
+            ->assertSee('Main Hall')
+            ->assertSee('Payment report')
             ->assertDontSee('NGN 9,999.00');
     }
 

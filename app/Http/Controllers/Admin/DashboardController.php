@@ -166,6 +166,7 @@ class DashboardController extends Controller
                 'profit' => $currentMonthProfit,
                 'margin' => $currentMonthTenantNet > 0 ? round(($currentMonthProfit / $currentMonthTenantNet) * 100, 1) : null,
             ],
+            'topPackages' => $this->topPackages($shopIds, $monthStart, $monthEnd),
             'budgetCategoryCount' => $budgetCategoryCount,
             'budgetWatch' => $budgetWatch,
             'financeTrend' => $this->financeTrend($user, $shopIds),
@@ -202,6 +203,48 @@ class DashboardController extends Controller
                 ],
             ],
         ]);
+    }
+
+    private function topPackages($shopIds, $monthStart, $monthEnd): array
+    {
+        $payments = Payment::query()
+            ->with(['package.shop', 'shop'])
+            ->whereIn('shop_id', $shopIds)
+            ->where('status', 'successful')
+            ->where(function ($query) use ($monthStart, $monthEnd): void {
+                $query->whereBetween('paid_at', [$monthStart, $monthEnd])
+                    ->orWhere(function ($query) use ($monthStart, $monthEnd): void {
+                        $query->whereNull('paid_at')
+                            ->whereBetween('created_at', [$monthStart, $monthEnd]);
+                    });
+            })
+            ->get();
+        $totalSales = $payments->sum(fn (Payment $payment) => (float) ($payment->gross_amount ?: $payment->amount));
+
+        return $payments
+            ->groupBy(fn (Payment $payment) => $payment->package_id ?: 'deleted')
+            ->map(function ($groupedPayments): array {
+                $payment = $groupedPayments->first();
+                $grossSales = $groupedPayments->sum(fn (Payment $payment) => (float) ($payment->gross_amount ?: $payment->amount));
+
+                return [
+                    'package' => $payment->package?->name ?? 'Deleted package',
+                    'shop' => $payment->package?->shop?->name ?? $payment->shop?->name ?? 'Deleted shop',
+                    'sales_count' => $groupedPayments->count(),
+                    'gross_sales' => $grossSales,
+                    'tenant_net' => $groupedPayments->sum(fn (Payment $payment) => (float) ($payment->tenant_net_amount ?: (($payment->gross_amount ?: $payment->amount) - $payment->platform_fee_amount))),
+                ];
+            })
+            ->sortByDesc('gross_sales')
+            ->take(5)
+            ->values()
+            ->map(function (array $row) use ($totalSales): array {
+                return [
+                    ...$row,
+                    'share' => $totalSales > 0 ? round(($row['gross_sales'] / $totalSales) * 100, 1) : null,
+                ];
+            })
+            ->all();
     }
 
     private function financeTrend(User $user, $shopIds): array
