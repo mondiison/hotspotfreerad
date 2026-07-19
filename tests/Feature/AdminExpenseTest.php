@@ -400,6 +400,64 @@ class AdminExpenseTest extends TestCase
         $this->assertStringContainsString('Recorded from recurring schedule due 2026-08-01.', $occurrence->notes);
     }
 
+    public function test_expense_schedule_filter_shows_due_and_overdue_recurring_items(): void
+    {
+        $tenant = Tenant::create([
+            'company_name' => 'Mondi Tenant',
+            'owner_email' => 'owner@example.com',
+        ]);
+        Expense::create([
+            'tenant_id' => $tenant->id,
+            'title' => 'Overdue upstream internet',
+            'amount' => 25000,
+            'currency' => 'NGN',
+            'incurred_on' => now()->subMonth()->toDateString(),
+            'is_recurring' => true,
+            'recurring_frequency' => 'monthly',
+            'next_due_on' => now()->subDay()->toDateString(),
+        ]);
+        Expense::create([
+            'tenant_id' => $tenant->id,
+            'title' => 'Upcoming staff salary',
+            'amount' => 50000,
+            'currency' => 'NGN',
+            'incurred_on' => now()->subMonth()->toDateString(),
+            'is_recurring' => true,
+            'recurring_frequency' => 'monthly',
+            'next_due_on' => now()->addDays(10)->toDateString(),
+        ]);
+        Expense::create([
+            'tenant_id' => $tenant->id,
+            'title' => 'Future equipment lease',
+            'amount' => 10000,
+            'currency' => 'NGN',
+            'incurred_on' => now()->toDateString(),
+            'is_recurring' => true,
+            'recurring_frequency' => 'monthly',
+            'next_due_on' => now()->addDays(60)->toDateString(),
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('admin.expenses.index', ['schedule' => 'overdue']))
+            ->assertOk()
+            ->assertSee('Overdue upstream internet')
+            ->assertSee('Overdue')
+            ->assertDontSee('Upcoming staff salary')
+            ->assertDontSee('Future equipment lease');
+
+        $this->actingAs($user)
+            ->get(route('admin.expenses.index', ['schedule' => 'due_soon']))
+            ->assertOk()
+            ->assertSee('Upcoming staff salary')
+            ->assertDontSee('Overdue upstream internet')
+            ->assertDontSee('Future equipment lease');
+    }
+
     public function test_tenant_admin_cannot_record_another_tenants_recurring_expense(): void
     {
         $ownTenant = Tenant::create([

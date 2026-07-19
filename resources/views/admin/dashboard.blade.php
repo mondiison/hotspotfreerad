@@ -158,13 +158,58 @@
         </section>
     @endif
 
+    @if ($overdueRecurringExpenses->isNotEmpty())
+        <section class="mt-6 rounded-lg border border-red-200 bg-red-50 p-5 shadow-sm">
+            <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+                <div>
+                    <h2 class="text-base font-semibold text-red-950">Overdue Recurring Expenses</h2>
+                    <p class="mt-1 text-sm text-red-700">These recurring costs have due dates before today.</p>
+                </div>
+                <flux:button href="{{ route('admin.expenses.index', ['schedule' => 'overdue']) }}" variant="outline" size="sm" icon="receipt-percent">Review overdue</flux:button>
+            </div>
+
+            <div class="mt-5 overflow-hidden rounded-lg border border-red-200 bg-white">
+                <table class="w-full text-left text-sm">
+                    <thead class="bg-red-50 text-red-700">
+                        <tr>
+                            <th class="px-4 py-3 font-medium">Expense</th>
+                            <th class="px-4 py-3 font-medium">Tenant</th>
+                            <th class="px-4 py-3 font-medium">Due</th>
+                            <th class="px-4 py-3 text-right font-medium">Amount</th>
+                            <th class="px-4 py-3 text-right font-medium">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-red-100">
+                        @foreach ($overdueRecurringExpenses as $expense)
+                            <tr>
+                                <td class="px-4 py-3">
+                                    <p class="font-medium">{{ $expense->title }}</p>
+                                    <p class="mt-1 text-xs text-zinc-500">{{ $expense->category?->name ?? 'Uncategorized' }}</p>
+                                </td>
+                                <td class="px-4 py-3 text-zinc-600">{{ $expense->tenant?->company_name }}</td>
+                                <td class="px-4 py-3 text-red-700">{{ $expense->next_due_on?->toFormattedDateString() }}</td>
+                                <td class="px-4 py-3 text-right font-semibold">{{ $expense->currency }} {{ number_format($expense->amount, 2) }}</td>
+                                <td class="px-4 py-3">
+                                    <form method="POST" action="{{ route('admin.expenses.record-recurring', $expense) }}" class="flex justify-end">
+                                        @csrf
+                                        <flux:button type="submit" variant="primary" size="sm" icon="check">Record</flux:button>
+                                    </form>
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    @endif
+
     <section class="mt-6 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
         <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
             <div>
                 <h2 class="text-base font-semibold">Upcoming Recurring Expenses</h2>
                 <p class="mt-1 text-sm text-zinc-500">Costs due within the next 30 days.</p>
             </div>
-            <flux:button href="{{ route('admin.expenses.index') }}" variant="outline" size="sm" icon="receipt-percent">View expenses</flux:button>
+            <flux:button href="{{ route('admin.expenses.index', ['schedule' => 'due_soon']) }}" variant="outline" size="sm" icon="receipt-percent">View due soon</flux:button>
         </div>
 
         <div class="mt-5 overflow-hidden rounded-lg border border-zinc-200">

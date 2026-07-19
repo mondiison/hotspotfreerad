@@ -12,6 +12,7 @@
             ['label' => 'Expenses', 'value' => number_format($summary['count']), 'hint' => 'Matching current filters'],
             ['label' => 'Total Spent', 'value' => 'NGN '.number_format($summary['total'], 2), 'hint' => 'All recorded expenses'],
             ['label' => 'Recurring', 'value' => 'NGN '.number_format($summary['recurring'], 2), 'hint' => 'Marked as recurring'],
+            ['label' => 'Overdue', 'value' => number_format($summary['overdue_count']), 'hint' => 'Recurring schedules past due'],
             ['label' => 'Categories', 'value' => number_format($summary['category_count']), 'hint' => 'Expense groups used'],
         ] as $stat)
             <div class="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
@@ -22,7 +23,7 @@
         @endforeach
     </section>
 
-    <form method="GET" class="mt-6 grid gap-3 rounded-lg border border-zinc-200 bg-white p-4 md:grid-cols-[1fr_1fr_190px_1fr_auto]">
+    <form method="GET" class="mt-6 grid gap-3 rounded-lg border border-zinc-200 bg-white p-4 md:grid-cols-[1fr_1fr_190px_190px_1fr_auto]">
         <flux:input type="date" name="from" value="{{ $filters['from'] }}" />
         <flux:input type="date" name="to" value="{{ $filters['to'] }}" />
         <select name="category" class="rounded-md border border-zinc-300 px-3 py-2 text-sm">
@@ -30,6 +31,12 @@
             @foreach ($categories as $category)
                 <option value="{{ $category->id }}" @selected((string) $filters['category'] === (string) $category->id)>{{ $category->name }}</option>
             @endforeach
+        </select>
+        <select name="schedule" class="rounded-md border border-zinc-300 px-3 py-2 text-sm">
+            <option value="">All schedules</option>
+            <option value="recurring" @selected($filters['schedule'] === 'recurring')>Recurring</option>
+            <option value="due_soon" @selected($filters['schedule'] === 'due_soon')>Due soon</option>
+            <option value="overdue" @selected($filters['schedule'] === 'overdue')>Overdue</option>
         </select>
         <flux:input name="search" value="{{ $filters['search'] }}" placeholder="Search title, vendor, note" />
         <flux:button type="submit" variant="primary" icon="funnel">Filter</flux:button>

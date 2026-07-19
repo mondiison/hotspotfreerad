@@ -386,4 +386,35 @@ class AdminDashboardTest extends TestCase
             ->assertDontSee('Other recurring cost')
             ->assertDontSee('NGN 99,000.00');
     }
+
+    public function test_dashboard_highlights_overdue_recurring_expenses(): void
+    {
+        $tenant = Tenant::create([
+            'company_name' => 'Own Tenant',
+            'owner_email' => 'own@example.com',
+        ]);
+        Expense::create([
+            'tenant_id' => $tenant->id,
+            'title' => 'Overdue upstream internet',
+            'amount' => 25000,
+            'currency' => 'NGN',
+            'incurred_on' => now()->subMonth()->toDateString(),
+            'is_recurring' => true,
+            'recurring_frequency' => 'monthly',
+            'next_due_on' => now()->subDay()->toDateString(),
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('admin.dashboard'))
+            ->assertOk()
+            ->assertSee('Overdue Recurring Expenses')
+            ->assertSee('Overdue upstream internet')
+            ->assertSee('Review overdue')
+            ->assertSee(route('admin.expenses.index', ['schedule' => 'overdue']), false);
+    }
 }

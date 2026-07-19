@@ -59,6 +59,16 @@ class DashboardController extends Controller
             ->orderBy('next_due_on')
             ->take(6)
             ->get();
+        $overdueRecurringExpenses = TenantAccess::scopeExpenses(
+            Expense::query()->with(['tenant', 'category']),
+            $user
+        )
+            ->where('is_recurring', true)
+            ->whereNotNull('next_due_on')
+            ->whereDate('next_due_on', '<', now()->toDateString())
+            ->orderBy('next_due_on')
+            ->take(6)
+            ->get();
 
         return view('admin.dashboard', [
             'tenantCount' => $user->isSuperAdmin() ? Tenant::count() : 1,
@@ -88,6 +98,7 @@ class DashboardController extends Controller
             'totalExpenses' => $totalExpenses,
             'estimatedProfit' => $tenantNetRevenue - $totalExpenses,
             'upcomingRecurringExpenses' => $upcomingRecurringExpenses,
+            'overdueRecurringExpenses' => $overdueRecurringExpenses,
             'onlineSessions' => $radiusStats->onlineSessions($routers),
             'recentSubscriptions' => Subscription::query()
                 ->with(['shop.tenant', 'package'])

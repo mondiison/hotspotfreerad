@@ -43,11 +43,16 @@ class ExpenseController extends Controller
                 'to' => $to->toDateString(),
                 'category' => $data['category'] ?? '',
                 'search' => $data['search'] ?? '',
+                'schedule' => $data['schedule'] ?? '',
             ],
             'summary' => [
                 'count' => (clone $summaryQuery)->count(),
                 'total' => (clone $summaryQuery)->sum('amount'),
                 'recurring' => (clone $summaryQuery)->where('is_recurring', true)->sum('amount'),
+                'overdue_count' => TenantAccess::scopeExpenses(Expense::query(), $request->user())
+                    ->where('is_recurring', true)
+                    ->whereDate('next_due_on', '<', now()->toDateString())
+                    ->count(),
                 'category_count' => $categoryRows->count(),
             ],
             'categoryRows' => $categoryRows,
@@ -276,6 +281,7 @@ class ExpenseController extends Controller
             'to' => ['nullable', 'date', 'after_or_equal:from'],
             'category' => ['nullable', 'integer', 'exists:expense_categories,id'],
             'search' => ['nullable', 'string', 'max:255'],
+            'schedule' => ['nullable', Rule::in(['recurring', 'due_soon', 'overdue'])],
         ]);
 
         $from = filled($data['from'] ?? null) ? Carbon::parse($data['from'])->startOfDay() : now()->startOfMonth();
@@ -285,7 +291,23 @@ class ExpenseController extends Controller
             Expense::query()->with(['tenant', 'category']),
             $request->user()
         )
-            ->whereBetween('incurred_on', [$from->toDateString(), $to->toDateString()])
+            ->when(
+                filled($data['schedule'] ?? null),
+                function ($query) use ($data): void {
+                    $query
+                        ->where('is_recurring', true)
+                        ->whereNotNull('next_due_on')
+                        ->when(
+                            $data['schedule'] === 'due_soon',
+                            fn ($query) => $query->whereBetween('next_due_on', [now()->toDateString(), now()->addDays(30)->toDateString()])
+                        )
+                        ->when(
+                            $data['schedule'] === 'overdue',
+                            fn ($query) => $query->whereDate('next_due_on', '<', now()->toDateString())
+                        );
+                },
+                fn ($query) => $query->whereBetween('incurred_on', [$from->toDateString(), $to->toDateString()])
+            )
             ->when($request->filled('category'), fn ($query) => $query->where('expense_category_id', $request->integer('category')))
             ->when($request->filled('search'), function ($query) use ($request): void {
                 $search = $request->string('search')->toString();
