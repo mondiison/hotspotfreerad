@@ -70,6 +70,8 @@ class ExpenseController extends Controller
                 'Amount',
                 'Currency',
                 'Recurring',
+                'Recurring Frequency',
+                'Next Due On',
                 'Receipt',
                 'Notes',
             ]);
@@ -88,6 +90,8 @@ class ExpenseController extends Controller
                         number_format((float) $expense->amount, 2, '.', ''),
                         $expense->currency,
                         $expense->is_recurring ? 'Yes' : 'No',
+                        $expense->recurring_frequency,
+                        $expense->next_due_on?->toDateString(),
                         $expense->receipt_path ? 'Attached' : 'None',
                         $expense->notes,
                     ]);
@@ -199,6 +203,8 @@ class ExpenseController extends Controller
             'incurred_on' => ['required', 'date'],
             'vendor' => ['nullable', 'string', 'max:255'],
             'is_recurring' => ['nullable', 'boolean'],
+            'recurring_frequency' => ['nullable', 'required_if:is_recurring,1', Rule::in(['weekly', 'monthly', 'quarterly', 'yearly'])],
+            'next_due_on' => ['nullable', 'date'],
             'receipt' => ['nullable', 'file', 'mimes:jpg,jpeg,png,pdf,webp', 'max:4096'],
             'remove_receipt' => ['nullable', 'boolean'],
             'notes' => ['nullable', 'string', 'max:2000'],
@@ -208,6 +214,12 @@ class ExpenseController extends Controller
 
         $data['tenant_id'] = $tenantId;
         $data['currency'] = strtoupper($data['currency']);
+
+        if (! $data['is_recurring']) {
+            $data['recurring_frequency'] = null;
+            $data['next_due_on'] = null;
+        }
+
         unset($data['receipt'], $data['remove_receipt']);
 
         return $data;

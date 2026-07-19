@@ -69,6 +69,25 @@
                 <flux:checkbox name="is_recurring" value="1" :checked="(bool) old('is_recurring', $expense->is_recurring)" label="Recurring expense" />
             </div>
 
+            <flux:field>
+                <flux:label>Recurring frequency</flux:label>
+                <flux:select name="recurring_frequency">
+                    <flux:select.option value="">Not scheduled</flux:select.option>
+                    @foreach (['weekly' => 'Weekly', 'monthly' => 'Monthly', 'quarterly' => 'Quarterly', 'yearly' => 'Yearly'] as $value => $label)
+                        <flux:select.option value="{{ $value }}" :selected="old('recurring_frequency', $expense->recurring_frequency) === $value">{{ $label }}</flux:select.option>
+                    @endforeach
+                </flux:select>
+                <flux:description>Use this for rent, salaries, internet upstream, generator service, and other repeat costs.</flux:description>
+                <flux:error name="recurring_frequency" />
+            </flux:field>
+
+            <flux:field>
+                <flux:label>Next due date</flux:label>
+                <flux:input type="date" name="next_due_on" value="{{ old('next_due_on', optional($expense->next_due_on)->toDateString()) }}" />
+                <flux:description>Shows on the dashboard when due within the next 30 days.</flux:description>
+                <flux:error name="next_due_on" />
+            </flux:field>
+
             <flux:field class="md:col-span-2">
                 <flux:label>Receipt</flux:label>
                 <flux:input type="file" name="receipt" accept=".jpg,.jpeg,.png,.pdf,.webp" />

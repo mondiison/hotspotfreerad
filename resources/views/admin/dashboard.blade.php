@@ -158,6 +158,46 @@
         </section>
     @endif
 
+    <section class="mt-6 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+        <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+            <div>
+                <h2 class="text-base font-semibold">Upcoming Recurring Expenses</h2>
+                <p class="mt-1 text-sm text-zinc-500">Costs due within the next 30 days.</p>
+            </div>
+            <flux:button href="{{ route('admin.expenses.index') }}" variant="outline" size="sm" icon="receipt-percent">View expenses</flux:button>
+        </div>
+
+        <div class="mt-5 overflow-hidden rounded-lg border border-zinc-200">
+            <table class="w-full text-left text-sm">
+                <thead class="bg-zinc-50 text-zinc-500">
+                    <tr>
+                        <th class="px-4 py-3 font-medium">Expense</th>
+                        <th class="px-4 py-3 font-medium">Tenant</th>
+                        <th class="px-4 py-3 font-medium">Frequency</th>
+                        <th class="px-4 py-3 font-medium">Due</th>
+                        <th class="px-4 py-3 text-right font-medium">Amount</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-zinc-100">
+                    @forelse ($upcomingRecurringExpenses as $expense)
+                        <tr>
+                            <td class="px-4 py-3">
+                                <p class="font-medium">{{ $expense->title }}</p>
+                                <p class="mt-1 text-xs text-zinc-500">{{ $expense->category?->name ?? 'Uncategorized' }}</p>
+                            </td>
+                            <td class="px-4 py-3 text-zinc-600">{{ $expense->tenant?->company_name }}</td>
+                            <td class="px-4 py-3 text-zinc-600">{{ $expense->recurring_frequency ? str($expense->recurring_frequency)->title() : 'Not set' }}</td>
+                            <td class="px-4 py-3 text-zinc-600">{{ $expense->next_due_on?->toFormattedDateString() }}</td>
+                            <td class="px-4 py-3 text-right font-semibold">{{ $expense->currency }} {{ number_format($expense->amount, 2) }}</td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="5" class="px-4 py-8 text-center text-zinc-500">No recurring expenses are due in the next 30 days.</td></tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    </section>
+
     <section class="mt-6 grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <div class="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
             <div class="flex items-center justify-between gap-4">

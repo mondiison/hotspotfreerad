@@ -15,6 +15,7 @@ class Expense extends Model
             'amount' => 'decimal:2',
             'incurred_on' => 'date',
             'is_recurring' => 'boolean',
+            'next_due_on' => 'date',
         ];
     }
 

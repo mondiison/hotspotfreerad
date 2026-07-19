@@ -55,6 +55,12 @@
                                 <p class="mt-1 text-xs text-zinc-500">{{ $expense->incurred_on->toFormattedDateString() }}{{ $expense->vendor ? ' - '.$expense->vendor : '' }}</p>
                                 @if ($expense->is_recurring)
                                     <p class="mt-1 text-xs font-medium text-blue-700">Recurring</p>
+                                    <p class="mt-1 text-xs text-zinc-500">
+                                        {{ $expense->recurring_frequency ? str($expense->recurring_frequency)->title() : 'Frequency not set' }}
+                                        @if ($expense->next_due_on)
+                                            - due {{ $expense->next_due_on->toFormattedDateString() }}
+                                        @endif
+                                    </p>
                                 @endif
                                 @if ($expense->receipt_path)
                                     <a href="{{ route('admin.expenses.receipt', $expense) }}" class="mt-1 inline-flex text-xs font-medium text-zinc-950 underline decoration-zinc-300 underline-offset-4">Receipt attached</a>

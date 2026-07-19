@@ -37,6 +37,8 @@ class AdminExpenseTest extends TestCase
                 'incurred_on' => '2026-07-10',
                 'vendor' => 'Technician',
                 'is_recurring' => 1,
+                'recurring_frequency' => 'monthly',
+                'next_due_on' => '2026-08-10',
                 'notes' => 'Replaced power adapter.',
             ])
             ->assertRedirect(route('admin.expenses.index'));
@@ -47,6 +49,8 @@ class AdminExpenseTest extends TestCase
             'title' => 'Router repair',
             'amount' => 2500,
             'is_recurring' => true,
+            'recurring_frequency' => 'monthly',
+            'next_due_on' => '2026-08-10 00:00:00',
         ]);
 
         $this->actingAs($user)
@@ -58,7 +62,49 @@ class AdminExpenseTest extends TestCase
             ->assertSee('Router repair')
             ->assertSee('Maintenance')
             ->assertSee('NGN 2,500.00')
-            ->assertSee('Recurring');
+            ->assertSee('Recurring')
+            ->assertSee('Monthly')
+            ->assertSee('Aug 10, 2026');
+    }
+
+    public function test_recurring_expense_requires_frequency_and_non_recurring_clears_schedule(): void
+    {
+        $tenant = Tenant::create([
+            'company_name' => 'Mondi Tenant',
+            'owner_email' => 'owner@example.com',
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->post(route('admin.expenses.store'), [
+                'title' => 'Monthly ISP',
+                'amount' => 15000,
+                'currency' => 'NGN',
+                'incurred_on' => '2026-07-10',
+                'is_recurring' => 1,
+            ])
+            ->assertSessionHasErrors('recurring_frequency');
+
+        $this->actingAs($user)
+            ->post(route('admin.expenses.store'), [
+                'title' => 'One-time cable',
+                'amount' => 5000,
+                'currency' => 'NGN',
+                'incurred_on' => '2026-07-10',
+                'recurring_frequency' => 'monthly',
+                'next_due_on' => '2026-08-10',
+            ])
+            ->assertRedirect(route('admin.expenses.index'));
+
+        $expense = Expense::where('title', 'One-time cable')->firstOrFail();
+
+        $this->assertFalse($expense->is_recurring);
+        $this->assertNull($expense->recurring_frequency);
+        $this->assertNull($expense->next_due_on);
     }
 
     public function test_tenant_admin_cannot_access_another_tenants_expense(): void
@@ -273,6 +319,9 @@ class AdminExpenseTest extends TestCase
             'incurred_on' => '2026-07-16',
             'vendor' => 'Own Technician',
             'notes' => 'Tenant scoped export.',
+            'is_recurring' => true,
+            'recurring_frequency' => 'monthly',
+            'next_due_on' => '2026-08-16',
         ]);
         Expense::create([
             'tenant_id' => $otherTenant->id,
@@ -302,6 +351,8 @@ class AdminExpenseTest extends TestCase
         $this->assertStringContainsString('Own router repair', $content);
         $this->assertStringContainsString('Maintenance', $content);
         $this->assertStringContainsString('2200.00', $content);
+        $this->assertStringContainsString('monthly', $content);
+        $this->assertStringContainsString('2026-08-16', $content);
         $this->assertStringNotContainsString('Other expense', $content);
         $this->assertStringNotContainsString('9900.00', $content);
     }

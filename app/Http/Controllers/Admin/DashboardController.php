@@ -49,6 +49,16 @@ class DashboardController extends Controller
             ->where('status', 'successful')
             ->sum(DB::raw('coalesce(nullif(tenant_net_amount, 0), coalesce(nullif(gross_amount, 0), amount) - platform_fee_amount)'));
         $totalExpenses = TenantAccess::scopeExpenses(Expense::query(), $user)->sum('amount');
+        $upcomingRecurringExpenses = TenantAccess::scopeExpenses(
+            Expense::query()->with(['tenant', 'category']),
+            $user
+        )
+            ->where('is_recurring', true)
+            ->whereNotNull('next_due_on')
+            ->whereBetween('next_due_on', [now()->toDateString(), now()->addDays(30)->toDateString()])
+            ->orderBy('next_due_on')
+            ->take(6)
+            ->get();
 
         return view('admin.dashboard', [
             'tenantCount' => $user->isSuperAdmin() ? Tenant::count() : 1,
@@ -77,6 +87,7 @@ class DashboardController extends Controller
             'tenantNetRevenue' => $tenantNetRevenue,
             'totalExpenses' => $totalExpenses,
             'estimatedProfit' => $tenantNetRevenue - $totalExpenses,
+            'upcomingRecurringExpenses' => $upcomingRecurringExpenses,
             'onlineSessions' => $radiusStats->onlineSessions($routers),
             'recentSubscriptions' => Subscription::query()
                 ->with(['shop.tenant', 'package'])

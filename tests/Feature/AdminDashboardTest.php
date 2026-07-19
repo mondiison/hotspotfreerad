@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\BillingPlan;
+use App\Models\Expense;
 use App\Models\Package;
 use App\Models\Payment;
 use App\Models\Router;
@@ -335,5 +336,53 @@ class AdminDashboardTest extends TestCase
             ->assertSee('NGN 1,000.00')
             ->assertSee('NGN 100.00')
             ->assertSee('NGN 900.00');
+    }
+
+    public function test_dashboard_shows_upcoming_recurring_expenses(): void
+    {
+        $ownTenant = Tenant::create([
+            'company_name' => 'Own Tenant',
+            'owner_email' => 'own@example.com',
+        ]);
+        $otherTenant = Tenant::create([
+            'company_name' => 'Other Tenant',
+            'owner_email' => 'other@example.com',
+        ]);
+        Expense::create([
+            'tenant_id' => $ownTenant->id,
+            'title' => 'Monthly upstream internet',
+            'amount' => 25000,
+            'currency' => 'NGN',
+            'incurred_on' => now()->toDateString(),
+            'is_recurring' => true,
+            'recurring_frequency' => 'monthly',
+            'next_due_on' => now()->addDays(10)->toDateString(),
+        ]);
+        Expense::create([
+            'tenant_id' => $otherTenant->id,
+            'title' => 'Other recurring cost',
+            'amount' => 99000,
+            'currency' => 'NGN',
+            'incurred_on' => now()->toDateString(),
+            'is_recurring' => true,
+            'recurring_frequency' => 'monthly',
+            'next_due_on' => now()->addDays(10)->toDateString(),
+        ]);
+
+        $user = User::factory()->create([
+            'tenant_id' => $ownTenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('admin.dashboard'))
+            ->assertOk()
+            ->assertSee('Upcoming Recurring Expenses')
+            ->assertSee('Monthly upstream internet')
+            ->assertSee('Monthly')
+            ->assertSee('NGN 25,000.00')
+            ->assertDontSee('Other recurring cost')
+            ->assertDontSee('NGN 99,000.00');
     }
 }
