@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Livewire\Admin\PaymentsIndex;
 use App\Models\Customer;
 use App\Models\Package;
 use App\Models\Payment;
@@ -11,6 +12,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Livewire\Livewire;
 use Tests\TestCase;
 
 class AdminPaymentIndexTest extends TestCase
@@ -204,6 +206,82 @@ class AdminPaymentIndexTest extends TestCase
         $this->assertStringContainsString('500.00,100.00,400.00,20.00,commission,Yes', $content);
         $this->assertStringNotContainsString($otherPayment->tx_ref, $content);
         $this->assertStringNotContainsString('Other Export Shop', $content);
+    }
+
+    public function test_livewire_payment_report_filters_without_page_reload(): void
+    {
+        [$successfulPayment] = $this->paymentFixture('Own Tenant', 'own@example.com', 'Main Hall', 'SUCCESS-LIVE', 'successful');
+        [$pendingPayment] = $this->paymentFixture('Own Tenant Two', 'two@example.com', 'Annex', 'PENDING-LIVE', 'pending');
+        $user = User::factory()->create([
+            'role' => 'super_admin',
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(PaymentsIndex::class)
+            ->set('status', 'pending')
+            ->set('search', 'Annex')
+            ->assertSee($pendingPayment->tx_ref)
+            ->assertDontSee($successfulPayment->tx_ref)
+            ->assertSee('NGN 500.00 awaiting confirmation')
+            ->call('clearFilters')
+            ->assertSet('status', '')
+            ->assertSet('search', '')
+            ->assertSee($successfulPayment->tx_ref);
+    }
+
+    public function test_livewire_payment_report_presets_and_export_link(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-19 12:00:00'));
+
+        try {
+            [$recentPayment] = $this->paymentFixture('Preset Tenant', 'preset@example.com', 'Recent Shop', 'RECENT-LIVE', 'successful');
+            [$oldPayment] = $this->paymentFixture('Old Preset Tenant', 'old-preset@example.com', 'Old Shop', 'OLD-LIVE', 'successful');
+            $oldPayment->update([
+                'created_at' => '2026-07-01 10:00:00',
+                'updated_at' => '2026-07-01 10:00:00',
+            ]);
+            $user = User::factory()->create([
+                'role' => 'super_admin',
+                'is_active' => true,
+            ]);
+
+            Livewire::actingAs($user)
+                ->test(PaymentsIndex::class)
+                ->call('setPreset', 'last_7_days')
+                ->assertSet('preset', 'last_7_days')
+                ->assertSet('from', '2026-07-13')
+                ->assertSet('to', '2026-07-19')
+                ->assertSee($recentPayment->tx_ref)
+                ->assertDontSee($oldPayment->tx_ref)
+                ->assertSee(route('admin.payments.export', ['preset' => 'last_7_days']), false)
+                ->call('useCustomRange')
+                ->set('from', '2026-07-01')
+                ->set('to', '2026-07-02')
+                ->assertSet('preset', '')
+                ->assertSee($oldPayment->tx_ref)
+                ->assertDontSee($recentPayment->tx_ref);
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
+    public function test_livewire_payment_report_respects_tenant_scope(): void
+    {
+        [$ownPayment, $ownTenant] = $this->paymentFixture('Own Live Tenant', 'own-live@example.com', 'Own Live Shop', 'OWN-LIVE', 'successful');
+        [$otherPayment] = $this->paymentFixture('Other Live Tenant', 'other-live@example.com', 'Other Live Shop', 'OTHER-LIVE', 'successful');
+        $user = User::factory()->create([
+            'tenant_id' => $ownTenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(PaymentsIndex::class)
+            ->assertSee($ownPayment->tx_ref)
+            ->assertDontSee($otherPayment->tx_ref)
+            ->assertSee('Own Live Shop')
+            ->assertDontSee('Other Live Shop');
     }
 
     private function paymentFixture(string $tenantName, string $ownerEmail, string $shopName, string $txRef, string $status, array $tenantOverrides = []): array
