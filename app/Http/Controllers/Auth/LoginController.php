@@ -48,11 +48,13 @@ class LoginController extends Controller
             return redirect()->route('password.force-change');
         }
 
-        return redirect()->intended(
-            $user->isTenantAdmin()
-                ? route('tenant.public-site', $user->tenant)
-                : route('admin.dashboard')
-        );
+        if ($user->isTenantAdmin()) {
+            $request->session()->forget('url.intended');
+
+            return redirect()->route('tenant.public-site', $user->tenant);
+        }
+
+        return redirect()->intended(route('admin.dashboard'));
     }
 
     public function destroy(Request $request): RedirectResponse

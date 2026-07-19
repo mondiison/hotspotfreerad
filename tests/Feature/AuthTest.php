@@ -58,6 +58,30 @@ class AuthTest extends TestCase
         $this->assertAuthenticatedAs($user);
     }
 
+    public function test_tenant_admin_login_ignores_intended_admin_url_and_redirects_to_tenant_slug(): void
+    {
+        $tenant = Tenant::create([
+            'company_name' => 'Mondi Internet',
+            'owner_email' => 'owner@example.com',
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'email' => 'tenant@example.com',
+            'password' => 'secret-password',
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->get(route('admin.payment-settings.index'))
+            ->assertRedirect(route('login'));
+
+        $this->post('/login', [
+            'email' => $user->email,
+            'password' => 'secret-password',
+        ])
+            ->assertRedirect(route('tenant.public-site', $tenant));
+    }
+
     public function test_tenant_admin_with_temporary_password_must_change_password_before_workspace(): void
     {
         $tenant = Tenant::create([
