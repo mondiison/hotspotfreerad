@@ -47,6 +47,7 @@ class DashboardController extends Controller
             'activePackageCount' => (clone $packageQuery)->where('is_active', true)->count(),
             'tenantBillingSummary' => $this->tenantBillingSummary($user, $shopIds->count(), $routers->count(), (clone $packageQuery)->count()),
             'platformBillingSummary' => $this->platformBillingSummary($user),
+            'tenantWorkspaceSummary' => $this->tenantWorkspaceSummary($user),
             'activeSessionCount' => $radiusSummary['active_session_count'],
             'onlineUserCount' => $radiusSummary['online_user_count'],
             'totalUsageBytes' => $radiusSummary['total_bytes'],
@@ -110,6 +111,27 @@ class DashboardController extends Controller
                 $this->limitUsage('Routers', $routerCount, $plan?->router_limit),
                 $this->limitUsage('Packages', $packageCount, $plan?->package_limit),
             ],
+        ];
+    }
+
+    private function tenantWorkspaceSummary(User $user): ?array
+    {
+        if ($user->isSuperAdmin() || ! $user->tenant_id) {
+            return null;
+        }
+
+        $tenant = Tenant::find($user->tenant_id);
+
+        if (! $tenant) {
+            return null;
+        }
+
+        return [
+            'company_name' => $tenant->company_name,
+            'slug' => $tenant->slug,
+            'owner_email' => $tenant->owner_email,
+            'public_url' => $tenant->publicUrl(),
+            'public_site_enabled' => $tenant->public_site_enabled,
         ];
     }
 

@@ -22,6 +22,29 @@
         };
     @endphp
 
+    @if ($tenantWorkspaceSummary)
+        <section class="mb-6 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+            <div class="flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
+                <div class="min-w-0">
+                    <p class="text-sm font-medium text-zinc-500">Tenant Workspace</p>
+                    <div class="mt-2 flex flex-wrap items-center gap-2">
+                        <h2 class="truncate text-2xl font-semibold">{{ $tenantWorkspaceSummary['company_name'] }}</h2>
+                        <flux:badge :color="$tenantWorkspaceSummary['public_site_enabled'] ? 'green' : 'zinc'">
+                            {{ $tenantWorkspaceSummary['public_site_enabled'] ? 'Public site live' : 'Public site disabled' }}
+                        </flux:badge>
+                    </div>
+                    <p class="mt-2 text-sm text-zinc-500">/{{ $tenantWorkspaceSummary['slug'] }} · {{ $tenantWorkspaceSummary['owner_email'] }}</p>
+                </div>
+
+                <div class="flex flex-wrap gap-2">
+                    <flux:button href="{{ route('admin.brand.edit') }}" variant="outline" icon="swatch">Brand</flux:button>
+                    <flux:button href="{{ route('admin.payment-settings.index') }}" variant="outline" icon="credit-card">Payment Setup</flux:button>
+                    <flux:button href="{{ $tenantWorkspaceSummary['public_url'] }}" target="_blank" variant="primary" icon="arrow-top-right-on-square">Public Page</flux:button>
+                </div>
+            </div>
+        </section>
+    @endif
+
     <section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         @foreach ([
             ['label' => 'Tenants', 'value' => $tenantCount, 'hint' => auth()->user()->isSuperAdmin() ? 'Total platform customers' : 'Your assigned tenant'],
