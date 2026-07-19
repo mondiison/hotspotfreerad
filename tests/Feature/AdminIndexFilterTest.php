@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\ExpenseCategory;
 use App\Models\Package;
 use App\Models\Router;
 use App\Models\Shop;
@@ -125,6 +126,41 @@ class AdminIndexFilterTest extends TestCase
             ->assertOk()
             ->assertSee($activePackage->name)
             ->assertDontSee($inactivePackage->name);
+    }
+
+    public function test_expense_category_index_can_search_and_filter_scope_status_and_budget(): void
+    {
+        $tenant = $this->tenant();
+        $matchingCategory = ExpenseCategory::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Generator fuel',
+            'description' => 'Diesel for busy hotspot sites.',
+            'monthly_budget' => 75000,
+            'is_active' => true,
+        ]);
+        $inactiveCategory = ExpenseCategory::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Dormant repairs',
+            'monthly_budget' => 20000,
+            'is_active' => false,
+        ]);
+        $platformCategory = ExpenseCategory::create([
+            'tenant_id' => null,
+            'name' => 'Platform licensing',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($this->superAdmin())
+            ->get(route('admin.expense-categories.index', [
+                'search' => 'Diesel',
+                'scope' => 'tenant',
+                'status' => 'active',
+                'budget' => 'budgeted',
+            ]))
+            ->assertOk()
+            ->assertSee($matchingCategory->name)
+            ->assertDontSee($inactiveCategory->name)
+            ->assertDontSee($platformCategory->name);
     }
 
     private function tenant(): Tenant

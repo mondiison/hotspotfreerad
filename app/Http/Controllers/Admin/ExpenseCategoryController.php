@@ -15,10 +15,29 @@ class ExpenseCategoryController extends Controller
     public function index(Request $request): View
     {
         $user = $request->user();
+        $filters = $request->validate([
+            'search' => ['nullable', 'string', 'max:255'],
+            'scope' => ['nullable', Rule::in(['platform', 'tenant'])],
+            'status' => ['nullable', Rule::in(['active', 'inactive'])],
+            'budget' => ['nullable', Rule::in(['budgeted', 'unbudgeted'])],
+        ]);
         $monthStart = now()->startOfMonth()->toDateString();
         $monthEnd = now()->endOfDay()->toDateString();
 
         $categories = TenantAccess::scopeExpenseCategories(ExpenseCategory::query(), $user)
+            ->when($filters['search'] ?? null, function ($query, string $search): void {
+                $query->where(function ($query) use ($search): void {
+                    $query
+                        ->where('name', 'like', "%{$search}%")
+                        ->orWhere('description', 'like', "%{$search}%");
+                });
+            })
+            ->when(($filters['scope'] ?? null) === 'platform', fn ($query) => $query->whereNull('tenant_id'))
+            ->when(($filters['scope'] ?? null) === 'tenant', fn ($query) => $query->whereNotNull('tenant_id'))
+            ->when(($filters['status'] ?? null) === 'active', fn ($query) => $query->where('is_active', true))
+            ->when(($filters['status'] ?? null) === 'inactive', fn ($query) => $query->where('is_active', false))
+            ->when(($filters['budget'] ?? null) === 'budgeted', fn ($query) => $query->whereNotNull('monthly_budget'))
+            ->when(($filters['budget'] ?? null) === 'unbudgeted', fn ($query) => $query->whereNull('monthly_budget'))
             ->withCount(['expenses' => function ($query) use ($user): void {
                 if (! $user->isSuperAdmin()) {
                     $query->where('tenant_id', $user->tenant_id);
@@ -35,9 +54,10 @@ class ExpenseCategoryController extends Controller
             }], 'amount')
             ->orderByRaw('tenant_id is not null')
             ->orderBy('name')
-            ->paginate(20);
+            ->paginate(20)
+            ->withQueryString();
 
-        return view('admin.expense-categories.index', compact('categories'));
+        return view('admin.expense-categories.index', compact('categories', 'filters'));
     }
 
     public function create(): View
