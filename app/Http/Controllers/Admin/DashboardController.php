@@ -167,6 +167,7 @@ class DashboardController extends Controller
                 'margin' => $currentMonthTenantNet > 0 ? round(($currentMonthProfit / $currentMonthTenantNet) * 100, 1) : null,
             ],
             'topPackages' => $this->topPackages($shopIds, $monthStart, $monthEnd),
+            'topShops' => $this->topShops($shopIds, $monthStart, $monthEnd),
             'budgetCategoryCount' => $budgetCategoryCount,
             'budgetWatch' => $budgetWatch,
             'financeTrend' => $this->financeTrend($user, $shopIds),
@@ -203,6 +204,55 @@ class DashboardController extends Controller
                 ],
             ],
         ]);
+    }
+
+    private function topShops($shopIds, $monthStart, $monthEnd): array
+    {
+        $payments = Payment::query()
+            ->with('shop.tenant')
+            ->whereIn('shop_id', $shopIds)
+            ->where('status', 'successful')
+            ->where(function ($query) use ($monthStart, $monthEnd): void {
+                $query->whereBetween('paid_at', [$monthStart, $monthEnd])
+                    ->orWhere(function ($query) use ($monthStart, $monthEnd): void {
+                        $query->whereNull('paid_at')
+                            ->whereBetween('created_at', [$monthStart, $monthEnd]);
+                    });
+            })
+            ->get();
+        $totalSales = $payments->sum(fn (Payment $payment) => (float) ($payment->gross_amount ?: $payment->amount));
+        $activeAccessByShop = Subscription::query()
+            ->whereIn('shop_id', $shopIds)
+            ->where('expires_at', '>', now())
+            ->select('shop_id', DB::raw('count(*) as active_access_count'))
+            ->groupBy('shop_id')
+            ->pluck('active_access_count', 'shop_id');
+
+        return $payments
+            ->groupBy('shop_id')
+            ->map(function ($groupedPayments, int $shopId) use ($activeAccessByShop): array {
+                $payment = $groupedPayments->first();
+                $grossSales = $groupedPayments->sum(fn (Payment $payment) => (float) ($payment->gross_amount ?: $payment->amount));
+
+                return [
+                    'shop' => $payment->shop?->name ?? 'Deleted shop',
+                    'tenant' => $payment->shop?->tenant?->company_name,
+                    'sales_count' => $groupedPayments->count(),
+                    'gross_sales' => $grossSales,
+                    'tenant_net' => $groupedPayments->sum(fn (Payment $payment) => (float) ($payment->tenant_net_amount ?: (($payment->gross_amount ?: $payment->amount) - $payment->platform_fee_amount))),
+                    'active_access_count' => (int) ($activeAccessByShop->get($shopId) ?? 0),
+                ];
+            })
+            ->sortByDesc('gross_sales')
+            ->take(5)
+            ->values()
+            ->map(function (array $row) use ($totalSales): array {
+                return [
+                    ...$row,
+                    'share' => $totalSales > 0 ? round(($row['gross_sales'] / $totalSales) * 100, 1) : null,
+                ];
+            })
+            ->all();
     }
 
     private function topPackages($shopIds, $monthStart, $monthEnd): array

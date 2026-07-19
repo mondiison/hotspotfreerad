@@ -306,6 +306,13 @@ class AdminDashboardTest extends TestCase
             'speed_limit_profile' => '5M/5M',
             'is_active' => true,
         ]);
+        Subscription::create([
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'mac_address' => 'AA:BB:CC:DD:EE:FF',
+            'starts_at' => now(),
+            'expires_at' => now()->addDay(),
+        ]);
         Payment::create([
             'shop_id' => $shop->id,
             'package_id' => $package->id,
@@ -460,6 +467,11 @@ class AdminDashboardTest extends TestCase
             ->assertSee('Daily')
             ->assertSee('Main Hall')
             ->assertSee('Payment report')
+            ->assertSee('Top Locations')
+            ->assertSee('Jul 2026 shop performance')
+            ->assertSee('Active Access')
+            ->assertSee('Manage shops')
+            ->assertDontSee('Other Hall')
             ->assertDontSee('NGN 9,999.00');
     }
 

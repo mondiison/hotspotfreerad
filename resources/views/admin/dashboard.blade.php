@@ -199,6 +199,58 @@
     </section>
 
     <section class="mt-6 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+        <div class="flex flex-col justify-between gap-3 md:flex-row md:items-center">
+            <div>
+                <p class="text-sm font-medium text-zinc-500">Top Locations</p>
+                <h2 class="mt-1 text-xl font-semibold">{{ $monthFinanceSummary['period'] }} shop performance</h2>
+            </div>
+            <flux:button href="{{ route('admin.shops.index') }}" variant="outline" size="sm" icon="building-storefront">
+                Manage shops
+            </flux:button>
+        </div>
+
+        <div class="mt-5 overflow-hidden rounded-lg border border-zinc-200">
+            <table class="w-full text-left text-sm">
+                <thead class="bg-zinc-50 text-zinc-500">
+                    <tr>
+                        <th class="px-4 py-3 font-medium">Shop</th>
+                        <th class="px-4 py-3 font-medium">Tenant</th>
+                        <th class="px-4 py-3 text-right font-medium">Sales</th>
+                        <th class="px-4 py-3 text-right font-medium">Active Access</th>
+                        <th class="px-4 py-3 text-right font-medium">Gross</th>
+                        <th class="px-4 py-3 text-right font-medium">Tenant Net</th>
+                        <th class="px-4 py-3 text-right font-medium">Share</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-zinc-100">
+                    @forelse ($topShops as $row)
+                        <tr>
+                            <td class="px-4 py-3 font-medium">{{ $row['shop'] }}</td>
+                            <td class="px-4 py-3 text-zinc-600">{{ $row['tenant'] ?: 'Current tenant' }}</td>
+                            <td class="px-4 py-3 text-right">{{ number_format($row['sales_count']) }}</td>
+                            <td class="px-4 py-3 text-right">{{ number_format($row['active_access_count']) }}</td>
+                            <td class="px-4 py-3 text-right font-semibold">NGN {{ number_format($row['gross_sales'], 2) }}</td>
+                            <td class="px-4 py-3 text-right">NGN {{ number_format($row['tenant_net'], 2) }}</td>
+                            <td class="px-4 py-3 text-right">
+                                <div class="ml-auto flex w-28 flex-col items-end gap-1">
+                                    <span>{{ is_null($row['share']) ? 'No sales' : $row['share'].'%' }}</span>
+                                    <span class="block h-1.5 w-full overflow-hidden rounded-full bg-zinc-100">
+                                        <span class="block h-full rounded-full bg-zinc-950" style="width: {{ $row['share'] ?? 0 }}%"></span>
+                                    </span>
+                                </div>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="7" class="px-4 py-8 text-center text-zinc-500">No successful shop sales this month.</td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="mt-6 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
         @php
             $financeTrendMax = max(1, (float) collect($financeTrend)
                 ->flatMap(fn (array $row) => [(float) $row['sales'], (float) $row['expenses'], abs((float) $row['profit'])])
