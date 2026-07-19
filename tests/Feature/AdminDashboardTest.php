@@ -86,6 +86,21 @@ class AdminDashboardTest extends TestCase
             ->assertSee('Setup Progress');
     }
 
+    public function test_super_admin_layout_shows_platform_mode(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'super_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('admin.dashboard'))
+            ->assertOk()
+            ->assertSee('Platform Admin')
+            ->assertDontSee('Tenant Admin')
+            ->assertDontSee('Public Page');
+    }
+
     public function test_tenant_admin_dashboard_is_scoped_to_their_tenant(): void
     {
         $ownTenant = Tenant::create([
@@ -129,6 +144,9 @@ class AdminDashboardTest extends TestCase
         $this->actingAs($user)
             ->get(route('admin.dashboard'))
             ->assertOk()
+            ->assertSee('Tenant Admin')
+            ->assertSee('Public Page')
+            ->assertSee(route('tenant.public-site', $ownTenant), false)
             ->assertSee('Own Router')
             ->assertDontSee('Other Router');
     }

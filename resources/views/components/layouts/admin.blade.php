@@ -102,16 +102,31 @@
                         </button>
 
                         <div class="min-w-0">
-                            <h1 class="truncate text-xl font-semibold">{{ $heading ?? $title ?? 'Dashboard' }}</h1>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <h1 class="truncate text-xl font-semibold">{{ $heading ?? $title ?? 'Dashboard' }}</h1>
+                                @auth
+                                    <flux:badge :color="auth()->user()->isSuperAdmin() ? 'blue' : 'green'">
+                                        {{ auth()->user()->isSuperAdmin() ? 'Platform Admin' : 'Tenant Admin' }}
+                                    </flux:badge>
+                                @endauth
+                            </div>
                             @isset($subheading)
                                 <p class="mt-1 text-sm text-zinc-500">{{ $subheading }}</p>
                             @endisset
                         </div>
                     </div>
 
-                    @isset($action)
-                        <div class="shrink-0">{{ $action }}</div>
-                    @endisset
+                    <div class="flex shrink-0 items-center gap-2">
+                        @auth
+                            @if (auth()->user()->isTenantAdmin() && auth()->user()->tenant)
+                                <flux:button href="{{ auth()->user()->tenant->publicUrl() }}" target="_blank" variant="outline" size="sm" icon="arrow-top-right-on-square">Public Page</flux:button>
+                            @endif
+                        @endauth
+
+                        @isset($action)
+                            {{ $action }}
+                        @endisset
+                    </div>
                 </div>
             </header>
 
