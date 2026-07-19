@@ -17,6 +17,11 @@ class ProfileService
         ];
     }
 
+    public function currentPasswordRule(): array
+    {
+        return ['required', 'current_password'];
+    }
+
     public function update(User $user, array $data): User
     {
         $user->name = $data['name'];

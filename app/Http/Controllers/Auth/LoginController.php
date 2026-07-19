@@ -42,6 +42,17 @@ class LoginController extends Controller
                 ->onlyInput('email');
         }
 
+        if ($user->hasTwoFactorEnabled()) {
+            Auth::logout();
+
+            $request->session()->put([
+                'login.two_factor_user_id' => $user->id,
+                'login.remember' => $request->boolean('remember'),
+            ]);
+
+            return redirect()->route('two-factor.login');
+        }
+
         $request->session()->regenerate();
 
         $request->session()->forget('url.intended');

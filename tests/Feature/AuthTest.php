@@ -2,9 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Mail\HotspotTestMail;
 use App\Models\Tenant;
 use App\Models\User;
-use App\Mail\HotspotTestMail;
+use App\Services\TwoFactorService;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
@@ -36,6 +37,74 @@ class AuthTest extends TestCase
 
         $this->get(route('redirect-after-login'))
             ->assertRedirect(route('admin.dashboard'));
+    }
+
+    public function test_user_with_two_factor_must_complete_challenge_before_admin_redirect(): void
+    {
+        $twoFactor = app(TwoFactorService::class);
+        $secret = $twoFactor->generateSecret();
+        $user = User::factory()->create([
+            'password' => 'current-password',
+            'role' => 'super_admin',
+            'is_active' => true,
+            'two_factor_secret' => $secret,
+            'two_factor_recovery_codes' => $twoFactor->hashRecoveryCodes(['ABCDE-12345']),
+            'two_factor_confirmed_at' => now(),
+        ]);
+
+        $this->post(route('login.store'), [
+            'email' => $user->email,
+            'password' => 'current-password',
+        ])
+            ->assertRedirect(route('two-factor.login'));
+
+        $this->assertGuest();
+
+        $this->post(route('two-factor.login'), [
+            'code' => $twoFactor->currentCode($secret),
+        ])
+            ->assertRedirect(route('redirect-after-login'));
+
+        $this->assertAuthenticatedAs($user);
+    }
+
+    public function test_two_factor_recovery_code_can_only_be_used_once(): void
+    {
+        $twoFactor = app(TwoFactorService::class);
+        $secret = $twoFactor->generateSecret();
+        $user = User::factory()->create([
+            'password' => 'current-password',
+            'role' => 'super_admin',
+            'is_active' => true,
+            'two_factor_secret' => $secret,
+            'two_factor_recovery_codes' => $twoFactor->hashRecoveryCodes(['ABCDE-12345']),
+            'two_factor_confirmed_at' => now(),
+        ]);
+
+        $this->post(route('login.store'), [
+            'email' => $user->email,
+            'password' => 'current-password',
+        ]);
+
+        $this->post(route('two-factor.login'), [
+            'recovery_code' => 'ABCDE-12345',
+        ])
+            ->assertRedirect(route('redirect-after-login'));
+
+        $this->assertAuthenticatedAs($user);
+        $this->assertCount(0, $user->fresh()->two_factor_recovery_codes);
+
+        $this->post(route('logout'));
+
+        $this->post(route('login.store'), [
+            'email' => $user->email,
+            'password' => 'current-password',
+        ]);
+
+        $this->post(route('two-factor.login'), [
+            'recovery_code' => 'ABCDE-12345',
+        ])
+            ->assertSessionHasErrors('code');
     }
 
     public function test_tenant_admin_uses_shared_login_and_redirects_to_admin_dashboard(): void

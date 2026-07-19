@@ -17,6 +17,8 @@
             this.sidebarCollapsed = value;
             localStorage.setItem('adminSidebarCollapsed', value ? '1' : '0');
         },
+        accountMenuOpen: false,
+        headerAccountMenuOpen: false,
     }"
 >
     <div class="min-h-screen lg:flex">
@@ -62,21 +64,10 @@
                 </button>
             </div>
 
-            @auth
-                <a href="{{ route('admin.profile.edit') }}" class="mt-6 flex items-center gap-3 rounded-md bg-zinc-100 p-3 text-sm hover:bg-zinc-200" :class="{ 'lg:justify-center': sidebarCollapsed }" title="{{ auth()->user()->name }}">
-                    <span class="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-white text-xs font-semibold text-zinc-700">{{ str(auth()->user()->name)->substr(0, 1)->upper() }}</span>
-                    <div class="min-w-0" :class="{ 'lg:hidden': sidebarCollapsed }">
-                        <p class="truncate font-medium">{{ auth()->user()->name }}</p>
-                        <p class="mt-1 truncate text-xs text-zinc-500">{{ str_replace('_', ' ', auth()->user()->role) }}</p>
-                    </div>
-                </a>
-            @endauth
-
             <nav class="mt-8 space-y-1 text-sm">
                 @php
                     $links = [
                         ['label' => 'Dashboard', 'route' => 'admin.dashboard', 'icon' => 'squares-2x2'],
-                        ['label' => 'My Profile', 'route' => 'admin.profile.edit', 'icon' => 'user-circle'],
                         ['label' => 'Tenants', 'route' => 'admin.tenants.index', 'icon' => 'building-storefront', 'super_admin' => true],
                         ['label' => 'Brand', 'route' => 'admin.brand.edit', 'icon' => 'swatch', 'tenant_admin' => true],
                         ['label' => 'Billing', 'route' => 'admin.billing.index', 'icon' => 'credit-card'],
@@ -115,15 +106,52 @@
                 @endforeach
             </nav>
 
-            <form method="POST" action="{{ route('logout') }}" class="mt-auto pt-8">
-                @csrf
-                <button class="flex w-full items-center gap-3 rounded-md border border-zinc-200 px-3 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-100" :class="{ 'lg:justify-center': sidebarCollapsed }" title="Sign out">
-                    <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-zinc-100">
-                        <flux:icon.arrow-left-start-on-rectangle class="size-4" />
-                    </span>
-                    <span :class="{ 'lg:hidden': sidebarCollapsed }">Sign out</span>
-                </button>
-            </form>
+            @auth
+                <div class="relative mt-auto pt-8" @keydown.escape.window="accountMenuOpen = false">
+                    <div
+                        x-cloak
+                        x-show="accountMenuOpen"
+                        x-transition.origin.bottom.left
+                        @click.outside="accountMenuOpen = false"
+                        class="absolute bottom-full left-0 z-50 mb-3 w-full min-w-60 rounded-lg border border-zinc-200 bg-white p-2 text-sm shadow-lg"
+                    >
+                        <a href="{{ route('admin.profile.edit') }}" class="flex items-center gap-3 rounded-md px-3 py-2 text-zinc-700 hover:bg-zinc-100">
+                            <flux:icon.user-circle class="size-4" />
+                            <span>Profile and security</span>
+                        </a>
+
+                        @if (auth()->user()->isTenantAdmin() && auth()->user()->tenant)
+                            <a href="{{ auth()->user()->tenant->publicUrl() }}" target="_blank" class="flex items-center gap-3 rounded-md px-3 py-2 text-zinc-700 hover:bg-zinc-100">
+                                <flux:icon.arrow-top-right-on-square class="size-4" />
+                                <span>Public page</span>
+                            </a>
+                        @endif
+
+                        <form method="POST" action="{{ route('logout') }}" class="mt-1 border-t border-zinc-100 pt-1">
+                            @csrf
+                            <button class="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-red-700 hover:bg-red-50">
+                                <flux:icon.arrow-left-start-on-rectangle class="size-4" />
+                                <span>Sign out</span>
+                            </button>
+                        </form>
+                    </div>
+
+                    <button
+                        type="button"
+                        @click="accountMenuOpen = ! accountMenuOpen"
+                        class="flex w-full items-center gap-3 rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-left text-sm hover:bg-zinc-100"
+                        :class="{ 'lg:justify-center lg:p-2': sidebarCollapsed }"
+                        title="{{ auth()->user()->name }}"
+                    >
+                        <span class="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-zinc-950 text-xs font-semibold text-white">{{ str(auth()->user()->name)->substr(0, 1)->upper() }}</span>
+                        <span class="min-w-0 flex-1" :class="{ 'lg:hidden': sidebarCollapsed }">
+                            <span class="block truncate font-medium">{{ auth()->user()->name }}</span>
+                            <span class="mt-1 block truncate text-xs text-zinc-500">{{ str_replace('_', ' ', auth()->user()->role) }}</span>
+                        </span>
+                        <flux:icon.chevron-up class="size-4 text-zinc-500" x-bind:class="{ 'lg:hidden': sidebarCollapsed }" />
+                    </button>
+                </div>
+            @endauth
         </aside>
 
         <main class="min-w-0 flex-1">
@@ -151,9 +179,51 @@
 
                     <div class="flex shrink-0 items-center gap-2">
                         @auth
-                            @if (auth()->user()->isTenantAdmin() && auth()->user()->tenant)
-                                <flux:button href="{{ auth()->user()->tenant->publicUrl() }}" target="_blank" variant="outline" size="sm" icon="arrow-top-right-on-square">Public Page</flux:button>
-                            @endif
+                            <div class="relative" @keydown.escape.window="headerAccountMenuOpen = false">
+                                <button
+                                    type="button"
+                                    @click="headerAccountMenuOpen = ! headerAccountMenuOpen"
+                                    class="flex items-center gap-2 rounded-lg border border-zinc-200 bg-white p-2 text-sm hover:bg-zinc-50"
+                                    title="{{ auth()->user()->name }}"
+                                >
+                                    <span class="grid h-8 w-8 place-items-center rounded-md bg-zinc-950 text-xs font-semibold text-white">{{ str(auth()->user()->name)->substr(0, 1)->upper() }}</span>
+                                    <span class="hidden max-w-36 truncate font-medium xl:block">{{ auth()->user()->name }}</span>
+                                    <flux:icon.chevron-down class="size-4 text-zinc-500" />
+                                </button>
+
+                                <div
+                                    x-cloak
+                                    x-show="headerAccountMenuOpen"
+                                    x-transition.origin.top.right
+                                    @click.outside="headerAccountMenuOpen = false"
+                                    class="absolute right-0 z-50 mt-3 w-64 rounded-lg border border-zinc-200 bg-white p-2 text-sm shadow-lg"
+                                >
+                                    <div class="px-3 py-2">
+                                        <p class="truncate font-medium">{{ auth()->user()->name }}</p>
+                                        <p class="mt-1 truncate text-xs text-zinc-500">{{ auth()->user()->email }}</p>
+                                    </div>
+
+                                    <a href="{{ route('admin.profile.edit') }}" class="flex items-center gap-3 rounded-md px-3 py-2 text-zinc-700 hover:bg-zinc-100">
+                                        <flux:icon.user-circle class="size-4" />
+                                        <span>Profile and security</span>
+                                    </a>
+
+                                    @if (auth()->user()->isTenantAdmin() && auth()->user()->tenant)
+                                        <a href="{{ auth()->user()->tenant->publicUrl() }}" target="_blank" class="flex items-center gap-3 rounded-md px-3 py-2 text-zinc-700 hover:bg-zinc-100">
+                                            <flux:icon.arrow-top-right-on-square class="size-4" />
+                                            <span>Public page</span>
+                                        </a>
+                                    @endif
+
+                                    <form method="POST" action="{{ route('logout') }}" class="mt-1 border-t border-zinc-100 pt-1">
+                                        @csrf
+                                        <button class="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-red-700 hover:bg-red-50">
+                                            <flux:icon.arrow-left-start-on-rectangle class="size-4" />
+                                            <span>Sign out</span>
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
                         @endauth
 
                         @isset($action)
