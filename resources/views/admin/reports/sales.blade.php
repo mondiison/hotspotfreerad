@@ -3,6 +3,26 @@
         <flux:button href="{{ route('admin.reports.sales.export', request()->query()) }}" variant="outline" icon="arrow-down-tray">Export CSV</flux:button>
     </x-slot:action>
 
+    <section class="mb-4 flex flex-wrap gap-2">
+        @foreach ($presets as $key => $preset)
+            <flux:button
+                href="{{ route('admin.reports.sales', ['preset' => $key, 'group' => $preset['group']]) }}"
+                variant="{{ $filters['preset'] === $key ? 'primary' : 'outline' }}"
+                size="sm"
+            >
+                {{ $preset['label'] }}
+            </flux:button>
+        @endforeach
+
+        <flux:button
+            href="{{ route('admin.reports.sales', ['from' => $filters['from'], 'to' => $filters['to'], 'group' => $filters['group']]) }}"
+            variant="{{ $filters['preset'] ? 'outline' : 'primary' }}"
+            size="sm"
+        >
+            Custom
+        </flux:button>
+    </section>
+
     <form method="GET" class="grid gap-4 rounded-lg border border-zinc-200 bg-white p-5 md:grid-cols-[1fr_1fr_180px_auto]">
         <flux:field>
             <flux:label>From</flux:label>

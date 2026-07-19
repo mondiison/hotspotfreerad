@@ -11,6 +11,7 @@ use App\Models\Shop;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 class AdminSalesReportTest extends TestCase
@@ -112,6 +113,36 @@ class AdminSalesReportTest extends TestCase
             ->assertSee('NGN 500.00')
             ->assertSee('NGN 1,200.00')
             ->assertSee('Maintenance');
+    }
+
+    public function test_sales_report_can_use_date_presets(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-19 12:00:00'));
+
+        try {
+            $this->paymentFixture('Preset Tenant', 'preset@example.com', 'Recent Shop', 1800, 'successful', '2026-07-14 10:00:00');
+            $this->paymentFixture('Old Preset Tenant', 'old-preset@example.com', 'Old Shop', 9000, 'successful', '2026-07-01 10:00:00');
+
+            $user = User::factory()->create([
+                'role' => 'super_admin',
+                'is_active' => true,
+            ]);
+
+            $this->actingAs($user)
+                ->get(route('admin.reports.sales', [
+                    'preset' => 'last_7_days',
+                ]))
+                ->assertOk()
+                ->assertSee('7 days')
+                ->assertSee('2026-07-13')
+                ->assertSee('2026-07-19')
+                ->assertSee('Recent Shop')
+                ->assertSee('NGN 1,800.00')
+                ->assertDontSee('Old Shop')
+                ->assertDontSee('NGN 9,000.00');
+        } finally {
+            Carbon::setTestNow();
+        }
     }
 
     public function test_sales_report_validates_date_range(): void

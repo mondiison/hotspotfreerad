@@ -86,18 +86,25 @@ class SalesReportController extends Controller
     private function buildReport(Request $request): array
     {
         $data = $request->validate([
+            'preset' => ['nullable', 'in:today,last_7_days,this_month,last_month,this_year'],
             'from' => ['nullable', 'date'],
             'to' => ['nullable', 'date', 'after_or_equal:from'],
             'group' => ['nullable', 'in:day,month,year'],
         ]);
 
-        $group = $data['group'] ?? 'day';
-        $from = filled($data['from'] ?? null)
-            ? Carbon::parse($data['from'])->startOfDay()
-            : now()->startOfMonth();
-        $to = filled($data['to'] ?? null)
-            ? Carbon::parse($data['to'])->endOfDay()
-            : now()->endOfDay();
+        $preset = $data['preset'] ?? null;
+        if ($preset) {
+            [$from, $to, $defaultGroup] = $this->presetRange($preset);
+            $group = $data['group'] ?? $defaultGroup;
+        } else {
+            $group = $data['group'] ?? 'day';
+            $from = filled($data['from'] ?? null)
+                ? Carbon::parse($data['from'])->startOfDay()
+                : now()->startOfMonth();
+            $to = filled($data['to'] ?? null)
+                ? Carbon::parse($data['to'])->endOfDay()
+                : now()->endOfDay();
+        }
 
         $payments = TenantAccess::scopePayments(
             Payment::query()->with(['shop.tenant', 'package'])->where('status', 'successful'),
@@ -160,10 +167,12 @@ class SalesReportController extends Controller
 
         return [
             'filters' => [
+                'preset' => $preset,
                 'from' => $from->toDateString(),
                 'to' => $to->toDateString(),
                 'group' => $group,
             ],
+            'presets' => $this->presets(),
             'summary' => [
                 'sales_count' => $payments->count(),
                 'revenue' => $payments->sum(fn (Payment $payment) => $this->grossAmount($payment)),
@@ -178,6 +187,50 @@ class SalesReportController extends Controller
             'shopRows' => $shopRows,
             'expenseRows' => $expenseRows,
         ];
+    }
+
+    private function presets(): array
+    {
+        return [
+            'today' => ['label' => 'Today', 'group' => 'day'],
+            'last_7_days' => ['label' => '7 days', 'group' => 'day'],
+            'this_month' => ['label' => 'This month', 'group' => 'day'],
+            'last_month' => ['label' => 'Last month', 'group' => 'day'],
+            'this_year' => ['label' => 'This year', 'group' => 'month'],
+        ];
+    }
+
+    private function presetRange(string $preset): array
+    {
+        $today = now();
+
+        return match ($preset) {
+            'today' => [
+                $today->copy()->startOfDay(),
+                $today->copy()->endOfDay(),
+                'day',
+            ],
+            'last_7_days' => [
+                $today->copy()->subDays(6)->startOfDay(),
+                $today->copy()->endOfDay(),
+                'day',
+            ],
+            'last_month' => [
+                $today->copy()->subMonthNoOverflow()->startOfMonth(),
+                $today->copy()->subMonthNoOverflow()->endOfMonth(),
+                'day',
+            ],
+            'this_year' => [
+                $today->copy()->startOfYear(),
+                $today->copy()->endOfDay(),
+                'month',
+            ],
+            default => [
+                $today->copy()->startOfMonth(),
+                $today->copy()->endOfDay(),
+                'day',
+            ],
+        };
     }
 
     private function periodKey(Carbon $date, string $group): string
