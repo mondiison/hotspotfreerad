@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Livewire\Admin\RoutersIndex;
 use App\Livewire\Admin\ShopsIndex;
 use App\Models\ExpenseCategory;
 use App\Models\Package;
@@ -215,6 +216,136 @@ class AdminIndexFilterTest extends TestCase
             ->assertOk()
             ->assertSee($onlineRouter->name)
             ->assertDontSee($offlineRouter->name);
+    }
+
+    public function test_livewire_router_index_creates_router_and_syncs_radius(): void
+    {
+        $shop = $this->shop();
+
+        Livewire::actingAs($this->superAdmin())
+            ->test(RoutersIndex::class)
+            ->call('create')
+            ->assertSet('showFormModal', true)
+            ->set('shop_id', (string) $shop->id)
+            ->set('name', 'Livewire Router')
+            ->set('nas_identifier', 'livewire-router')
+            ->set('wireguard_internal_ip', '10.8.0.50')
+            ->set('shared_secret', 'radius-secret')
+            ->call('save')
+            ->assertHasNoErrors()
+            ->assertSet('showFormModal', false)
+            ->assertSee('Router created and synced to RADIUS nas.')
+            ->assertSee('Livewire Router');
+
+        $this->assertDatabaseHas('routers', [
+            'shop_id' => $shop->id,
+            'name' => 'Livewire Router',
+            'nas_identifier' => 'livewire-router',
+            'wireguard_internal_ip' => '10.8.0.50',
+        ]);
+        $this->assertDatabaseHas('nas', [
+            'nasname' => '10.8.0.50',
+            'shortname' => 'livewire-router',
+            'secret' => 'radius-secret',
+            'description' => 'Livewire Router',
+        ]);
+    }
+
+    public function test_livewire_router_index_edits_router_and_keeps_blank_secret(): void
+    {
+        $shop = $this->shop();
+        $router = Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'Old Router',
+            'nas_identifier' => 'old-router',
+            'wireguard_internal_ip' => '10.8.0.60',
+            'shared_secret' => 'original-secret',
+            'is_online' => false,
+        ]);
+
+        Livewire::actingAs($this->superAdmin())
+            ->test(RoutersIndex::class)
+            ->call('edit', $router->id)
+            ->assertSet('showFormModal', true)
+            ->assertSet('name', 'Old Router')
+            ->set('name', 'Updated Router')
+            ->set('nas_identifier', 'updated-router')
+            ->set('wireguard_internal_ip', '10.8.0.61')
+            ->set('shared_secret', '')
+            ->call('save')
+            ->assertHasNoErrors()
+            ->assertSet('showFormModal', false)
+            ->assertSee('Router updated and synced to RADIUS nas.');
+
+        $router->refresh();
+
+        $this->assertSame('Updated Router', $router->name);
+        $this->assertSame('original-secret', $router->shared_secret);
+        $this->assertDatabaseHas('nas', [
+            'nasname' => '10.8.0.61',
+            'shortname' => 'updated-router',
+            'secret' => 'original-secret',
+            'description' => 'Updated Router',
+        ]);
+    }
+
+    public function test_livewire_router_index_sets_ip_preset_and_filters_without_reload(): void
+    {
+        $shop = $this->shop();
+        Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'Online Router',
+            'nas_identifier' => 'online-router',
+            'wireguard_internal_ip' => '10.8.0.70',
+            'shared_secret' => 'radius-secret',
+            'is_online' => true,
+        ]);
+        Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'Offline Router',
+            'nas_identifier' => 'offline-router',
+            'wireguard_internal_ip' => '10.8.0.71',
+            'shared_secret' => 'radius-secret',
+            'is_online' => false,
+        ]);
+
+        Livewire::actingAs($this->superAdmin())
+            ->test(RoutersIndex::class)
+            ->call('setPreset', 'wireguard_internal_ip', '10.8.0.12')
+            ->assertSet('wireguard_internal_ip', '10.8.0.12')
+            ->set('search', 'Online')
+            ->set('status', 'online')
+            ->assertSee('Online Router')
+            ->assertDontSee('Offline Router')
+            ->call('clearFilters')
+            ->assertSet('search', '')
+            ->assertSet('status', '')
+            ->assertSee('Offline Router');
+    }
+
+    public function test_livewire_router_index_deletes_router_with_confirmation(): void
+    {
+        $shop = $this->shop();
+        $router = Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'Delete Router',
+            'nas_identifier' => 'delete-router',
+            'wireguard_internal_ip' => '10.8.0.80',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        Livewire::actingAs($this->superAdmin())
+            ->test(RoutersIndex::class)
+            ->call('confirmDelete', $router->id)
+            ->assertSet('showDeleteModal', true)
+            ->assertSee('Delete Router')
+            ->call('delete')
+            ->assertSet('showDeleteModal', false)
+            ->assertSee('Router deleted.');
+
+        $this->assertDatabaseMissing('routers', [
+            'id' => $router->id,
+        ]);
     }
 
     public function test_package_index_can_search_and_filter_by_active_status(): void
