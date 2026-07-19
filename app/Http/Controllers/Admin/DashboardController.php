@@ -49,6 +49,29 @@ class DashboardController extends Controller
             ->where('status', 'successful')
             ->sum(DB::raw('coalesce(nullif(tenant_net_amount, 0), coalesce(nullif(gross_amount, 0), amount) - platform_fee_amount)'));
         $totalExpenses = TenantAccess::scopeExpenses(Expense::query(), $user)->sum('amount');
+        $monthStart = now()->startOfMonth();
+        $monthEnd = now()->endOfDay();
+        $currentMonthPaymentQuery = Payment::query()
+            ->whereIn('shop_id', $shopIds)
+            ->where('status', 'successful')
+            ->where(function ($query) use ($monthStart, $monthEnd): void {
+                $query->whereBetween('paid_at', [$monthStart, $monthEnd])
+                    ->orWhere(function ($query) use ($monthStart, $monthEnd): void {
+                        $query->whereNull('paid_at')
+                            ->whereBetween('created_at', [$monthStart, $monthEnd]);
+                    });
+            });
+        $currentMonthGrossSales = (float) (clone $currentMonthPaymentQuery)
+            ->sum(DB::raw('coalesce(nullif(gross_amount, 0), amount)'));
+        $currentMonthPlatformCommission = (float) (clone $currentMonthPaymentQuery)
+            ->sum('platform_fee_amount');
+        $currentMonthTenantNet = (float) (clone $currentMonthPaymentQuery)
+            ->sum(DB::raw('coalesce(nullif(tenant_net_amount, 0), coalesce(nullif(gross_amount, 0), amount) - platform_fee_amount)'));
+        $currentMonthExpenses = (float) TenantAccess::scopeExpenses(Expense::query(), $user)
+            ->whereDate('incurred_on', '>=', $monthStart->toDateString())
+            ->whereDate('incurred_on', '<=', $monthEnd->toDateString())
+            ->sum('amount');
+        $currentMonthProfit = $currentMonthTenantNet - $currentMonthExpenses;
         $upcomingRecurringExpenses = TenantAccess::scopeExpenses(
             Expense::query()->with(['tenant', 'category']),
             $user
@@ -97,6 +120,17 @@ class DashboardController extends Controller
             'tenantNetRevenue' => $tenantNetRevenue,
             'totalExpenses' => $totalExpenses,
             'estimatedProfit' => $tenantNetRevenue - $totalExpenses,
+            'monthFinanceSummary' => [
+                'period' => $monthStart->format('M Y'),
+                'from' => $monthStart->toDateString(),
+                'to' => $monthEnd->toDateString(),
+                'gross_sales' => $currentMonthGrossSales,
+                'platform_commission' => $currentMonthPlatformCommission,
+                'tenant_net' => $currentMonthTenantNet,
+                'expenses' => $currentMonthExpenses,
+                'profit' => $currentMonthProfit,
+                'margin' => $currentMonthTenantNet > 0 ? round(($currentMonthProfit / $currentMonthTenantNet) * 100, 1) : null,
+            ],
             'upcomingRecurringExpenses' => $upcomingRecurringExpenses,
             'overdueRecurringExpenses' => $overdueRecurringExpenses,
             'onlineSessions' => $radiusStats->onlineSessions($routers),

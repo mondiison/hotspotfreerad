@@ -103,6 +103,51 @@
         @endforeach
     </section>
 
+    <section class="mt-6 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+        <div class="flex flex-col justify-between gap-3 md:flex-row md:items-center">
+            <div>
+                <p class="text-sm font-medium text-zinc-500">This Month Finance</p>
+                <h2 class="mt-1 text-xl font-semibold">{{ $monthFinanceSummary['period'] }} performance</h2>
+            </div>
+
+            <div class="flex flex-wrap gap-2">
+                <flux:button
+                    href="{{ route('admin.reports.sales', ['from' => $monthFinanceSummary['from'], 'to' => $monthFinanceSummary['to']]) }}"
+                    variant="outline"
+                    size="sm"
+                    icon="chart-bar"
+                >
+                    Sales report
+                </flux:button>
+                <flux:button
+                    href="{{ route('admin.expenses.index', ['from' => $monthFinanceSummary['from'], 'to' => $monthFinanceSummary['to']]) }}"
+                    variant="outline"
+                    size="sm"
+                    icon="receipt-percent"
+                >
+                    Expenses
+                </flux:button>
+            </div>
+        </div>
+
+        <div class="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
+            @foreach ([
+                ['label' => 'Gross Sales', 'value' => 'NGN '.number_format($monthFinanceSummary['gross_sales'], 2), 'hint' => 'Customer payments received this month'],
+                ['label' => auth()->user()->isSuperAdmin() ? 'Commission' : 'Platform Fees', 'value' => 'NGN '.number_format($monthFinanceSummary['platform_commission'], 2), 'hint' => 'Platform commission deducted this month'],
+                ['label' => 'Tenant Net', 'value' => 'NGN '.number_format($monthFinanceSummary['tenant_net'], 2), 'hint' => 'Sales retained by the tenant'],
+                ['label' => 'Expenses', 'value' => 'NGN '.number_format($monthFinanceSummary['expenses'], 2), 'hint' => 'Costs recorded this month'],
+                ['label' => 'Profit', 'value' => 'NGN '.number_format($monthFinanceSummary['profit'], 2), 'hint' => 'Tenant net sales minus expenses'],
+                ['label' => 'Margin', 'value' => is_null($monthFinanceSummary['margin']) ? 'No sales' : $monthFinanceSummary['margin'].'%', 'hint' => 'Profit as a share of tenant net sales'],
+            ] as $monthlyStat)
+                <article class="rounded-lg border border-zinc-200 p-4">
+                    <p class="text-sm font-medium text-zinc-500">{{ $monthlyStat['label'] }}</p>
+                    <p class="mt-3 text-2xl font-semibold">{{ $monthlyStat['value'] }}</p>
+                    <p class="mt-2 text-xs leading-5 text-zinc-500">{{ $monthlyStat['hint'] }}</p>
+                </article>
+            @endforeach
+        </div>
+    </section>
+
     @if ($tenantBillingSummary)
         <section class="mt-6 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
             <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
