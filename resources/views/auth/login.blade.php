@@ -3,8 +3,11 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Sign In - HotspotFreeRAD</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
+    @fluxAppearance
+    <style>[x-cloak] { display: none !important; }</style>
 </head>
 <body class="min-h-screen bg-zinc-100 text-zinc-950 antialiased" style="--brand: #047857">
     <main class="flex min-h-screen items-center justify-center px-5 py-10 sm:px-8">
@@ -40,7 +43,7 @@
                 </div>
             </div>
 
-            <div class="flex items-center justify-center px-5 py-10 sm:px-8 lg:px-12">
+            <div class="flex items-center justify-center px-5 py-10 sm:px-8 lg:px-12" x-data="passkeyLogin()">
                 <div class="w-full max-w-md">
                     <div class="mb-8">
                         <p class="text-sm font-medium" style="color: var(--brand)">Welcome back</p>
@@ -54,7 +57,7 @@
                     <div class="space-y-5">
                         <label class="block">
                             <span class="text-sm font-medium">Email</span>
-                            <input type="email" name="email" value="{{ old('email') }}" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2" required autofocus>
+                            <input type="email" name="email" value="{{ old('email') }}" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2" required autofocus autocomplete="email webauthn">
                             @error('email') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
                         </label>
 
@@ -75,9 +78,23 @@
 
                         <button class="mt-6 w-full rounded-md px-4 py-2.5 text-sm font-medium text-white" style="background-color: var(--brand)">Sign In</button>
                     </form>
+
+                    <div class="my-5 flex items-center gap-3">
+                        <div class="h-px flex-1 bg-zinc-200"></div>
+                        <span class="text-xs text-zinc-500">or</span>
+                        <div class="h-px flex-1 bg-zinc-200"></div>
+                    </div>
+
+                    <button type="button" x-bind:disabled="! supported || loading" x-on:click="verify" class="w-full rounded-md border border-zinc-200 bg-white px-4 py-2.5 text-sm font-medium text-zinc-800 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60">
+                        <span x-show="! loading">Continue with passkey</span>
+                        <span x-show="loading">Waiting for your device...</span>
+                    </button>
+                    <p x-cloak x-show="error" x-text="error" class="mt-2 text-center text-sm text-red-600"></p>
+                    <p x-cloak x-show="! supported" class="mt-2 text-center text-xs text-zinc-500">Passkeys are not available in this browser.</p>
                 </div>
             </div>
         </section>
     </main>
+    @fluxScripts
 </body>
 </html>

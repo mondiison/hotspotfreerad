@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Password;
+use Laravel\Passkeys\Contracts\PasskeyUser;
 use Tests\TestCase;
 
 class AuthTest extends TestCase
@@ -317,7 +318,52 @@ class AuthTest extends TestCase
         $this->get('/login')
             ->assertOk()
             ->assertSee('Forgot password?')
-            ->assertSee(route('password.request'), false);
+            ->assertSee(route('password.request'), false)
+            ->assertSee('Continue with passkey')
+            ->assertSee('autocomplete="email webauthn"', false);
+    }
+
+    public function test_user_model_supports_passkeys(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'super_admin',
+            'is_active' => true,
+        ]);
+
+        $this->assertInstanceOf(PasskeyUser::class, $user);
+
+        $user->passkeys()->create([
+            'name' => 'Office laptop',
+            'credential_id' => 'credential-one',
+            'credential' => ['aaguid' => '00000000-0000-0000-0000-000000000000'],
+        ]);
+
+        $this->assertTrue($user->hasPasskeysEnabled());
+        $this->assertDatabaseHas('passkeys', [
+            'user_id' => $user->id,
+            'name' => 'Office laptop',
+        ]);
+    }
+
+    public function test_admin_can_view_passkey_management_page(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'super_admin',
+            'is_active' => true,
+        ]);
+
+        $user->passkeys()->create([
+            'name' => 'Office laptop',
+            'credential_id' => 'credential-two',
+            'credential' => ['aaguid' => '00000000-0000-0000-0000-000000000000'],
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('admin.passkeys.index'))
+            ->assertOk()
+            ->assertSee('Add a trusted device')
+            ->assertSee('Office laptop')
+            ->assertSee('Passkeys work on localhost');
     }
 
     public function test_tenant_admin_cannot_login_when_tenant_is_inactive(): void

@@ -3,6 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{{ $title ?? 'HotspotFreeRAD' }}</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @fluxAppearance
@@ -121,6 +122,11 @@
                             <span>Profile and security</span>
                         </a>
 
+                        <a href="{{ route('admin.passkeys.index') }}" class="flex items-center gap-3 rounded-md px-3 py-2 text-zinc-700 hover:bg-zinc-100">
+                            <flux:icon.key class="size-4" />
+                            <span>Passkeys</span>
+                        </a>
+
                         @if (auth()->user()->isTenantAdmin() && auth()->user()->tenant)
                             <a href="{{ auth()->user()->tenant->publicUrl() }}" target="_blank" class="flex items-center gap-3 rounded-md px-3 py-2 text-zinc-700 hover:bg-zinc-100">
                                 <flux:icon.arrow-top-right-on-square class="size-4" />
@@ -207,6 +213,11 @@
                                     <a href="{{ route('admin.profile.edit') }}" class="flex items-center gap-3 rounded-md px-3 py-2 text-zinc-700 hover:bg-zinc-100">
                                         <flux:icon.user-circle class="size-4" />
                                         <span>Profile and security</span>
+                                    </a>
+
+                                    <a href="{{ route('admin.passkeys.index') }}" class="flex items-center gap-3 rounded-md px-3 py-2 text-zinc-700 hover:bg-zinc-100">
+                                        <flux:icon.key class="size-4" />
+                                        <span>Passkeys</span>
                                     </a>
 
                                     @if (auth()->user()->isTenantAdmin() && auth()->user()->tenant)
