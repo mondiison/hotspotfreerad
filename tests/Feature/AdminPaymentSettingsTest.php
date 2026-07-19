@@ -2,10 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Livewire\Admin\PaymentSettingsCard;
 use App\Models\Shop;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Livewire;
 use Tests\TestCase;
 
 class AdminPaymentSettingsTest extends TestCase
@@ -97,6 +99,84 @@ class AdminPaymentSettingsTest extends TestCase
             ])
             ->assertRedirect(route('admin.payment-settings.index'))
             ->assertSessionHasErrors('flutterwave_client_secret');
+    }
+
+    public function test_livewire_payment_settings_card_saves_credentials(): void
+    {
+        [$tenant] = $this->tenants();
+        $shop = $this->shop($tenant, 'Livewire Shop', false)->load('tenant');
+        $shop->payments_count = 0;
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user);
+
+        Livewire::test(PaymentSettingsCard::class, ['shop' => $shop])
+            ->set('flutterwave_client_id', 'livewire-client-id')
+            ->set('flutterwave_client_secret', 'livewire-client-secret')
+            ->set('flutterwave_webhook_secret', 'livewire-webhook-secret')
+            ->call('save')
+            ->assertHasNoErrors()
+            ->assertSee('Payment settings updated for Livewire Shop.')
+            ->assertSee('Payments configured')
+            ->assertSee('Webhook ready');
+
+        $shop->refresh();
+
+        $this->assertSame('livewire-client-id', $shop->flutterwave_client_id);
+        $this->assertSame('livewire-client-secret', $shop->flutterwave_client_secret);
+        $this->assertSame('livewire-webhook-secret', $shop->flutterwave_webhook_secret);
+    }
+
+    public function test_livewire_payment_settings_card_validates_credentials_together(): void
+    {
+        [$tenant] = $this->tenants();
+        $shop = $this->shop($tenant, 'Livewire Shop', false)->load('tenant');
+        $shop->payments_count = 0;
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user);
+
+        Livewire::test(PaymentSettingsCard::class, ['shop' => $shop])
+            ->set('flutterwave_client_id', 'livewire-client-id')
+            ->call('save')
+            ->assertHasErrors('flutterwave_client_secret');
+    }
+
+    public function test_livewire_payment_settings_card_clears_saved_credentials(): void
+    {
+        [$tenant] = $this->tenants();
+        $shop = $this->shop($tenant, 'Configured Shop', true)->load('tenant');
+        $shop->payments_count = 0;
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user);
+
+        Livewire::test(PaymentSettingsCard::class, ['shop' => $shop])
+            ->set('clear_flutterwave_credentials', true)
+            ->set('clear_flutterwave_webhook_secret', true)
+            ->call('save')
+            ->assertHasNoErrors()
+            ->assertSee('Payment settings updated for Configured Shop.')
+            ->assertSee('Payments not configured')
+            ->assertSee('Webhook missing');
+
+        $shop->refresh();
+
+        $this->assertNull($shop->flutterwave_client_id);
+        $this->assertNull($shop->flutterwave_client_secret);
+        $this->assertNull($shop->flutterwave_webhook_secret);
     }
 
     private function tenants(): array
