@@ -19,7 +19,7 @@ class PasskeysCard extends Component
         $deleted = (bool) $passkey?->delete();
 
         if ($deleted) {
-            $activity->log(auth()->user(), 'passkey_deleted', 'Passkey removed.', [
+            $activity->log(auth()->user(), 'passkey_deleted', 'Passkey removed: '.$passkey->name.'.', [
                 'passkey_id' => $passkey->id,
                 'passkey_name' => $passkey->name,
                 'authenticator' => $passkey->authenticator,

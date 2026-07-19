@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Passkeys\Contracts\PasskeyLoginResponse as PasskeyLoginResponseContract;
 use Laravel\Passkeys\Events\PasskeyRegistered;
+use Laravel\Passkeys\Events\PasskeyVerified;
 use Laravel\Passkeys\Passkey;
 use Laravel\Passkeys\Passkeys;
 
@@ -45,7 +46,24 @@ class AppServiceProvider extends ServiceProvider
             app(SecurityActivityService::class)->log(
                 $event->user,
                 'passkey_registered',
-                'Passkey registered.',
+                'Passkey registered: '.$event->passkey->name.'.',
+                [
+                    'passkey_id' => $event->passkey->id,
+                    'passkey_name' => $event->passkey->name,
+                    'authenticator' => $event->passkey->authenticator,
+                ]
+            );
+        });
+
+        Event::listen(PasskeyVerified::class, function (PasskeyVerified $event): void {
+            if (! $event->user instanceof User) {
+                return;
+            }
+
+            app(SecurityActivityService::class)->log(
+                $event->user,
+                'passkey_login',
+                'Signed in with passkey: '.$event->passkey->name.'.',
                 [
                     'passkey_id' => $event->passkey->id,
                     'passkey_name' => $event->passkey->name,

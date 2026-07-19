@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Password;
 use Laravel\Passkeys\Contracts\PasskeyUser;
 use Laravel\Passkeys\Events\PasskeyRegistered;
+use Laravel\Passkeys\Events\PasskeyVerified;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -389,7 +390,31 @@ class AuthTest extends TestCase
         $this->assertDatabaseHas('security_activities', [
             'user_id' => $user->id,
             'action' => 'passkey_registered',
-            'label' => 'Passkey registered.',
+            'label' => 'Passkey registered: Office laptop.',
+        ]);
+    }
+
+    public function test_passkey_verification_is_logged_with_device_context(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'super_admin',
+            'is_active' => true,
+        ]);
+
+        $passkey = $user->passkeys()->create([
+            'name' => 'Office laptop',
+            'credential_id' => 'credential-five',
+            'credential' => ['aaguid' => '00000000-0000-0000-0000-000000000000'],
+        ]);
+
+        $this->actingAs($user);
+
+        PasskeyVerified::dispatch($user, $passkey);
+
+        $this->assertDatabaseHas('security_activities', [
+            'user_id' => $user->id,
+            'action' => 'passkey_login',
+            'label' => 'Signed in with passkey: Office laptop.',
         ]);
     }
 
@@ -417,7 +442,7 @@ class AuthTest extends TestCase
         $this->assertDatabaseHas('security_activities', [
             'user_id' => $user->id,
             'action' => 'passkey_deleted',
-            'label' => 'Passkey removed.',
+            'label' => 'Passkey removed: Office laptop.',
         ]);
     }
 
