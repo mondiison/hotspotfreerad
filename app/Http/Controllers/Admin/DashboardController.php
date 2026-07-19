@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\BillingPlan;
+use App\Models\Expense;
 use App\Models\Package;
 use App\Models\Payment;
 use App\Models\Router;
@@ -47,6 +48,7 @@ class DashboardController extends Controller
             ->whereIn('shop_id', $shopIds)
             ->where('status', 'successful')
             ->sum(DB::raw('coalesce(nullif(tenant_net_amount, 0), coalesce(nullif(gross_amount, 0), amount) - platform_fee_amount)'));
+        $totalExpenses = TenantAccess::scopeExpenses(Expense::query(), $user)->sum('amount');
 
         return view('admin.dashboard', [
             'tenantCount' => $user->isSuperAdmin() ? Tenant::count() : 1,
@@ -73,6 +75,8 @@ class DashboardController extends Controller
             'paidRevenue' => $paidRevenue,
             'platformCommission' => $platformCommission,
             'tenantNetRevenue' => $tenantNetRevenue,
+            'totalExpenses' => $totalExpenses,
+            'estimatedProfit' => $tenantNetRevenue - $totalExpenses,
             'onlineSessions' => $radiusStats->onlineSessions($routers),
             'recentSubscriptions' => Subscription::query()
                 ->with(['shop.tenant', 'package'])

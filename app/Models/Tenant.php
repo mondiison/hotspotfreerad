@@ -57,6 +57,11 @@ class Tenant extends Model
         return $this->hasMany(PlatformBillingPayment::class);
     }
 
+    public function expenses(): HasMany
+    {
+        return $this->hasMany(Expense::class);
+    }
+
     public function currentBillingSubscription(): HasOne
     {
         return $this->hasOne(TenantBillingSubscription::class)->latestOfMany();

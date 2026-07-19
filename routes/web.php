@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\BillingController;
+use App\Http\Controllers\Admin\ExpenseController;
 use App\Http\Controllers\Admin\PackageController;
 use App\Http\Controllers\Admin\PaymentSettingsController;
 use App\Http\Controllers\Admin\PaymentController;
@@ -75,6 +76,7 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::resource('packages', PackageController::class)->except('show');
     Route::get('subscriptions', [SubscriptionController::class, 'index'])->name('subscriptions.index');
     Route::get('payments', [PaymentController::class, 'index'])->name('payments.index');
+    Route::resource('expenses', ExpenseController::class)->except('show');
     Route::get('reports/sales', [SalesReportController::class, 'index'])->name('reports.sales');
     Route::get('payment-settings', [PaymentSettingsController::class, 'index'])->name('payment-settings.index');
     Route::put('payment-settings/{shop}', [PaymentSettingsController::class, 'update'])->name('payment-settings.update');

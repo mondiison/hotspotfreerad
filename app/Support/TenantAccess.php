@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Models\Package;
+use App\Models\Expense;
 use App\Models\Router;
 use App\Models\Shop;
 use App\Models\User;
@@ -40,6 +41,13 @@ class TenantAccess
             : $query->whereHas('shop', fn (Builder $shop) => $shop->where('tenant_id', $user->tenant_id));
     }
 
+    public static function scopeExpenses(Builder $query, User $user): Builder
+    {
+        return $user->isSuperAdmin()
+            ? $query
+            : $query->where('tenant_id', $user->tenant_id);
+    }
+
     public static function scopeSubscriptions(Builder $query, User $user): Builder
     {
         return $user->isSuperAdmin()
@@ -64,6 +72,11 @@ class TenantAccess
         $package->loadMissing('shop');
 
         self::assertShop($package->shop, $user);
+    }
+
+    public static function assertExpense(Expense $expense, User $user): void
+    {
+        abort_unless($user->isSuperAdmin() || $expense->tenant_id === $user->tenant_id, 403);
     }
 
     public static function shopExistsRule(User $user): Exists

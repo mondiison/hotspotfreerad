@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Expense;
 use App\Models\Payment;
 use App\Support\TenantAccess;
 use Illuminate\Http\Request;
@@ -68,6 +69,24 @@ class SalesReportController extends Controller
             ->sortByDesc('revenue')
             ->values();
 
+        $expenses = TenantAccess::scopeExpenses(
+            Expense::query()->with('category'),
+            $request->user()
+        )
+            ->whereBetween('incurred_on', [$from->toDateString(), $to->toDateString()])
+            ->get();
+        $expenseRows = $expenses
+            ->groupBy(fn (Expense $expense) => $expense->category?->name ?? 'Uncategorized')
+            ->map(fn ($groupedExpenses, string $category) => [
+                'category' => $category,
+                'count' => $groupedExpenses->count(),
+                'amount' => $groupedExpenses->sum(fn (Expense $expense) => (float) $expense->amount),
+            ])
+            ->sortByDesc('amount')
+            ->values();
+        $expenseTotal = $expenses->sum(fn (Expense $expense) => (float) $expense->amount);
+        $tenantNet = $payments->sum(fn (Payment $payment) => $this->tenantNet($payment));
+
         return view('admin.reports.sales', [
             'filters' => [
                 'from' => $from->toDateString(),
@@ -78,12 +97,15 @@ class SalesReportController extends Controller
                 'sales_count' => $payments->count(),
                 'revenue' => $payments->sum(fn (Payment $payment) => $this->grossAmount($payment)),
                 'platform_fee' => $payments->sum(fn (Payment $payment) => $this->platformFee($payment)),
-                'tenant_net' => $payments->sum(fn (Payment $payment) => $this->tenantNet($payment)),
+                'tenant_net' => $tenantNet,
+                'expenses' => $expenseTotal,
+                'estimated_profit' => $tenantNet - $expenseTotal,
                 'average_sale' => $payments->avg(fn (Payment $payment) => $this->grossAmount($payment)) ?? 0,
                 'period_count' => $rows->count(),
             ],
             'rows' => $rows,
             'shopRows' => $shopRows,
+            'expenseRows' => $expenseRows,
         ]);
     }
 

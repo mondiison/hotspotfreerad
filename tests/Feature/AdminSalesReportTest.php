@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\Customer;
+use App\Models\Expense;
+use App\Models\ExpenseCategory;
 use App\Models\Package;
 use App\Models\Payment;
 use App\Models\Shop;
@@ -76,6 +78,16 @@ class AdminSalesReportTest extends TestCase
             'billing_model' => 'commission',
             'commission_rate' => 15,
         ]);
+        $tenant = Tenant::where('owner_email', 'commission@example.com')->firstOrFail();
+        $category = ExpenseCategory::where('name', 'Maintenance')->firstOrFail();
+        Expense::create([
+            'tenant_id' => $tenant->id,
+            'expense_category_id' => $category->id,
+            'title' => 'Router maintenance',
+            'amount' => 500,
+            'currency' => 'NGN',
+            'incurred_on' => '2026-04-07',
+        ]);
 
         $user = User::factory()->create([
             'role' => 'super_admin',
@@ -92,9 +104,14 @@ class AdminSalesReportTest extends TestCase
             ->assertSee('Gross Sales')
             ->assertSee('Platform Commission')
             ->assertSee('Tenant Net')
+            ->assertSee('Expenses')
+            ->assertSee('Estimated Profit')
             ->assertSee('NGN 2,000.00')
             ->assertSee('NGN 300.00')
-            ->assertSee('NGN 1,700.00');
+            ->assertSee('NGN 1,700.00')
+            ->assertSee('NGN 500.00')
+            ->assertSee('NGN 1,200.00')
+            ->assertSee('Maintenance');
     }
 
     public function test_sales_report_validates_date_range(): void

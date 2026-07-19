@@ -92,6 +92,8 @@
             ['label' => 'Gross Sales', 'value' => 'NGN '.number_format($paidRevenue, 2), 'hint' => 'Successful customer payments'],
             ['label' => auth()->user()->isSuperAdmin() ? 'Platform Commission' : 'Platform Fees', 'value' => 'NGN '.number_format($platformCommission, 2), 'hint' => 'Commission deducted from sales'],
             ['label' => 'Tenant Net', 'value' => 'NGN '.number_format($tenantNetRevenue, 2), 'hint' => 'Successful sales after commission'],
+            ['label' => 'Expenses', 'value' => 'NGN '.number_format($totalExpenses, 2), 'hint' => 'Recorded operating costs'],
+            ['label' => 'Estimated Profit', 'value' => 'NGN '.number_format($estimatedProfit, 2), 'hint' => 'Tenant net sales minus expenses'],
         ] as $stat)
             <div class="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
                 <p class="text-sm font-medium text-zinc-500">{{ $stat['label'] }}</p>

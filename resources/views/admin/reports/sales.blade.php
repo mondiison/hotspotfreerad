@@ -26,12 +26,14 @@
         </div>
     </form>
 
-    <section class="mt-6 grid gap-4 md:grid-cols-3 xl:grid-cols-6">
+    <section class="mt-6 grid gap-4 md:grid-cols-3 xl:grid-cols-4">
         @foreach ([
             ['label' => 'Sales', 'value' => number_format($summary['sales_count']), 'hint' => 'Successful payments in range'],
             ['label' => 'Gross Sales', 'value' => 'NGN '.number_format($summary['revenue'], 2), 'hint' => 'Total customer payments'],
             ['label' => 'Platform Commission', 'value' => 'NGN '.number_format($summary['platform_fee'], 2), 'hint' => 'Platform share from commission tenants'],
             ['label' => 'Tenant Net', 'value' => 'NGN '.number_format($summary['tenant_net'], 2), 'hint' => 'Amount retained by tenants'],
+            ['label' => 'Expenses', 'value' => 'NGN '.number_format($summary['expenses'], 2), 'hint' => 'Operating costs in range'],
+            ['label' => 'Estimated Profit', 'value' => 'NGN '.number_format($summary['estimated_profit'], 2), 'hint' => 'Tenant net minus expenses'],
             ['label' => 'Average Sale', 'value' => 'NGN '.number_format($summary['average_sale'], 2), 'hint' => 'Gross sales divided by sales'],
             ['label' => 'Periods', 'value' => number_format($summary['period_count']), 'hint' => 'Grouped rows below'],
         ] as $stat)
@@ -78,7 +80,8 @@
             </table>
         </div>
 
-        <div class="overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
+        <div class="grid gap-6">
+            <div class="overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
             <div class="border-b border-zinc-200 p-5">
                 <h2 class="text-base font-semibold">Sales by Shop</h2>
                 <p class="mt-1 text-sm text-zinc-500">Best performing hotspot locations in the selected range.</p>
@@ -108,6 +111,35 @@
                     @endforelse
                 </tbody>
             </table>
+            </div>
+
+            <div class="overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
+                <div class="border-b border-zinc-200 p-5">
+                    <h2 class="text-base font-semibold">Expenses by Category</h2>
+                    <p class="mt-1 text-sm text-zinc-500">Costs recorded in the selected report range.</p>
+                </div>
+
+                <table class="w-full text-left text-sm">
+                    <thead class="border-b border-zinc-200 bg-zinc-50 text-zinc-500">
+                        <tr>
+                            <th class="px-4 py-3 font-medium">Category</th>
+                            <th class="px-4 py-3 text-right font-medium">Count</th>
+                            <th class="px-4 py-3 text-right font-medium">Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-zinc-100">
+                        @forelse ($expenseRows as $row)
+                            <tr>
+                                <td class="px-4 py-3 font-medium">{{ $row['category'] }}</td>
+                                <td class="px-4 py-3 text-right">{{ number_format($row['count']) }}</td>
+                                <td class="px-4 py-3 text-right font-semibold">NGN {{ number_format($row['amount'], 2) }}</td>
+                            </tr>
+                        @empty
+                            <tr><td colspan="3" class="px-4 py-8 text-center text-zinc-500">No expenses in this range.</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
         </div>
     </section>
 </x-layouts.admin>
