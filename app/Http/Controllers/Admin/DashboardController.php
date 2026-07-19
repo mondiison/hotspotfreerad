@@ -168,6 +168,7 @@ class DashboardController extends Controller
             ],
             'budgetCategoryCount' => $budgetCategoryCount,
             'budgetWatch' => $budgetWatch,
+            'financeTrend' => $this->financeTrend($user, $shopIds),
             'upcomingRecurringExpenses' => $upcomingRecurringExpenses,
             'overdueRecurringExpenses' => $overdueRecurringExpenses,
             'onlineSessions' => $radiusStats->onlineSessions($routers),
@@ -201,6 +202,50 @@ class DashboardController extends Controller
                 ],
             ],
         ]);
+    }
+
+    private function financeTrend(User $user, $shopIds): array
+    {
+        return collect(range(5, 0))
+            ->map(function (int $monthsAgo) use ($user, $shopIds): array {
+                $start = now()->subMonthsNoOverflow($monthsAgo)->startOfMonth();
+                $end = $monthsAgo === 0
+                    ? now()->endOfDay()
+                    : $start->copy()->endOfMonth();
+
+                $paymentQuery = Payment::query()
+                    ->whereIn('shop_id', $shopIds)
+                    ->where('status', 'successful')
+                    ->where(function ($query) use ($start, $end): void {
+                        $query->whereBetween('paid_at', [$start, $end])
+                            ->orWhere(function ($query) use ($start, $end): void {
+                                $query->whereNull('paid_at')
+                                    ->whereBetween('created_at', [$start, $end]);
+                            });
+                    });
+
+                $sales = (float) (clone $paymentQuery)
+                    ->sum(DB::raw('coalesce(nullif(gross_amount, 0), amount)'));
+                $net = (float) (clone $paymentQuery)
+                    ->sum(DB::raw('coalesce(nullif(tenant_net_amount, 0), coalesce(nullif(gross_amount, 0), amount) - platform_fee_amount)'));
+                $expenses = (float) TenantAccess::scopeExpenses(Expense::query(), $user)
+                    ->whereDate('incurred_on', '>=', $start->toDateString())
+                    ->whereDate('incurred_on', '<=', $end->toDateString())
+                    ->sum('amount');
+                $profit = $net - $expenses;
+
+                return [
+                    'label' => $start->format('M Y'),
+                    'from' => $start->toDateString(),
+                    'to' => $end->toDateString(),
+                    'sales' => $sales,
+                    'net' => $net,
+                    'expenses' => $expenses,
+                    'profit' => $profit,
+                    'margin' => $net > 0 ? round(($profit / $net) * 100, 1) : null,
+                ];
+            })
+            ->all();
     }
 
     private function tenantBillingSummary(User $user, int $shopCount, int $routerCount, int $packageCount): ?array

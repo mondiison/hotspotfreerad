@@ -458,6 +458,105 @@ class AdminDashboardTest extends TestCase
             ->assertDontSee('NGN 9,999.00');
     }
 
+    public function test_dashboard_shows_six_month_finance_trend(): void
+    {
+        $tenant = Tenant::create([
+            'company_name' => 'Trend Tenant',
+            'owner_email' => 'trend@example.com',
+        ]);
+        $shop = Shop::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Trend Shop',
+        ]);
+        $package = Package::create([
+            'shop_id' => $shop->id,
+            'name' => 'Daily',
+            'price' => 2000,
+            'currency' => 'NGN',
+            'limit_uptime_seconds' => 86400,
+            'speed_limit_profile' => '5M/5M',
+            'is_active' => true,
+        ]);
+        Payment::create([
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'provider' => 'flutterwave',
+            'tx_ref' => 'DASH-TREND-CURRENT',
+            'amount' => 2000,
+            'gross_amount' => 2000,
+            'platform_fee_amount' => 200,
+            'tenant_net_amount' => 1800,
+            'commission_rate' => 10,
+            'billing_model' => 'commission',
+            'currency' => 'NGN',
+            'status' => 'successful',
+            'paid_at' => now(),
+            'payload' => [],
+        ]);
+        Expense::create([
+            'tenant_id' => $tenant->id,
+            'title' => 'Trend repair',
+            'amount' => 800,
+            'currency' => 'NGN',
+            'incurred_on' => now()->toDateString(),
+        ]);
+
+        $otherTenant = Tenant::create([
+            'company_name' => 'Other Trend Tenant',
+            'owner_email' => 'other-trend@example.com',
+        ]);
+        $otherShop = Shop::create([
+            'tenant_id' => $otherTenant->id,
+            'name' => 'Other Trend Shop',
+        ]);
+        $otherPackage = Package::create([
+            'shop_id' => $otherShop->id,
+            'name' => 'Other Daily',
+            'price' => 9999,
+            'currency' => 'NGN',
+            'limit_uptime_seconds' => 86400,
+            'speed_limit_profile' => '5M/5M',
+            'is_active' => true,
+        ]);
+        Payment::create([
+            'shop_id' => $otherShop->id,
+            'package_id' => $otherPackage->id,
+            'provider' => 'flutterwave',
+            'tx_ref' => 'DASH-TREND-OTHER',
+            'amount' => 9999,
+            'gross_amount' => 9999,
+            'platform_fee_amount' => 999,
+            'tenant_net_amount' => 9000,
+            'commission_rate' => 10,
+            'billing_model' => 'commission',
+            'currency' => 'NGN',
+            'status' => 'successful',
+            'paid_at' => now(),
+            'payload' => [],
+        ]);
+
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('admin.dashboard'))
+            ->assertOk()
+            ->assertSee('Finance Trend')
+            ->assertSee('Last 6 months')
+            ->assertSee(now()->format('M Y'))
+            ->assertSee('NGN 2,000.00')
+            ->assertSee('NGN 1,800.00')
+            ->assertSee('NGN 800.00')
+            ->assertSee('NGN 1,000.00')
+            ->assertSee('55.6%')
+            ->assertSee('Full report')
+            ->assertSee('Details')
+            ->assertDontSee('NGN 9,999.00');
+    }
+
     public function test_dashboard_shows_current_month_budget_watch(): void
     {
         $tenant = Tenant::create([

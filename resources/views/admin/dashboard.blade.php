@@ -148,6 +148,56 @@
         </div>
     </section>
 
+    <section class="mt-6 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+        <div class="flex flex-col justify-between gap-3 md:flex-row md:items-center">
+            <div>
+                <p class="text-sm font-medium text-zinc-500">Finance Trend</p>
+                <h2 class="mt-1 text-xl font-semibold">Last 6 months</h2>
+            </div>
+            <flux:button href="{{ route('admin.reports.sales', ['preset' => 'this_year', 'group' => 'month']) }}" variant="outline" size="sm" icon="chart-bar">
+                Full report
+            </flux:button>
+        </div>
+
+        <div class="mt-5 overflow-hidden rounded-lg border border-zinc-200">
+            <table class="w-full text-left text-sm">
+                <thead class="bg-zinc-50 text-zinc-500">
+                    <tr>
+                        <th class="px-4 py-3 font-medium">Month</th>
+                        <th class="px-4 py-3 text-right font-medium">Gross Sales</th>
+                        <th class="px-4 py-3 text-right font-medium">Tenant Net</th>
+                        <th class="px-4 py-3 text-right font-medium">Expenses</th>
+                        <th class="px-4 py-3 text-right font-medium">Profit</th>
+                        <th class="px-4 py-3 text-right font-medium">Margin</th>
+                        <th class="px-4 py-3 text-right font-medium">Action</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-zinc-100">
+                    @foreach ($financeTrend as $row)
+                        <tr>
+                            <td class="px-4 py-3 font-medium">{{ $row['label'] }}</td>
+                            <td class="px-4 py-3 text-right font-semibold">NGN {{ number_format($row['sales'], 2) }}</td>
+                            <td class="px-4 py-3 text-right">NGN {{ number_format($row['net'], 2) }}</td>
+                            <td class="px-4 py-3 text-right">NGN {{ number_format($row['expenses'], 2) }}</td>
+                            <td class="px-4 py-3 text-right {{ $row['profit'] < 0 ? 'font-semibold text-red-700' : 'font-semibold text-zinc-950' }}">NGN {{ number_format($row['profit'], 2) }}</td>
+                            <td class="px-4 py-3 text-right">{{ is_null($row['margin']) ? 'No sales' : $row['margin'].'%' }}</td>
+                            <td class="px-4 py-3 text-right">
+                                <flux:button
+                                    href="{{ route('admin.reports.sales', ['from' => $row['from'], 'to' => $row['to'], 'group' => 'day']) }}"
+                                    variant="outline"
+                                    size="sm"
+                                    icon="magnifying-glass"
+                                >
+                                    Details
+                                </flux:button>
+                            </td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+    </section>
+
     @if ($budgetWatch->isNotEmpty() || $budgetCategoryCount > 0)
         <section class="mt-6 rounded-lg border {{ $budgetWatch->isNotEmpty() ? 'border-amber-200 bg-amber-50' : 'border-emerald-200 bg-emerald-50' }} p-5 shadow-sm">
             <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
