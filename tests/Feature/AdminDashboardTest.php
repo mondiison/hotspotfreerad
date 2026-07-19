@@ -475,6 +475,107 @@ class AdminDashboardTest extends TestCase
             ->assertDontSee('NGN 9,999.00');
     }
 
+    public function test_dashboard_shows_payment_health_for_current_month(): void
+    {
+        $tenant = Tenant::create([
+            'company_name' => 'Payment Tenant',
+            'owner_email' => 'payments@example.com',
+        ]);
+        $shop = Shop::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Payment Shop',
+        ]);
+        $package = Package::create([
+            'shop_id' => $shop->id,
+            'name' => 'Daily',
+            'price' => 1000,
+            'currency' => 'NGN',
+            'limit_uptime_seconds' => 86400,
+            'speed_limit_profile' => '5M/5M',
+            'is_active' => true,
+        ]);
+
+        foreach ([
+            ['tx_ref' => 'DASH-HEALTH-SUCCESS', 'amount' => 1000, 'status' => 'successful'],
+            ['tx_ref' => 'DASH-HEALTH-PENDING', 'amount' => 1500, 'status' => 'pending'],
+            ['tx_ref' => 'DASH-HEALTH-FAILED', 'amount' => 2000, 'status' => 'failed'],
+        ] as $paymentData) {
+            Payment::create([
+                'shop_id' => $shop->id,
+                'package_id' => $package->id,
+                'provider' => 'flutterwave',
+                'tx_ref' => $paymentData['tx_ref'],
+                'amount' => $paymentData['amount'],
+                'gross_amount' => $paymentData['amount'],
+                'platform_fee_amount' => 0,
+                'tenant_net_amount' => $paymentData['status'] === 'successful' ? $paymentData['amount'] : 0,
+                'currency' => 'NGN',
+                'status' => $paymentData['status'],
+                'paid_at' => $paymentData['status'] === 'successful' ? now() : null,
+                'payload' => [],
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        $otherTenant = Tenant::create([
+            'company_name' => 'Other Payment Tenant',
+            'owner_email' => 'other-payments@example.com',
+        ]);
+        $otherShop = Shop::create([
+            'tenant_id' => $otherTenant->id,
+            'name' => 'Other Payment Shop',
+        ]);
+        $otherPackage = Package::create([
+            'shop_id' => $otherShop->id,
+            'name' => 'Other Daily',
+            'price' => 9999,
+            'currency' => 'NGN',
+            'limit_uptime_seconds' => 86400,
+            'speed_limit_profile' => '5M/5M',
+            'is_active' => true,
+        ]);
+        Payment::create([
+            'shop_id' => $otherShop->id,
+            'package_id' => $otherPackage->id,
+            'provider' => 'flutterwave',
+            'tx_ref' => 'DASH-HEALTH-OTHER',
+            'amount' => 9999,
+            'gross_amount' => 9999,
+            'platform_fee_amount' => 0,
+            'tenant_net_amount' => 0,
+            'currency' => 'NGN',
+            'status' => 'pending',
+            'payload' => [],
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('admin.dashboard'))
+            ->assertOk()
+            ->assertSee('Payment Health')
+            ->assertSee('Jul 2026 checkout flow')
+            ->assertSee('Attempts')
+            ->assertSee('Success Rate')
+            ->assertSee('33.3%')
+            ->assertSee('Successful')
+            ->assertSee('Pending')
+            ->assertSee('Needs Attention')
+            ->assertSee('NGN 1,000.00 confirmed')
+            ->assertSee('NGN 1,500.00 awaiting callback/webhook')
+            ->assertSee('NGN 3,500.00 pending or failed')
+            ->assertSee(route('admin.payments.index', ['status' => 'pending']), false)
+            ->assertSee(route('admin.payments.index', ['status' => 'failed']), false)
+            ->assertDontSee('NGN 9,999.00');
+    }
+
     public function test_dashboard_shows_six_month_finance_trend(): void
     {
         $tenant = Tenant::create([

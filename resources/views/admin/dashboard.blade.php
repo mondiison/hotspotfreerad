@@ -151,6 +151,44 @@
     <section class="mt-6 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
         <div class="flex flex-col justify-between gap-3 md:flex-row md:items-center">
             <div>
+                <p class="text-sm font-medium text-zinc-500">Payment Health</p>
+                <h2 class="mt-1 text-xl font-semibold">{{ $paymentHealth['period'] }} checkout flow</h2>
+                <p class="mt-1 text-sm text-zinc-500">Attempts are counted by checkout creation date, so pending and failed payments do not inflate sales.</p>
+            </div>
+
+            <div class="flex flex-wrap gap-2">
+                <flux:button href="{{ route('admin.payments.index', ['status' => 'pending']) }}" variant="outline" size="sm" icon="clock">
+                    Pending
+                </flux:button>
+                <flux:button href="{{ route('admin.payments.index', ['status' => 'failed']) }}" variant="outline" size="sm" icon="exclamation-triangle">
+                    Failed
+                </flux:button>
+                <flux:button href="{{ route('admin.payments.index') }}" variant="outline" size="sm" icon="credit-card">
+                    All payments
+                </flux:button>
+            </div>
+        </div>
+
+        <div class="mt-5 grid gap-4 md:grid-cols-5">
+            @foreach ([
+                ['label' => 'Attempts', 'value' => number_format($paymentHealth['total_attempts']), 'hint' => 'All checkout attempts this month'],
+                ['label' => 'Success Rate', 'value' => is_null($paymentHealth['success_rate']) ? 'No attempts' : $paymentHealth['success_rate'].'%', 'hint' => 'Successful payments divided by attempts'],
+                ['label' => 'Successful', 'value' => number_format($paymentHealth['successful_count']), 'hint' => 'NGN '.number_format($paymentHealth['successful_value'], 2).' confirmed'],
+                ['label' => 'Pending', 'value' => number_format($paymentHealth['pending_count']), 'hint' => 'NGN '.number_format($paymentHealth['pending_value'], 2).' awaiting callback/webhook'],
+                ['label' => 'Needs Attention', 'value' => number_format($paymentHealth['attention_count']), 'hint' => 'NGN '.number_format($paymentHealth['attention_value'], 2).' pending or failed'],
+            ] as $stat)
+                <article class="rounded-lg border border-zinc-200 p-4">
+                    <p class="text-sm font-medium text-zinc-500">{{ $stat['label'] }}</p>
+                    <p class="mt-3 text-2xl font-semibold">{{ $stat['value'] }}</p>
+                    <p class="mt-2 text-xs leading-5 text-zinc-500">{{ $stat['hint'] }}</p>
+                </article>
+            @endforeach
+        </div>
+    </section>
+
+    <section class="mt-6 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+        <div class="flex flex-col justify-between gap-3 md:flex-row md:items-center">
+            <div>
                 <p class="text-sm font-medium text-zinc-500">Top Packages</p>
                 <h2 class="mt-1 text-xl font-semibold">{{ $monthFinanceSummary['period'] }} best sellers</h2>
             </div>

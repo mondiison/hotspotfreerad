@@ -168,6 +168,7 @@ class DashboardController extends Controller
             ],
             'topPackages' => $this->topPackages($shopIds, $monthStart, $monthEnd),
             'topShops' => $this->topShops($shopIds, $monthStart, $monthEnd),
+            'paymentHealth' => $this->paymentHealth($shopIds, $monthStart, $monthEnd),
             'budgetCategoryCount' => $budgetCategoryCount,
             'budgetWatch' => $budgetWatch,
             'financeTrend' => $this->financeTrend($user, $shopIds),
@@ -253,6 +254,34 @@ class DashboardController extends Controller
                 ];
             })
             ->all();
+    }
+
+    private function paymentHealth($shopIds, $monthStart, $monthEnd): array
+    {
+        $payments = Payment::query()
+            ->whereIn('shop_id', $shopIds)
+            ->whereBetween('created_at', [$monthStart, $monthEnd])
+            ->get();
+
+        $successful = $payments->where('status', 'successful');
+        $pending = $payments->where('status', 'pending');
+        $failed = $payments->filter(fn (Payment $payment) => in_array($payment->status, ['failed', 'verification_failed'], true));
+        $totalAttempts = $payments->count();
+
+        return [
+            'period' => $monthStart->format('M Y'),
+            'total_attempts' => $totalAttempts,
+            'successful_count' => $successful->count(),
+            'pending_count' => $pending->count(),
+            'failed_count' => $failed->count(),
+            'success_rate' => $totalAttempts > 0 ? round(($successful->count() / $totalAttempts) * 100, 1) : null,
+            'successful_value' => $successful->sum(fn (Payment $payment) => (float) ($payment->gross_amount ?: $payment->amount)),
+            'pending_value' => $pending->sum(fn (Payment $payment) => (float) ($payment->gross_amount ?: $payment->amount)),
+            'failed_value' => $failed->sum(fn (Payment $payment) => (float) ($payment->gross_amount ?: $payment->amount)),
+            'attention_count' => $pending->count() + $failed->count(),
+            'attention_value' => $pending->sum(fn (Payment $payment) => (float) ($payment->gross_amount ?: $payment->amount))
+                + $failed->sum(fn (Payment $payment) => (float) ($payment->gross_amount ?: $payment->amount)),
+        ];
     }
 
     private function topPackages($shopIds, $monthStart, $monthEnd): array
