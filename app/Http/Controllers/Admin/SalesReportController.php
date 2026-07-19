@@ -44,7 +44,7 @@ class SalesReportController extends Controller
             fputcsv($handle, []);
 
             fputcsv($handle, ['Sales by Period']);
-            fputcsv($handle, ['Period', 'Sales', 'Average Sale', 'Gross Sales', 'Platform Commission', 'Tenant Net']);
+            fputcsv($handle, ['Period', 'Sales', 'Average Sale', 'Gross Sales', 'Platform Commission', 'Tenant Net', 'Expenses', 'Estimated Profit', 'Profit Margin']);
             foreach ($report['rows'] as $row) {
                 fputcsv($handle, [
                     $row['period'],
@@ -53,6 +53,9 @@ class SalesReportController extends Controller
                     number_format($row['revenue'], 2, '.', ''),
                     number_format($row['platform_fee'], 2, '.', ''),
                     number_format($row['tenant_net'], 2, '.', ''),
+                    number_format($row['expenses'], 2, '.', ''),
+                    number_format($row['estimated_profit'], 2, '.', ''),
+                    $this->formatMargin($row['profit_margin']),
                 ]);
             }
             fputcsv($handle, []);
@@ -124,18 +127,6 @@ class SalesReportController extends Controller
             ->oldest()
             ->get();
 
-        $rows = $payments
-            ->groupBy(fn (Payment $payment) => $this->periodKey($payment->paid_at ?? $payment->created_at, $group))
-            ->map(fn ($groupedPayments, string $period) => [
-                'period' => $period,
-                'sales_count' => $groupedPayments->count(),
-                'revenue' => $groupedPayments->sum(fn (Payment $payment) => $this->grossAmount($payment)),
-                'platform_fee' => $groupedPayments->sum(fn (Payment $payment) => $this->platformFee($payment)),
-                'tenant_net' => $groupedPayments->sum(fn (Payment $payment) => $this->tenantNet($payment)),
-                'average_sale' => $groupedPayments->avg(fn (Payment $payment) => $this->grossAmount($payment)) ?? 0,
-            ])
-            ->values();
-
         $shopRows = $payments
             ->groupBy(fn (Payment $payment) => $payment->shop?->name ?? 'Deleted shop')
             ->map(fn ($groupedPayments, string $shopName) => [
@@ -154,6 +145,29 @@ class SalesReportController extends Controller
         )
             ->whereBetween('incurred_on', [$from->toDateString(), $to->toDateString()])
             ->get();
+        $expensePeriods = $expenses
+            ->groupBy(fn (Expense $expense) => $this->periodKey($expense->incurred_on, $group))
+            ->map(fn ($groupedExpenses) => $groupedExpenses->sum(fn (Expense $expense) => (float) $expense->amount));
+        $rows = $payments
+            ->groupBy(fn (Payment $payment) => $this->periodKey($payment->paid_at ?? $payment->created_at, $group))
+            ->map(function ($groupedPayments, string $period) use ($expensePeriods): array {
+                $tenantNet = $groupedPayments->sum(fn (Payment $payment) => $this->tenantNet($payment));
+                $expenses = (float) ($expensePeriods->get($period) ?? 0);
+                $profit = $tenantNet - $expenses;
+
+                return [
+                    'period' => $period,
+                    'sales_count' => $groupedPayments->count(),
+                    'revenue' => $groupedPayments->sum(fn (Payment $payment) => $this->grossAmount($payment)),
+                    'platform_fee' => $groupedPayments->sum(fn (Payment $payment) => $this->platformFee($payment)),
+                    'tenant_net' => $tenantNet,
+                    'expenses' => $expenses,
+                    'estimated_profit' => $profit,
+                    'profit_margin' => $tenantNet > 0 ? round(($profit / $tenantNet) * 100, 1) : null,
+                    'average_sale' => $groupedPayments->avg(fn (Payment $payment) => $this->grossAmount($payment)) ?? 0,
+                ];
+            })
+            ->values();
         $expenseRows = $expenses
             ->groupBy(fn (Expense $expense) => $expense->category?->name ?? 'Uncategorized')
             ->map(fn ($groupedExpenses, string $category) => [

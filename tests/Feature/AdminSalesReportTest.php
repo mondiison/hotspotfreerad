@@ -108,6 +108,8 @@ class AdminSalesReportTest extends TestCase
             ->assertSee('Expenses')
             ->assertSee('Estimated Profit')
             ->assertSee('Profit Margin')
+            ->assertSee('Profit')
+            ->assertSee('Margin')
             ->assertSee('NGN 2,000.00')
             ->assertSee('NGN 300.00')
             ->assertSee('NGN 1,700.00')
@@ -203,6 +205,9 @@ class AdminSalesReportTest extends TestCase
         $this->assertStringContainsString('Expenses,800.00', $content);
         $this->assertStringContainsString('"Estimated Profit",1900.00', $content);
         $this->assertStringContainsString('"Profit Margin",70.4%', $content);
+        $this->assertStringContainsString('"Sales by Period"', $content);
+        $this->assertStringContainsString('Period,Sales,"Average Sale","Gross Sales","Platform Commission","Tenant Net",Expenses,"Estimated Profit","Profit Margin"', $content);
+        $this->assertStringContainsString('2026-05,1,3000.00,3000.00,300.00,2700.00,800.00,1900.00,70.4%', $content);
         $this->assertStringContainsString('CSV Shop', $content);
         $this->assertStringContainsString('Equipment', $content);
     }

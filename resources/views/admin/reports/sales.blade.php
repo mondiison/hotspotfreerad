@@ -77,19 +77,23 @@
                 <p class="mt-1 text-sm text-zinc-500">Only successful payments are counted.</p>
             </div>
 
-            <table class="w-full text-left text-sm">
-                <thead class="border-b border-zinc-200 bg-zinc-50 text-zinc-500">
-                    <tr>
-                        <th class="px-4 py-3 font-medium">Period</th>
-                        <th class="px-4 py-3 text-right font-medium">Sales</th>
-                        <th class="px-4 py-3 text-right font-medium">Average</th>
-                        <th class="px-4 py-3 text-right font-medium">Gross</th>
-                        <th class="px-4 py-3 text-right font-medium">Commission</th>
-                        <th class="px-4 py-3 text-right font-medium">Tenant Net</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-zinc-100">
-                    @forelse ($rows as $row)
+            <div class="overflow-x-auto">
+                <table class="w-full min-w-[980px] text-left text-sm">
+                    <thead class="border-b border-zinc-200 bg-zinc-50 text-zinc-500">
+                        <tr>
+                            <th class="px-4 py-3 font-medium">Period</th>
+                            <th class="px-4 py-3 text-right font-medium">Sales</th>
+                            <th class="px-4 py-3 text-right font-medium">Average</th>
+                            <th class="px-4 py-3 text-right font-medium">Gross</th>
+                            <th class="px-4 py-3 text-right font-medium">Commission</th>
+                            <th class="px-4 py-3 text-right font-medium">Tenant Net</th>
+                            <th class="px-4 py-3 text-right font-medium">Expenses</th>
+                            <th class="px-4 py-3 text-right font-medium">Profit</th>
+                            <th class="px-4 py-3 text-right font-medium">Margin</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-zinc-100">
+                        @forelse ($rows as $row)
                         <tr>
                             <td class="px-4 py-3 font-medium">{{ $row['period'] }}</td>
                             <td class="px-4 py-3 text-right">{{ number_format($row['sales_count']) }}</td>
@@ -97,12 +101,16 @@
                             <td class="px-4 py-3 text-right font-semibold">NGN {{ number_format($row['revenue'], 2) }}</td>
                             <td class="px-4 py-3 text-right">NGN {{ number_format($row['platform_fee'], 2) }}</td>
                             <td class="px-4 py-3 text-right">NGN {{ number_format($row['tenant_net'], 2) }}</td>
+                            <td class="px-4 py-3 text-right">NGN {{ number_format($row['expenses'], 2) }}</td>
+                            <td class="px-4 py-3 text-right font-semibold">NGN {{ number_format($row['estimated_profit'], 2) }}</td>
+                            <td class="px-4 py-3 text-right">{{ is_null($row['profit_margin']) ? 'No sales' : $row['profit_margin'].'%' }}</td>
                         </tr>
-                    @empty
-                        <tr><td colspan="6" class="px-4 py-8 text-center text-zinc-500">No successful sales in this range.</td></tr>
-                    @endforelse
-                </tbody>
-            </table>
+                        @empty
+                            <tr><td colspan="9" class="px-4 py-8 text-center text-zinc-500">No successful sales in this range.</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
         </div>
 
         <div class="grid gap-6">
