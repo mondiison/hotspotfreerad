@@ -92,7 +92,43 @@ class SecurityActivityReportTest extends TestCase
             ->call('clearFilters')
             ->assertSet('action_group', '')
             ->assertSet('search', '')
+            ->assertSet('attention', '')
             ->assertSet('date_preset', '30');
+    }
+
+    public function test_security_activity_report_filters_attention_events(): void
+    {
+        $tenant = Tenant::create([
+            'company_name' => 'Attention Tenant',
+            'owner_email' => 'attention@example.com',
+        ]);
+        $admin = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $admin->securityActivities()->create([
+            'tenant_id' => $tenant->id,
+            'action' => 'two_factor_challenge_failed',
+            'label' => 'Two-factor challenge failed.',
+            'ip_address' => '10.8.0.70',
+        ]);
+        $admin->securityActivities()->create([
+            'tenant_id' => $tenant->id,
+            'action' => 'login',
+            'label' => 'Normal sign-in event.',
+            'ip_address' => '10.8.0.71',
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test(SecurityActivitiesIndex::class)
+            ->assertSee('Needs attention')
+            ->assertSee('Two-factor challenge failed.')
+            ->assertSee('Normal sign-in event.')
+            ->set('attention', '1')
+            ->assertSee('Two-factor challenge failed.')
+            ->assertDontSee('Normal sign-in event.');
     }
 
     public function test_tenant_admin_only_sees_own_tenant_security_activity(): void
@@ -279,7 +315,11 @@ class SecurityActivityReportTest extends TestCase
         $content = $response->streamedContent();
 
         $this->assertStringContainsString('Security Activity Report', $content);
+        $this->assertStringContainsString('"Event Group",Passkeys', $content);
+        $this->assertStringContainsString('"Attention Only",No', $content);
+        $this->assertStringContainsString('"Created At",Event,Action,Priority', $content);
         $this->assertStringContainsString('Passkey registered: Export laptop.', $content);
+        $this->assertStringContainsString('Normal', $content);
         $this->assertStringContainsString('Export Owner', $content);
         $this->assertStringContainsString('Export Tenant', $content);
         $this->assertStringNotContainsString('Password changed from export test.', $content);

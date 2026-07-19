@@ -20,12 +20,14 @@ class SecurityActivityController extends Controller
             fputcsv($handle, ['Security Activity Report']);
             fputcsv($handle, ['Date Range', $reports->dateLabel($filters['date_preset'])]);
             fputcsv($handle, ['Event Group', $reports->groupLabel($filters['action_group'])]);
+            fputcsv($handle, ['Attention Only', $filters['attention'] === '1' ? 'Yes' : 'No']);
             fputcsv($handle, ['Search', $filters['search']]);
             fputcsv($handle, []);
             fputcsv($handle, [
                 'Created At',
                 'Event',
                 'Action',
+                'Priority',
                 'Admin Name',
                 'Admin Email',
                 'Tenant',
@@ -36,12 +38,13 @@ class SecurityActivityController extends Controller
 
             $reports->query($request->user(), $filters)
                 ->latest()
-                ->chunk(200, function ($activities) use ($handle): void {
+                ->chunk(200, function ($activities) use ($handle, $reports): void {
                     foreach ($activities as $activity) {
                         fputcsv($handle, [
                             $activity->created_at?->toDateTimeString(),
                             $activity->label,
                             $activity->action,
+                            $reports->priorityLabel($activity->action),
                             $activity->user?->name ?? 'Deleted user',
                             $activity->user?->email,
                             $activity->tenant?->company_name ?? 'Platform',

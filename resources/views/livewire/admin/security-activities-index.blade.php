@@ -15,18 +15,18 @@
         </div>
 
         <div class="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
-            <p class="text-sm text-zinc-500">Passkey events</p>
-            <p class="mt-2 text-3xl font-semibold text-emerald-700">{{ number_format($summary['passkeys']) }}</p>
+            <p class="text-sm text-zinc-500">Needs attention</p>
+            <p class="mt-2 text-3xl font-semibold text-rose-700">{{ number_format($summary['attention']) }}</p>
         </div>
 
         <div class="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
-            <p class="text-sm text-zinc-500">Password events</p>
-            <p class="mt-2 text-3xl font-semibold text-amber-700">{{ number_format($summary['passwords']) }}</p>
+            <p class="text-sm text-zinc-500">Passkey events</p>
+            <p class="mt-2 text-3xl font-semibold text-emerald-700">{{ number_format($summary['passkeys']) }}</p>
         </div>
     </section>
 
     <section class="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
-        <div class="grid gap-3 lg:grid-cols-[1fr_180px_180px_180px_auto]">
+        <div class="grid gap-3 lg:grid-cols-[1fr_180px_160px_180px_180px_auto]">
             <flux:input wire:model.live.debounce.350ms="search" icon="magnifying-glass" placeholder="Search user, action, IP, tenant" />
 
             <flux:select wire:model.live="action_group">
@@ -34,6 +34,11 @@
                 @foreach ($actionGroups as $value => $label)
                     <flux:select.option value="{{ $value }}">{{ $label }}</flux:select.option>
                 @endforeach
+            </flux:select>
+
+            <flux:select wire:model.live="attention">
+                <flux:select.option value="">All priorities</flux:select.option>
+                <flux:select.option value="1">Attention only</flux:select.option>
             </flux:select>
 
             @if (auth()->user()->isSuperAdmin())
@@ -53,7 +58,7 @@
                 @endforeach
             </flux:select>
 
-            <flux:button type="button" variant="outline" icon="x-mark" wire:click="clearFilters" wire:loading.attr="disabled" wire:target="clearFilters,search,action_group,tenant_id,date_preset">
+            <flux:button type="button" variant="outline" icon="x-mark" wire:click="clearFilters" wire:loading.attr="disabled" wire:target="clearFilters,search,action_group,attention,tenant_id,date_preset">
                 Reset
             </flux:button>
         </div>
@@ -65,6 +70,7 @@
                 <thead class="border-b border-zinc-200 bg-zinc-50 text-zinc-500">
                     <tr>
                         <th class="px-4 py-3 font-medium">Event</th>
+                        <th class="px-4 py-3 font-medium">Priority</th>
                         <th class="px-4 py-3 font-medium">Admin</th>
                         <th class="px-4 py-3 font-medium">Tenant</th>
                         <th class="px-4 py-3 font-medium">IP</th>
@@ -104,6 +110,13 @@
                                 </div>
                             </td>
                             <td class="px-4 py-3">
+                                @if ($reports->priorityForAction($activity->action) === 'attention')
+                                    <span class="inline-flex items-center rounded-md bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700 ring-1 ring-rose-200">Attention</span>
+                                @else
+                                    <span class="inline-flex items-center rounded-md bg-zinc-100 px-2 py-1 text-xs font-medium text-zinc-600">Normal</span>
+                                @endif
+                            </td>
+                            <td class="px-4 py-3">
                                 <p class="font-medium">{{ $activity->user?->name ?? 'Deleted user' }}</p>
                                 <p class="mt-1 text-xs text-zinc-500">{{ $activity->user?->email ?? '-' }}</p>
                             </td>
@@ -121,7 +134,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="6" class="px-4 py-10 text-center">
+                            <td colspan="7" class="px-4 py-10 text-center">
                                 <p class="font-medium">No security activity matches this view.</p>
                                 <p class="mt-1 text-sm text-zinc-500">Try a wider date range or clear filters.</p>
                             </td>
@@ -152,6 +165,13 @@
                     <div class="min-w-0">
                         <flux:heading size="lg">{{ $selectedActivity->label }}</flux:heading>
                         <p class="mt-1 text-sm text-zinc-500">{{ str($selectedActivity->action)->replace('_', ' ')->title() }} / {{ $selectedActivity->created_at->format('M j, Y H:i:s') }}</p>
+                        <div class="mt-3">
+                            @if ($reports->priorityForAction($selectedActivity->action) === 'attention')
+                                <span class="inline-flex items-center rounded-md bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700 ring-1 ring-rose-200">Needs attention</span>
+                            @else
+                                <span class="inline-flex items-center rounded-md bg-zinc-100 px-2 py-1 text-xs font-medium text-zinc-600">Normal activity</span>
+                            @endif
+                        </div>
                     </div>
                 </div>
 

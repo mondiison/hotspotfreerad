@@ -17,6 +17,8 @@ class SecurityActivitiesIndex extends Component
 
     public string $action_group = '';
 
+    public string $attention = '';
+
     public string $tenant_id = '';
 
     public string $date_preset = '30';
@@ -28,20 +30,21 @@ class SecurityActivitiesIndex extends Component
     protected $queryString = [
         'search' => ['except' => ''],
         'action_group' => ['except' => ''],
+        'attention' => ['except' => ''],
         'tenant_id' => ['except' => ''],
         'date_preset' => ['except' => '30'],
     ];
 
     public function updated($property): void
     {
-        if (in_array($property, ['search', 'action_group', 'tenant_id', 'date_preset'], true)) {
+        if (in_array($property, ['search', 'action_group', 'attention', 'tenant_id', 'date_preset'], true)) {
             $this->resetPage();
         }
     }
 
     public function clearFilters(): void
     {
-        $this->reset(['search', 'action_group', 'tenant_id']);
+        $this->reset(['search', 'action_group', 'attention', 'tenant_id']);
         $this->date_preset = '30';
         $this->resetPage();
     }
@@ -67,6 +70,7 @@ class SecurityActivitiesIndex extends Component
         $filters = $reports->filters([
             'search' => $this->search,
             'action_group' => $this->action_group,
+            'attention' => $this->attention,
             'tenant_id' => $this->tenant_id,
             'date_preset' => $this->date_preset,
         ]);
@@ -79,6 +83,7 @@ class SecurityActivitiesIndex extends Component
             'datePresets' => $reports->datePresets(),
             'exportQuery' => $reports->queryParams($filters),
             'selectedActivity' => $this->selectedActivity(),
+            'reports' => $reports,
         ]);
     }
 

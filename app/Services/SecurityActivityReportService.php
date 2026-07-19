@@ -38,6 +38,7 @@ class SecurityActivityReportService
         $data = Validator::make($input, [
             'search' => ['nullable', 'string', 'max:255'],
             'action_group' => ['nullable', Rule::in(array_keys($this->actionGroups()))],
+            'attention' => ['nullable', 'in:1'],
             'tenant_id' => ['nullable', 'integer', 'exists:tenants,id'],
             'date_preset' => ['nullable', Rule::in(array_keys($this->datePresets()))],
         ])->validate();
@@ -45,6 +46,7 @@ class SecurityActivityReportService
         return [
             'search' => $data['search'] ?? '',
             'action_group' => $data['action_group'] ?? '',
+            'attention' => $data['attention'] ?? '',
             'tenant_id' => (string) ($data['tenant_id'] ?? ''),
             'date_preset' => $data['date_preset'] ?? '30',
         ];
@@ -57,6 +59,7 @@ class SecurityActivityReportService
             ->when(! $user->isSuperAdmin(), fn ($query) => $query->where('tenant_id', $user->tenant_id))
             ->when($user->isSuperAdmin() && $filters['tenant_id'] !== '', fn ($query) => $query->where('tenant_id', $filters['tenant_id']))
             ->when($filters['action_group'] !== '', fn ($query) => $query->whereIn('action', $this->actionsForGroup($filters['action_group'])))
+            ->when($filters['attention'] === '1', fn ($query) => $query->whereIn('action', $this->attentionActions()))
             ->when($filters['date_preset'] !== 'all', fn ($query) => $query->where('created_at', '>=', now()->subDays((int) $filters['date_preset'])))
             ->when($filters['search'] !== '', function ($query) use ($filters): void {
                 $search = $filters['search'];
@@ -82,6 +85,7 @@ class SecurityActivityReportService
         return [
             'total' => (clone $base)->count(),
             'sign_ins' => (clone $base)->whereIn('action', $this->actionsForGroup('sign_in'))->count(),
+            'attention' => (clone $base)->whereIn('action', $this->attentionActions())->count(),
             'passkeys' => (clone $base)->whereIn('action', $this->actionsForGroup('passkey'))->count(),
             'passwords' => (clone $base)->whereIn('action', $this->actionsForGroup('password'))->count(),
         ];
@@ -92,6 +96,7 @@ class SecurityActivityReportService
         return array_filter([
             'search' => $filters['search'],
             'action_group' => $filters['action_group'],
+            'attention' => $filters['attention'],
             'tenant_id' => $filters['tenant_id'],
             'date_preset' => $filters['date_preset'] === '30' ? null : $filters['date_preset'],
         ], fn ($value) => filled($value));
@@ -119,5 +124,26 @@ class SecurityActivityReportService
             'policy' => ['platform_security_updated', 'tenant_two_factor_policy_updated'],
             default => [],
         };
+    }
+
+    public function attentionActions(): array
+    {
+        return [
+            'tenant_inactive_login_blocked',
+            'two_factor_challenge_failed',
+            'managed_user_password_reset_sent',
+            'password_updated',
+            'two_factor_disabled',
+        ];
+    }
+
+    public function priorityForAction(string $action): string
+    {
+        return in_array($action, $this->attentionActions(), true) ? 'attention' : 'normal';
+    }
+
+    public function priorityLabel(string $action): string
+    {
+        return $this->priorityForAction($action) === 'attention' ? 'Attention' : 'Normal';
     }
 }
