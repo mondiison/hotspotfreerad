@@ -71,6 +71,40 @@ class AdminSecuritySettingsTest extends TestCase
         ]);
     }
 
+    public function test_security_settings_show_super_admin_two_factor_compliance(): void
+    {
+        $twoFactor = app(TwoFactorService::class);
+        $secret = $twoFactor->generateSecret();
+        $readyAdmin = User::factory()->create([
+            'name' => 'Ready Admin',
+            'email' => 'ready@example.com',
+            'role' => 'super_admin',
+            'is_active' => true,
+            'two_factor_secret' => $secret,
+            'two_factor_recovery_codes' => $twoFactor->hashRecoveryCodes(['ABCDE-12345']),
+            'two_factor_confirmed_at' => now(),
+        ]);
+        $missingAdmin = User::factory()->create([
+            'name' => 'Missing Admin',
+            'email' => 'missing@example.com',
+            'role' => 'super_admin',
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs($readyAdmin)
+            ->test(PlatformSecuritySettings::class)
+            ->assertSee('Super Admin Compliance')
+            ->assertSee('Ready Admin')
+            ->assertSee('ready@example.com')
+            ->assertSee('2FA enabled')
+            ->assertSee('Missing Admin')
+            ->assertSee('missing@example.com')
+            ->assertSee('2FA not enabled')
+            ->assertSee('1 need setup');
+
+        $this->assertFalse($missingAdmin->hasTwoFactorEnabled());
+    }
+
     public function test_super_admin_without_two_factor_is_redirected_when_policy_requires_it(): void
     {
         PlatformSetting::create([

@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Admin;
 
+use App\Models\User;
 use App\Services\PlatformSecuritySettingsService;
 use App\Services\SecurityActivityService;
 use Livewire\Component;
@@ -35,6 +36,16 @@ class PlatformSecuritySettings extends Component
 
     public function render()
     {
-        return view('livewire.admin.platform-security-settings');
+        $superAdmins = User::query()
+            ->where('role', 'super_admin')
+            ->orderBy('name')
+            ->get();
+
+        return view('livewire.admin.platform-security-settings', [
+            'superAdmins' => $superAdmins,
+            'superAdminCount' => $superAdmins->count(),
+            'superAdminsWithTwoFactor' => $superAdmins->filter->hasTwoFactorEnabled()->count(),
+            'superAdminsMissingTwoFactor' => $superAdmins->reject->hasTwoFactorEnabled()->count(),
+        ]);
     }
 }
