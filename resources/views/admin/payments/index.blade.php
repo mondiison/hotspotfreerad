@@ -1,4 +1,8 @@
 <x-layouts.admin title="Payments" heading="Payments" subheading="Customer hotspot payment attempts, confirmations, and provisioning status.">
+    <x-slot:action>
+        <flux:button href="{{ route('admin.payments.export', request()->query()) }}" variant="outline" icon="arrow-down-tray">Export CSV</flux:button>
+    </x-slot:action>
+
     <section class="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
         @foreach ([
             ['label' => 'Transactions', 'value' => number_format($summary['count']), 'hint' => 'Matching current filters'],

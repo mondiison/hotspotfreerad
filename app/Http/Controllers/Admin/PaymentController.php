@@ -9,34 +9,14 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Carbon;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class PaymentController extends Controller
 {
     public function index(Request $request): View
     {
         $filters = $this->filters($request);
-        $query = TenantAccess::scopePayments(
-            Payment::query()->with(['shop.tenant', 'package', 'customer', 'subscription']),
-            $request->user()
-        )
-            ->whereBetween('created_at', [$filters['from_date'], $filters['to_date']])
-            ->when(filled($filters['search']), function ($query) use ($filters): void {
-                $search = $filters['search'];
-
-                $query->where(function ($query) use ($search): void {
-                    $query
-                        ->where('tx_ref', 'like', "%{$search}%")
-                        ->orWhere('provider_reference', 'like', "%{$search}%")
-                        ->orWhereHas('customer', fn ($customer) => $customer
-                            ->where('email', 'like', "%{$search}%")
-                            ->orWhere('phone', 'like', "%{$search}%")
-                            ->orWhere('mac_address', 'like', "%{$search}%"))
-                        ->orWhereHas('shop', fn ($shop) => $shop->where('name', 'like', "%{$search}%"))
-                        ->orWhereHas('package', fn ($package) => $package->where('name', 'like', "%{$search}%"));
-                });
-            })
-            ->when(filled($filters['status']), fn ($query) => $query->where('status', $filters['status']))
-            ->when(filled($filters['provider']), fn ($query) => $query->where('provider', $filters['provider']));
+        $query = $this->filteredPayments($request, $filters);
 
         $summaryQuery = clone $query;
         $successfulQuery = (clone $summaryQuery)->where('status', 'successful');
@@ -66,6 +46,101 @@ class PaymentController extends Controller
                 'tenant_net' => (clone $successfulQuery)->sum(DB::raw('coalesce(nullif(tenant_net_amount, 0), coalesce(nullif(gross_amount, 0), amount) - platform_fee_amount)')),
             ],
         ]);
+    }
+
+    public function export(Request $request): StreamedResponse
+    {
+        $filters = $this->filters($request);
+        $filename = 'payments-'.$filters['from'].'-to-'.$filters['to'].'.csv';
+
+        return response()->streamDownload(function () use ($request, $filters): void {
+            $handle = fopen('php://output', 'w');
+
+            fputcsv($handle, ['Payment Report']);
+            fputcsv($handle, ['From', $filters['from']]);
+            fputcsv($handle, ['To', $filters['to']]);
+            fputcsv($handle, ['Status', $filters['status'] ?: 'All']);
+            fputcsv($handle, ['Provider', $filters['provider'] ?: 'All']);
+            fputcsv($handle, ['Search', $filters['search'] ?: '']);
+            fputcsv($handle, []);
+            fputcsv($handle, [
+                'Created At',
+                'Paid At',
+                'Transaction Ref',
+                'Provider Ref',
+                'Provider',
+                'Status',
+                'Customer MAC',
+                'Customer Email',
+                'Customer Phone',
+                'Package',
+                'Shop',
+                'Tenant',
+                'Currency',
+                'Gross',
+                'Platform Commission',
+                'Tenant Net',
+                'Commission Rate',
+                'Billing Model',
+                'Provisioned',
+            ]);
+
+            $this->filteredPayments($request, $filters)
+                ->latest()
+                ->chunk(200, function ($payments) use ($handle): void {
+                    foreach ($payments as $payment) {
+                        fputcsv($handle, [
+                            $payment->created_at?->toDateTimeString(),
+                            $payment->paid_at?->toDateTimeString(),
+                            $payment->tx_ref,
+                            $payment->provider_reference,
+                            $payment->provider,
+                            $payment->status,
+                            $payment->customer?->mac_address ?? data_get($payment->payload, 'mac'),
+                            $payment->customer?->email,
+                            $payment->customer?->phone,
+                            $payment->package?->name ?? 'Deleted package',
+                            $payment->shop?->name ?? 'Deleted shop',
+                            $payment->shop?->tenant?->company_name,
+                            $payment->currency,
+                            number_format($payment->gross_amount ?: $payment->amount, 2, '.', ''),
+                            number_format($payment->platform_fee_amount, 2, '.', ''),
+                            number_format($payment->tenant_net_amount ?: ($payment->gross_amount ?: $payment->amount), 2, '.', ''),
+                            number_format((float) $payment->commission_rate, 2, '.', ''),
+                            $payment->billing_model ?? 'subscription',
+                            $payment->subscription ? 'Yes' : 'No',
+                        ]);
+                    }
+                });
+
+            fclose($handle);
+        }, $filename, ['Content-Type' => 'text/csv']);
+    }
+
+    private function filteredPayments(Request $request, array $filters)
+    {
+        return TenantAccess::scopePayments(
+            Payment::query()->with(['shop.tenant', 'package', 'customer', 'subscription']),
+            $request->user()
+        )
+            ->whereBetween('created_at', [$filters['from_date'], $filters['to_date']])
+            ->when(filled($filters['search']), function ($query) use ($filters): void {
+                $search = $filters['search'];
+
+                $query->where(function ($query) use ($search): void {
+                    $query
+                        ->where('tx_ref', 'like', "%{$search}%")
+                        ->orWhere('provider_reference', 'like', "%{$search}%")
+                        ->orWhereHas('customer', fn ($customer) => $customer
+                            ->where('email', 'like', "%{$search}%")
+                            ->orWhere('phone', 'like', "%{$search}%")
+                            ->orWhere('mac_address', 'like', "%{$search}%"))
+                        ->orWhereHas('shop', fn ($shop) => $shop->where('name', 'like', "%{$search}%"))
+                        ->orWhereHas('package', fn ($package) => $package->where('name', 'like', "%{$search}%"));
+                });
+            })
+            ->when(filled($filters['status']), fn ($query) => $query->where('status', $filters['status']))
+            ->when(filled($filters['provider']), fn ($query) => $query->where('provider', $filters['provider']));
     }
 
     private function filters(Request $request): array

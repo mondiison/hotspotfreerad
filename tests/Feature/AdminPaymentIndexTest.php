@@ -144,6 +144,45 @@ class AdminPaymentIndexTest extends TestCase
         }
     }
 
+    public function test_tenant_admin_can_export_filtered_payment_report(): void
+    {
+        [$ownPayment, $ownTenant] = $this->paymentFixture('Own Export Tenant', 'own-export@example.com', 'Own Export Shop', 'EXPORT-OWN', 'successful', [
+            'billing_model' => 'commission',
+            'commission_rate' => 20,
+        ]);
+        [$otherPayment] = $this->paymentFixture('Other Export Tenant', 'other-export@example.com', 'Other Export Shop', 'EXPORT-OTHER', 'successful');
+        $user = User::factory()->create([
+            'tenant_id' => $ownTenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $response = $this->actingAs($user)
+            ->get(route('admin.payments.export', [
+                'from' => now()->startOfMonth()->toDateString(),
+                'to' => now()->endOfDay()->toDateString(),
+                'status' => 'successful',
+                'search' => 'Own Export',
+            ]));
+
+        $response
+            ->assertOk()
+            ->assertHeader('content-type', 'text/csv; charset=UTF-8');
+
+        $content = $response->streamedContent();
+
+        $this->assertStringContainsString('Payment Report', $content);
+        $this->assertStringContainsString('Status,successful', $content);
+        $this->assertStringContainsString('Search,"Own Export"', $content);
+        $this->assertStringContainsString('"Transaction Ref","Provider Ref",Provider,Status', $content);
+        $this->assertStringContainsString($ownPayment->tx_ref, $content);
+        $this->assertStringContainsString('"Own Export Shop"', $content);
+        $this->assertStringContainsString('"Own Export Tenant"', $content);
+        $this->assertStringContainsString('500.00,100.00,400.00,20.00,commission,Yes', $content);
+        $this->assertStringNotContainsString($otherPayment->tx_ref, $content);
+        $this->assertStringNotContainsString('Other Export Shop', $content);
+    }
+
     private function paymentFixture(string $tenantName, string $ownerEmail, string $shopName, string $txRef, string $status, array $tenantOverrides = []): array
     {
         $tenant = Tenant::create(array_merge([
