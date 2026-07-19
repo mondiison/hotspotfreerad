@@ -126,6 +126,7 @@
                         <th class="px-4 py-3 font-medium">Shop</th>
                         <th class="px-4 py-3 text-right font-medium">Sales</th>
                         <th class="px-4 py-3 text-right font-medium">Gross</th>
+                        <th class="px-4 py-3 text-right font-medium">Share</th>
                         <th class="px-4 py-3 text-right font-medium">Commission</th>
                         <th class="px-4 py-3 text-right font-medium">Tenant Net</th>
                     </tr>
@@ -136,11 +137,19 @@
                             <td class="px-4 py-3 font-medium">{{ $row['shop'] }}</td>
                             <td class="px-4 py-3 text-right">{{ number_format($row['sales_count']) }}</td>
                             <td class="px-4 py-3 text-right font-semibold">NGN {{ number_format($row['revenue'], 2) }}</td>
+                            <td class="px-4 py-3 text-right">
+                                <div class="ml-auto flex w-28 flex-col items-end gap-1">
+                                    <span>{{ is_null($row['share']) ? 'No sales' : $row['share'].'%' }}</span>
+                                    <span class="block h-1.5 w-full overflow-hidden rounded-full bg-zinc-100">
+                                        <span class="block h-full rounded-full bg-zinc-950" style="width: {{ $row['share'] ?? 0 }}%"></span>
+                                    </span>
+                                </div>
+                            </td>
                             <td class="px-4 py-3 text-right">NGN {{ number_format($row['platform_fee'], 2) }}</td>
                             <td class="px-4 py-3 text-right">NGN {{ number_format($row['tenant_net'], 2) }}</td>
                         </tr>
                     @empty
-                        <tr><td colspan="5" class="px-4 py-8 text-center text-zinc-500">No shop sales in this range.</td></tr>
+                        <tr><td colspan="6" class="px-4 py-8 text-center text-zinc-500">No shop sales in this range.</td></tr>
                     @endforelse
                 </tbody>
             </table>
