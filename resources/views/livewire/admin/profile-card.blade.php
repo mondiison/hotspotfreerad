@@ -102,10 +102,24 @@
 
             @if ($twoFactorSetupSecret && ! $user->hasTwoFactorEnabled())
                 <div class="mt-5 rounded-lg border border-zinc-200 bg-zinc-50 p-4">
-                    <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_240px]">
+                    <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px]">
                         <div>
                             <p class="text-sm font-medium">Add this account to your authenticator app</p>
-                            <p class="mt-2 text-sm leading-6 text-zinc-600">Choose manual setup in Google Authenticator, Authy, Microsoft Authenticator, or 1Password, then enter this setup key.</p>
+                            <p class="mt-2 text-sm leading-6 text-zinc-600">Scan the QR code with Google Authenticator, Authy, Microsoft Authenticator, or 1Password. Use the setup key if the app asks for manual entry.</p>
+
+                            <div class="mt-4 rounded-md border border-zinc-200 bg-white p-3">
+                                <p class="text-xs font-medium uppercase text-zinc-500">Scan QR code</p>
+                                <div
+                                    wire:ignore
+                                    x-data
+                                    x-init="window.renderQrCode($refs.qr, @js($twoFactorProvisioningUri))"
+                                    class="mt-3 flex justify-center"
+                                >
+                                    <div x-ref="qr" class="grid min-h-48 w-48 place-items-center rounded-md border border-zinc-100 bg-white p-2 text-center text-sm text-zinc-500">
+                                        Preparing QR code...
+                                    </div>
+                                </div>
+                            </div>
 
                             <div class="mt-4 rounded-md border border-zinc-200 bg-white p-3">
                                 <p class="text-xs font-medium uppercase text-zinc-500">Setup key</p>

@@ -126,6 +126,7 @@ class AdminProfileTest extends TestCase
         $component = Livewire::actingAs($user)
             ->test(ProfileCard::class)
             ->call('startTwoFactorSetup')
+            ->assertSee('Scan QR code')
             ->assertSee('Setup key');
 
         $secret = $user->fresh()->two_factor_secret;
