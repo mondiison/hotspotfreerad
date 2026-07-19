@@ -4,6 +4,7 @@ namespace App\Livewire\Admin;
 
 use App\Models\User;
 use App\Services\ProfileService;
+use App\Services\SecurityActivityService;
 use App\Services\SessionSecurityService;
 use App\Services\TwoFactorService;
 use Livewire\Component;
@@ -40,9 +41,10 @@ class ProfileCard extends Component
         $this->name = $this->user->name;
     }
 
-    public function save(ProfileService $profiles): void
+    public function save(ProfileService $profiles, SecurityActivityService $activity): void
     {
         $data = $this->validate($profiles->rules());
+        $passwordChanged = filled($data['password'] ?? null);
 
         $this->user = $profiles->update($this->user, $data)->load('tenant');
 
@@ -54,9 +56,14 @@ class ProfileCard extends Component
 
         $this->savedMessage = 'Profile updated.';
         session()->flash('status', 'Profile updated.');
+        $activity->log(
+            $this->user,
+            $passwordChanged ? 'password_updated' : 'profile_updated',
+            $passwordChanged ? 'Password changed from profile.' : 'Profile details updated.'
+        );
     }
 
-    public function startTwoFactorSetup(TwoFactorService $twoFactor): void
+    public function startTwoFactorSetup(TwoFactorService $twoFactor, SecurityActivityService $activity): void
     {
         $secret = $twoFactor->generateSecret();
 
@@ -72,9 +79,10 @@ class ProfileCard extends Component
         $this->two_factor_code = '';
         $this->plainRecoveryCodes = [];
         $this->savedMessage = null;
+        $activity->log($this->user, 'two_factor_setup_started', 'Two-factor setup started.');
     }
 
-    public function confirmTwoFactor(TwoFactorService $twoFactor): void
+    public function confirmTwoFactor(TwoFactorService $twoFactor, SecurityActivityService $activity): void
     {
         $this->validate([
             'two_factor_code' => ['required', 'digits:6'],
@@ -100,9 +108,10 @@ class ProfileCard extends Component
         $this->plainRecoveryCodes = $codes;
         $this->savedMessage = 'Two-factor authentication is enabled.';
         session()->flash('status', 'Two-factor authentication is enabled.');
+        $activity->log($this->user, 'two_factor_enabled', 'Two-factor authentication enabled.');
     }
 
-    public function regenerateRecoveryCodes(TwoFactorService $twoFactor): void
+    public function regenerateRecoveryCodes(TwoFactorService $twoFactor, SecurityActivityService $activity): void
     {
         abort_unless($this->user->hasTwoFactorEnabled(), 403);
 
@@ -115,9 +124,10 @@ class ProfileCard extends Component
         $this->user->refresh();
         $this->plainRecoveryCodes = $codes;
         $this->savedMessage = 'Recovery codes regenerated.';
+        $activity->log($this->user, 'recovery_codes_regenerated', 'Two-factor recovery codes regenerated.');
     }
 
-    public function disableTwoFactor(ProfileService $profiles): void
+    public function disableTwoFactor(ProfileService $profiles, SecurityActivityService $activity): void
     {
         $this->validate([
             'two_factor_disable_password' => $profiles->currentPasswordRule(),
@@ -139,9 +149,10 @@ class ProfileCard extends Component
         ]);
         $this->savedMessage = 'Two-factor authentication is disabled.';
         session()->flash('status', 'Two-factor authentication is disabled.');
+        $activity->log($this->user, 'two_factor_disabled', 'Two-factor authentication disabled.');
     }
 
-    public function logoutOtherSessions(ProfileService $profiles, SessionSecurityService $sessions): void
+    public function logoutOtherSessions(ProfileService $profiles, SessionSecurityService $sessions, SecurityActivityService $activity): void
     {
         $this->validate([
             'logout_other_sessions_password' => $profiles->currentPasswordRule(),
@@ -154,12 +165,16 @@ class ProfileCard extends Component
             ? 'Signed out 1 other session.'
             : 'Signed out '.$count.' other sessions.';
         session()->flash('status', $this->savedMessage);
+        $activity->log($this->user, 'other_sessions_logged_out', $this->savedMessage, [
+            'session_count' => $count,
+        ]);
     }
 
-    public function render(SessionSecurityService $sessions)
+    public function render(SessionSecurityService $sessions, SecurityActivityService $activity)
     {
         return view('livewire.admin.profile-card', [
             'activeSessions' => $sessions->sessionsFor($this->user, session()->getId()),
+            'securityActivities' => $activity->recentFor($this->user),
             'sessionDriverSupported' => config('session.driver') === 'database',
         ]);
     }

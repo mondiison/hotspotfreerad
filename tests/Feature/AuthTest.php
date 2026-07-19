@@ -37,6 +37,12 @@ class AuthTest extends TestCase
 
         $this->get(route('redirect-after-login'))
             ->assertRedirect(route('admin.dashboard'));
+
+        $this->assertDatabaseHas('security_activities', [
+            'user_id' => $user->id,
+            'action' => 'login',
+            'label' => 'Signed in successfully.',
+        ]);
     }
 
     public function test_user_with_two_factor_must_complete_challenge_before_admin_redirect(): void
@@ -59,6 +65,10 @@ class AuthTest extends TestCase
             ->assertRedirect(route('two-factor.login'));
 
         $this->assertGuest();
+        $this->assertDatabaseHas('security_activities', [
+            'user_id' => $user->id,
+            'action' => 'two_factor_challenge_started',
+        ]);
 
         $this->post(route('two-factor.login'), [
             'code' => $twoFactor->currentCode($secret),
@@ -66,6 +76,11 @@ class AuthTest extends TestCase
             ->assertRedirect(route('redirect-after-login'));
 
         $this->assertAuthenticatedAs($user);
+        $this->assertDatabaseHas('security_activities', [
+            'user_id' => $user->id,
+            'action' => 'two_factor_login',
+            'label' => 'Signed in with two-factor authentication.',
+        ]);
     }
 
     public function test_two_factor_recovery_code_can_only_be_used_once(): void
@@ -93,6 +108,11 @@ class AuthTest extends TestCase
 
         $this->assertAuthenticatedAs($user);
         $this->assertCount(0, $user->fresh()->two_factor_recovery_codes);
+        $this->assertDatabaseHas('security_activities', [
+            'user_id' => $user->id,
+            'action' => 'two_factor_login',
+            'label' => 'Signed in with a recovery code.',
+        ]);
 
         $this->post(route('logout'));
 

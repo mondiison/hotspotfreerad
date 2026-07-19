@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\SecurityActivityService;
 use App\Services\TwoFactorService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -22,7 +23,7 @@ class TwoFactorChallengeController extends Controller
         return view('auth.two-factor-challenge');
     }
 
-    public function store(Request $request, TwoFactorService $twoFactor): RedirectResponse
+    public function store(Request $request, TwoFactorService $twoFactor, SecurityActivityService $activity): RedirectResponse
     {
         $data = $request->validate([
             'code' => ['nullable', 'string'],
@@ -41,6 +42,8 @@ class TwoFactorChallengeController extends Controller
             && $twoFactor->verifyRecoveryCode($user, $data['recovery_code']);
 
         if (! $validCode && ! $validRecoveryCode) {
+            $activity->log($user, 'two_factor_challenge_failed', 'Two-factor challenge failed.', request: $request);
+
             throw ValidationException::withMessages([
                 'code' => 'The authentication code is invalid.',
             ]);
@@ -54,6 +57,13 @@ class TwoFactorChallengeController extends Controller
             'login.remember',
             'url.intended',
         ]);
+
+        $activity->log(
+            $user,
+            'two_factor_login',
+            $validRecoveryCode ? 'Signed in with a recovery code.' : 'Signed in with two-factor authentication.',
+            request: $request
+        );
 
         return redirect()->route('redirect-after-login');
     }

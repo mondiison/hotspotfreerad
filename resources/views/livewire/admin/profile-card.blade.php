@@ -229,6 +229,55 @@
                 </div>
             @endif
         </section>
+
+        <section class="border-t border-zinc-200 pt-6">
+            <div class="flex flex-col justify-between gap-3 md:flex-row md:items-start">
+                <div>
+                    <h2 class="text-base font-semibold">Security Activity</h2>
+                    <p class="mt-1 text-sm text-zinc-500">Recent sign-in and profile security events for this account.</p>
+                </div>
+
+                <flux:badge color="zinc">
+                    {{ $securityActivities->count() }} recent
+                </flux:badge>
+            </div>
+
+            <div class="mt-5 overflow-hidden rounded-lg border border-zinc-200 bg-white">
+                <div class="divide-y divide-zinc-200">
+                    @forelse ($securityActivities as $activity)
+                        <div class="flex flex-col justify-between gap-3 p-4 md:flex-row md:items-start">
+                            <div class="min-w-0">
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-zinc-100 text-zinc-600">
+                                        @if (str_contains($activity->action, 'two_factor'))
+                                            <flux:icon.shield-check class="size-4" />
+                                        @elseif (str_contains($activity->action, 'login') || str_contains($activity->action, 'logout'))
+                                            <flux:icon.arrow-left-start-on-rectangle class="size-4" />
+                                        @else
+                                            <flux:icon.key class="size-4" />
+                                        @endif
+                                    </span>
+                                    <div class="min-w-0">
+                                        <p class="font-medium">{{ $activity->label }}</p>
+                                        <p class="mt-1 text-sm text-zinc-500">{{ $activity->ip_address ?: 'Unknown IP' }}</p>
+                                    </div>
+                                </div>
+
+                                <p class="mt-2 truncate text-xs text-zinc-400">{{ $activity->user_agent ?: 'No user agent recorded' }}</p>
+                            </div>
+
+                            <div class="shrink-0 text-sm text-zinc-500">
+                                {{ $activity->created_at->diffForHumans() }}
+                            </div>
+                        </div>
+                    @empty
+                        <div class="p-4 text-sm text-zinc-500">
+                            No security activity has been recorded yet.
+                        </div>
+                    @endforelse
+                </div>
+            </div>
+        </section>
     </div>
 
     <div class="mt-6 flex flex-wrap gap-3">

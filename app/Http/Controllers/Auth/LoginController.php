@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Services\SecurityActivityService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -15,7 +16,7 @@ class LoginController extends Controller
         return view('auth.login');
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request, SecurityActivityService $activity): RedirectResponse
     {
         $credentials = $request->validate([
             'email' => ['required', 'email'],
@@ -35,6 +36,8 @@ class LoginController extends Controller
         $user = Auth::user()->load('tenant');
 
         if ($user->isTenantAdmin() && (! $user->tenant || ! $user->tenant->is_active)) {
+            $activity->log($user, 'tenant_inactive_login_blocked', 'Login blocked because tenant is inactive.', request: $request);
+
             Auth::logout();
 
             return back()
@@ -43,6 +46,8 @@ class LoginController extends Controller
         }
 
         if ($user->hasTwoFactorEnabled()) {
+            $activity->log($user, 'two_factor_challenge_started', 'Password accepted. Two-factor challenge required.', request: $request);
+
             Auth::logout();
 
             $request->session()->put([
@@ -57,11 +62,17 @@ class LoginController extends Controller
 
         $request->session()->forget('url.intended');
 
+        $activity->log($user, 'login', 'Signed in successfully.', request: $request);
+
         return redirect()->route('redirect-after-login');
     }
 
-    public function destroy(Request $request): RedirectResponse
+    public function destroy(Request $request, SecurityActivityService $activity): RedirectResponse
     {
+        if ($request->user()) {
+            $activity->log($request->user(), 'logout', 'Signed out.', request: $request);
+        }
+
         Auth::logout();
 
         $request->session()->invalidate();

@@ -107,6 +107,11 @@ class AdminProfileTest extends TestCase
         $this->assertSame('Updated Owner', $freshUser->name);
         $this->assertTrue(Hash::check('new-private-password', $freshUser->password));
         $this->assertFalse($freshUser->must_change_password);
+        $this->assertDatabaseHas('security_activities', [
+            'user_id' => $user->id,
+            'action' => 'password_updated',
+            'label' => 'Password changed from profile.',
+        ]);
     }
 
     public function test_livewire_profile_card_enables_regenerates_and_disables_two_factor(): void
@@ -134,10 +139,18 @@ class AdminProfileTest extends TestCase
 
         $this->assertTrue($user->fresh()->hasTwoFactorEnabled());
         $this->assertCount(8, $user->fresh()->two_factor_recovery_codes);
+        $this->assertDatabaseHas('security_activities', [
+            'user_id' => $user->id,
+            'action' => 'two_factor_enabled',
+        ]);
 
         $component
             ->call('regenerateRecoveryCodes')
             ->assertSee('Recovery codes regenerated.');
+        $this->assertDatabaseHas('security_activities', [
+            'user_id' => $user->id,
+            'action' => 'recovery_codes_regenerated',
+        ]);
 
         $component
             ->set('two_factor_disable_password', 'current-password')
@@ -147,6 +160,10 @@ class AdminProfileTest extends TestCase
 
         $this->assertFalse($user->fresh()->hasTwoFactorEnabled());
         $this->assertNull($user->fresh()->two_factor_secret);
+        $this->assertDatabaseHas('security_activities', [
+            'user_id' => $user->id,
+            'action' => 'two_factor_disabled',
+        ]);
     }
 
     public function test_livewire_profile_card_lists_and_logs_out_other_sessions(): void
@@ -190,6 +207,32 @@ class AdminProfileTest extends TestCase
             ->assertSee('Signed out');
 
         $this->assertDatabaseMissing('sessions', ['id' => 'other-session']);
+        $this->assertDatabaseHas('security_activities', [
+            'user_id' => $user->id,
+            'action' => 'other_sessions_logged_out',
+        ]);
+    }
+
+    public function test_livewire_profile_card_shows_recent_security_activity(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'super_admin',
+            'is_active' => true,
+        ]);
+
+        $user->securityActivities()->create([
+            'action' => 'login',
+            'label' => 'Signed in successfully.',
+            'ip_address' => '127.0.0.1',
+            'user_agent' => 'Feature Test Browser',
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(ProfileCard::class)
+            ->assertSee('Security Activity')
+            ->assertSee('Signed in successfully.')
+            ->assertSee('127.0.0.1')
+            ->assertSee('Feature Test Browser');
     }
 
     public function test_profile_password_change_requires_current_password(): void
