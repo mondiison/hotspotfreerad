@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\ExpenseCategory;
+use App\Services\ExpenseCategoryManagementService;
 use App\Support\TenantAccess;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -67,81 +68,35 @@ class ExpenseCategoryController extends Controller
         ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request, ExpenseCategoryManagementService $categories): RedirectResponse
     {
-        ExpenseCategory::create($this->validated($request));
+        $categories->create($categories->validated($request), $request->user());
 
         return redirect()->route('admin.expense-categories.index')->with('status', 'Expense category created.');
     }
 
-    public function edit(Request $request, ExpenseCategory $expenseCategory): View
+    public function edit(Request $request, ExpenseCategory $expenseCategory, ExpenseCategoryManagementService $categories): View
     {
-        $this->assertCanManage($request, $expenseCategory);
+        $categories->assertCanManage($request->user(), $expenseCategory);
 
         return view('admin.expense-categories.form', ['category' => $expenseCategory]);
     }
 
-    public function update(Request $request, ExpenseCategory $expenseCategory): RedirectResponse
+    public function update(Request $request, ExpenseCategory $expenseCategory, ExpenseCategoryManagementService $categories): RedirectResponse
     {
-        $this->assertCanManage($request, $expenseCategory);
-
-        $expenseCategory->update($this->validated($request, $expenseCategory));
+        $categories->update($expenseCategory, $categories->validated($request, $expenseCategory), $request->user());
 
         return redirect()->route('admin.expense-categories.index')->with('status', 'Expense category updated.');
     }
 
-    public function destroy(Request $request, ExpenseCategory $expenseCategory): RedirectResponse
+    public function destroy(Request $request, ExpenseCategory $expenseCategory, ExpenseCategoryManagementService $categories): RedirectResponse
     {
-        $this->assertCanManage($request, $expenseCategory);
-
-        if ($expenseCategory->expenses()->exists()) {
+        try {
+            $categories->delete($expenseCategory, $request->user());
+        } catch (\DomainException) {
             return back()->withErrors(['category' => 'This category is already used by expenses. Deactivate it instead of deleting it.']);
         }
 
-        $expenseCategory->delete();
-
         return redirect()->route('admin.expense-categories.index')->with('status', 'Expense category deleted.');
-    }
-
-    private function validated(Request $request, ?ExpenseCategory $category = null): array
-    {
-        $user = $request->user();
-        $tenantId = $user->isSuperAdmin()
-            ? null
-            : $user->tenant_id;
-
-        abort_unless($user->isSuperAdmin() || $tenantId, 403);
-
-        $data = $request->validate([
-            'name' => [
-                'required',
-                'string',
-                'max:255',
-                Rule::unique('expense_categories', 'name')
-                    ->where('tenant_id', $tenantId)
-                    ->ignore($category?->id),
-            ],
-            'description' => ['nullable', 'string', 'max:500'],
-            'monthly_budget' => ['nullable', 'numeric', 'min:0', 'max:9999999999.99'],
-            'is_active' => ['nullable', 'boolean'],
-        ]) + [
-            'is_active' => false,
-        ];
-
-        $data['tenant_id'] = $tenantId;
-        $data['monthly_budget'] = filled($data['monthly_budget'] ?? null)
-            ? round((float) $data['monthly_budget'], 2)
-            : null;
-
-        return $data;
-    }
-
-    private function assertCanManage(Request $request, ExpenseCategory $category): void
-    {
-        if ($request->user()->isSuperAdmin()) {
-            return;
-        }
-
-        abort_unless($category->tenant_id === $request->user()->tenant_id, 403);
     }
 }
