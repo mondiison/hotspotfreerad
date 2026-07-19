@@ -70,6 +70,33 @@ class AdminSalesReportTest extends TestCase
         $this->assertSame('successful', $ownPayment->status);
     }
 
+    public function test_sales_report_shows_platform_commission_and_tenant_net(): void
+    {
+        $this->paymentFixture('Commission Tenant', 'commission@example.com', 'Commission Shop', 2000, 'successful', '2026-04-05 10:00:00', [
+            'billing_model' => 'commission',
+            'commission_rate' => 15,
+        ]);
+
+        $user = User::factory()->create([
+            'role' => 'super_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('admin.reports.sales', [
+                'from' => '2026-04-01',
+                'to' => '2026-04-30',
+                'group' => 'month',
+            ]))
+            ->assertOk()
+            ->assertSee('Gross Sales')
+            ->assertSee('Platform Commission')
+            ->assertSee('Tenant Net')
+            ->assertSee('NGN 2,000.00')
+            ->assertSee('NGN 300.00')
+            ->assertSee('NGN 1,700.00');
+    }
+
     public function test_sales_report_validates_date_range(): void
     {
         $user = User::factory()->create([
@@ -85,12 +112,12 @@ class AdminSalesReportTest extends TestCase
             ->assertSessionHasErrors('to');
     }
 
-    private function paymentFixture(string $tenantName, string $ownerEmail, string $shopName, int $amount, string $status, ?string $paidAt): array
+    private function paymentFixture(string $tenantName, string $ownerEmail, string $shopName, int $amount, string $status, ?string $paidAt, array $tenantOverrides = []): array
     {
-        $tenant = Tenant::create([
+        $tenant = Tenant::create(array_merge([
             'company_name' => $tenantName,
             'owner_email' => $ownerEmail,
-        ]);
+        ], $tenantOverrides));
         $shop = Shop::create([
             'tenant_id' => $tenant->id,
             'name' => $shopName,
@@ -108,6 +135,9 @@ class AdminSalesReportTest extends TestCase
             'shop_id' => $shop->id,
             'mac_address' => fake()->unique()->macAddress(),
         ]);
+        $commissionRate = ($tenant->billing_model ?? 'subscription') === 'commission' ? (float) $tenant->commission_rate : 0.0;
+        $platformFee = round($amount * ($commissionRate / 100), 2);
+
         $payment = Payment::create([
             'shop_id' => $shop->id,
             'package_id' => $package->id,
@@ -116,6 +146,11 @@ class AdminSalesReportTest extends TestCase
             'tx_ref' => fake()->unique()->bothify('TX-####'),
             'provider_reference' => $status === 'successful' ? fake()->unique()->bothify('ORD-####') : null,
             'amount' => $amount,
+            'gross_amount' => $amount,
+            'platform_fee_amount' => $platformFee,
+            'tenant_net_amount' => $amount - $platformFee,
+            'commission_rate' => $commissionRate,
+            'billing_model' => $tenant->billing_model ?? 'subscription',
             'currency' => 'NGN',
             'status' => $status,
             'paid_at' => $paidAt,

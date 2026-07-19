@@ -40,11 +40,43 @@ class AdminTenantManagementTest extends TestCase
         $tenantAdmin = User::where('email', 'mondiison@gmail.com')->firstOrFail();
 
         $this->assertSame($tenant->id, $tenantAdmin->tenant_id);
+        $this->assertSame('subscription', $tenant->billing_model);
+        $this->assertSame('0.00', $tenant->commission_rate);
         $this->assertSame('tenant_admin', $tenantAdmin->role);
         $this->assertTrue($tenantAdmin->is_active);
         $this->assertTrue($tenantAdmin->must_change_password);
 
         Notification::assertSentTo($tenantAdmin, TenantAdminTemporaryPassword::class);
+    }
+
+    public function test_super_admin_can_create_commission_tenant(): void
+    {
+        Notification::fake();
+
+        $superAdmin = User::factory()->create([
+            'role' => 'super_admin',
+            'tenant_id' => null,
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($superAdmin)
+            ->post(route('admin.tenants.store'), [
+                'company_name' => 'Commission ISP',
+                'slug' => 'commission-isp',
+                'owner_email' => 'commission@example.com',
+                'subscription_plan' => 'free',
+                'billing_model' => 'commission',
+                'commission_rate' => 12.5,
+                'is_active' => 1,
+                'public_site_enabled' => 1,
+                'brand_color' => '#0f766e',
+            ])
+            ->assertRedirect(route('admin.tenants.index'));
+
+        $tenant = Tenant::where('owner_email', 'commission@example.com')->firstOrFail();
+
+        $this->assertSame('commission', $tenant->billing_model);
+        $this->assertSame('12.50', $tenant->commission_rate);
     }
 
     public function test_tenant_index_shows_owner_access_status_and_reset_action(): void

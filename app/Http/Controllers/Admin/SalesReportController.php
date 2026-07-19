@@ -49,8 +49,10 @@ class SalesReportController extends Controller
             ->map(fn ($groupedPayments, string $period) => [
                 'period' => $period,
                 'sales_count' => $groupedPayments->count(),
-                'revenue' => $groupedPayments->sum(fn (Payment $payment) => (float) $payment->amount),
-                'average_sale' => $groupedPayments->avg(fn (Payment $payment) => (float) $payment->amount) ?? 0,
+                'revenue' => $groupedPayments->sum(fn (Payment $payment) => $this->grossAmount($payment)),
+                'platform_fee' => $groupedPayments->sum(fn (Payment $payment) => $this->platformFee($payment)),
+                'tenant_net' => $groupedPayments->sum(fn (Payment $payment) => $this->tenantNet($payment)),
+                'average_sale' => $groupedPayments->avg(fn (Payment $payment) => $this->grossAmount($payment)) ?? 0,
             ])
             ->values();
 
@@ -59,7 +61,9 @@ class SalesReportController extends Controller
             ->map(fn ($groupedPayments, string $shopName) => [
                 'shop' => $shopName,
                 'sales_count' => $groupedPayments->count(),
-                'revenue' => $groupedPayments->sum(fn (Payment $payment) => (float) $payment->amount),
+                'revenue' => $groupedPayments->sum(fn (Payment $payment) => $this->grossAmount($payment)),
+                'platform_fee' => $groupedPayments->sum(fn (Payment $payment) => $this->platformFee($payment)),
+                'tenant_net' => $groupedPayments->sum(fn (Payment $payment) => $this->tenantNet($payment)),
             ])
             ->sortByDesc('revenue')
             ->values();
@@ -72,8 +76,10 @@ class SalesReportController extends Controller
             ],
             'summary' => [
                 'sales_count' => $payments->count(),
-                'revenue' => $payments->sum(fn (Payment $payment) => (float) $payment->amount),
-                'average_sale' => $payments->avg(fn (Payment $payment) => (float) $payment->amount) ?? 0,
+                'revenue' => $payments->sum(fn (Payment $payment) => $this->grossAmount($payment)),
+                'platform_fee' => $payments->sum(fn (Payment $payment) => $this->platformFee($payment)),
+                'tenant_net' => $payments->sum(fn (Payment $payment) => $this->tenantNet($payment)),
+                'average_sale' => $payments->avg(fn (Payment $payment) => $this->grossAmount($payment)) ?? 0,
                 'period_count' => $rows->count(),
             ],
             'rows' => $rows,
@@ -88,5 +94,24 @@ class SalesReportController extends Controller
             'month' => $date->format('Y-m'),
             default => $date->format('Y-m-d'),
         };
+    }
+
+    private function grossAmount(Payment $payment): float
+    {
+        return (float) ($payment->gross_amount ?: $payment->amount);
+    }
+
+    private function platformFee(Payment $payment): float
+    {
+        return (float) ($payment->platform_fee_amount ?? 0);
+    }
+
+    private function tenantNet(Payment $payment): float
+    {
+        if ($payment->tenant_net_amount !== null && (float) $payment->tenant_net_amount > 0) {
+            return (float) $payment->tenant_net_amount;
+        }
+
+        return $this->grossAmount($payment) - $this->platformFee($payment);
     }
 }

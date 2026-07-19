@@ -171,9 +171,41 @@ class HotspotPortalTest extends TestCase
             'shop_id' => $router->shop_id,
             'package_id' => $package->id,
             'amount' => 500,
+            'gross_amount' => 500,
+            'platform_fee_amount' => 0,
+            'tenant_net_amount' => 500,
+            'billing_model' => 'subscription',
             'currency' => 'NGN',
             'status' => 'pending',
             'provider' => 'flutterwave',
+        ]);
+    }
+
+    public function test_payment_step_captures_commission_snapshot_for_commission_tenant(): void
+    {
+        [$router, $package] = $this->routerWithPackage([
+            'billing_model' => 'commission',
+            'commission_rate' => 10,
+        ]);
+
+        $this->post(route('hotspot.pay'), [
+            'mac' => 'AA:BB:CC:DD:EE:FF',
+            'nasid' => $router->nas_identifier,
+            'package_id' => $package->id,
+            'email' => 'customer@example.com',
+        ])
+            ->assertOk();
+
+        $this->assertDatabaseHas('payments', [
+            'shop_id' => $router->shop_id,
+            'package_id' => $package->id,
+            'amount' => 500,
+            'gross_amount' => 500,
+            'platform_fee_amount' => 50,
+            'tenant_net_amount' => 450,
+            'commission_rate' => 10,
+            'billing_model' => 'commission',
+            'status' => 'pending',
         ]);
     }
 
@@ -423,15 +455,15 @@ class HotspotPortalTest extends TestCase
         ]);
     }
 
-    private function routerWithPackage(): array
+    private function routerWithPackage(array $tenantOverrides = []): array
     {
-        $tenant = Tenant::create([
+        $tenant = Tenant::create(array_merge([
             'company_name' => 'Demo ISP',
             'owner_email' => 'owner@example.com',
             'brand_color' => '#0f766e',
             'hero_image_path' => 'tenant-brand/demo/fallback-hero.jpg',
             'flyer_image_path' => 'tenant-brand/demo/fallback-flyer.jpg',
-        ]);
+        ], $tenantOverrides));
 
         $shop = Shop::create([
             'tenant_id' => $tenant->id,

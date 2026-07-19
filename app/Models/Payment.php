@@ -14,6 +14,10 @@ class Payment extends Model
     {
         return [
             'amount' => 'decimal:2',
+            'gross_amount' => 'decimal:2',
+            'platform_fee_amount' => 'decimal:2',
+            'tenant_net_amount' => 'decimal:2',
+            'commission_rate' => 'decimal:2',
             'payload' => 'array',
             'paid_at' => 'datetime',
         ];

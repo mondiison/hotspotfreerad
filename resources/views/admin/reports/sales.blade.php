@@ -26,11 +26,13 @@
         </div>
     </form>
 
-    <section class="mt-6 grid gap-4 md:grid-cols-4">
+    <section class="mt-6 grid gap-4 md:grid-cols-3 xl:grid-cols-6">
         @foreach ([
             ['label' => 'Sales', 'value' => number_format($summary['sales_count']), 'hint' => 'Successful payments in range'],
-            ['label' => 'Revenue', 'value' => 'NGN '.number_format($summary['revenue'], 2), 'hint' => 'Total confirmed sales'],
-            ['label' => 'Average Sale', 'value' => 'NGN '.number_format($summary['average_sale'], 2), 'hint' => 'Revenue divided by sales'],
+            ['label' => 'Gross Sales', 'value' => 'NGN '.number_format($summary['revenue'], 2), 'hint' => 'Total customer payments'],
+            ['label' => 'Platform Commission', 'value' => 'NGN '.number_format($summary['platform_fee'], 2), 'hint' => 'Platform share from commission tenants'],
+            ['label' => 'Tenant Net', 'value' => 'NGN '.number_format($summary['tenant_net'], 2), 'hint' => 'Amount retained by tenants'],
+            ['label' => 'Average Sale', 'value' => 'NGN '.number_format($summary['average_sale'], 2), 'hint' => 'Gross sales divided by sales'],
             ['label' => 'Periods', 'value' => number_format($summary['period_count']), 'hint' => 'Grouped rows below'],
         ] as $stat)
             <div class="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
@@ -54,7 +56,9 @@
                         <th class="px-4 py-3 font-medium">Period</th>
                         <th class="px-4 py-3 text-right font-medium">Sales</th>
                         <th class="px-4 py-3 text-right font-medium">Average</th>
-                        <th class="px-4 py-3 text-right font-medium">Revenue</th>
+                        <th class="px-4 py-3 text-right font-medium">Gross</th>
+                        <th class="px-4 py-3 text-right font-medium">Commission</th>
+                        <th class="px-4 py-3 text-right font-medium">Tenant Net</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-zinc-100">
@@ -64,9 +68,11 @@
                             <td class="px-4 py-3 text-right">{{ number_format($row['sales_count']) }}</td>
                             <td class="px-4 py-3 text-right">NGN {{ number_format($row['average_sale'], 2) }}</td>
                             <td class="px-4 py-3 text-right font-semibold">NGN {{ number_format($row['revenue'], 2) }}</td>
+                            <td class="px-4 py-3 text-right">NGN {{ number_format($row['platform_fee'], 2) }}</td>
+                            <td class="px-4 py-3 text-right">NGN {{ number_format($row['tenant_net'], 2) }}</td>
                         </tr>
                     @empty
-                        <tr><td colspan="4" class="px-4 py-8 text-center text-zinc-500">No successful sales in this range.</td></tr>
+                        <tr><td colspan="6" class="px-4 py-8 text-center text-zinc-500">No successful sales in this range.</td></tr>
                     @endforelse
                 </tbody>
             </table>
@@ -83,7 +89,9 @@
                     <tr>
                         <th class="px-4 py-3 font-medium">Shop</th>
                         <th class="px-4 py-3 text-right font-medium">Sales</th>
-                        <th class="px-4 py-3 text-right font-medium">Revenue</th>
+                        <th class="px-4 py-3 text-right font-medium">Gross</th>
+                        <th class="px-4 py-3 text-right font-medium">Commission</th>
+                        <th class="px-4 py-3 text-right font-medium">Tenant Net</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-zinc-100">
@@ -92,9 +100,11 @@
                             <td class="px-4 py-3 font-medium">{{ $row['shop'] }}</td>
                             <td class="px-4 py-3 text-right">{{ number_format($row['sales_count']) }}</td>
                             <td class="px-4 py-3 text-right font-semibold">NGN {{ number_format($row['revenue'], 2) }}</td>
+                            <td class="px-4 py-3 text-right">NGN {{ number_format($row['platform_fee'], 2) }}</td>
+                            <td class="px-4 py-3 text-right">NGN {{ number_format($row['tenant_net'], 2) }}</td>
                         </tr>
                     @empty
-                        <tr><td colspan="3" class="px-4 py-8 text-center text-zinc-500">No shop sales in this range.</td></tr>
+                        <tr><td colspan="5" class="px-4 py-8 text-center text-zinc-500">No shop sales in this range.</td></tr>
                     @endforelse
                 </tbody>
             </table>

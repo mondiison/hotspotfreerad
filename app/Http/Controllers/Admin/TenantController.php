@@ -163,6 +163,8 @@ class TenantController extends Controller
             ],
             'owner_email' => ['required', 'email', 'max:255', "unique:tenants,owner_email,{$tenantId}"],
             'subscription_plan' => ['required', 'string', 'max:50'],
+            'billing_model' => ['nullable', 'string', Rule::in(['subscription', 'commission'])],
+            'commission_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'trial_ends_at' => ['nullable', 'date'],
             'is_active' => ['nullable', 'boolean'],
             'public_site_enabled' => ['nullable', 'boolean'],
@@ -176,7 +178,13 @@ class TenantController extends Controller
             'is_active' => false,
             'public_site_enabled' => false,
             'brand_color' => '#0f766e',
+            'billing_model' => 'subscription',
+            'commission_rate' => 0,
         ];
+
+        if (($data['billing_model'] ?? 'subscription') !== 'commission') {
+            $data['commission_rate'] = 0;
+        }
 
         validator($data, [
             'owner_email' => [

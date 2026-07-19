@@ -31,6 +31,7 @@ class Tenant extends Model
         return [
             'trial_ends_at' => 'datetime',
             'is_active' => 'boolean',
+            'commission_rate' => 'decimal:2',
             'public_site_enabled' => 'boolean',
             'public_site_slides' => 'array',
         ];

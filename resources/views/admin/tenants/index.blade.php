@@ -50,7 +50,14 @@
                                 </form>
                             </div>
                         </td>
-                        <td class="px-4 py-3">{{ ucfirst($tenant->subscription_plan) }}</td>
+                        <td class="px-4 py-3">
+                            <p class="font-medium">{{ ucfirst($tenant->subscription_plan) }}</p>
+                            @if (($tenant->billing_model ?? 'subscription') === 'commission')
+                                <p class="mt-1 text-xs text-zinc-500">{{ number_format((float) $tenant->commission_rate, 2) }}% commission</p>
+                            @else
+                                <p class="mt-1 text-xs text-zinc-500">Subscription billing</p>
+                            @endif
+                        </td>
                         <td class="px-4 py-3">
                             <flux:badge :color="$tenant->is_active ? 'green' : 'zinc'">{{ $tenant->is_active ? 'Active' : 'Inactive' }}</flux:badge>
                         </td>

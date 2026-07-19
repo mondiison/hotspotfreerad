@@ -10,6 +10,7 @@ use App\Models\Router;
 use App\Models\Subscription;
 use App\Services\FlutterwaveService;
 use App\Services\RadiusProvisioningService;
+use App\Support\PaymentCommission;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -173,6 +174,7 @@ class PortalController extends Controller
                 'provider' => 'flutterwave',
                 'tx_ref' => 'HSF-'.now()->format('YmdHis').'-'.Str::upper(Str::random(8)),
                 'amount' => $package->price,
+                ...PaymentCommission::forShop($router->shop, (float) $package->price),
                 'currency' => $package->currency,
                 'status' => 'pending',
                 'payload' => [

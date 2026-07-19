@@ -34,6 +34,23 @@
                     </flux:field>
 
                     <flux:field>
+                        <flux:label>Tenant billing model</flux:label>
+                        <flux:select name="billing_model">
+                            <flux:select.option value="subscription" :selected="old('billing_model', $tenant->billing_model ?? 'subscription') === 'subscription'">Subscription</flux:select.option>
+                            <flux:select.option value="commission" :selected="old('billing_model', $tenant->billing_model ?? 'subscription') === 'commission'">Commission on sales</flux:select.option>
+                        </flux:select>
+                        <flux:description>Subscription charges the tenant separately. Commission deducts a platform percentage from each hotspot sale.</flux:description>
+                        <flux:error name="billing_model" />
+                    </flux:field>
+
+                    <flux:field>
+                        <flux:label>Commission rate</flux:label>
+                        <flux:input type="number" name="commission_rate" value="{{ old('commission_rate', $tenant->commission_rate ?? 0) }}" min="0" max="100" step="0.01" icon="receipt-percent" />
+                        <flux:description>Example: 10 means the platform keeps 10% and the tenant net is 90%.</flux:description>
+                        <flux:error name="commission_rate" />
+                    </flux:field>
+
+                    <flux:field>
                         <flux:label>Trial ends at</flux:label>
                         <flux:input type="datetime-local" name="trial_ends_at" value="{{ old('trial_ends_at', optional($tenant->trial_ends_at)->format('Y-m-d\TH:i')) }}" />
                         <flux:error name="trial_ends_at" />
