@@ -58,6 +58,67 @@ class FlutterwaveService
     /**
      * @throws RequestException
      */
+    public function createDynamicVirtualAccount(Payment $payment, array $customer): array
+    {
+        $customerResponse = $this->createCustomer($payment, $customer);
+        $customerId = data_get($customerResponse, 'data.id');
+
+        $response = Http::withToken($this->accessToken($payment))
+            ->acceptJson()
+            ->withHeaders([
+                'X-Trace-Id' => $payment->tx_ref,
+                'X-Idempotency-Key' => $payment->tx_ref.'-virtual-account',
+            ])
+            ->post($this->baseUrl().'/virtual-accounts', [
+                'reference' => $payment->tx_ref,
+                'customer_id' => $customerId,
+                'amount' => (float) $payment->amount,
+                'currency' => $payment->currency,
+                'account_type' => 'dynamic',
+                'expiry' => 3600,
+                'narration' => $payment->shop->name.' hotspot',
+                'meta' => [
+                    'payment_id' => $payment->id,
+                    'payment_reference' => $payment->tx_ref,
+                    'shop_id' => $payment->shop_id,
+                    'package_id' => $payment->package_id,
+                    'device_mac' => data_get($payment->payload, 'mac'),
+                    'nas_identifier' => data_get($payment->payload, 'nasid'),
+                ],
+            ])
+            ->throw()
+            ->json();
+
+        return [
+            'response' => $response,
+            'customer_response' => $customerResponse,
+            'customer_id' => (string) $customerId,
+            'virtual_account_id' => (string) data_get($response, 'data.id'),
+            'account_number' => (string) data_get($response, 'data.account_number'),
+            'bank_name' => (string) data_get($response, 'data.account_bank_name'),
+            'account_name' => (string) (data_get($response, 'data.narration') ?: data_get($response, 'data.note')),
+            'expires_at' => data_get($response, 'data.account_expiration_datetime'),
+            'note' => data_get($response, 'data.note'),
+        ];
+    }
+
+    /**
+     * @throws RequestException
+     */
+    public function virtualAccountCharges(Payment $payment, string $virtualAccountId): array
+    {
+        return Http::withToken($this->accessToken($payment))
+            ->acceptJson()
+            ->get($this->baseUrl().'/charges', [
+                'virtual_account_id' => $virtualAccountId,
+            ])
+            ->throw()
+            ->json();
+    }
+
+    /**
+     * @throws RequestException
+     */
     public function verifyPayment(Payment $payment, string $providerReference, string $type = 'order'): array
     {
         $resource = Str::startsWith($type, 'order') ? 'orders' : 'charges';
@@ -153,6 +214,19 @@ class FlutterwaveService
 
             return (string) data_get($response, 'access_token');
         });
+    }
+
+    private function createCustomer(Payment $payment, array $customer): array
+    {
+        return Http::withToken($this->accessToken($payment))
+            ->acceptJson()
+            ->withHeaders([
+                'X-Trace-Id' => $payment->tx_ref,
+                'X-Idempotency-Key' => $payment->tx_ref.'-customer',
+            ])
+            ->post($this->baseUrl().'/customers', $this->customerPayload($payment, $customer))
+            ->throw()
+            ->json();
     }
 
     private function clientId(Payment $payment): string

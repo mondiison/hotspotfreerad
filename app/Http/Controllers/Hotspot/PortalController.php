@@ -139,7 +139,7 @@ class PortalController extends Controller
             'package_id' => ['required', 'integer', 'exists:packages,id'],
             'email' => ['nullable', 'email', 'max:255'],
             'phone' => ['nullable', 'string', 'max:255'],
-            'payment_method' => ['nullable', 'string', 'in:opay'],
+            'payment_method' => ['nullable', 'string', 'in:opay,bank_transfer'],
             'link-login' => ['nullable', 'string', 'max:2048'],
             'link-orig' => ['nullable', 'string', 'max:2048'],
         ]);
@@ -199,6 +199,37 @@ class PortalController extends Controller
 
         if ($flutterwave->isConfiguredFor($payment)) {
             try {
+                if (($validated['payment_method'] ?? 'opay') === 'bank_transfer') {
+                    $transfer = $flutterwave->createDynamicVirtualAccount(
+                        $payment,
+                        [
+                            'email' => $validated['email'] ?? null,
+                            'phone' => $validated['phone'] ?? null,
+                            'name' => 'Hotspot Customer',
+                        ],
+                    );
+
+                    $payment->update([
+                        'provider_reference' => $transfer['virtual_account_id'],
+                        'payload' => array_merge($payment->payload ?? [], [
+                            'flutterwave_account' => $credentialSource,
+                            'flutterwave_customer_id' => $transfer['customer_id'],
+                            'virtual_account' => $transfer,
+                        ]),
+                    ]);
+
+                    return view('hotspot.bank-transfer', [
+                        'router' => $router,
+                        'shop' => $router->shop,
+                        'package' => $package,
+                        'payment' => $payment->fresh(),
+                        'transfer' => $transfer,
+                        'macAddress' => $validated['mac'],
+                        'loginUrl' => $validated['link-login'] ?? null,
+                        'originalUrl' => $validated['link-orig'] ?? null,
+                    ]);
+                }
+
                 $checkout = $flutterwave->initializeCheckout(
                     $payment,
                     [
@@ -247,6 +278,66 @@ class PortalController extends Controller
             'macAddress' => $validated['mac'],
             'loginUrl' => $validated['link-login'] ?? null,
             'originalUrl' => $validated['link-orig'] ?? null,
+        ]);
+    }
+
+    public function checkBankTransfer(Request $request, FlutterwaveService $flutterwave, HotspotPaymentConfirmationService $payments): View
+    {
+        $validated = $request->validate([
+            'tx_ref' => ['required', 'string', 'exists:payments,tx_ref'],
+        ]);
+
+        $payment = Payment::with(['shop.tenant', 'package'])
+            ->where('tx_ref', $validated['tx_ref'])
+            ->firstOrFail();
+
+        $virtualAccountId = (string) data_get($payment->payload, 'virtual_account.virtual_account_id');
+
+        if (blank($virtualAccountId)) {
+            return view('hotspot.payment-failed', compact('payment'));
+        }
+
+        try {
+            $charges = $flutterwave->virtualAccountCharges($payment, $virtualAccountId);
+            $charge = collect(data_get($charges, 'data', []))->first(fn ($charge) => $this->statusIsSuccessful(data_get($charge, 'status'))
+                && (data_get($charge, 'reference') === $payment->tx_ref || (float) data_get($charge, 'amount') >= (float) $payment->amount));
+
+            if ($charge) {
+                $subscription = $payments->verifyAndGrant($payment, (string) data_get($charge, 'id'), 'charge');
+
+                if ($subscription) {
+                    $payment->refresh();
+
+                    return view('hotspot.access-granted', [
+                        'router' => Router::with('shop.tenant')->where('shop_id', $payment->shop_id)->first(),
+                        'package' => $payment->package,
+                        'subscription' => $subscription,
+                        'macAddress' => $payment->payload['mac'],
+                        'username' => $payment->payload['mac'],
+                        'password' => self::TEST_ACCESS_PASSWORD,
+                        'loginUrl' => $payment->payload['link_login'] ?? null,
+                        'originalUrl' => $payment->payload['link_orig'] ?? null,
+                    ]);
+                }
+            }
+        } catch (Throwable $exception) {
+            Log::warning('Flutterwave bank transfer check failed', [
+                'payment_id' => $payment->id,
+                'tx_ref' => $payment->tx_ref,
+                'message' => $exception->getMessage(),
+            ]);
+        }
+
+        return view('hotspot.bank-transfer', [
+            'router' => Router::with('shop.tenant')->where('shop_id', $payment->shop_id)->first(),
+            'shop' => $payment->shop,
+            'package' => $payment->package,
+            'payment' => $payment,
+            'transfer' => data_get($payment->payload, 'virtual_account', []),
+            'macAddress' => $payment->payload['mac'],
+            'loginUrl' => $payment->payload['link_login'] ?? null,
+            'originalUrl' => $payment->payload['link_orig'] ?? null,
+            'statusMessage' => 'We have not received the transfer yet. Please confirm the amount and try again after a moment.',
         ]);
     }
 

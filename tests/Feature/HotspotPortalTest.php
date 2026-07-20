@@ -279,7 +279,7 @@ class HotspotPortalTest extends TestCase
         $this->assertSame('tenant', data_get($payment->payload, 'flutterwave_account.source'));
     }
 
-    public function test_payment_step_rejects_methods_that_need_a_separate_flutterwave_flow(): void
+    public function test_payment_step_rejects_card_until_secure_card_flow_exists(): void
     {
         [$router, $package] = $this->routerWithPackage();
 
@@ -288,9 +288,153 @@ class HotspotPortalTest extends TestCase
             'nasid' => $router->nas_identifier,
             'package_id' => $package->id,
             'email' => 'customer@example.com',
-            'payment_method' => 'banktransfer',
+            'payment_method' => 'card',
         ])
             ->assertSessionHasErrors('payment_method');
+    }
+
+    public function test_payment_step_creates_dynamic_virtual_account_for_bank_transfer(): void
+    {
+        $this->configureFlutterwave();
+        Http::fake([
+            'idp.flutterwave.com/*' => Http::response([
+                'access_token' => 'FLW_V4_TOKEN',
+                'expires_in' => 600,
+            ]),
+            'developersandbox-api.flutterwave.com/customers' => Http::response([
+                'status' => 'success',
+                'data' => [
+                    'id' => 'cus_12345',
+                ],
+            ], 201),
+            'developersandbox-api.flutterwave.com/virtual-accounts' => Http::response([
+                'status' => 'success',
+                'data' => [
+                    'id' => 'van_12345',
+                    'account_number' => '9059273981',
+                    'account_bank_name' => 'Flutterwave MFB',
+                    'account_type' => 'dynamic',
+                    'account_expiration_datetime' => '2026-07-20T18:00:00.000Z',
+                    'currency' => 'NGN',
+                    'narration' => 'Demo Shop hotspot',
+                ],
+            ], 201),
+        ]);
+        [$router, $package] = $this->routerWithPackage();
+        $router->shop->update([
+            'flutterwave_client_id' => 'tenant-client-id',
+            'flutterwave_client_secret' => 'tenant-client-secret',
+        ]);
+
+        $this->post(route('hotspot.pay'), [
+            'mac' => 'AA:BB:CC:DD:EE:FF',
+            'nasid' => $router->nas_identifier,
+            'package_id' => $package->id,
+            'email' => 'customer@example.com',
+            'phone' => '08000000000',
+            'payment_method' => 'bank_transfer',
+        ])
+            ->assertOk()
+            ->assertSee('Pay by bank transfer')
+            ->assertSee('Flutterwave MFB')
+            ->assertSee('9059273981')
+            ->assertSee('NGN 500.00')
+            ->assertSee('I have paid');
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/customers')
+            && data_get($request->data(), 'email') === 'customer@example.com');
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/virtual-accounts')
+            && $request['reference']
+            && $request['customer_id'] === 'cus_12345'
+            && $request['amount'] === 500.0
+            && $request['currency'] === 'NGN'
+            && $request['account_type'] === 'dynamic');
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), '/orchestration/direct-charges'));
+
+        $payment = Payment::firstOrFail();
+        $this->assertSame('bank_transfer', data_get($payment->payload, 'payment_method'));
+        $this->assertSame('van_12345', $payment->provider_reference);
+        $this->assertSame('9059273981', data_get($payment->payload, 'virtual_account.account_number'));
+    }
+
+    public function test_bank_transfer_check_provisions_radius_access_when_charge_is_successful(): void
+    {
+        [$router, $package] = $this->routerWithPackage();
+        $router->shop->update([
+            'flutterwave_client_id' => 'tenant-client-id',
+            'flutterwave_client_secret' => 'tenant-client-secret',
+        ]);
+
+        $payment = Payment::create([
+            'shop_id' => $router->shop_id,
+            'package_id' => $package->id,
+            'provider' => 'flutterwave',
+            'tx_ref' => 'HSF-20260720180000-TRANSFER',
+            'provider_reference' => 'van_12345',
+            'amount' => 500,
+            'gross_amount' => 500,
+            'platform_fee_amount' => 0,
+            'tenant_net_amount' => 500,
+            'currency' => 'NGN',
+            'status' => 'pending',
+            'payload' => [
+                'mac' => 'AA:BB:CC:DD:EE:FF',
+                'nasid' => $router->nas_identifier,
+                'payment_method' => 'bank_transfer',
+                'virtual_account' => [
+                    'virtual_account_id' => 'van_12345',
+                    'account_number' => '9059273981',
+                    'bank_name' => 'Flutterwave MFB',
+                ],
+            ],
+        ]);
+
+        $this->configureFlutterwave();
+        Http::fake(fn ($request) => match (true) {
+            str_contains($request->url(), '/charges/chg_12345') => Http::response([
+                'status' => 'success',
+                'data' => [
+                    'id' => 'chg_12345',
+                    'status' => 'succeeded',
+                    'reference' => $payment->tx_ref,
+                    'amount' => 500,
+                    'currency' => 'NGN',
+                ],
+            ]),
+            str_contains($request->url(), '/charges') => Http::response([
+                'status' => 'success',
+                'data' => [
+                    [
+                        'id' => 'chg_12345',
+                        'status' => 'succeeded',
+                        'reference' => $payment->tx_ref,
+                        'amount' => 500,
+                        'currency' => 'NGN',
+                    ],
+                ],
+            ]),
+            default => Http::response(['access_token' => 'FLW_V4_TOKEN']),
+        });
+
+        $this->post(route('hotspot.payment.bank-transfer.check'), [
+            'tx_ref' => $payment->tx_ref,
+        ])
+            ->assertOk()
+            ->assertSee('Access provisioned');
+
+        $this->assertDatabaseHas('payments', [
+            'id' => $payment->id,
+            'status' => 'successful',
+            'provider_reference' => 'chg_12345',
+        ]);
+        $this->assertDatabaseHas('subscriptions', [
+            'payment_id' => $payment->id,
+            'mac_address' => 'AA:BB:CC:DD:EE:FF',
+        ]);
+        $this->assertDatabaseHas('radcheck', [
+            'username' => 'AA:BB:CC:DD:EE:FF',
+            'attribute' => 'Cleartext-Password',
+        ]);
     }
 
     public function test_tenant_flutterwave_credentials_are_used_when_complete(): void
