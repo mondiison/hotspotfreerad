@@ -7,8 +7,10 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Services\TwoFactorService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -36,6 +38,7 @@ class AdminProfileTest extends TestCase
             ->assertSee('Tenant Owner')
             ->assertSee('owner@example.com')
             ->assertSee('Mondi Internet')
+            ->assertSee('Profile photo')
             ->assertSee('Passkeys')
             ->assertSee('Not configured')
             ->assertSee(route('admin.passkeys.index'), false);
@@ -115,6 +118,38 @@ class AdminProfileTest extends TestCase
             'action' => 'password_updated',
             'label' => 'Password changed from profile.',
         ]);
+    }
+
+    public function test_livewire_profile_card_uploads_and_removes_avatar(): void
+    {
+        Storage::fake('public');
+
+        $user = User::factory()->create([
+            'name' => 'Avatar Owner',
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(ProfileCard::class)
+            ->set('avatar', UploadedFile::fake()->image('owner.jpg', 400, 400))
+            ->call('save')
+            ->assertHasNoErrors()
+            ->assertSee('Profile updated.');
+
+        $freshUser = $user->fresh();
+
+        $this->assertNotNull($freshUser->avatar_path);
+        Storage::disk('public')->assertExists($freshUser->avatar_path);
+
+        Livewire::actingAs($freshUser)
+            ->test(ProfileCard::class)
+            ->call('removeAvatar')
+            ->assertHasNoErrors()
+            ->assertSee('Profile photo removed.');
+
+        Storage::disk('public')->assertMissing($freshUser->avatar_path);
+        $this->assertNull($freshUser->fresh()->avatar_path);
     }
 
     public function test_livewire_profile_card_enables_regenerates_and_disables_two_factor(): void

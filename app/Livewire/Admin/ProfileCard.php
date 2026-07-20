@@ -8,12 +8,19 @@ use App\Services\SecurityActivityService;
 use App\Services\SessionSecurityService;
 use App\Services\TwoFactorService;
 use Livewire\Component;
+use Livewire\WithFileUploads;
 
 class ProfileCard extends Component
 {
+    use WithFileUploads;
+
     public User $user;
 
     public string $name = '';
+
+    public $avatar = null;
+
+    public bool $remove_avatar = false;
 
     public string $current_password = '';
 
@@ -54,6 +61,8 @@ class ProfileCard extends Component
             'current_password',
             'password',
             'password_confirmation',
+            'avatar',
+            'remove_avatar',
         ]);
 
         $this->savedMessage = 'Profile updated.';
@@ -63,6 +72,22 @@ class ProfileCard extends Component
             $passwordChanged ? 'password_updated' : 'profile_updated',
             $passwordChanged ? 'Password changed from profile.' : 'Profile details updated.'
         );
+    }
+
+    public function removeAvatar(ProfileService $profiles, SecurityActivityService $activity): void
+    {
+        $this->remove_avatar = true;
+
+        $this->user = $profiles->update($this->user, [
+            'name' => $this->name,
+            'remove_avatar' => true,
+        ])->load('tenant');
+
+        $this->reset(['avatar', 'remove_avatar']);
+
+        $this->savedMessage = 'Profile photo removed.';
+        session()->flash('status', 'Profile photo removed.');
+        $activity->log($this->user, 'profile_updated', 'Profile photo removed.');
     }
 
     public function startTwoFactorSetup(TwoFactorService $twoFactor, SecurityActivityService $activity): void

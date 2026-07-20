@@ -121,7 +121,7 @@
                     >
                         <a href="{{ route('admin.profile.edit') }}" wire:navigate class="flex items-center gap-3 rounded-md px-3 py-2 text-zinc-700 hover:bg-zinc-100">
                             <flux:icon.user-circle class="size-4" />
-                            <span>Profile and security</span>
+                            <span>Profile</span>
                         </a>
 
                         <a href="{{ route('admin.passkeys.index') }}" wire:navigate class="flex items-center gap-3 rounded-md px-3 py-2 text-zinc-700 hover:bg-zinc-100">
@@ -152,7 +152,13 @@
                         :class="{ 'lg:justify-center lg:p-2': sidebarCollapsed }"
                         title="{{ auth()->user()->name }}"
                     >
-                        <span class="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-zinc-950 text-xs font-semibold text-white">{{ str(auth()->user()->name)->substr(0, 1)->upper() }}</span>
+                        <span class="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-md bg-zinc-950 text-xs font-semibold text-white">
+                            @if (auth()->user()->avatarUrl())
+                                <img src="{{ auth()->user()->avatarUrl() }}" alt="{{ auth()->user()->name }} profile photo" class="h-full w-full object-cover">
+                            @else
+                                {{ auth()->user()->initials() }}
+                            @endif
+                        </span>
                         <span class="min-w-0 flex-1" :class="{ 'lg:hidden': sidebarCollapsed }">
                             <span class="block truncate font-medium">{{ auth()->user()->name }}</span>
                             <span class="mt-1 block truncate text-xs text-zinc-500">{{ str_replace('_', ' ', auth()->user()->role) }}</span>
@@ -195,7 +201,13 @@
                                     class="flex items-center gap-2 rounded-lg border border-zinc-200 bg-white p-2 text-sm hover:bg-zinc-50"
                                     title="{{ auth()->user()->name }}"
                                 >
-                                    <span class="grid h-8 w-8 place-items-center rounded-md bg-zinc-950 text-xs font-semibold text-white">{{ str(auth()->user()->name)->substr(0, 1)->upper() }}</span>
+                                    <span class="grid h-8 w-8 place-items-center overflow-hidden rounded-md bg-zinc-950 text-xs font-semibold text-white">
+                                        @if (auth()->user()->avatarUrl())
+                                            <img src="{{ auth()->user()->avatarUrl() }}" alt="{{ auth()->user()->name }} profile photo" class="h-full w-full object-cover">
+                                        @else
+                                            {{ auth()->user()->initials() }}
+                                        @endif
+                                    </span>
                                     <span class="hidden max-w-36 truncate font-medium xl:block">{{ auth()->user()->name }}</span>
                                     <flux:icon.chevron-down class="size-4 text-zinc-500" />
                                 </button>
@@ -214,7 +226,7 @@
 
                                     <a href="{{ route('admin.profile.edit') }}" wire:navigate class="flex items-center gap-3 rounded-md px-3 py-2 text-zinc-700 hover:bg-zinc-100">
                                         <flux:icon.user-circle class="size-4" />
-                                        <span>Profile and security</span>
+                                        <span>Profile</span>
                                     </a>
 
                                     <a href="{{ route('admin.passkeys.index') }}" wire:navigate class="flex items-center gap-3 rounded-md px-3 py-2 text-zinc-700 hover:bg-zinc-100">

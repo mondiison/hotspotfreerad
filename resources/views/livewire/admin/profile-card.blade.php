@@ -1,5 +1,5 @@
 <form wire:submit="save" class="relative max-w-4xl rounded-lg border border-zinc-200 bg-white p-6 shadow-sm">
-    <div wire:loading.flex wire:target="save" class="absolute inset-0 z-10 hidden items-center justify-center rounded-lg bg-white/70 backdrop-blur-[1px]">
+    <div wire:loading.flex wire:target="save,avatar,removeAvatar" class="absolute inset-0 z-10 hidden items-center justify-center rounded-lg bg-white/70 backdrop-blur-[1px]">
         <div class="rounded-md border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-700 shadow-sm">
             Saving profile...
         </div>
@@ -24,7 +24,33 @@
                 </flux:badge>
             </div>
 
-            <div class="mt-5 grid gap-5 md:grid-cols-2">
+            <div class="mt-5 grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)]">
+                <div class="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+                    <div class="mx-auto grid h-28 w-28 place-items-center overflow-hidden rounded-lg bg-zinc-950 text-2xl font-semibold text-white">
+                        @if ($avatar)
+                            <img src="{{ $avatar->temporaryUrl() }}" alt="{{ $name }} profile photo preview" class="h-full w-full object-cover">
+                        @elseif ($user->avatarUrl())
+                            <img src="{{ $user->avatarUrl() }}" alt="{{ $user->name }} profile photo" class="h-full w-full object-cover">
+                        @else
+                            {{ $user->initials() }}
+                        @endif
+                    </div>
+
+                    <flux:field class="mt-4">
+                        <flux:label>Profile photo</flux:label>
+                        <flux:input type="file" wire:model="avatar" accept=".jpg,.jpeg,.png,.webp" />
+                        <flux:description>JPG, PNG, or WEBP up to 2 MB.</flux:description>
+                        <flux:error name="avatar" />
+                    </flux:field>
+
+                    @if ($user->avatar_path)
+                        <flux:button type="button" wire:click="removeAvatar" wire:loading.attr="disabled" wire:target="removeAvatar" variant="outline" size="sm" icon="trash" class="mt-3 w-full">
+                            Remove photo
+                        </flux:button>
+                    @endif
+                </div>
+
+                <div class="grid gap-5 md:grid-cols-2">
                 <flux:field>
                     <flux:label>Name</flux:label>
                     <flux:input wire:model.blur="name" icon="user" required />
@@ -46,6 +72,7 @@
                     <flux:label>Tenant</flux:label>
                     <flux:input value="{{ $user->tenant?->company_name ?? 'Platform' }}" icon="building-storefront" disabled />
                 </flux:field>
+                </div>
             </div>
         </section>
 
@@ -371,9 +398,9 @@
     </div>
 
     <div class="mt-6 flex flex-wrap gap-3">
-        <flux:button type="submit" variant="primary" icon="check" wire:loading.attr="disabled" wire:target="save">
-            <span wire:loading.remove wire:target="save">Save profile</span>
-            <span wire:loading wire:target="save">Saving...</span>
+        <flux:button type="submit" variant="primary" icon="check" wire:loading.attr="disabled" wire:target="save,avatar">
+            <span wire:loading.remove wire:target="save,avatar">Save profile</span>
+            <span wire:loading wire:target="save,avatar">Saving...</span>
         </flux:button>
         <flux:button href="{{ route('admin.dashboard') }}" wire:navigate variant="outline" icon="arrow-left">Back to dashboard</flux:button>
     </div>

@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Passkeys\Contracts\PasskeyUser;
 use Laravel\Passkeys\PasskeyAuthenticatable;
 
@@ -26,6 +27,7 @@ class User extends Authenticatable implements PasskeyUser
         'tenant_id',
         'name',
         'email',
+        'avatar_path',
         'role',
         'is_active',
         'must_change_password',
@@ -86,5 +88,21 @@ class User extends Authenticatable implements PasskeyUser
     public function hasTwoFactorEnabled(): bool
     {
         return filled($this->two_factor_secret) && filled($this->two_factor_confirmed_at);
+    }
+
+    public function avatarUrl(): ?string
+    {
+        return $this->avatar_path ? Storage::disk('public')->url($this->avatar_path) : null;
+    }
+
+    public function initials(): string
+    {
+        return str($this->name)
+            ->trim()
+            ->explode(' ')
+            ->filter()
+            ->take(2)
+            ->map(fn (string $part) => str($part)->substr(0, 1)->upper()->toString())
+            ->implode('') ?: 'U';
     }
 }
