@@ -15,10 +15,12 @@ use App\Services\RadiusProvisioningService;
 use App\Support\PaymentCommission;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
+use Throwable;
 
 class PortalController extends Controller
 {
@@ -190,6 +192,7 @@ class PortalController extends Controller
 
         $payment->load(['shop.tenant', 'package', 'customer']);
         $credentialSource = $flutterwave->credentialSource($payment);
+        $checkoutUnavailableReason = 'missing_credentials';
 
         if ($flutterwave->isConfiguredFor($payment)) {
             try {
@@ -215,7 +218,10 @@ class PortalController extends Controller
                 if (filled($checkout['checkout_url'])) {
                     return redirect()->away($checkout['checkout_url']);
                 }
-            } catch (\Throwable $exception) {
+                $checkoutUnavailableReason = 'missing_checkout_url';
+            } catch (Throwable $exception) {
+                $checkoutUnavailableReason = 'initialization_failed';
+
                 Log::warning('Flutterwave checkout initialization failed', [
                     'payment_id' => $payment->id,
                     'tx_ref' => $payment->tx_ref,
@@ -229,6 +235,8 @@ class PortalController extends Controller
             'shop' => $router->shop,
             'package' => $package,
             'payment' => $payment,
+            'credentialSource' => $credentialSource,
+            'checkoutUnavailableReason' => $checkoutUnavailableReason,
             'macAddress' => $validated['mac'],
             'loginUrl' => $validated['link-login'] ?? null,
             'originalUrl' => $validated['link-orig'] ?? null,
@@ -263,7 +271,7 @@ class PortalController extends Controller
                 (string) $providerReference,
                 $this->paymentResourceType((string) $providerReference, $request->query('type'))
             );
-        } catch (\Throwable $exception) {
+        } catch (Throwable $exception) {
             Log::warning('Flutterwave callback verification failed', [
                 'payment_id' => $payment->id,
                 'tx_ref' => $payment->tx_ref,
@@ -291,7 +299,7 @@ class PortalController extends Controller
         ]);
     }
 
-    public function webhook(Request $request, FlutterwaveService $flutterwave): \Illuminate\Http\Response
+    public function webhook(Request $request, FlutterwaveService $flutterwave): Response
     {
         $payload = $request->all();
         $txRef = data_get($payload, 'data.reference') ?: data_get($payload, 'data.tx_ref');

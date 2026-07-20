@@ -41,7 +41,7 @@
                 <p class="text-sm font-medium" style="color: var(--brand)">{{ $tenant->company_name }}</p>
             </div>
             <h1 class="mt-2 text-2xl font-semibold">Confirm internet access</h1>
-            <p class="mt-2 text-sm text-zinc-600">A pending payment has been created, but online payment is not available for this shop yet.</p>
+            <p class="mt-2 text-sm text-zinc-600">A pending payment has been created, but online checkout could not continue from this hotspot.</p>
 
             <dl class="mt-5 space-y-3 text-sm">
                 <div>
@@ -63,7 +63,13 @@
             </dl>
 
             <div class="mt-6 rounded-md bg-amber-50 p-4 text-sm leading-6 text-amber-800">
-                This tenant has not connected a Flutterwave payment account for hotspot customers. Use test access while the tenant account is being configured.
+                @if (($checkoutUnavailableReason ?? null) === 'missing_credentials')
+                    This shop has no complete Flutterwave client ID and client secret saved for hotspot customer payments. Check Payment Setup for {{ $shop->name }}.
+                @elseif (($checkoutUnavailableReason ?? null) === 'missing_checkout_url')
+                    Flutterwave accepted the payment request, but did not return a checkout link. Check the tenant Flutterwave account/payment method configuration.
+                @else
+                    Flutterwave checkout could not start even though credentials were found for {{ $credentialSource['label'] ?? $shop->name }}. Check the saved client ID/secret, payment method, and Laravel logs.
+                @endif
             </div>
 
             <form method="POST" action="{{ route('hotspot.grant') }}" class="mt-5">

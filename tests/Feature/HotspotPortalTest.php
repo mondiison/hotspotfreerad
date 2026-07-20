@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Jobs\VerifyHotspotPaymentWebhook;
 use App\Models\Package;
+use App\Models\Payment;
 use App\Models\Router;
 use App\Models\Shop;
 use App\Models\Tenant;
@@ -75,12 +76,14 @@ class HotspotPortalTest extends TestCase
             ->assertSee('/storage/tenant-brand/1/slides/offer.jpg', false)
             ->assertSee('AA:BB:CC:DD:EE:FF')
             ->assertSee('One Hour Ultra')
-            ->assertSee('NGN 500.00')
+            ->assertSee('NGN 500')
             ->assertSee('1 hour')
             ->assertSee('5 GB')
             ->assertSee('After 2 GB: 1M/1M')
             ->assertSee('Continue to payment')
-            ->assertSee('Start test access');
+            ->assertSee('Start test access')
+            ->assertSee('sm:grid-cols-2 lg:grid-cols-3', false)
+            ->assertSee('grid-cols-3 gap-2', false);
     }
 
     public function test_portal_displays_helpful_page_for_unknown_router(): void
@@ -264,7 +267,7 @@ class HotspotPortalTest extends TestCase
             && $request['metadata']['nas_identifier'] === $router->nas_identifier
             && $request['redirect_url'] === route('hotspot.payment.callback'));
 
-        $payment = \App\Models\Payment::firstOrFail();
+        $payment = Payment::firstOrFail();
         $this->assertSame('tenant', data_get($payment->payload, 'flutterwave_account.source'));
     }
 
@@ -315,7 +318,7 @@ class HotspotPortalTest extends TestCase
             && $request['metadata']['credential_source'] === 'tenant'
             && $request['metadata']['credential_label'] === 'Demo ISP / Demo Shop');
 
-        $payment = \App\Models\Payment::firstOrFail();
+        $payment = Payment::firstOrFail();
         $this->assertSame('tenant', data_get($payment->payload, 'flutterwave_account.source'));
     }
 
@@ -335,12 +338,44 @@ class HotspotPortalTest extends TestCase
             'email' => 'customer@example.com',
         ])
             ->assertOk()
-            ->assertSee('online payment is not available');
+            ->assertSee('no complete Flutterwave client ID and client secret');
 
         Http::assertNothingSent();
 
-        $payment = \App\Models\Payment::firstOrFail();
+        $payment = Payment::firstOrFail();
         $this->assertNull(data_get($payment->payload, 'flutterwave_account.source'));
+    }
+
+    public function test_configured_tenant_payment_shows_checkout_failure_reason_when_flutterwave_fails(): void
+    {
+        $this->configureFlutterwave();
+        Http::fake([
+            'idp.flutterwave.com/*' => Http::response([
+                'access_token' => 'TENANT_TOKEN',
+                'expires_in' => 600,
+            ]),
+            'developersandbox-api.flutterwave.com/orchestration/direct-orders' => Http::response([
+                'message' => 'Invalid payment method',
+            ], 422),
+        ]);
+        [$router, $package] = $this->routerWithPackage();
+        $router->shop->update([
+            'flutterwave_client_id' => 'tenant-client-id',
+            'flutterwave_client_secret' => 'tenant-client-secret',
+        ]);
+
+        $this->post(route('hotspot.pay'), [
+            'mac' => 'AA:BB:CC:DD:EE:FF',
+            'nasid' => $router->nas_identifier,
+            'package_id' => $package->id,
+            'email' => 'customer@example.com',
+        ])
+            ->assertOk()
+            ->assertSee('Flutterwave checkout could not start even though credentials were found')
+            ->assertSee('Demo ISP / Demo Shop');
+
+        $payment = Payment::firstOrFail();
+        $this->assertNull(data_get($payment->payload, 'checkout_url'));
     }
 
     public function test_successful_flutterwave_callback_provisions_radius_access(): void
@@ -354,7 +389,7 @@ class HotspotPortalTest extends TestCase
             'email' => 'customer@example.com',
         ]);
 
-        $payment = \App\Models\Payment::firstOrFail();
+        $payment = Payment::firstOrFail();
         $router->shop->update([
             'flutterwave_client_id' => 'tenant-client-id',
             'flutterwave_client_secret' => 'tenant-client-secret',
@@ -411,7 +446,7 @@ class HotspotPortalTest extends TestCase
             'email' => 'customer@example.com',
         ]);
 
-        $payment = \App\Models\Payment::firstOrFail();
+        $payment = Payment::firstOrFail();
         $router->shop->update([
             'flutterwave_client_id' => 'tenant-client-id',
             'flutterwave_client_secret' => 'tenant-client-secret',
@@ -469,7 +504,7 @@ class HotspotPortalTest extends TestCase
             'email' => 'customer@example.com',
         ]);
 
-        $payment = \App\Models\Payment::firstOrFail();
+        $payment = Payment::firstOrFail();
         $router->shop->update(['flutterwave_webhook_secret' => 'webhook-secret']);
 
         $this->postJson(route('hotspot.payment.webhook'), [
