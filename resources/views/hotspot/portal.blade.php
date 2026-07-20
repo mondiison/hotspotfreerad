@@ -136,7 +136,7 @@
                             <fieldset>
                                 <legend class="mb-2 text-xs font-medium text-zinc-500">Pay with</legend>
                                 <div class="grid grid-cols-3 gap-2">
-                                    @foreach ([['opay', 'OPay', true, true], ['bank_transfer', 'Transfer', true, false], ['card', 'Card', false, false]] as [$methodValue, $methodLabel, $methodAvailable, $methodSelected])
+                                    @foreach ([['opay', 'OPay', true, true], ['bank_transfer', 'Transfer', true, false], ['card', 'Card', true, false]] as [$methodValue, $methodLabel, $methodAvailable, $methodSelected])
                                         <label class="cursor-pointer">
                                             <input type="radio" name="payment_method" value="{{ $methodValue }}" class="peer sr-only" @checked($methodSelected) @disabled(! $methodAvailable)>
                                             <span class="grid min-h-9 place-items-center rounded-md border border-zinc-200 px-2 text-center text-xs font-medium text-zinc-600 transition peer-checked:border-zinc-950 peer-checked:bg-zinc-950 peer-checked:text-white peer-disabled:cursor-not-allowed peer-disabled:bg-zinc-50 peer-disabled:text-zinc-400">

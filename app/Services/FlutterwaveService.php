@@ -105,6 +105,41 @@ class FlutterwaveService
     /**
      * @throws RequestException
      */
+    public function createCheckoutSession(Payment $payment, array $customer, string $redirectUrl): array
+    {
+        $customerResponse = $this->createCustomer($payment, $customer);
+        $customerId = data_get($customerResponse, 'data.id');
+
+        $response = Http::withToken($this->accessToken($payment))
+            ->acceptJson()
+            ->withHeaders([
+                'X-Trace-Id' => $payment->tx_ref,
+                'X-Idempotency-Key' => $payment->tx_ref.'-checkout-session',
+            ])
+            ->post($this->baseUrl().'/checkout/sessions', [
+                'amount' => (float) $payment->amount,
+                'currency' => $payment->currency,
+                'customer_id' => $customerId,
+                'redirect_url' => $redirectUrl,
+                'reference' => $payment->tx_ref,
+                'max_retry_attempts' => 3,
+                'session_duration' => 30,
+            ])
+            ->throw()
+            ->json();
+
+        return [
+            'response' => $response,
+            'customer_response' => $customerResponse,
+            'customer_id' => (string) $customerId,
+            'provider_reference' => (string) data_get($response, 'data.id'),
+            'checkout_url' => (string) data_get($response, 'data.checkout_url'),
+        ];
+    }
+
+    /**
+     * @throws RequestException
+     */
     public function virtualAccountCharges(Payment $payment, string $virtualAccountId): array
     {
         return Http::withToken($this->accessToken($payment))

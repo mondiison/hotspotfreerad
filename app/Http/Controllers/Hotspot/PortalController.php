@@ -139,7 +139,7 @@ class PortalController extends Controller
             'package_id' => ['required', 'integer', 'exists:packages,id'],
             'email' => ['nullable', 'email', 'max:255'],
             'phone' => ['nullable', 'string', 'max:255'],
-            'payment_method' => ['nullable', 'string', 'in:opay,bank_transfer'],
+            'payment_method' => ['nullable', 'string', 'in:opay,bank_transfer,card'],
             'link-login' => ['nullable', 'string', 'max:2048'],
             'link-orig' => ['nullable', 'string', 'max:2048'],
         ]);
@@ -230,30 +230,61 @@ class PortalController extends Controller
                     ]);
                 }
 
-                $checkout = $flutterwave->initializeCheckout(
-                    $payment,
-                    [
-                        'email' => $validated['email'] ?? null,
-                        'phone' => $validated['phone'] ?? null,
-                        'payment_method' => $validated['payment_method'] ?? null,
-                        'name' => 'Hotspot Customer',
-                    ],
-                    route('hotspot.payment.callback')
-                );
+                if (($validated['payment_method'] ?? 'opay') === 'card') {
+                    $checkout = $flutterwave->createCheckoutSession(
+                        $payment,
+                        [
+                            'email' => $validated['email'] ?? null,
+                            'phone' => $validated['phone'] ?? null,
+                            'name' => 'Hotspot Customer',
+                        ],
+                        route('hotspot.payment.callback')
+                    );
 
-                $payment->update([
-                    'provider_reference' => $checkout['provider_reference'],
-                    'payload' => array_merge($payment->payload ?? [], [
-                        'checkout_url' => $checkout['checkout_url'],
-                        'flutterwave_account' => $credentialSource,
-                        'flutterwave_init_response' => $checkout['response'],
-                    ]),
-                ]);
+                    $payment->update([
+                        'provider_reference' => $checkout['provider_reference'],
+                        'payload' => array_merge($payment->payload ?? [], [
+                            'checkout_url' => $checkout['checkout_url'],
+                            'flutterwave_account' => $credentialSource,
+                            'flutterwave_customer_id' => $checkout['customer_id'],
+                            'flutterwave_checkout_session_response' => $checkout['response'],
+                        ]),
+                    ]);
 
-                if (filled($checkout['checkout_url'])) {
-                    return redirect()->away($checkout['checkout_url']);
+                    if (filled($checkout['checkout_url'])) {
+                        return redirect()->away($checkout['checkout_url']);
+                    }
+
+                    $checkoutUnavailableReason = 'missing_checkout_url';
                 }
-                $checkoutUnavailableReason = 'missing_checkout_url';
+
+                if (($validated['payment_method'] ?? 'opay') === 'opay') {
+                    $checkout = $flutterwave->initializeCheckout(
+                        $payment,
+                        [
+                            'email' => $validated['email'] ?? null,
+                            'phone' => $validated['phone'] ?? null,
+                            'payment_method' => $validated['payment_method'] ?? null,
+                            'name' => 'Hotspot Customer',
+                        ],
+                        route('hotspot.payment.callback')
+                    );
+
+                    $payment->update([
+                        'provider_reference' => $checkout['provider_reference'],
+                        'payload' => array_merge($payment->payload ?? [], [
+                            'checkout_url' => $checkout['checkout_url'],
+                            'flutterwave_account' => $credentialSource,
+                            'flutterwave_init_response' => $checkout['response'],
+                        ]),
+                    ]);
+
+                    if (filled($checkout['checkout_url'])) {
+                        return redirect()->away($checkout['checkout_url']);
+                    }
+
+                    $checkoutUnavailableReason = 'missing_checkout_url';
+                }
             } catch (Throwable $exception) {
                 $checkoutUnavailableReason = 'initialization_failed';
 
