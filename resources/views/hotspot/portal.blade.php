@@ -136,11 +136,14 @@
                             <fieldset>
                                 <legend class="mb-2 text-xs font-medium text-zinc-500">Pay with</legend>
                                 <div class="grid grid-cols-3 gap-2">
-                                    @foreach ([['opay', 'OPay'], ['card', 'Card'], ['banktransfer', 'Transfer']] as [$methodValue, $methodLabel])
+                                    @foreach ([['opay', 'OPay', true], ['card', 'Card', false], ['banktransfer', 'Transfer', false]] as [$methodValue, $methodLabel, $methodAvailable])
                                         <label class="cursor-pointer">
-                                            <input type="radio" name="payment_method" value="{{ $methodValue }}" class="peer sr-only" @checked($loop->first)>
-                                            <span class="grid min-h-9 place-items-center rounded-md border border-zinc-200 px-2 text-center text-xs font-medium text-zinc-600 transition peer-checked:border-zinc-950 peer-checked:bg-zinc-950 peer-checked:text-white">
-                                                {{ $methodLabel }}
+                                            <input type="radio" name="payment_method" value="{{ $methodValue }}" class="peer sr-only" @checked($methodAvailable) @disabled(! $methodAvailable)>
+                                            <span class="grid min-h-9 place-items-center rounded-md border border-zinc-200 px-2 text-center text-xs font-medium text-zinc-600 transition peer-checked:border-zinc-950 peer-checked:bg-zinc-950 peer-checked:text-white peer-disabled:cursor-not-allowed peer-disabled:bg-zinc-50 peer-disabled:text-zinc-400">
+                                                <span>{{ $methodLabel }}</span>
+                                                @unless ($methodAvailable)
+                                                    <span class="text-[10px] font-normal">Soon</span>
+                                                @endunless
                                             </span>
                                         </label>
                                     @endforeach

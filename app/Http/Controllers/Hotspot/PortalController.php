@@ -139,7 +139,7 @@ class PortalController extends Controller
             'package_id' => ['required', 'integer', 'exists:packages,id'],
             'email' => ['nullable', 'email', 'max:255'],
             'phone' => ['nullable', 'string', 'max:255'],
-            'payment_method' => ['nullable', 'string', 'in:opay,card,banktransfer'],
+            'payment_method' => ['nullable', 'string', 'in:opay'],
             'link-login' => ['nullable', 'string', 'max:2048'],
             'link-orig' => ['nullable', 'string', 'max:2048'],
         ]);
