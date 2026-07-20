@@ -39,6 +39,8 @@ class AdminProfileTest extends TestCase
             ->assertSee('owner@example.com')
             ->assertSee('Mondi Internet')
             ->assertSee('Profile photo')
+            ->assertSee('Take photo')
+            ->assertSee('Upload an image or take a camera photo.')
             ->assertSee('Passkeys')
             ->assertSee('Not configured')
             ->assertSee(route('admin.passkeys.index'), false);

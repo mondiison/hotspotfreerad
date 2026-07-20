@@ -25,23 +25,124 @@
             </div>
 
             <div class="mt-5 grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)]">
-                <div class="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+                <div
+                    x-data="{
+                        cameraActive: false,
+                        capturedPreview: null,
+                        cameraError: null,
+                        async startCamera() {
+                            this.cameraError = null;
+
+                            if (! navigator.mediaDevices?.getUserMedia) {
+                                this.cameraError = 'Camera capture is not supported by this browser.';
+
+                                return;
+                            }
+
+                            try {
+                                const stream = await navigator.mediaDevices.getUserMedia({
+                                    video: { facingMode: 'user' },
+                                    audio: false,
+                                });
+
+                                this.cameraActive = true;
+                                this.$nextTick(() => {
+                                    this.$refs.video.srcObject = stream;
+                                    this.$refs.video.play();
+                                });
+                            } catch (error) {
+                                this.cameraError = window.isSecureContext
+                                    ? 'Camera permission was blocked or no camera was found.'
+                                    : 'Camera access needs localhost or HTTPS. Use upload on this connection.';
+                            }
+                        },
+                        stopCamera() {
+                            const stream = this.$refs.video?.srcObject;
+
+                            if (stream) {
+                                stream.getTracks().forEach((track) => track.stop());
+                            }
+
+                            if (this.$refs.video) {
+                                this.$refs.video.srcObject = null;
+                            }
+
+                            this.cameraActive = false;
+                        },
+                        capturePhoto() {
+                            const video = this.$refs.video;
+                            const canvas = this.$refs.canvas;
+
+                            canvas.width = video.videoWidth || 640;
+                            canvas.height = video.videoHeight || 640;
+                            canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                            canvas.toBlob((blob) => {
+                                if (! blob) {
+                                    this.cameraError = 'Could not capture a photo. Please try again.';
+
+                                    return;
+                                }
+
+                                const file = new File([blob], 'camera-avatar.jpg', { type: 'image/jpeg' });
+                                const transfer = new DataTransfer();
+                                transfer.items.add(file);
+                                this.$refs.avatarInput.files = transfer.files;
+                                this.$refs.avatarInput.dispatchEvent(new Event('change', { bubbles: true }));
+                                this.capturedPreview = URL.createObjectURL(blob);
+                                this.stopCamera();
+                            }, 'image/jpeg', 0.9);
+                        },
+                    }"
+                    x-init="$watch('capturedPreview', (value, oldValue) => { if (oldValue) URL.revokeObjectURL(oldValue) })"
+                    class="rounded-lg border border-zinc-200 bg-zinc-50 p-4"
+                >
                     <div class="mx-auto grid h-28 w-28 place-items-center overflow-hidden rounded-lg bg-zinc-950 text-2xl font-semibold text-white">
+                        <template x-if="capturedPreview">
+                            <img :src="capturedPreview" alt="{{ $name }} captured profile photo preview" class="h-full w-full object-cover">
+                        </template>
+
                         @if ($avatar)
-                            <img src="{{ $avatar->temporaryUrl() }}" alt="{{ $name }} profile photo preview" class="h-full w-full object-cover">
+                            <img x-show="! capturedPreview" src="{{ $avatar->temporaryUrl() }}" alt="{{ $name }} profile photo preview" class="h-full w-full object-cover">
                         @elseif ($user->avatarUrl())
-                            <img src="{{ $user->avatarUrl() }}" alt="{{ $user->name }} profile photo" class="h-full w-full object-cover">
+                            <img x-show="! capturedPreview" src="{{ $user->avatarUrl() }}" alt="{{ $user->name }} profile photo" class="h-full w-full object-cover">
                         @else
-                            {{ $user->initials() }}
+                            <span x-show="! capturedPreview">{{ $user->initials() }}</span>
                         @endif
                     </div>
 
                     <flux:field class="mt-4">
                         <flux:label>Profile photo</flux:label>
-                        <flux:input type="file" wire:model="avatar" accept=".jpg,.jpeg,.png,.webp" />
-                        <flux:description>JPG, PNG, or WEBP up to 2 MB.</flux:description>
+                        <input x-ref="avatarInput" type="file" wire:model="avatar" accept=".jpg,.jpeg,.png,.webp" capture="user" @change="if (! cameraActive) { if (capturedPreview) URL.revokeObjectURL(capturedPreview); capturedPreview = null }" class="block w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700 file:mr-3 file:rounded-md file:border-0 file:bg-zinc-950 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white hover:file:bg-zinc-800">
+                        <flux:description>Upload an image or take a camera photo. JPG, PNG, or WEBP up to 2 MB.</flux:description>
                         <flux:error name="avatar" />
                     </flux:field>
+
+                    <div class="mt-3 grid gap-2">
+                        <div x-show="cameraActive" x-cloak class="overflow-hidden rounded-lg border border-zinc-200 bg-black">
+                            <video x-ref="video" playsinline muted class="aspect-square w-full object-cover"></video>
+                        </div>
+
+                        <canvas x-ref="canvas" class="hidden"></canvas>
+
+                        <p x-show="cameraError" x-text="cameraError" x-cloak class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800"></p>
+
+                        <div class="grid gap-2">
+                            <flux:button x-show="! cameraActive" type="button" @click="startCamera" variant="outline" size="sm" icon="camera" class="w-full">
+                                Take photo
+                            </flux:button>
+
+                            <div x-show="cameraActive" x-cloak class="grid grid-cols-2 gap-2">
+                                <flux:button type="button" @click="capturePhoto" variant="primary" size="sm" icon="camera">
+                                    Capture
+                                </flux:button>
+
+                                <flux:button type="button" @click="stopCamera" variant="outline" size="sm" icon="x-mark">
+                                    Cancel
+                                </flux:button>
+                            </div>
+                        </div>
+                    </div>
 
                     @if ($user->avatar_path)
                         <flux:button type="button" wire:click="removeAvatar" wire:loading.attr="disabled" wire:target="removeAvatar" variant="outline" size="sm" icon="trash" class="mt-3 w-full">
