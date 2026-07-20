@@ -81,6 +81,9 @@ class HotspotPortalTest extends TestCase
             ->assertSee('5 GB')
             ->assertSee('After 2 GB: 1M/1M')
             ->assertSee('Continue to payment')
+            ->assertSee('Pay with')
+            ->assertSee('Card')
+            ->assertSee('Transfer')
             ->assertSee('Start test access')
             ->assertSee('sm:grid-cols-2 lg:grid-cols-3', false)
             ->assertSee('grid-cols-3 gap-2', false);
@@ -184,6 +187,8 @@ class HotspotPortalTest extends TestCase
             'status' => 'pending',
             'provider' => 'flutterwave',
         ]);
+
+        $this->assertNull(data_get(Payment::firstOrFail()->payload, 'payment_method'));
     }
 
     public function test_payment_step_captures_commission_snapshot_for_commission_tenant(): void
@@ -271,6 +276,48 @@ class HotspotPortalTest extends TestCase
 
         $payment = Payment::firstOrFail();
         $this->assertSame('tenant', data_get($payment->payload, 'flutterwave_account.source'));
+    }
+
+    public function test_payment_step_sends_selected_payment_method_to_flutterwave(): void
+    {
+        $this->configureFlutterwave();
+        Http::fake([
+            'idp.flutterwave.com/*' => Http::response([
+                'access_token' => 'FLW_V4_TOKEN',
+                'expires_in' => 600,
+            ]),
+            'developersandbox-api.flutterwave.com/orchestration/direct-charges' => Http::response([
+                'status' => 'success',
+                'data' => [
+                    'id' => 'chg_12345',
+                    'next_action' => [
+                        'redirect_url' => [
+                            'url' => 'https://developer-sandbox-ui-sit.flutterwave.cloud/redirects/banktransfer/demo',
+                        ],
+                    ],
+                ],
+            ]),
+        ]);
+        [$router, $package] = $this->routerWithPackage();
+        $router->shop->update([
+            'flutterwave_client_id' => 'tenant-client-id',
+            'flutterwave_client_secret' => 'tenant-client-secret',
+        ]);
+
+        $this->post(route('hotspot.pay'), [
+            'mac' => 'AA:BB:CC:DD:EE:FF',
+            'nasid' => $router->nas_identifier,
+            'package_id' => $package->id,
+            'email' => 'customer@example.com',
+            'payment_method' => 'banktransfer',
+        ])
+            ->assertRedirect('https://developer-sandbox-ui-sit.flutterwave.cloud/redirects/banktransfer/demo');
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/orchestration/direct-charges')
+            && data_get($request->data(), 'payment_method.type') === 'banktransfer');
+
+        $payment = Payment::firstOrFail();
+        $this->assertSame('banktransfer', data_get($payment->payload, 'payment_method'));
     }
 
     public function test_tenant_flutterwave_credentials_are_used_when_complete(): void

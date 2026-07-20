@@ -139,6 +139,7 @@ class PortalController extends Controller
             'package_id' => ['required', 'integer', 'exists:packages,id'],
             'email' => ['nullable', 'email', 'max:255'],
             'phone' => ['nullable', 'string', 'max:255'],
+            'payment_method' => ['nullable', 'string', 'in:opay,card,banktransfer'],
             'link-login' => ['nullable', 'string', 'max:2048'],
             'link-orig' => ['nullable', 'string', 'max:2048'],
         ]);
@@ -185,6 +186,7 @@ class PortalController extends Controller
                 'payload' => [
                     'mac' => $validated['mac'],
                     'nasid' => $validated['nasid'],
+                    'payment_method' => $validated['payment_method'] ?? null,
                     'link_login' => $validated['link-login'] ?? null,
                     'link_orig' => $validated['link-orig'] ?? null,
                 ],
@@ -202,6 +204,7 @@ class PortalController extends Controller
                     [
                         'email' => $validated['email'] ?? null,
                         'phone' => $validated['phone'] ?? null,
+                        'payment_method' => $validated['payment_method'] ?? null,
                         'name' => 'Hotspot Customer',
                     ],
                     route('hotspot.payment.callback')

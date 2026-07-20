@@ -27,7 +27,7 @@ class FlutterwaveService
                 'reference' => $payment->tx_ref,
                 'redirect_url' => $redirectUrl,
                 'payment_method' => [
-                    'type' => $this->paymentMethodType(),
+                    'type' => $this->paymentMethodType($customer['payment_method'] ?? null),
                 ],
                 'customer' => $this->customerPayload($payment, $customer),
                 'meta' => [
@@ -178,10 +178,12 @@ class FlutterwaveService
         return rtrim((string) config('services.flutterwave.base_url'), '/');
     }
 
-    private function paymentMethodType(): string
+    private function paymentMethodType(?string $selectedMethod = null): string
     {
-        return filled(config('services.flutterwave.default_payment_method'))
-            ? (string) config('services.flutterwave.default_payment_method')
+        $method = $selectedMethod ?: config('services.flutterwave.default_payment_method');
+
+        return filled($method)
+            ? (string) $method
             : 'opay';
     }
 

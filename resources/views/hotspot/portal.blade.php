@@ -133,6 +133,19 @@
                                 <input type="email" name="email" placeholder="Email" class="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm">
                                 <input name="phone" placeholder="Phone" class="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm">
                             </div>
+                            <fieldset>
+                                <legend class="mb-2 text-xs font-medium text-zinc-500">Pay with</legend>
+                                <div class="grid grid-cols-3 gap-2">
+                                    @foreach ([['opay', 'OPay'], ['card', 'Card'], ['banktransfer', 'Transfer']] as [$methodValue, $methodLabel])
+                                        <label class="cursor-pointer">
+                                            <input type="radio" name="payment_method" value="{{ $methodValue }}" class="peer sr-only" @checked($loop->first)>
+                                            <span class="grid min-h-9 place-items-center rounded-md border border-zinc-200 px-2 text-center text-xs font-medium text-zinc-600 transition peer-checked:border-zinc-950 peer-checked:bg-zinc-950 peer-checked:text-white">
+                                                {{ $methodLabel }}
+                                            </span>
+                                        </label>
+                                    @endforeach
+                                </div>
+                            </fieldset>
                             @if ($loginUrl)
                                 <input type="hidden" name="link-login" value="{{ $loginUrl }}">
                             @endif
