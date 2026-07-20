@@ -43,6 +43,7 @@ class PlatformFlutterwaveService
                         'country' => 'NG',
                         'city' => 'Lagos',
                         'state' => 'Lagos',
+                        'postal_code' => '100001',
                         'line1' => $payment->tenant->company_name,
                     ],
                 ],

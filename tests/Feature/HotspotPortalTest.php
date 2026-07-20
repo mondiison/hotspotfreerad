@@ -259,6 +259,7 @@ class HotspotPortalTest extends TestCase
             && $request['amount'] === 500.0
             && $request['currency'] === 'NGN'
             && data_get($request->data(), 'payment_method.type') === 'opay'
+            && data_get($request->data(), 'customer.address.postal_code') === '100001'
             && $request['meta']['credential_source'] === 'tenant'
             && $request['meta']['credential_label'] === 'Demo ISP / Demo Shop'
             && $request['meta']['tenant_name'] === 'Demo ISP'

@@ -204,6 +204,7 @@ class FlutterwaveService
                 'country' => 'NG',
                 'city' => $payment->shop->location_city ?: 'Lagos',
                 'state' => $payment->shop->location_city ?: 'Lagos',
+                'postal_code' => '100001',
                 'line1' => $payment->shop->name,
             ],
         ];

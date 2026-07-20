@@ -358,6 +358,7 @@ class PlatformBillingTest extends TestCase
             && $request['amount'] === 35000.0
             && $request['currency'] === 'NGN'
             && data_get($request->data(), 'payment_method.type') === 'opay'
+            && data_get($request->data(), 'customer.address.postal_code') === '100001'
             && $request['meta']['payment_type'] === 'platform_subscription'
             && $request['meta']['tenant_name'] === 'Tenant One'
             && $request['meta']['billing_plan_name'] === 'Growth');
