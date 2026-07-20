@@ -41,7 +41,7 @@
             }"
         >
             <div class="flex items-start justify-between gap-4">
-                <a href="{{ route('admin.dashboard') }}" class="flex min-w-0 items-center gap-3" title="HotspotFreeRAD">
+                <a href="{{ route('admin.dashboard') }}" wire:navigate class="flex min-w-0 items-center gap-3" title="HotspotFreeRAD">
                     <span class="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-zinc-950 text-sm font-semibold text-white">HF</span>
                     <span class="min-w-0" :class="{ 'lg:hidden': sidebarCollapsed }">
                         <span class="block truncate text-lg font-semibold">HotspotFreeRAD</span>
@@ -97,6 +97,7 @@
                     @endphp
                     <a
                         href="{{ route($link['route']) }}"
+                        wire:navigate
                         title="{{ $link['label'] }}"
                         class="flex items-center gap-3 rounded-md px-3 py-2 {{ request()->routeIs($sectionPattern) ? 'bg-zinc-950 text-white' : 'text-zinc-700 hover:bg-zinc-100' }}"
                         :class="{ 'lg:justify-center': sidebarCollapsed }"
@@ -118,12 +119,12 @@
                         @click.outside="accountMenuOpen = false"
                         class="absolute bottom-full left-0 z-50 mb-3 w-full min-w-60 rounded-lg border border-zinc-200 bg-white p-2 text-sm shadow-lg"
                     >
-                        <a href="{{ route('admin.profile.edit') }}" class="flex items-center gap-3 rounded-md px-3 py-2 text-zinc-700 hover:bg-zinc-100">
+                        <a href="{{ route('admin.profile.edit') }}" wire:navigate class="flex items-center gap-3 rounded-md px-3 py-2 text-zinc-700 hover:bg-zinc-100">
                             <flux:icon.user-circle class="size-4" />
                             <span>Profile and security</span>
                         </a>
 
-                        <a href="{{ route('admin.passkeys.index') }}" class="flex items-center gap-3 rounded-md px-3 py-2 text-zinc-700 hover:bg-zinc-100">
+                        <a href="{{ route('admin.passkeys.index') }}" wire:navigate class="flex items-center gap-3 rounded-md px-3 py-2 text-zinc-700 hover:bg-zinc-100">
                             <flux:icon.key class="size-4" />
                             <span>Passkeys</span>
                         </a>
@@ -211,12 +212,12 @@
                                         <p class="mt-1 truncate text-xs text-zinc-500">{{ auth()->user()->email }}</p>
                                     </div>
 
-                                    <a href="{{ route('admin.profile.edit') }}" class="flex items-center gap-3 rounded-md px-3 py-2 text-zinc-700 hover:bg-zinc-100">
+                                    <a href="{{ route('admin.profile.edit') }}" wire:navigate class="flex items-center gap-3 rounded-md px-3 py-2 text-zinc-700 hover:bg-zinc-100">
                                         <flux:icon.user-circle class="size-4" />
                                         <span>Profile and security</span>
                                     </a>
 
-                                    <a href="{{ route('admin.passkeys.index') }}" class="flex items-center gap-3 rounded-md px-3 py-2 text-zinc-700 hover:bg-zinc-100">
+                                    <a href="{{ route('admin.passkeys.index') }}" wire:navigate class="flex items-center gap-3 rounded-md px-3 py-2 text-zinc-700 hover:bg-zinc-100">
                                         <flux:icon.key class="size-4" />
                                         <span>Passkeys</span>
                                     </a>

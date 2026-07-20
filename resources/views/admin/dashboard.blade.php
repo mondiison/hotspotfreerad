@@ -41,9 +41,9 @@
                 </div>
 
                 <div class="flex flex-wrap gap-2">
-                    <flux:button href="{{ route('admin.brand.edit') }}" variant="outline" icon="swatch">Brand</flux:button>
-                    <flux:button href="{{ route('admin.profile.edit') }}" variant="outline" icon="shield-check">{{ $tenantWorkspaceSummary['security']['action'] }}</flux:button>
-                    <flux:button href="{{ route('admin.payment-settings.index') }}" variant="outline" icon="credit-card">Payment Setup</flux:button>
+                    <flux:button href="{{ route('admin.brand.edit') }}" wire:navigate variant="outline" icon="swatch">Brand</flux:button>
+                    <flux:button href="{{ route('admin.profile.edit') }}" wire:navigate variant="outline" icon="shield-check">{{ $tenantWorkspaceSummary['security']['action'] }}</flux:button>
+                    <flux:button href="{{ route('admin.payment-settings.index') }}" wire:navigate variant="outline" icon="credit-card">Payment Setup</flux:button>
                     <flux:button href="{{ $tenantWorkspaceSummary['public_url'] }}" target="_blank" variant="primary" icon="arrow-top-right-on-square">Public Page</flux:button>
                 </div>
             </div>
@@ -74,7 +74,7 @@
                         <p class="mt-2 flex-1 text-xs leading-5 text-zinc-500">{{ $item['detail'] }}</p>
                         <p class="mt-3 text-xs leading-5 text-zinc-600">{{ $item['status'] }}</p>
 
-                        <flux:button href="{{ route($item['route']) }}" variant="{{ $item['complete'] ? 'outline' : 'primary' }}" size="sm" class="mt-4">
+                        <flux:button href="{{ route($item['route']) }}" wire:navigate variant="{{ $item['complete'] ? 'outline' : 'primary' }}" size="sm" class="mt-4">
                             {{ $item['action'] }}
                         </flux:button>
                     </article>
@@ -116,7 +116,7 @@
                 <p class="mt-1 text-sm text-zinc-500">Failed 2FA, blocked tenant access, password changes, reset links, and disabled 2FA.</p>
             </div>
 
-            <flux:button href="{{ route('admin.security-activity.index', ['attention' => '1']) }}" variant="outline" size="sm" icon="shield-exclamation">
+            <flux:button href="{{ route('admin.security-activity.index', ['attention' => '1']) }}" wire:navigate variant="outline" size="sm" icon="shield-exclamation">
                 Review activity
             </flux:button>
         </div>
@@ -126,6 +126,7 @@
                 @foreach ($securityAttention['reasons'] as $reason)
                     <a
                         href="{{ route('admin.security-activity.index', ['attention' => '1', 'action' => $reason['action']]) }}"
+                        wire:navigate
                         class="inline-flex items-center gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-1.5 text-sm font-medium text-rose-700 hover:bg-rose-100"
                     >
                         <span>{{ $reason['label'] }}</span>
@@ -179,6 +180,7 @@
             <div class="flex flex-wrap gap-2">
                 <flux:button
                     href="{{ route('admin.reports.sales', ['from' => $monthFinanceSummary['from'], 'to' => $monthFinanceSummary['to']]) }}"
+                    wire:navigate
                     variant="outline"
                     size="sm"
                     icon="chart-bar"
@@ -187,6 +189,7 @@
                 </flux:button>
                 <flux:button
                     href="{{ route('admin.expenses.index', ['from' => $monthFinanceSummary['from'], 'to' => $monthFinanceSummary['to']]) }}"
+                    wire:navigate
                     variant="outline"
                     size="sm"
                     icon="receipt-percent"
@@ -223,16 +226,16 @@
             </div>
 
             <div class="flex flex-wrap gap-2">
-                <flux:button href="{{ route('admin.payments.index', ['status' => 'pending']) }}" variant="outline" size="sm" icon="clock">
+                <flux:button href="{{ route('admin.payments.index', ['status' => 'pending']) }}" wire:navigate variant="outline" size="sm" icon="clock">
                     Pending
                 </flux:button>
-                <flux:button href="{{ route('admin.payments.index', ['status' => 'failed']) }}" variant="outline" size="sm" icon="exclamation-triangle">
+                <flux:button href="{{ route('admin.payments.index', ['status' => 'failed']) }}" wire:navigate variant="outline" size="sm" icon="exclamation-triangle">
                     Failed
                 </flux:button>
-                <flux:button href="{{ route('admin.payments.index', ['status' => 'attention']) }}" variant="outline" size="sm" icon="exclamation-triangle">
+                <flux:button href="{{ route('admin.payments.index', ['status' => 'attention']) }}" wire:navigate variant="outline" size="sm" icon="exclamation-triangle">
                     Needs attention
                 </flux:button>
-                <flux:button href="{{ route('admin.payments.index') }}" variant="outline" size="sm" icon="credit-card">
+                <flux:button href="{{ route('admin.payments.index') }}" wire:navigate variant="outline" size="sm" icon="credit-card">
                     All payments
                 </flux:button>
             </div>
@@ -261,7 +264,7 @@
                 <p class="text-sm font-medium text-zinc-500">Top Packages</p>
                 <h2 class="mt-1 text-xl font-semibold">{{ $monthFinanceSummary['period'] }} best sellers</h2>
             </div>
-            <flux:button href="{{ route('admin.payments.index', ['status' => 'successful']) }}" variant="outline" size="sm" icon="credit-card">
+            <flux:button href="{{ route('admin.payments.index', ['status' => 'successful']) }}" wire:navigate variant="outline" size="sm" icon="credit-card">
                 Payment report
             </flux:button>
         </div>
@@ -311,7 +314,7 @@
                 <p class="text-sm font-medium text-zinc-500">Top Locations</p>
                 <h2 class="mt-1 text-xl font-semibold">{{ $monthFinanceSummary['period'] }} shop performance</h2>
             </div>
-            <flux:button href="{{ route('admin.shops.index') }}" variant="outline" size="sm" icon="building-storefront">
+            <flux:button href="{{ route('admin.shops.index') }}" wire:navigate variant="outline" size="sm" icon="building-storefront">
                 Manage shops
             </flux:button>
         </div>
@@ -368,7 +371,7 @@
                 <p class="text-sm font-medium text-zinc-500">Finance Trend</p>
                 <h2 class="mt-1 text-xl font-semibold">Last 6 months</h2>
             </div>
-            <flux:button href="{{ route('admin.reports.sales', ['preset' => 'this_year', 'group' => 'month']) }}" variant="outline" size="sm" icon="chart-bar">
+            <flux:button href="{{ route('admin.reports.sales', ['preset' => 'this_year', 'group' => 'month']) }}" wire:navigate variant="outline" size="sm" icon="chart-bar">
                 Full report
             </flux:button>
         </div>
@@ -424,6 +427,7 @@
                             <td class="px-4 py-3 text-right">
                                 <flux:button
                                     href="{{ route('admin.reports.sales', ['from' => $row['from'], 'to' => $row['to'], 'group' => 'day']) }}"
+                                    wire:navigate
                                     variant="outline"
                                     size="sm"
                                     icon="magnifying-glass"
@@ -454,6 +458,7 @@
                 <div class="flex flex-wrap gap-2">
                     <flux:button
                         href="{{ route('admin.reports.sales', ['from' => $monthFinanceSummary['from'], 'to' => $monthFinanceSummary['to']]) }}"
+                        wire:navigate
                         variant="outline"
                         size="sm"
                         icon="chart-bar"
@@ -462,6 +467,7 @@
                     </flux:button>
                     <flux:button
                         href="{{ route('admin.expenses.index', ['from' => $monthFinanceSummary['from'], 'to' => $monthFinanceSummary['to']]) }}"
+                        wire:navigate
                         variant="outline"
                         size="sm"
                         icon="receipt-percent"
@@ -514,6 +520,7 @@
                                 <td class="px-4 py-3 text-right">
                                     <flux:button
                                         href="{{ route('admin.expenses.index', ['from' => $monthFinanceSummary['from'], 'to' => $monthFinanceSummary['to'], 'category' => $row['category_id']]) }}"
+                                        wire:navigate
                                         variant="outline"
                                         size="sm"
                                         icon="magnifying-glass"
@@ -542,7 +549,7 @@
                 <div class="flex flex-wrap gap-2">
                     <span class="rounded-full bg-zinc-100 px-3 py-1 text-sm font-medium text-zinc-700">{{ $tenantBillingSummary['status'] }}</span>
                     <span class="rounded-full bg-blue-50 px-3 py-1 text-sm font-medium text-blue-700">{{ $tenantBillingSummary['period_label'] }}</span>
-                    <a href="{{ route('admin.billing.index') }}" class="rounded-md border border-zinc-200 px-3 py-1.5 text-sm font-medium hover:bg-zinc-50">Manage billing</a>
+                    <a href="{{ route('admin.billing.index') }}" wire:navigate class="rounded-md border border-zinc-200 px-3 py-1.5 text-sm font-medium hover:bg-zinc-50">Manage billing</a>
                 </div>
             </div>
 
@@ -592,7 +599,7 @@
                     <h2 class="text-base font-semibold text-red-950">Overdue Recurring Expenses</h2>
                     <p class="mt-1 text-sm text-red-700">These recurring costs have due dates before today.</p>
                 </div>
-                <flux:button href="{{ route('admin.expenses.index', ['schedule' => 'overdue']) }}" variant="outline" size="sm" icon="receipt-percent">Review overdue</flux:button>
+                <flux:button href="{{ route('admin.expenses.index', ['schedule' => 'overdue']) }}" wire:navigate variant="outline" size="sm" icon="receipt-percent">Review overdue</flux:button>
             </div>
 
             <div class="mt-5 overflow-hidden rounded-lg border border-red-200 bg-white">
@@ -636,7 +643,7 @@
                 <h2 class="text-base font-semibold">Upcoming Recurring Expenses</h2>
                 <p class="mt-1 text-sm text-zinc-500">Costs due within the next 30 days.</p>
             </div>
-            <flux:button href="{{ route('admin.expenses.index', ['schedule' => 'due_soon']) }}" variant="outline" size="sm" icon="receipt-percent">View due soon</flux:button>
+            <flux:button href="{{ route('admin.expenses.index', ['schedule' => 'due_soon']) }}" wire:navigate variant="outline" size="sm" icon="receipt-percent">View due soon</flux:button>
         </div>
 
         <div class="mt-5 overflow-hidden rounded-lg border border-zinc-200">
@@ -684,7 +691,7 @@
                     <h2 class="text-base font-semibold">Router Health</h2>
                     <p class="mt-1 text-sm text-zinc-500">Status is refreshed from recent FreeRADIUS accounting activity.</p>
                 </div>
-                <a href="{{ route('admin.routers.index') }}" class="rounded-md border border-zinc-200 px-3 py-2 text-sm hover:bg-zinc-50">View all</a>
+                <a href="{{ route('admin.routers.index') }}" wire:navigate class="rounded-md border border-zinc-200 px-3 py-2 text-sm hover:bg-zinc-50">View all</a>
             </div>
 
             <div class="mt-5 overflow-hidden rounded-lg border border-zinc-200">
@@ -732,7 +739,7 @@
                         </div>
 
                         @if (! $step['complete'] && $step['route'])
-                            <a href="{{ route($step['route']) }}" class="text-sm font-medium text-zinc-950 underline decoration-zinc-300 underline-offset-4">Start</a>
+                            <a href="{{ route($step['route']) }}" wire:navigate class="text-sm font-medium text-zinc-950 underline decoration-zinc-300 underline-offset-4">Start</a>
                         @else
                             <span class="text-sm text-zinc-500">{{ $step['complete'] ? 'Done' : 'Pending' }}</span>
                         @endif
@@ -794,7 +801,7 @@
                 <h2 class="text-base font-semibold">Recent Access Grants</h2>
                 <p class="mt-1 text-sm text-zinc-500">Latest subscriptions created from the captive portal or package flow.</p>
             </div>
-            <a href="{{ route('admin.packages.index') }}" class="rounded-md border border-zinc-200 px-3 py-2 text-sm hover:bg-zinc-50">Manage plans</a>
+            <a href="{{ route('admin.packages.index') }}" wire:navigate class="rounded-md border border-zinc-200 px-3 py-2 text-sm hover:bg-zinc-50">Manage plans</a>
         </div>
 
         <div class="mt-5 overflow-hidden rounded-lg border border-zinc-200">

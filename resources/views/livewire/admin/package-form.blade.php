@@ -163,7 +163,7 @@
                 <span wire:loading.remove wire:target="save">Save Package</span>
                 <span wire:loading wire:target="save">Saving...</span>
             </flux:button>
-            <flux:button href="{{ route('admin.packages.index') }}" variant="outline">Cancel</flux:button>
+            <flux:button href="{{ route('admin.packages.index') }}" wire:navigate variant="outline">Cancel</flux:button>
         </div>
     </form>
 

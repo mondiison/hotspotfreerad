@@ -28,7 +28,7 @@
         </dl>
 
         @if (! $usage['can_create'])
-            <a href="{{ route('admin.billing.index') }}" class="mt-4 inline-flex rounded-md bg-zinc-950 px-3 py-2 text-sm font-medium text-white">
+        <a href="{{ route('admin.billing.index') }}" wire:navigate class="mt-4 inline-flex rounded-md bg-zinc-950 px-3 py-2 text-sm font-medium text-white">
                 Manage billing
             </a>
         @endif

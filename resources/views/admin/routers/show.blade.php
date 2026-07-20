@@ -4,7 +4,7 @@
     subheading="Guided MikroTik RouterOS onboarding for this NAS."
 >
     <x-slot:action>
-        <a href="{{ route('admin.routers.edit', $router) }}" class="rounded-md border border-zinc-200 px-4 py-2 text-sm">Edit Router</a>
+        <a href="{{ route('admin.routers.edit', $router) }}" wire:navigate class="rounded-md border border-zinc-200 px-4 py-2 text-sm">Edit Router</a>
     </x-slot:action>
 
     <div class="grid gap-6 xl:grid-cols-[340px_1fr]">

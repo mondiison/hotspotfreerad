@@ -85,6 +85,6 @@
             <span wire:loading.remove wire:target="save">Save payment settings</span>
             <span wire:loading wire:target="save">Saving...</span>
         </flux:button>
-        <flux:button href="{{ route('admin.shops.edit', $shop) }}" variant="outline" icon="arrow-top-right-on-square">Open shop</flux:button>
+                                <flux:button href="{{ route('admin.shops.edit', $shop) }}" wire:navigate variant="outline" icon="arrow-top-right-on-square">Open shop</flux:button>
     </div>
 </form>

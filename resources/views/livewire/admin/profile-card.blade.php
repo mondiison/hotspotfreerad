@@ -97,7 +97,7 @@
                         <p class="mt-2 text-xs leading-5 text-zinc-500">Registration works on localhost during development and on HTTPS domains in production.</p>
                     </div>
 
-                    <flux:button href="{{ route('admin.passkeys.index') }}" variant="outline" icon="key">
+                    <flux:button href="{{ route('admin.passkeys.index') }}" wire:navigate variant="outline" icon="key">
                         Manage passkeys
                     </flux:button>
                 </div>
@@ -375,6 +375,6 @@
             <span wire:loading.remove wire:target="save">Save profile</span>
             <span wire:loading wire:target="save">Saving...</span>
         </flux:button>
-        <flux:button href="{{ route('admin.dashboard') }}" variant="outline" icon="arrow-left">Back to dashboard</flux:button>
+        <flux:button href="{{ route('admin.dashboard') }}" wire:navigate variant="outline" icon="arrow-left">Back to dashboard</flux:button>
     </div>
 </form>

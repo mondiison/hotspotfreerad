@@ -139,7 +139,7 @@
 
         <div class="mt-6 flex gap-3">
             <flux:button type="submit" variant="primary" icon="check">Save Tenant</flux:button>
-            <flux:button href="{{ route('admin.tenants.index') }}" variant="outline">Cancel</flux:button>
+            <flux:button href="{{ route('admin.tenants.index') }}" wire:navigate variant="outline">Cancel</flux:button>
         </div>
     </form>
 

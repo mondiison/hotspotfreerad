@@ -100,6 +100,7 @@ class AdminDashboardTest extends TestCase
             ->get(route('admin.dashboard'))
             ->assertOk()
             ->assertSee('Platform Admin')
+            ->assertSee('wire:navigate', false)
             ->assertDontSee('Tenant Admin')
             ->assertDontSee('Tenant Workspace')
             ->assertDontSee('Launch Checklist')

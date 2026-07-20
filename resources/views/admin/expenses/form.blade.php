@@ -119,7 +119,7 @@
 
         <div class="mt-6 flex gap-3">
             <flux:button type="submit" variant="primary" icon="check">Save Expense</flux:button>
-            <flux:button href="{{ route('admin.expenses.index') }}" variant="outline">Cancel</flux:button>
+            <flux:button href="{{ route('admin.expenses.index') }}" wire:navigate variant="outline">Cancel</flux:button>
         </div>
     </form>
 </x-layouts.admin>

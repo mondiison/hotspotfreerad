@@ -86,7 +86,7 @@
 
         <div class="mt-6 flex gap-3">
             <flux:button type="submit" variant="primary" icon="check">Save Shop</flux:button>
-            <flux:button href="{{ route('admin.shops.index') }}" variant="outline">Cancel</flux:button>
+            <flux:button href="{{ route('admin.shops.index') }}" wire:navigate variant="outline">Cancel</flux:button>
         </div>
         </form>
     </div>
