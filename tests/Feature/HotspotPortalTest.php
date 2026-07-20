@@ -217,6 +217,7 @@ class HotspotPortalTest extends TestCase
     public function test_payment_step_redirects_to_flutterwave_when_configured(): void
     {
         $this->configureFlutterwave();
+        config(['services.flutterwave.default_payment_method' => null]);
         Http::fake([
             'idp.flutterwave.com/*' => Http::response([
                 'access_token' => 'FLW_V4_TOKEN',

@@ -315,6 +315,7 @@ class PlatformBillingTest extends TestCase
     public function test_tenant_admin_can_start_platform_subscription_checkout(): void
     {
         $this->configurePlatformFlutterwave();
+        config(['services.flutterwave.default_payment_method' => null]);
         Http::fake([
             'idp.flutterwave.com/*' => Http::response([
                 'access_token' => 'PLATFORM_TOKEN',

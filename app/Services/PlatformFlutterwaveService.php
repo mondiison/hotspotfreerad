@@ -27,7 +27,7 @@ class PlatformFlutterwaveService
                 'reference' => $payment->tx_ref,
                 'redirect_url' => $redirectUrl,
                 'payment_method' => [
-                    'type' => (string) config('services.flutterwave.default_payment_method', 'opay'),
+                    'type' => $this->paymentMethodType(),
                 ],
                 'customer' => [
                     'email' => $payment->tenant->owner_email,
@@ -143,5 +143,12 @@ class PlatformFlutterwaveService
     private function baseUrl(): string
     {
         return rtrim((string) config('services.flutterwave.base_url'), '/');
+    }
+
+    private function paymentMethodType(): string
+    {
+        return filled(config('services.flutterwave.default_payment_method'))
+            ? (string) config('services.flutterwave.default_payment_method')
+            : 'opay';
     }
 }
