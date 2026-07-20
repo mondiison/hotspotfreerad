@@ -358,9 +358,9 @@ class PlatformBillingTest extends TestCase
             && $request['amount'] === 35000.0
             && $request['currency'] === 'NGN'
             && data_get($request->data(), 'payment_method.type') === 'opay'
-            && $request['metadata']['payment_type'] === 'platform_subscription'
-            && $request['metadata']['tenant_name'] === 'Tenant One'
-            && $request['metadata']['billing_plan_name'] === 'Growth');
+            && $request['meta']['payment_type'] === 'platform_subscription'
+            && $request['meta']['tenant_name'] === 'Tenant One'
+            && $request['meta']['billing_plan_name'] === 'Growth');
 
         $payment = PlatformBillingPayment::firstOrFail();
         $this->assertSame('pending', $payment->status);

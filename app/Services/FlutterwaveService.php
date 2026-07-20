@@ -29,12 +29,8 @@ class FlutterwaveService
                 'payment_method' => [
                     'type' => $this->paymentMethodType(),
                 ],
-                'customer' => [
-                    'email' => $customer['email'] ?: 'guest-'.$payment->id.'@hotspot.local',
-                    'phone' => $customer['phone'] ?? null,
-                    'name' => $customer['name'] ?? 'Hotspot Customer',
-                ],
-                'metadata' => [
+                'customer' => $this->customerPayload($payment, $customer),
+                'meta' => [
                     'payment_id' => $payment->id,
                     'payment_reference' => $payment->tx_ref,
                     'credential_source' => $this->credentialSource($payment)['source'],
@@ -187,5 +183,54 @@ class FlutterwaveService
         return filled(config('services.flutterwave.default_payment_method'))
             ? (string) config('services.flutterwave.default_payment_method')
             : 'opay';
+    }
+
+    private function customerPayload(Payment $payment, array $customer): array
+    {
+        [$firstName, $lastName] = $this->splitName((string) ($customer['name'] ?? 'Hotspot Customer'));
+        [$countryCode, $phoneNumber] = $this->phoneParts((string) ($customer['phone'] ?? ''));
+
+        return [
+            'email' => $customer['email'] ?: 'guest-'.$payment->id.'@hotspot.local',
+            'name' => [
+                'first' => $firstName,
+                'last' => $lastName,
+            ],
+            'phone' => [
+                'country_code' => $countryCode,
+                'number' => $phoneNumber,
+            ],
+            'address' => [
+                'country' => 'NG',
+                'city' => $payment->shop->location_city ?: 'Lagos',
+                'state' => $payment->shop->location_city ?: 'Lagos',
+                'line1' => $payment->shop->name,
+            ],
+        ];
+    }
+
+    private function splitName(string $name): array
+    {
+        $parts = Str::of($name)->squish()->explode(' ')->filter()->values();
+
+        return [
+            (string) ($parts->first() ?: 'Hotspot'),
+            (string) ($parts->skip(1)->implode(' ') ?: 'Customer'),
+        ];
+    }
+
+    private function phoneParts(string $phone): array
+    {
+        $digits = preg_replace('/\D+/', '', $phone) ?: '8000000000';
+
+        if (Str::startsWith($digits, '234') && strlen($digits) > 10) {
+            return ['234', substr($digits, 3)];
+        }
+
+        if (Str::startsWith($digits, '0') && strlen($digits) > 1) {
+            return ['234', substr($digits, 1)];
+        }
+
+        return ['234', $digits];
     }
 }

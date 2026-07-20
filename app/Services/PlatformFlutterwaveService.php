@@ -31,9 +31,22 @@ class PlatformFlutterwaveService
                 ],
                 'customer' => [
                     'email' => $payment->tenant->owner_email,
-                    'name' => $payment->tenant->company_name,
+                    'name' => [
+                        'first' => str($payment->tenant->company_name)->squish()->before(' ')->toString() ?: 'Tenant',
+                        'last' => str($payment->tenant->company_name)->squish()->after(' ')->toString() ?: 'Admin',
+                    ],
+                    'phone' => [
+                        'country_code' => '234',
+                        'number' => preg_replace('/\D+/', '', (string) $payment->tenant->contact_phone) ?: '8000000000',
+                    ],
+                    'address' => [
+                        'country' => 'NG',
+                        'city' => 'Lagos',
+                        'state' => 'Lagos',
+                        'line1' => $payment->tenant->company_name,
+                    ],
                 ],
-                'metadata' => [
+                'meta' => [
                     'payment_type' => 'platform_subscription',
                     'payment_id' => $payment->id,
                     'payment_reference' => $payment->tx_ref,

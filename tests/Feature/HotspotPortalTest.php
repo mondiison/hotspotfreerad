@@ -259,13 +259,13 @@ class HotspotPortalTest extends TestCase
             && $request['amount'] === 500.0
             && $request['currency'] === 'NGN'
             && data_get($request->data(), 'payment_method.type') === 'opay'
-            && $request['metadata']['credential_source'] === 'tenant'
-            && $request['metadata']['credential_label'] === 'Demo ISP / Demo Shop'
-            && $request['metadata']['tenant_name'] === 'Demo ISP'
-            && $request['metadata']['shop_name'] === 'Demo Shop'
-            && $request['metadata']['package_name'] === 'One Hour Ultra'
-            && $request['metadata']['device_mac'] === 'AA:BB:CC:DD:EE:FF'
-            && $request['metadata']['nas_identifier'] === $router->nas_identifier
+            && $request['meta']['credential_source'] === 'tenant'
+            && $request['meta']['credential_label'] === 'Demo ISP / Demo Shop'
+            && $request['meta']['tenant_name'] === 'Demo ISP'
+            && $request['meta']['shop_name'] === 'Demo Shop'
+            && $request['meta']['package_name'] === 'One Hour Ultra'
+            && $request['meta']['device_mac'] === 'AA:BB:CC:DD:EE:FF'
+            && $request['meta']['nas_identifier'] === $router->nas_identifier
             && $request['redirect_url'] === route('hotspot.payment.callback'));
 
         $payment = Payment::firstOrFail();
@@ -316,8 +316,8 @@ class HotspotPortalTest extends TestCase
             && $request['client_id'] === 'tenant-client-id'
             && $request['client_secret'] === 'tenant-client-secret');
         Http::assertSent(fn ($request) => str_contains($request->url(), '/orchestration/direct-charges')
-            && $request['metadata']['credential_source'] === 'tenant'
-            && $request['metadata']['credential_label'] === 'Demo ISP / Demo Shop');
+            && $request['meta']['credential_source'] === 'tenant'
+            && $request['meta']['credential_label'] === 'Demo ISP / Demo Shop');
 
         $payment = Payment::firstOrFail();
         $this->assertSame('tenant', data_get($payment->payload, 'flutterwave_account.source'));

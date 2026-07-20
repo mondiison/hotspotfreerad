@@ -13,6 +13,7 @@ use App\Services\FlutterwaveService;
 use App\Services\HotspotPaymentConfirmationService;
 use App\Services\RadiusProvisioningService;
 use App\Support\PaymentCommission;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -226,6 +227,9 @@ class PortalController extends Controller
                     'payment_id' => $payment->id,
                     'tx_ref' => $payment->tx_ref,
                     'message' => $exception->getMessage(),
+                    'response_body' => $exception instanceof RequestException
+                        ? $exception->response->json() ?: $exception->response->body()
+                        : null,
                 ]);
             }
         }
