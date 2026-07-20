@@ -320,10 +320,10 @@ class PlatformBillingTest extends TestCase
                 'access_token' => 'PLATFORM_TOKEN',
                 'expires_in' => 600,
             ]),
-            'developersandbox-api.flutterwave.com/orchestration/direct-orders' => Http::response([
+            'developersandbox-api.flutterwave.com/orchestration/direct-charges' => Http::response([
                 'status' => 'success',
                 'data' => [
-                    'id' => 'ord_platform_123',
+                    'id' => 'chg_platform_123',
                     'next_action' => [
                         'redirect_url' => [
                             'url' => 'https://developer-sandbox-ui-sit.flutterwave.cloud/redirects/opay/platform-subscription',
@@ -352,17 +352,18 @@ class PlatformBillingTest extends TestCase
         Http::assertSent(fn ($request) => str_contains($request->url(), 'idp.flutterwave.com')
             && $request['client_id'] === 'platform-client-id'
             && $request['client_secret'] === 'platform-client-secret');
-        Http::assertSent(fn ($request) => str_contains($request->url(), '/orchestration/direct-orders')
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/orchestration/direct-charges')
             && $request->hasHeader('Authorization', 'Bearer PLATFORM_TOKEN')
             && $request['amount'] === 35000.0
             && $request['currency'] === 'NGN'
+            && data_get($request->data(), 'payment_method.type') === 'opay'
             && $request['metadata']['payment_type'] === 'platform_subscription'
             && $request['metadata']['tenant_name'] === 'Tenant One'
             && $request['metadata']['billing_plan_name'] === 'Growth');
 
         $payment = PlatformBillingPayment::firstOrFail();
         $this->assertSame('pending', $payment->status);
-        $this->assertSame('ord_platform_123', $payment->provider_reference);
+        $this->assertSame('chg_platform_123', $payment->provider_reference);
     }
 
     public function test_successful_platform_subscription_callback_activates_billing_subscription(): void

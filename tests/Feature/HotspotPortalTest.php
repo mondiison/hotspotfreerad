@@ -222,10 +222,10 @@ class HotspotPortalTest extends TestCase
                 'access_token' => 'FLW_V4_TOKEN',
                 'expires_in' => 600,
             ]),
-            'developersandbox-api.flutterwave.com/orchestration/direct-orders' => Http::response([
+            'developersandbox-api.flutterwave.com/orchestration/direct-charges' => Http::response([
                 'status' => 'success',
                 'data' => [
-                    'id' => 'ord_12345',
+                    'id' => 'chg_12345',
                     'reference' => 'pending',
                     'next_action' => [
                         'type' => 'redirect_url',
@@ -250,14 +250,14 @@ class HotspotPortalTest extends TestCase
         ])
             ->assertRedirect('https://developer-sandbox-ui-sit.flutterwave.cloud/redirects/opay/demo');
 
-        Http::assertSent(fn ($request) => str_contains($request->url(), '/orchestration/direct-orders')
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/orchestration/direct-charges')
             && $request->hasHeader('Authorization', 'Bearer FLW_V4_TOKEN')
             && $request->hasHeader('X-Trace-Id')
             && $request->hasHeader('X-Idempotency-Key')
             && $request['reference']
             && $request['amount'] === 500.0
             && $request['currency'] === 'NGN'
-            && $request['payment_method'] === 'opay'
+            && data_get($request->data(), 'payment_method.type') === 'opay'
             && $request['metadata']['credential_source'] === 'tenant'
             && $request['metadata']['credential_label'] === 'Demo ISP / Demo Shop'
             && $request['metadata']['tenant_name'] === 'Demo ISP'
@@ -285,10 +285,10 @@ class HotspotPortalTest extends TestCase
                 'access_token' => 'TENANT_TOKEN',
                 'expires_in' => 600,
             ]),
-            'developersandbox-api.flutterwave.com/orchestration/direct-orders' => Http::response([
+            'developersandbox-api.flutterwave.com/orchestration/direct-charges' => Http::response([
                 'status' => 'success',
                 'data' => [
-                    'id' => 'ord_tenant_123',
+                    'id' => 'chg_tenant_123',
                     'next_action' => [
                         'redirect_url' => [
                             'url' => 'https://developer-sandbox-ui-sit.flutterwave.cloud/redirects/opay/tenant',
@@ -314,7 +314,7 @@ class HotspotPortalTest extends TestCase
         Http::assertSent(fn ($request) => str_contains($request->url(), 'idp.flutterwave.com')
             && $request['client_id'] === 'tenant-client-id'
             && $request['client_secret'] === 'tenant-client-secret');
-        Http::assertSent(fn ($request) => str_contains($request->url(), '/orchestration/direct-orders')
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/orchestration/direct-charges')
             && $request['metadata']['credential_source'] === 'tenant'
             && $request['metadata']['credential_label'] === 'Demo ISP / Demo Shop');
 
@@ -354,7 +354,7 @@ class HotspotPortalTest extends TestCase
                 'access_token' => 'TENANT_TOKEN',
                 'expires_in' => 600,
             ]),
-            'developersandbox-api.flutterwave.com/orchestration/direct-orders' => Http::response([
+            'developersandbox-api.flutterwave.com/orchestration/direct-charges' => Http::response([
                 'message' => 'Invalid payment method',
             ], 422),
         ]);

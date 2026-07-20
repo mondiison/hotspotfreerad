@@ -21,12 +21,14 @@ class FlutterwaveService
                 'X-Trace-Id' => $payment->tx_ref,
                 'X-Idempotency-Key' => $payment->tx_ref,
             ])
-            ->post($this->baseUrl().'/orchestration/direct-orders', [
+            ->post($this->baseUrl().'/orchestration/direct-charges', [
                 'amount' => (float) $payment->amount,
                 'currency' => $payment->currency,
                 'reference' => $payment->tx_ref,
                 'redirect_url' => $redirectUrl,
-                'payment_method' => (string) config('services.flutterwave.default_payment_method', 'opay'),
+                'payment_method' => [
+                    'type' => (string) config('services.flutterwave.default_payment_method', 'opay'),
+                ],
                 'customer' => [
                     'email' => $customer['email'] ?: 'guest-'.$payment->id.'@hotspot.local',
                     'phone' => $customer['phone'] ?? null,
@@ -62,7 +64,7 @@ class FlutterwaveService
      */
     public function verifyPayment(Payment $payment, string $providerReference, string $type = 'order'): array
     {
-        $resource = Str::startsWith($type, 'charge') ? 'charges' : 'orders';
+        $resource = Str::startsWith($type, 'order') ? 'orders' : 'charges';
 
         return Http::withToken($this->accessToken($payment))
             ->acceptJson()
