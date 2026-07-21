@@ -47,14 +47,21 @@ class SubscriptionController extends Controller
                 'Expires At',
                 'Throttled',
                 'Speed Profile',
+                'Upload Bytes',
+                'Download Bytes',
+                'Total Transfer Bytes',
+                'RADIUS Sessions',
                 'Created At',
             ]);
 
             $reports->query($request->user(), $filters)
                 ->latest('expires_at')
-                ->chunk(200, function ($subscriptions) use ($handle): void {
+                ->chunk(200, function ($subscriptions) use ($handle, $reports): void {
+                    $reports->attachUsage($subscriptions);
+
                     foreach ($subscriptions as $subscription) {
                         $isActive = $subscription->expires_at->isFuture();
+                        $usage = $subscription->radius_usage;
 
                         fputcsv($handle, [
                             $subscription->mac_address,
@@ -68,6 +75,10 @@ class SubscriptionController extends Controller
                             $subscription->expires_at?->toDateTimeString(),
                             $subscription->is_throttled ? 'Yes' : 'No',
                             $subscription->package?->speed_limit_profile,
+                            $usage['upload_bytes'],
+                            $usage['download_bytes'],
+                            $usage['total_bytes'],
+                            $usage['session_count'],
                             $subscription->created_at?->toDateTimeString(),
                         ]);
                     }

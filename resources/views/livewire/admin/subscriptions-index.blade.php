@@ -1,4 +1,20 @@
 <div>
+    @php
+        $formatBytes = function (?int $bytes): string {
+            $bytes = (int) $bytes;
+
+            if ($bytes <= 0) {
+                return '0 B';
+            }
+
+            $units = ['B', 'KB', 'MB', 'GB', 'TB'];
+            $power = min((int) floor(log($bytes, 1024)), count($units) - 1);
+            $value = $bytes / (1024 ** $power);
+
+            return number_format($value, $power === 0 ? 0 : 1).' '.$units[$power];
+        };
+    @endphp
+
     <div class="mb-4 flex justify-end">
         <flux:button href="{{ route('admin.subscriptions.export', $exportQuery) }}" variant="outline" icon="arrow-down-tray">Export CSV</flux:button>
     </div>
@@ -71,6 +87,10 @@
         Updating access report...
     </div>
 
+    <div wire:loading.flex wire:target="inspect" class="mt-4 hidden rounded-md border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
+        Loading access activity...
+    </div>
+
     <div class="mt-6 overflow-hidden rounded-lg border border-zinc-200 bg-white">
         <table class="w-full text-left text-sm">
             <thead class="border-b border-zinc-200 bg-zinc-50 text-zinc-500">
@@ -80,12 +100,17 @@
                     <th class="px-4 py-3 font-medium">Shop</th>
                     <th class="px-4 py-3 font-medium">Source</th>
                     <th class="px-4 py-3 font-medium">Status</th>
+                    <th class="px-4 py-3 text-right font-medium">Transfer</th>
                     <th class="px-4 py-3 text-right font-medium">Access window</th>
+                    <th class="px-4 py-3 text-right font-medium">Inspect</th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-zinc-100">
                 @forelse ($subscriptions as $subscription)
-                    @php($isActive = $subscription->expires_at->isFuture())
+                    @php
+                        $isActive = $subscription->expires_at->isFuture();
+                        $usage = $subscription->radius_usage;
+                    @endphp
                     <tr wire:key="subscription-{{ $subscription->id }}">
                         <td class="px-4 py-3">
                             <p class="font-mono text-xs font-medium">{{ $subscription->mac_address }}</p>
@@ -117,16 +142,153 @@
                             @endif
                         </td>
                         <td class="px-4 py-3 text-right">
+                            @if ($usage['available'])
+                                <p class="font-medium">{{ $formatBytes($usage['total_bytes']) }}</p>
+                                <p class="mt-1 text-xs text-zinc-500">Down {{ $formatBytes($usage['download_bytes']) }}</p>
+                                <p class="mt-1 text-xs text-zinc-500">Up {{ $formatBytes($usage['upload_bytes']) }}</p>
+                                <p class="mt-1 text-xs text-zinc-400">{{ number_format($usage['session_count']) }} RADIUS {{ \Illuminate\Support\Str::plural('session', $usage['session_count']) }}</p>
+                            @else
+                                <p class="text-xs text-zinc-500">Accounting unavailable</p>
+                            @endif
+                        </td>
+                        <td class="px-4 py-3 text-right">
                             <p class="font-medium">{{ $subscription->expires_at->format('M j, Y g:i A') }}</p>
                             <p class="mt-1 text-xs text-zinc-500">Started {{ $subscription->starts_at->format('M j, Y g:i A') }}</p>
                         </td>
+                        <td class="px-4 py-3 text-right">
+                            <flux:button type="button" wire:click="inspect({{ $subscription->id }})" wire:loading.attr="disabled" wire:target="inspect({{ $subscription->id }})" variant="outline" size="sm" icon="magnifying-glass">
+                                Deep inspect
+                            </flux:button>
+                        </td>
                     </tr>
                 @empty
-                    <tr><td colspan="6" class="px-4 py-8 text-center text-zinc-500">No access records found.</td></tr>
+                    <tr><td colspan="8" class="px-4 py-8 text-center text-zinc-500">No access records found.</td></tr>
                 @endforelse
             </tbody>
         </table>
     </div>
 
     <div class="mt-4">{{ $subscriptions->links() }}</div>
+
+    <flux:modal wire:model.self="showInspectModal" class="md:w-5xl" :dismissible="true" variant="flyout">
+        @if ($selectedSubscription)
+            @php
+                $usage = $selectedSubscription->radius_usage;
+                $sessions = $selectedSubscription->radius_sessions;
+            @endphp
+
+            <div class="space-y-6">
+                <div class="flex flex-col justify-between gap-3 md:flex-row md:items-start">
+                    <div>
+                        <flux:heading level="2" size="lg">Access Activity</flux:heading>
+                        <flux:text class="mt-2 text-sm text-zinc-500">
+                            {{ $selectedSubscription->mac_address }} on {{ $selectedSubscription->shop?->name ?? 'Deleted shop' }}
+                        </flux:text>
+                    </div>
+
+                    <flux:badge :color="$selectedSubscription->expires_at->isFuture() ? 'green' : 'zinc'">
+                        {{ $selectedSubscription->expires_at->isFuture() ? 'Active' : 'Expired' }}
+                    </flux:badge>
+                </div>
+
+                <section class="grid gap-3 md:grid-cols-4">
+                    @foreach ([
+                        ['label' => 'Total transfer', 'value' => $formatBytes($usage['total_bytes'])],
+                        ['label' => 'Download', 'value' => $formatBytes($usage['download_bytes'])],
+                        ['label' => 'Upload', 'value' => $formatBytes($usage['upload_bytes'])],
+                        ['label' => 'RADIUS sessions', 'value' => number_format($usage['session_count'])],
+                    ] as $stat)
+                        <div class="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+                            <p class="text-xs font-medium uppercase text-zinc-500">{{ $stat['label'] }}</p>
+                            <p class="mt-2 text-xl font-semibold">{{ $stat['value'] }}</p>
+                        </div>
+                    @endforeach
+                </section>
+
+                <section class="grid gap-3 rounded-lg border border-zinc-200 bg-white p-4 text-sm md:grid-cols-2">
+                    <div>
+                        <p class="text-xs font-medium uppercase text-zinc-500">Package</p>
+                        <p class="mt-1 font-medium">{{ $selectedSubscription->package?->name ?? 'Deleted package' }}</p>
+                        <p class="mt-1 text-xs text-zinc-500">{{ $selectedSubscription->package?->speed_limit_profile ?: 'No bandwidth profile' }}</p>
+                    </div>
+                    <div>
+                        <p class="text-xs font-medium uppercase text-zinc-500">Access window</p>
+                        <p class="mt-1 font-medium">{{ $selectedSubscription->starts_at->format('M j, Y g:i A') }} - {{ $selectedSubscription->expires_at->format('M j, Y g:i A') }}</p>
+                    </div>
+                    <div>
+                        <p class="text-xs font-medium uppercase text-zinc-500">Source</p>
+                        <p class="mt-1 font-medium">{{ $selectedSubscription->payment ? 'Paid' : 'Test' }}</p>
+                        @if ($selectedSubscription->payment)
+                            <p class="mt-1 font-mono text-xs text-zinc-500">{{ $selectedSubscription->payment->tx_ref }}</p>
+                        @endif
+                    </div>
+                    <div>
+                        <p class="text-xs font-medium uppercase text-zinc-500">Tenant</p>
+                        <p class="mt-1 font-medium">{{ $selectedSubscription->shop?->tenant?->company_name ?? 'Unknown tenant' }}</p>
+                    </div>
+                </section>
+
+                <section class="overflow-hidden rounded-lg border border-zinc-200 bg-white">
+                    <div class="border-b border-zinc-200 bg-zinc-50 px-4 py-3">
+                        <h3 class="font-semibold">RADIUS accounting sessions</h3>
+                        <p class="mt-1 text-xs text-zinc-500">Only sessions whose start time falls inside this access window are included.</p>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm">
+                            <thead class="border-b border-zinc-200 text-zinc-500">
+                                <tr>
+                                    <th class="px-4 py-3 font-medium">Session</th>
+                                    <th class="px-4 py-3 font-medium">Router / IP</th>
+                                    <th class="px-4 py-3 font-medium">Started</th>
+                                    <th class="px-4 py-3 font-medium">Updated / Stopped</th>
+                                    <th class="px-4 py-3 text-right font-medium">Transfer</th>
+                                    <th class="px-4 py-3 font-medium">End reason</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-zinc-100">
+                                @forelse ($sessions as $session)
+                                    <tr>
+                                        <td class="px-4 py-3">
+                                            <p class="font-mono text-xs font-medium">{{ $session->acctsessionid }}</p>
+                                            <p class="mt-1 font-mono text-xs text-zinc-500">{{ $session->acctuniqueid }}</p>
+                                        </td>
+                                        <td class="px-4 py-3">
+                                            <p class="font-mono text-xs">{{ $session->nasipaddress ?: 'Unknown NAS' }}</p>
+                                            <p class="mt-1 font-mono text-xs text-zinc-500">{{ $session->framedipaddress ?: 'No framed IP' }}</p>
+                                        </td>
+                                        <td class="px-4 py-3 text-zinc-600">
+                                            {{ $session->acctstarttime ? \Illuminate\Support\Carbon::parse($session->acctstarttime)->format('M j, Y g:i A') : 'Unknown' }}
+                                        </td>
+                                        <td class="px-4 py-3 text-zinc-600">
+                                            <p>{{ $session->acctupdatetime ? \Illuminate\Support\Carbon::parse($session->acctupdatetime)->format('M j, Y g:i A') : 'No update' }}</p>
+                                            <p class="mt-1 text-xs text-zinc-500">{{ $session->acctstoptime ? 'Stopped '.\Illuminate\Support\Carbon::parse($session->acctstoptime)->format('M j, Y g:i A') : 'Still open / no stop' }}</p>
+                                        </td>
+                                        <td class="px-4 py-3 text-right">
+                                            <p class="font-medium">{{ $formatBytes($session->total_bytes) }}</p>
+                                            <p class="mt-1 text-xs text-zinc-500">Down {{ $formatBytes($session->download_bytes) }}</p>
+                                            <p class="mt-1 text-xs text-zinc-500">Up {{ $formatBytes($session->upload_bytes) }}</p>
+                                        </td>
+                                        <td class="px-4 py-3 text-zinc-600">
+                                            {{ $session->acctterminatecause ?: 'Not stopped' }}
+                                        </td>
+                                    </tr>
+                                @empty
+                                    <tr>
+                                        <td colspan="6" class="px-4 py-8 text-center text-zinc-500">
+                                            No RADIUS accounting sessions were found for this access window.
+                                        </td>
+                                    </tr>
+                                @endforelse
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <div class="flex justify-end">
+                    <flux:button type="button" variant="outline" wire:click="closeInspect">Close</flux:button>
+                </div>
+            </div>
+        @endif
+    </flux:modal>
 </div>

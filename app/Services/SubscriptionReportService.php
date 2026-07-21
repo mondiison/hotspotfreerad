@@ -6,6 +6,9 @@ use App\Models\Subscription;
 use App\Models\User;
 use App\Support\TenantAccess;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 
 class SubscriptionReportService
@@ -98,6 +101,121 @@ class SubscriptionReportService
             'test_count' => (clone $summaryQuery)->whereNull('payment_id')->count(),
             'throttled_count' => (clone $summaryQuery)->where('is_throttled', true)->count(),
         ];
+    }
+
+    public function attachUsage(Collection $subscriptions): Collection
+    {
+        $subscriptions->each(fn (Subscription $subscription) => $subscription->setAttribute('radius_usage', [
+            'upload_bytes' => 0,
+            'download_bytes' => 0,
+            'total_bytes' => 0,
+            'session_count' => 0,
+            'available' => Schema::hasTable('radacct'),
+        ]));
+
+        if ($subscriptions->isEmpty() || ! Schema::hasTable('radacct')) {
+            return $subscriptions;
+        }
+
+        $macAddresses = $subscriptions
+            ->pluck('mac_address')
+            ->filter()
+            ->map(fn (string $macAddress) => strtolower($macAddress))
+            ->unique()
+            ->values();
+
+        $from = $subscriptions->min('starts_at');
+        $to = $subscriptions->max('expires_at');
+
+        if (! $from || ! $to || $macAddresses->isEmpty()) {
+            return $subscriptions;
+        }
+
+        $sessions = DB::table('radacct')
+            ->select([
+                'username',
+                'callingstationid',
+                'acctstarttime',
+                'acctinputoctets',
+                'acctoutputoctets',
+            ])
+            ->whereBetween('acctstarttime', [$from, $to])
+            ->where(function ($query) use ($macAddresses): void {
+                $query
+                    ->whereIn(DB::raw('LOWER(username)'), $macAddresses)
+                    ->orWhereIn(DB::raw('LOWER(callingstationid)'), $macAddresses);
+            })
+            ->get();
+
+        foreach ($sessions as $session) {
+            $sessionMacs = collect([$session->username, $session->callingstationid])
+                ->filter()
+                ->map(fn (string $macAddress) => strtolower($macAddress))
+                ->unique();
+            $startedAt = $session->acctstarttime ? Carbon::parse($session->acctstarttime) : null;
+
+            if (! $startedAt) {
+                continue;
+            }
+
+            $subscriptions
+                ->filter(fn (Subscription $subscription) => $sessionMacs->contains(strtolower($subscription->mac_address))
+                    && $subscription->starts_at
+                    && $subscription->expires_at
+                    && $startedAt->betweenIncluded($subscription->starts_at, $subscription->expires_at))
+                ->each(function (Subscription $subscription) use ($session): void {
+                    $usage = $subscription->getAttribute('radius_usage');
+                    $usage['upload_bytes'] += (int) ($session->acctinputoctets ?? 0);
+                    $usage['download_bytes'] += (int) ($session->acctoutputoctets ?? 0);
+                    $usage['total_bytes'] = $usage['upload_bytes'] + $usage['download_bytes'];
+                    $usage['session_count']++;
+
+                    $subscription->setAttribute('radius_usage', $usage);
+                });
+        }
+
+        return $subscriptions;
+    }
+
+    public function sessionsFor(Subscription $subscription): Collection
+    {
+        if (! Schema::hasTable('radacct') || ! $subscription->starts_at || ! $subscription->expires_at) {
+            return collect();
+        }
+
+        $macAddress = strtolower($subscription->mac_address);
+
+        return DB::table('radacct')
+            ->select([
+                'acctsessionid',
+                'acctuniqueid',
+                'username',
+                'nasipaddress',
+                'acctstarttime',
+                'acctupdatetime',
+                'acctstoptime',
+                'acctsessiontime',
+                'acctinputoctets',
+                'acctoutputoctets',
+                'callingstationid',
+                'framedipaddress',
+                'acctterminatecause',
+            ])
+            ->whereBetween('acctstarttime', [$subscription->starts_at, $subscription->expires_at])
+            ->where(function ($query) use ($macAddress): void {
+                $query
+                    ->where(DB::raw('LOWER(username)'), $macAddress)
+                    ->orWhere(DB::raw('LOWER(callingstationid)'), $macAddress);
+            })
+            ->orderByDesc('acctstarttime')
+            ->get()
+            ->map(function ($session): object {
+                $session->upload_bytes = (int) ($session->acctinputoctets ?? 0);
+                $session->download_bytes = (int) ($session->acctoutputoctets ?? 0);
+                $session->total_bytes = $session->upload_bytes + $session->download_bytes;
+
+                return $session;
+            });
     }
 
     public function queryParams(array $filters): array

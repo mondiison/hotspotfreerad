@@ -11,12 +11,18 @@ use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use Tests\TestCase;
 
 class AdminSubscriptionIndexTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_application_timezone_defaults_to_lagos(): void
+    {
+        $this->assertSame('Africa/Lagos', config('app.timezone'));
+    }
 
     public function test_super_admin_can_view_access_report_across_tenants(): void
     {
@@ -158,6 +164,154 @@ class AdminSubscriptionIndexTest extends TestCase
         $this->assertStringNotContainsString($expiredSubscription->mac_address, $content);
         $this->assertStringNotContainsString($otherSubscription->mac_address, $content);
         $this->assertStringNotContainsString('Other Export Shop', $content);
+    }
+
+    public function test_access_report_shows_radius_upload_download_and_total_transfer(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-21 10:00:00'));
+
+        try {
+            [$subscription, $tenant] = $this->subscriptionFixture('Usage Tenant', 'usage@example.com', 'Usage Shop', 'AA:BB:CC:DD:EE:40', true, 'Usage Plan');
+            $subscription->update([
+                'starts_at' => now()->subMinutes(30),
+                'expires_at' => now()->addMinutes(30),
+            ]);
+
+            DB::table('radacct')->insert([
+                [
+                    'acctsessionid' => 'usage-session-1',
+                    'acctuniqueid' => 'usage-unique-1',
+                    'username' => $subscription->mac_address,
+                    'nasipaddress' => '10.8.0.10',
+                    'acctstarttime' => now()->subMinutes(20),
+                    'acctinputoctets' => 1048576,
+                    'acctoutputoctets' => 2097152,
+                    'callingstationid' => $subscription->mac_address,
+                ],
+                [
+                    'acctsessionid' => 'usage-session-2',
+                    'acctuniqueid' => 'usage-unique-2',
+                    'username' => $subscription->mac_address,
+                    'nasipaddress' => '10.8.0.10',
+                    'acctstarttime' => now()->subMinutes(10),
+                    'acctinputoctets' => 524288,
+                    'acctoutputoctets' => 524288,
+                    'callingstationid' => $subscription->mac_address,
+                ],
+                [
+                    'acctsessionid' => 'outside-window',
+                    'acctuniqueid' => 'outside-window',
+                    'username' => $subscription->mac_address,
+                    'nasipaddress' => '10.8.0.10',
+                    'acctstarttime' => now()->subHours(2),
+                    'acctinputoctets' => 999999,
+                    'acctoutputoctets' => 999999,
+                    'callingstationid' => $subscription->mac_address,
+                ],
+            ]);
+
+            $user = User::factory()->create([
+                'tenant_id' => $tenant->id,
+                'role' => 'tenant_admin',
+                'is_active' => true,
+            ]);
+
+            $this->actingAs($user)
+                ->get(route('admin.subscriptions.index'))
+                ->assertOk()
+                ->assertSee('Transfer')
+                ->assertSee('4.0 MB')
+                ->assertSee('Down 2.5 MB')
+                ->assertSee('Up 1.5 MB')
+                ->assertSee('2 RADIUS sessions');
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
+    public function test_access_report_deep_inspect_shows_radius_session_activity(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-21 10:00:00'));
+
+        try {
+            [$subscription, $tenant] = $this->subscriptionFixture('Inspect Tenant', 'inspect@example.com', 'Inspect Shop', 'AA:BB:CC:DD:EE:42', true, 'Inspect Plan');
+            $subscription->update([
+                'starts_at' => now()->subMinutes(30),
+                'expires_at' => now()->addMinutes(30),
+            ]);
+
+            DB::table('radacct')->insert([
+                'acctsessionid' => 'inspect-session',
+                'acctuniqueid' => 'inspect-unique',
+                'username' => $subscription->mac_address,
+                'nasipaddress' => '10.8.0.10',
+                'acctstarttime' => now()->subMinutes(12),
+                'acctupdatetime' => now()->subMinutes(2),
+                'acctstoptime' => null,
+                'acctsessiontime' => 600,
+                'acctinputoctets' => 1048576,
+                'acctoutputoctets' => 2097152,
+                'callingstationid' => $subscription->mac_address,
+                'framedipaddress' => '10.5.50.23',
+                'acctterminatecause' => null,
+            ]);
+
+            $user = User::factory()->create([
+                'tenant_id' => $tenant->id,
+                'role' => 'tenant_admin',
+                'is_active' => true,
+            ]);
+
+            Livewire::actingAs($user)
+                ->test(SubscriptionsIndex::class)
+                ->call('inspect', $subscription->id)
+                ->assertSet('showInspectModal', true)
+                ->assertSee('Access Activity')
+                ->assertSee('Inspect Shop')
+                ->assertSee('inspect-session')
+                ->assertSee('10.5.50.23')
+                ->assertSee('3.0 MB')
+                ->assertSee('Down 2.0 MB')
+                ->assertSee('Up 1.0 MB')
+                ->assertSee('Still open / no stop');
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
+    public function test_access_report_export_includes_radius_usage_columns(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-21 10:00:00'));
+
+        try {
+            [$subscription, $tenant] = $this->subscriptionFixture('CSV Usage Tenant', 'csv-usage@example.com', 'CSV Usage Shop', 'AA:BB:CC:DD:EE:41', true, 'CSV Usage Plan');
+
+            DB::table('radacct')->insert([
+                'acctsessionid' => 'csv-usage-session',
+                'acctuniqueid' => 'csv-usage-unique',
+                'username' => $subscription->mac_address,
+                'nasipaddress' => '10.8.0.10',
+                'acctstarttime' => now()->subMinutes(5),
+                'acctinputoctets' => 1000,
+                'acctoutputoctets' => 2000,
+                'callingstationid' => $subscription->mac_address,
+            ]);
+
+            $user = User::factory()->create([
+                'tenant_id' => $tenant->id,
+                'role' => 'tenant_admin',
+                'is_active' => true,
+            ]);
+
+            $content = $this->actingAs($user)
+                ->get(route('admin.subscriptions.export'))
+                ->streamedContent();
+
+            $this->assertStringContainsString('"Upload Bytes","Download Bytes","Total Transfer Bytes","RADIUS Sessions"', $content);
+            $this->assertStringContainsString(',5M/5M,1000,2000,3000,1,', $content);
+        } finally {
+            Carbon::setTestNow();
+        }
     }
 
     public function test_livewire_access_report_filters_without_page_reload(): void

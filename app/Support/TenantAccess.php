@@ -3,10 +3,10 @@
 namespace App\Support;
 
 use App\Models\Expense;
-use App\Models\ExpenseCategory;
 use App\Models\Package;
 use App\Models\Router;
 use App\Models\Shop;
+use App\Models\Subscription;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Validation\Rule;
@@ -88,6 +88,13 @@ class TenantAccess
     public static function assertExpense(Expense $expense, User $user): void
     {
         abort_unless($user->isSuperAdmin() || $expense->tenant_id === $user->tenant_id, 403);
+    }
+
+    public static function assertSubscription(Subscription $subscription, User $user): void
+    {
+        $subscription->loadMissing('shop');
+
+        self::assertShop($subscription->shop, $user);
     }
 
     public static function shopExistsRule(User $user): Exists
