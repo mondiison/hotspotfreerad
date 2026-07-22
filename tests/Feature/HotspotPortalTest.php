@@ -7,6 +7,7 @@ use App\Models\Package;
 use App\Models\Payment;
 use App\Models\Router;
 use App\Models\Shop;
+use App\Models\Subscription;
 use App\Models\Tenant;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -109,6 +110,48 @@ class HotspotPortalTest extends TestCase
             ->assertSee('Redirect incomplete')
             ->assertSee('Device MAC')
             ->assertSee('Missing');
+    }
+
+    public function test_portal_auto_connects_device_with_active_subscription(): void
+    {
+        [$router, $package] = $this->routerWithPackage();
+
+        Subscription::create([
+            'shop_id' => $router->shop_id,
+            'package_id' => $package->id,
+            'mac_address' => 'AA:BB:CC:DD:EE:FF',
+            'starts_at' => now()->subMinutes(5),
+            'expires_at' => now()->addHour(),
+            'is_throttled' => false,
+        ]);
+
+        $this->get('/hotspot/portal?mac=AA:BB:CC:DD:EE:FF&nasid='.$router->nas_identifier.'&link-login='.urlencode('http://10.5.50.1/login').'&link-orig='.urlencode('http://example.com'))
+            ->assertOk()
+            ->assertSee('Access provisioned')
+            ->assertSee('id="mikrotik-login"', false)
+            ->assertSee('http://10.5.50.1/login', false)
+            ->assertSee('document.getElementById', false)
+            ->assertDontSee('Choose internet access');
+    }
+
+    public function test_portal_keeps_showing_plans_for_expired_subscription(): void
+    {
+        [$router, $package] = $this->routerWithPackage();
+
+        Subscription::create([
+            'shop_id' => $router->shop_id,
+            'package_id' => $package->id,
+            'mac_address' => 'AA:BB:CC:DD:EE:FF',
+            'starts_at' => now()->subHours(2),
+            'expires_at' => now()->subHour(),
+            'is_throttled' => false,
+        ]);
+
+        $this->get('/hotspot/portal?mac=AA:BB:CC:DD:EE:FF&nasid='.$router->nas_identifier)
+            ->assertOk()
+            ->assertSee('Choose internet access')
+            ->assertSee($package->name)
+            ->assertDontSee('Access provisioned');
     }
 
     public function test_grant_creates_subscription_and_radius_access(): void

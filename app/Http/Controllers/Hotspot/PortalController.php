@@ -55,6 +55,27 @@ class PortalController extends Controller
             ]);
         }
 
+        $activeSubscription = Subscription::query()
+            ->with('package')
+            ->where('shop_id', $router->shop_id)
+            ->where('mac_address', $validated['mac'])
+            ->where('expires_at', '>', now())
+            ->latest('expires_at')
+            ->first();
+
+        if ($activeSubscription) {
+            return view('hotspot.access-granted', [
+                'router' => $router,
+                'package' => $activeSubscription->package,
+                'subscription' => $activeSubscription,
+                'macAddress' => $validated['mac'],
+                'username' => $validated['mac'],
+                'password' => self::TEST_ACCESS_PASSWORD,
+                'loginUrl' => $validated['link-login'] ?? null,
+                'originalUrl' => $validated['link-orig'] ?? null,
+            ]);
+        }
+
         return view('hotspot.portal', [
             'router' => $router,
             'shop' => $router->shop,
