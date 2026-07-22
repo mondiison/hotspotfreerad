@@ -706,6 +706,8 @@ class HotspotPortalTest extends TestCase
         ]))
             ->assertOk()
             ->assertSee('Verify and connect')
+            ->assertSee('Verifying payment...')
+            ->assertSee('x-data="{ verifying: false }"', false)
             ->assertSee('Message support on WhatsApp')
             ->assertSee('2347063218823')
             ->assertSee($payment->tx_ref);

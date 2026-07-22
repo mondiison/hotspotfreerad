@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Payment Not Confirmed</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
+    <style>[x-cloak] { display: none !important; }</style>
 </head>
 @php
     $tenant = $payment->shop?->tenant;
@@ -43,11 +44,12 @@
             </div>
 
             <div class="mt-6 grid gap-3 sm:grid-cols-2">
-                <form method="POST" action="{{ route('hotspot.payment.verify') }}">
+                <form method="POST" action="{{ route('hotspot.payment.verify') }}" x-data="{ verifying: false }" @submit="verifying = true">
                     @csrf
                     <input type="hidden" name="tx_ref" value="{{ $payment->tx_ref }}">
-                    <button class="w-full rounded-md px-4 py-2 text-sm font-medium text-white" style="background-color: var(--brand)">
-                        Verify and connect
+                    <button class="flex w-full items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium text-white disabled:cursor-wait disabled:opacity-75" style="background-color: var(--brand)" :disabled="verifying">
+                        <span x-show="verifying" x-cloak class="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"></span>
+                        <span x-text="verifying ? 'Verifying payment...' : 'Verify and connect'">Verify and connect</span>
                     </button>
                 </form>
 
