@@ -1,5 +1,6 @@
 import './bootstrap';
 import { Passkeys } from '@laravel/passkeys';
+import Alpine from 'alpinejs';
 
 window.copyText = async (text) => {
     if (! text) {
@@ -135,3 +136,8 @@ window.passkeyManager = function passkeyManager() {
         },
     };
 };
+
+if (! window.Alpine) {
+    window.Alpine = Alpine;
+    Alpine.start();
+}

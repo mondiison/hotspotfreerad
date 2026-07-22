@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ $shop->name }} Hotspot</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
+    <style>[x-cloak] { display: none !important; }</style>
 </head>
 <body class="min-h-screen bg-zinc-950 text-white antialiased" style="--brand: {{ $shop->tenant->brand_color ?? '#10b981' }}">
     @php
@@ -97,84 +98,101 @@
         <section class="py-4 sm:py-8">
             <h2 class="text-lg font-semibold">Choose internet access</h2>
 
-            <div class="mt-3 grid gap-3 sm:mt-5 sm:grid-cols-2 lg:grid-cols-3">
+            <div class="mt-3 grid gap-3 sm:mt-5 sm:grid-cols-2 lg:grid-cols-3" x-data="{ selectedPlan: null }">
                 @forelse ($packages as $package)
-                    <article class="rounded-lg border border-white/10 bg-white p-3 text-zinc-950 shadow-sm sm:p-5">
-                        <div class="flex items-start justify-between gap-3">
-                            <h3 class="min-w-0 text-base font-semibold sm:text-lg">{{ $package->name }}</h3>
-                            <p class="shrink-0 text-right text-lg font-semibold sm:text-3xl">{{ $package->currency }} {{ number_format($package->price, 0) }}</p>
-                        </div>
-                        <dl class="mt-3 grid grid-cols-3 gap-2 text-xs text-zinc-600 sm:mt-4 sm:block sm:space-y-2 sm:text-sm">
-                            <div class="rounded-md bg-zinc-50 p-2 sm:flex sm:justify-between sm:gap-4 sm:bg-transparent sm:p-0">
-                                <dt>Speed</dt>
-                                <dd class="mt-1 font-medium text-zinc-950 sm:mt-0">{{ $package->speed_limit_profile }}</dd>
-                            </div>
-                            <div class="rounded-md bg-zinc-50 p-2 sm:flex sm:justify-between sm:gap-4 sm:bg-transparent sm:p-0">
-                                <dt>Time</dt>
-                                <dd class="mt-1 font-medium text-zinc-950 sm:mt-0">{{ $formatDuration($package->limit_uptime_seconds) }}</dd>
-                            </div>
-                            <div class="rounded-md bg-zinc-50 p-2 sm:flex sm:justify-between sm:gap-4 sm:bg-transparent sm:p-0">
-                                <dt>Data</dt>
-                                <dd class="mt-1 font-medium text-zinc-950 sm:mt-0">{{ $formatData($package->data_limit_bytes) }}</dd>
-                            </div>
-                            @if ($package->fup_data_threshold_bytes && $package->fup_speed_limit_profile)
-                                <div class="col-span-3 rounded-md bg-zinc-50 p-2 sm:flex sm:justify-between sm:gap-4 sm:bg-transparent sm:p-0">
-                                    <dt>Fair use</dt>
-                                    <dd class="mt-1 font-medium text-zinc-950 sm:mt-0 sm:text-right">After {{ $formatData($package->fup_data_threshold_bytes) }}: {{ $package->fup_speed_limit_profile }}</dd>
+                    <article
+                        class="rounded-lg border border-white/10 bg-white p-3 text-zinc-950 shadow-sm transition sm:p-5"
+                        x-data="{ paying: false, testing: false }"
+                        :class="selectedPlan === {{ $package->id }} ? 'ring-2 ring-[var(--brand)]' : ''"
+                    >
+                        <button type="button" class="w-full text-left" @click="selectedPlan = selectedPlan === {{ $package->id }} ? null : {{ $package->id }}">
+                            <div class="flex items-start justify-between gap-3">
+                                <div class="min-w-0">
+                                    <h3 class="truncate text-base font-semibold sm:text-lg">{{ $package->name }}</h3>
+                                    <p class="mt-1 text-xs text-zinc-500">{{ $formatDuration($package->limit_uptime_seconds) }} / {{ $formatData($package->data_limit_bytes) }} / {{ $package->speed_limit_profile }}</p>
                                 </div>
-                            @endif
-                        </dl>
-                        <form method="POST" action="{{ route('hotspot.pay') }}" class="mt-3 space-y-2 sm:mt-5 sm:space-y-3">
-                            @csrf
-                            <input type="hidden" name="package_id" value="{{ $package->id }}">
-                            <input type="hidden" name="mac" value="{{ $macAddress }}">
-                            <input type="hidden" name="nasid" value="{{ $router->nas_identifier }}">
-                            <div class="grid grid-cols-2 gap-2 sm:grid-cols-1 sm:gap-3">
-                                <input type="email" name="email" placeholder="Email" class="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm">
-                                <input name="phone" placeholder="Phone" class="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm">
-                            </div>
-                            <fieldset>
-                                <legend class="mb-2 text-xs font-medium text-zinc-500">Pay with</legend>
-                                <div class="grid grid-cols-3 gap-2">
-                                    @foreach ([['opay', 'OPay', true, true], ['bank_transfer', 'Transfer', true, false], ['card', 'Card', true, false]] as [$methodValue, $methodLabel, $methodAvailable, $methodSelected])
-                                        <label class="cursor-pointer">
-                                            <input type="radio" name="payment_method" value="{{ $methodValue }}" class="peer sr-only" @checked($methodSelected) @disabled(! $methodAvailable)>
-                                            <span class="grid min-h-9 place-items-center rounded-md border border-zinc-200 px-2 text-center text-xs font-medium text-zinc-600 transition peer-checked:border-zinc-950 peer-checked:bg-zinc-950 peer-checked:text-white peer-disabled:cursor-not-allowed peer-disabled:bg-zinc-50 peer-disabled:text-zinc-400">
-                                                <span>{{ $methodLabel }}</span>
-                                                @unless ($methodAvailable)
-                                                    <span class="text-[10px] font-normal">Soon</span>
-                                                @endunless
-                                            </span>
-                                        </label>
-                                    @endforeach
+                                <div class="shrink-0 text-right">
+                                    <p class="text-lg font-semibold sm:text-3xl">{{ $package->currency }} {{ number_format($package->price, 0) }}</p>
+                                    <p class="mt-1 text-xs font-medium" style="color: var(--brand)" x-text="selectedPlan === {{ $package->id }} ? 'Hide details' : 'View plan'">View plan</p>
                                 </div>
-                            </fieldset>
-                            @if ($loginUrl)
-                                <input type="hidden" name="link-login" value="{{ $loginUrl }}">
-                            @endif
-                            @if ($originalUrl)
-                                <input type="hidden" name="link-orig" value="{{ $originalUrl }}">
-                            @endif
-                            <button class="w-full rounded-md px-3 py-2 text-sm font-medium text-white" style="background-color: var(--brand)">
-                                Continue to payment
-                            </button>
-                        </form>
+                            </div>
+                        </button>
 
-                        <form method="POST" action="{{ route('hotspot.grant') }}" class="mt-3">
-                            @csrf
-                            <input type="hidden" name="package_id" value="{{ $package->id }}">
-                            <input type="hidden" name="mac" value="{{ $macAddress }}">
-                            <input type="hidden" name="nasid" value="{{ $router->nas_identifier }}">
-                            @if ($loginUrl)
-                                <input type="hidden" name="link-login" value="{{ $loginUrl }}">
-                            @endif
-                            @if ($originalUrl)
-                                <input type="hidden" name="link-orig" value="{{ $originalUrl }}">
-                            @endif
-                            <button class="w-full rounded-md border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-700">
-                                Start test access
-                            </button>
-                        </form>
+                        <div x-show="selectedPlan === {{ $package->id }}" x-cloak>
+                            <dl class="mt-3 grid grid-cols-3 gap-2 text-xs text-zinc-600 sm:mt-4 sm:block sm:space-y-2 sm:text-sm">
+                                <div class="rounded-md bg-zinc-50 p-2 sm:flex sm:justify-between sm:gap-4 sm:bg-transparent sm:p-0">
+                                    <dt>Speed</dt>
+                                    <dd class="mt-1 font-medium text-zinc-950 sm:mt-0">{{ $package->speed_limit_profile }}</dd>
+                                </div>
+                                <div class="rounded-md bg-zinc-50 p-2 sm:flex sm:justify-between sm:gap-4 sm:bg-transparent sm:p-0">
+                                    <dt>Time</dt>
+                                    <dd class="mt-1 font-medium text-zinc-950 sm:mt-0">{{ $formatDuration($package->limit_uptime_seconds) }}</dd>
+                                </div>
+                                <div class="rounded-md bg-zinc-50 p-2 sm:flex sm:justify-between sm:gap-4 sm:bg-transparent sm:p-0">
+                                    <dt>Data</dt>
+                                    <dd class="mt-1 font-medium text-zinc-950 sm:mt-0">{{ $formatData($package->data_limit_bytes) }}</dd>
+                                </div>
+                                @if ($package->fup_data_threshold_bytes && $package->fup_speed_limit_profile)
+                                    <div class="col-span-3 rounded-md bg-zinc-50 p-2 sm:flex sm:justify-between sm:gap-4 sm:bg-transparent sm:p-0">
+                                        <dt>Fair use</dt>
+                                        <dd class="mt-1 font-medium text-zinc-950 sm:mt-0 sm:text-right">After {{ $formatData($package->fup_data_threshold_bytes) }}: {{ $package->fup_speed_limit_profile }}</dd>
+                                    </div>
+                                @endif
+                            </dl>
+                            <form method="POST" action="{{ route('hotspot.pay') }}" class="mt-3 space-y-2 sm:mt-5 sm:space-y-3" @submit="paying = true">
+                                @csrf
+                                <input type="hidden" name="package_id" value="{{ $package->id }}">
+                                <input type="hidden" name="mac" value="{{ $macAddress }}">
+                                <input type="hidden" name="nasid" value="{{ $router->nas_identifier }}">
+                                <div class="grid grid-cols-2 gap-2 sm:grid-cols-1 sm:gap-3">
+                                    <input type="email" name="email" placeholder="Email" class="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm">
+                                    <input name="phone" placeholder="Phone" class="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm">
+                                </div>
+                                <fieldset>
+                                    <legend class="mb-2 text-xs font-medium text-zinc-500">Pay with</legend>
+                                    <div class="grid grid-cols-3 gap-2">
+                                        @foreach ([['opay', 'OPay', true, true], ['bank_transfer', 'Transfer', true, false], ['card', 'Card', true, false]] as [$methodValue, $methodLabel, $methodAvailable, $methodSelected])
+                                            <label class="cursor-pointer">
+                                                <input type="radio" name="payment_method" value="{{ $methodValue }}" class="peer sr-only" @checked($methodSelected) @disabled(! $methodAvailable)>
+                                                <span class="grid min-h-9 place-items-center rounded-md border border-zinc-200 px-2 text-center text-xs font-medium text-zinc-600 transition peer-checked:border-zinc-950 peer-checked:bg-zinc-950 peer-checked:text-white peer-disabled:cursor-not-allowed peer-disabled:bg-zinc-50 peer-disabled:text-zinc-400">
+                                                    <span>{{ $methodLabel }}</span>
+                                                    @unless ($methodAvailable)
+                                                        <span class="text-[10px] font-normal">Soon</span>
+                                                    @endunless
+                                                </span>
+                                            </label>
+                                        @endforeach
+                                    </div>
+                                </fieldset>
+                                @if ($loginUrl)
+                                    <input type="hidden" name="link-login" value="{{ $loginUrl }}">
+                                @endif
+                                @if ($originalUrl)
+                                    <input type="hidden" name="link-orig" value="{{ $originalUrl }}">
+                                @endif
+                                <button class="flex w-full items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-white disabled:cursor-wait disabled:opacity-75" style="background-color: var(--brand)" :disabled="paying">
+                                    <span x-show="paying" class="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"></span>
+                                    <span x-text="paying ? 'Opening payment...' : 'Continue to payment'">Continue to payment</span>
+                                </button>
+                            </form>
+
+                            <form method="POST" action="{{ route('hotspot.grant') }}" class="mt-3" @submit="testing = true">
+                                @csrf
+                                <input type="hidden" name="package_id" value="{{ $package->id }}">
+                                <input type="hidden" name="mac" value="{{ $macAddress }}">
+                                <input type="hidden" name="nasid" value="{{ $router->nas_identifier }}">
+                                @if ($loginUrl)
+                                    <input type="hidden" name="link-login" value="{{ $loginUrl }}">
+                                @endif
+                                @if ($originalUrl)
+                                    <input type="hidden" name="link-orig" value="{{ $originalUrl }}">
+                                @endif
+                                <button class="flex w-full items-center justify-center gap-2 rounded-md border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-700 disabled:cursor-wait disabled:opacity-70" :disabled="testing">
+                                    <span x-show="testing" class="h-4 w-4 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-700"></span>
+                                    <span x-text="testing ? 'Connecting...' : 'Start test access'">Start test access</span>
+                                </button>
+                            </form>
+                        </div>
                     </article>
                 @empty
                     <div class="rounded-lg border border-white/10 bg-white/5 p-5 text-sm text-zinc-300 md:col-span-3">

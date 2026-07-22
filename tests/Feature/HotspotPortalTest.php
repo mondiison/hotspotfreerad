@@ -77,14 +77,18 @@ class HotspotPortalTest extends TestCase
             ->assertSee('AA:BB:CC:DD:EE:FF')
             ->assertSee('One Hour Ultra')
             ->assertSee('NGN 500')
+            ->assertSee('View plan')
             ->assertSee('1 hour')
             ->assertSee('5 GB')
             ->assertSee('After 2 GB: 1M/1M')
             ->assertSee('Continue to payment')
+            ->assertSee('Opening payment...')
             ->assertSee('Pay with')
             ->assertSee('Card')
             ->assertSee('Transfer')
             ->assertSee('Start test access')
+            ->assertSee('x-data="{ selectedPlan: null }"', false)
+            ->assertSee('x-cloak', false)
             ->assertSee('sm:grid-cols-2 lg:grid-cols-3', false)
             ->assertSee('grid-cols-3 gap-2', false);
     }
