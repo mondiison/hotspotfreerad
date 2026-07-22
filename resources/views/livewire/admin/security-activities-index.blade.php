@@ -72,8 +72,8 @@
     </section>
 
     <section class="overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
-        <div class="overflow-x-auto">
-            <table class="w-full text-left text-sm">
+        <div class="overflow-x-auto overflow-y-hidden">
+            <table class="min-w-[920px] w-full text-left text-sm">
                 <thead class="border-b border-zinc-200 bg-zinc-50 text-zinc-500">
                     <tr>
                         <th class="px-4 py-3 font-medium">Event</th>

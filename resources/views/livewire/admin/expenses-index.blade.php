@@ -83,8 +83,8 @@
         </section>
 
         <section class="mt-6 grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-            <div class="overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
-                <table class="w-full text-left text-sm">
+            <div class="overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
+                <table class="min-w-[820px] w-full text-left text-sm">
                     <thead class="border-b border-zinc-200 bg-zinc-50 text-zinc-500">
                         <tr>
                             <th class="px-4 py-3 font-medium">Expense</th>
@@ -144,7 +144,8 @@
                     <h2 class="text-base font-semibold">Spend by Category</h2>
                     <p class="mt-1 text-sm text-zinc-500">Largest operating costs in the selected range.</p>
                 </div>
-                <table class="w-full text-left text-sm">
+                <div class="overflow-x-auto overflow-y-hidden">
+                <table class="min-w-[720px] w-full text-left text-sm">
                     <thead class="border-b border-zinc-200 bg-zinc-50 text-zinc-500">
                         <tr>
                             <th class="px-4 py-3 font-medium">Category</th>
@@ -178,6 +179,7 @@
                         @endforelse
                     </tbody>
                 </table>
+                </div>
             </div>
         </section>
 

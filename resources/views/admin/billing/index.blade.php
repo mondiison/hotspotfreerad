@@ -72,7 +72,8 @@
             <div class="border-b border-zinc-200 px-4 py-3">
                 <h2 class="font-semibold">Tenant Billing History</h2>
             </div>
-            <table class="w-full text-left text-sm">
+            <div class="overflow-x-auto overflow-y-hidden">
+            <table class="min-w-[760px] w-full text-left text-sm">
                 <thead class="bg-zinc-50 text-zinc-500">
                     <tr>
                         <th class="px-4 py-3 font-medium">Tenant</th>
@@ -100,6 +101,7 @@
                     @endforelse
                 </tbody>
             </table>
+            </div>
         </section>
 
         <div class="mt-4">{{ $subscriptions->links() }}</div>
@@ -175,7 +177,8 @@
             <div class="border-b border-zinc-200 px-4 py-3">
                 <h2 class="font-semibold">Billing History</h2>
             </div>
-            <table class="w-full text-left text-sm">
+            <div class="overflow-x-auto overflow-y-hidden">
+            <table class="min-w-[640px] w-full text-left text-sm">
                 <thead class="bg-zinc-50 text-zinc-500">
                     <tr>
                         <th class="px-4 py-3 font-medium">Plan</th>
@@ -197,6 +200,7 @@
                     @endforelse
                 </tbody>
             </table>
+            </div>
         </section>
 
         <div class="mt-4">{{ $subscriptions->links() }}</div>

@@ -91,8 +91,8 @@
         Loading access activity...
     </div>
 
-    <div class="mt-6 overflow-hidden rounded-lg border border-zinc-200 bg-white">
-        <table class="w-full text-left text-sm">
+    <div class="mt-6 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 bg-white">
+        <table class="min-w-[1040px] w-full text-left text-sm">
             <thead class="border-b border-zinc-200 bg-zinc-50 text-zinc-500">
                 <tr>
                     <th class="px-4 py-3 font-medium">Device</th>
@@ -234,8 +234,8 @@
                         <p class="mt-1 text-xs text-zinc-500">Only sessions whose start time falls inside this access window are included.</p>
                     </div>
 
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left text-sm">
+                    <div class="overflow-x-auto overflow-y-hidden">
+                        <table class="min-w-[760px] w-full text-left text-sm">
                             <thead class="border-b border-zinc-200 text-zinc-500">
                                 <tr>
                                     <th class="px-4 py-3 font-medium">Session</th>

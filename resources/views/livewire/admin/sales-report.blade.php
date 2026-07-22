@@ -124,7 +124,8 @@
                     <p class="mt-1 text-sm text-zinc-500">Best performing hotspot locations in the selected range.</p>
                 </div>
 
-                <table class="w-full text-left text-sm">
+                <div class="overflow-x-auto overflow-y-hidden">
+                <table class="min-w-[720px] w-full text-left text-sm">
                     <thead class="border-b border-zinc-200 bg-zinc-50 text-zinc-500">
                         <tr>
                             <th class="px-4 py-3 font-medium">Shop</th>
@@ -157,6 +158,7 @@
                         @endforelse
                     </tbody>
                 </table>
+                </div>
             </div>
 
             <div class="overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
@@ -210,7 +212,8 @@
                     <p class="mt-1 text-sm text-zinc-500">Costs recorded in the selected report range.</p>
                 </div>
 
-                <table class="w-full text-left text-sm">
+                <div class="overflow-x-auto overflow-y-hidden">
+                <table class="min-w-[720px] w-full text-left text-sm">
                     <thead class="border-b border-zinc-200 bg-zinc-50 text-zinc-500">
                         <tr>
                             <th class="px-4 py-3 font-medium">Category</th>
@@ -246,6 +249,7 @@
                         @endforelse
                     </tbody>
                 </table>
+                </div>
             </div>
         </div>
     </section>

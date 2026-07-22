@@ -32,8 +32,8 @@
         </div>
     </section>
 
-    <div class="overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
-        <table class="w-full text-left text-sm">
+    <div class="overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
+        <table class="min-w-[760px] w-full text-left text-sm">
             <thead class="border-b border-zinc-200 bg-zinc-50 text-zinc-500">
                 <tr>
                     <th class="px-4 py-3 font-medium">Shop</th>

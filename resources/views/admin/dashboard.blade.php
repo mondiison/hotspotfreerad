@@ -136,8 +136,8 @@
             </div>
         @endif
 
-        <div class="mt-5 overflow-hidden rounded-lg border border-zinc-200">
-            <table class="w-full text-left text-sm">
+        <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200">
+            <table class="min-w-[680px] w-full text-left text-sm">
                 <thead class="bg-zinc-50 text-zinc-500">
                     <tr>
                         <th class="px-4 py-3 font-medium">Event</th>
@@ -269,8 +269,8 @@
             </flux:button>
         </div>
 
-        <div class="mt-5 overflow-hidden rounded-lg border border-zinc-200">
-            <table class="w-full text-left text-sm">
+        <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200">
+            <table class="min-w-[760px] w-full text-left text-sm">
                 <thead class="bg-zinc-50 text-zinc-500">
                     <tr>
                         <th class="px-4 py-3 font-medium">Package</th>
@@ -319,8 +319,8 @@
             </flux:button>
         </div>
 
-        <div class="mt-5 overflow-hidden rounded-lg border border-zinc-200">
-            <table class="w-full text-left text-sm">
+        <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200">
+            <table class="min-w-[820px] w-full text-left text-sm">
                 <thead class="bg-zinc-50 text-zinc-500">
                     <tr>
                         <th class="px-4 py-3 font-medium">Shop</th>
@@ -402,8 +402,8 @@
             </div>
         </div>
 
-        <div class="mt-5 overflow-hidden rounded-lg border border-zinc-200">
-            <table class="w-full text-left text-sm">
+        <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200">
+            <table class="min-w-[860px] w-full text-left text-sm">
                 <thead class="bg-zinc-50 text-zinc-500">
                     <tr>
                         <th class="px-4 py-3 font-medium">Month</th>
@@ -483,8 +483,8 @@
                     <p class="mt-1 text-sm text-emerald-700">The dashboard will highlight a category here once current-month spending reaches 80% of its monthly budget.</p>
                 </div>
             @else
-            <div class="mt-5 overflow-hidden rounded-lg border border-amber-200 bg-white">
-                <table class="w-full text-left text-sm">
+            <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-amber-200 bg-white">
+                <table class="min-w-[860px] w-full text-left text-sm">
                     <thead class="bg-amber-50 text-amber-800">
                         <tr>
                             <th class="px-4 py-3 font-medium">Category</th>
@@ -602,8 +602,8 @@
                 <flux:button href="{{ route('admin.expenses.index', ['schedule' => 'overdue']) }}" wire:navigate variant="outline" size="sm" icon="receipt-percent">Review overdue</flux:button>
             </div>
 
-            <div class="mt-5 overflow-hidden rounded-lg border border-red-200 bg-white">
-                <table class="w-full text-left text-sm">
+            <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-red-200 bg-white">
+                <table class="min-w-[720px] w-full text-left text-sm">
                     <thead class="bg-red-50 text-red-700">
                         <tr>
                             <th class="px-4 py-3 font-medium">Expense</th>
@@ -646,8 +646,8 @@
             <flux:button href="{{ route('admin.expenses.index', ['schedule' => 'due_soon']) }}" wire:navigate variant="outline" size="sm" icon="receipt-percent">View due soon</flux:button>
         </div>
 
-        <div class="mt-5 overflow-hidden rounded-lg border border-zinc-200">
-            <table class="w-full text-left text-sm">
+        <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200">
+            <table class="min-w-[760px] w-full text-left text-sm">
                 <thead class="bg-zinc-50 text-zinc-500">
                     <tr>
                         <th class="px-4 py-3 font-medium">Expense</th>
@@ -694,8 +694,8 @@
                 <a href="{{ route('admin.routers.index') }}" wire:navigate class="rounded-md border border-zinc-200 px-3 py-2 text-sm hover:bg-zinc-50">View all</a>
             </div>
 
-            <div class="mt-5 overflow-hidden rounded-lg border border-zinc-200">
-                <table class="w-full text-left text-sm">
+            <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200">
+                <table class="min-w-[760px] w-full text-left text-sm">
                     <thead class="bg-zinc-50 text-zinc-500">
                         <tr>
                             <th class="px-4 py-3 font-medium">Router</th>
@@ -757,8 +757,8 @@
             </div>
         </div>
 
-        <div class="mt-5 overflow-hidden rounded-lg border border-zinc-200">
-            <table class="w-full text-left text-sm">
+        <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200">
+            <table class="min-w-[720px] w-full text-left text-sm">
                 <thead class="bg-zinc-50 text-zinc-500">
                     <tr>
                         <th class="px-4 py-3 font-medium">User / Device</th>
@@ -804,8 +804,8 @@
             <a href="{{ route('admin.packages.index') }}" wire:navigate class="rounded-md border border-zinc-200 px-3 py-2 text-sm hover:bg-zinc-50">Manage plans</a>
         </div>
 
-        <div class="mt-5 overflow-hidden rounded-lg border border-zinc-200">
-            <table class="w-full text-left text-sm">
+        <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200">
+            <table class="min-w-[640px] w-full text-left text-sm">
                 <thead class="bg-zinc-50 text-zinc-500">
                     <tr>
                         <th class="px-4 py-3 font-medium">Device</th>
