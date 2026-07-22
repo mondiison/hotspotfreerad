@@ -19,7 +19,7 @@ class PackageManagementService
             'shop_id' => ['required', TenantAccess::shopExistsRule($user)],
             'name' => ['required', 'string', 'max:255'],
             'radius_group_name' => ['nullable', 'string', 'max:64', Rule::unique('packages')->ignore($package)],
-            'price' => ['required', 'numeric', 'min:0'],
+            'price' => ['required', 'numeric', 'min:1', 'max:99999999.99'],
             'currency' => ['required', 'string', 'size:3'],
             'limit_uptime_seconds' => ['required', 'integer', 'min:60'],
             'data_limit_bytes' => ['nullable', 'integer', 'min:1'],

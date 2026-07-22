@@ -49,6 +49,23 @@ class AdminPackageFormTest extends TestCase
             ->assertSessionHasErrors('fup_speed_limit_profile');
     }
 
+    public function test_package_price_must_meet_flutterwave_minimum(): void
+    {
+        $shop = $this->shop();
+
+        $this->actingAs($this->superAdmin())
+            ->post(route('admin.packages.store'), [
+                'shop_id' => $shop->id,
+                'name' => 'Trial Micro Plan',
+                'price' => 0,
+                'currency' => 'ngn',
+                'limit_uptime_seconds' => 3600,
+                'speed_limit_profile' => '5M/5M',
+                'is_active' => 1,
+            ])
+            ->assertSessionHasErrors('price');
+    }
+
     public function test_livewire_package_form_updates_plan_presets(): void
     {
         $shop = $this->shop();
