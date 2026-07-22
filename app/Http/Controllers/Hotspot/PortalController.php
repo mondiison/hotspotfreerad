@@ -276,6 +276,13 @@ class PortalController extends Controller
                         return redirect()->away($checkout['checkout_url']);
                     }
 
+                    Log::warning('Flutterwave checkout response missing redirect URL', [
+                        'payment_id' => $payment->id,
+                        'tx_ref' => $payment->tx_ref,
+                        'payment_method' => 'card',
+                        'response_body' => $checkout['response'] ?? null,
+                    ]);
+
                     $checkoutUnavailableReason = 'missing_checkout_url';
                 }
 
@@ -303,6 +310,13 @@ class PortalController extends Controller
                     if (filled($checkout['checkout_url'])) {
                         return redirect()->away($checkout['checkout_url']);
                     }
+
+                    Log::warning('Flutterwave checkout response missing redirect URL', [
+                        'payment_id' => $payment->id,
+                        'tx_ref' => $payment->tx_ref,
+                        'payment_method' => 'opay',
+                        'response_body' => $checkout['response'] ?? null,
+                    ]);
 
                     $checkoutUnavailableReason = 'missing_checkout_url';
                 }

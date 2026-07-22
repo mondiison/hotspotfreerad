@@ -117,11 +117,12 @@ class PlatformFlutterwaveService
     public function checkoutUrl(array $response): ?string
     {
         foreach ([
+            'data.checkout_url',
+            'data.link',
             'data.next_action.redirect_url.url',
             'data.next_action.redirect_url',
             'data.redirect_url.url',
             'data.redirect_url',
-            'data.link',
         ] as $key) {
             $value = data_get($response, $key);
 

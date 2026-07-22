@@ -363,7 +363,7 @@ class HotspotPortalTest extends TestCase
                     'amount' => 500,
                     'currency' => 'NGN',
                     'customer_id' => 'cus_card_12345',
-                    'checkout_url' => 'https://developersandbox.flutterwave.com/checkout/cks_12345',
+                    'link' => 'https://developersandbox.flutterwave.com/checkout/cks_12345',
                     'redirect_url' => route('hotspot.payment.callback'),
                     'reference' => 'pending',
                 ],
