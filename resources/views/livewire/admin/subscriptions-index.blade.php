@@ -60,7 +60,7 @@
         </flux:button>
     </section>
 
-    <section class="mt-4 grid gap-3 rounded-lg border border-zinc-200 bg-white p-4 lg:grid-cols-[140px_140px_1fr_150px_150px_150px_auto]">
+    <section class="mt-4 grid min-w-0 gap-3 rounded-lg border border-zinc-200 bg-white p-4 sm:grid-cols-2 xl:grid-cols-[140px_140px_minmax(0,1fr)_150px_150px_150px_auto] [&>*]:min-w-0">
         <flux:input type="date" wire:model.live="from" />
         <flux:input type="date" wire:model.live="to" />
         <flux:input wire:model.live.debounce.350ms="search" icon="magnifying-glass" placeholder="Search MAC, shop, package, payment ref" />
@@ -78,7 +78,7 @@
             <flux:select.option value="">Any speed state</flux:select.option>
             <flux:select.option value="1">Throttled only</flux:select.option>
         </flux:select>
-        <flux:button type="button" variant="outline" icon="x-mark" wire:click="clearFilters" wire:loading.attr="disabled" wire:target="clearFilters,from,to,search,status,source,throttled">
+        <flux:button type="button" variant="outline" icon="x-mark" class="w-full sm:col-span-2 xl:col-span-1 xl:w-auto" wire:click="clearFilters" wire:loading.attr="disabled" wire:target="clearFilters,from,to,search,status,source,throttled">
             Reset
         </flux:button>
     </section>

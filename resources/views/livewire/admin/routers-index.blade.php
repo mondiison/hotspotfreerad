@@ -14,14 +14,14 @@
     </div>
 
     <section class="mb-4 rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
-        <div class="grid gap-3 md:grid-cols-[1fr_180px_auto]">
+        <div class="grid min-w-0 gap-3 md:grid-cols-[minmax(0,1fr)_180px_auto] [&>*]:min-w-0">
             <flux:input wire:model.live.debounce.350ms="search" icon="magnifying-glass" placeholder="Search router, NAS ID, WireGuard IP, or shop" />
             <flux:select wire:model.live="status">
                 <flux:select.option value="">All statuses</flux:select.option>
                 <flux:select.option value="online">Active/recent</flux:select.option>
                 <flux:select.option value="offline">No recent accounting</flux:select.option>
             </flux:select>
-            <flux:button type="button" variant="outline" icon="x-mark" wire:click="clearFilters" wire:loading.attr="disabled" wire:target="clearFilters,search,status">
+            <flux:button type="button" variant="outline" icon="x-mark" class="w-full md:w-auto" wire:click="clearFilters" wire:loading.attr="disabled" wire:target="clearFilters,search,status">
                 Reset
             </flux:button>
         </div>

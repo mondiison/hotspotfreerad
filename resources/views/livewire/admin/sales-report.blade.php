@@ -27,7 +27,7 @@
         </flux:button>
     </section>
 
-    <section class="grid gap-4 rounded-lg border border-zinc-200 bg-white p-5 md:grid-cols-[1fr_1fr_180px]">
+    <section class="grid min-w-0 gap-4 rounded-lg border border-zinc-200 bg-white p-5 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_180px] [&>*]:min-w-0">
         <flux:field>
             <flux:label>From</flux:label>
             <flux:input type="date" wire:model.live="from" />
