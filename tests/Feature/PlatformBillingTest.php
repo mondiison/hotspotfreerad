@@ -361,7 +361,9 @@ class PlatformBillingTest extends TestCase
             && data_get($request->data(), 'customer.address.postal_code') === '100001'
             && $request['meta']['payment_type'] === 'platform_subscription'
             && $request['meta']['tenant_name'] === 'Tenant One'
-            && $request['meta']['billing_plan_name'] === 'Growth');
+            && $request['meta']['billing_plan_name'] === 'Growth'
+            && str_contains($request['redirect_url'], route('admin.billing.payments.callback'))
+            && str_contains($request['redirect_url'], 'tx_ref=PBF-'));
 
         $payment = PlatformBillingPayment::firstOrFail();
         $this->assertSame('pending', $payment->status);

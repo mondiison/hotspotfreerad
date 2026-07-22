@@ -238,7 +238,7 @@ class PortalController extends Controller
                             'phone' => $validated['phone'] ?? null,
                             'name' => 'Hotspot Customer',
                         ],
-                        route('hotspot.payment.callback')
+                        route('hotspot.payment.callback', ['tx_ref' => $payment->tx_ref])
                     );
 
                     $payment->update([
@@ -267,7 +267,7 @@ class PortalController extends Controller
                             'payment_method' => $validated['payment_method'] ?? null,
                             'name' => 'Hotspot Customer',
                         ],
-                        route('hotspot.payment.callback')
+                        route('hotspot.payment.callback', ['tx_ref' => $payment->tx_ref])
                     );
 
                     $payment->update([
@@ -378,7 +378,19 @@ class PortalController extends Controller
 
         $payment = Payment::with(['shop.tenant', 'package'])
             ->where('tx_ref', $txRef)
-            ->firstOrFail();
+            ->first();
+
+        if (! $payment) {
+            Log::warning('Flutterwave callback payment lookup failed', [
+                'tx_ref' => $txRef,
+                'query' => $request->query(),
+            ]);
+
+            return view('hotspot.payment-lookup-failed', [
+                'txRef' => $txRef,
+                'providerReference' => $this->providerReferenceFromRequest($request),
+            ]);
+        }
 
         if (! $this->statusIsSuccessful($request->query('status'))) {
             $payment->update(['status' => $request->query('status', 'failed')]);

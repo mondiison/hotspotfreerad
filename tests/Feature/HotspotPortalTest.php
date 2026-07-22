@@ -256,6 +256,8 @@ class HotspotPortalTest extends TestCase
         ])
             ->assertRedirect('https://developer-sandbox-ui-sit.flutterwave.cloud/redirects/opay/demo');
 
+        $payment = Payment::firstOrFail();
+
         Http::assertSent(fn ($request) => str_contains($request->url(), '/orchestration/direct-charges')
             && $request->hasHeader('Authorization', 'Bearer FLW_V4_TOKEN')
             && $request->hasHeader('X-Trace-Id')
@@ -272,9 +274,8 @@ class HotspotPortalTest extends TestCase
             && $request['meta']['package_name'] === 'One Hour Ultra'
             && $request['meta']['device_mac'] === 'AA:BB:CC:DD:EE:FF'
             && $request['meta']['nas_identifier'] === $router->nas_identifier
-            && $request['redirect_url'] === route('hotspot.payment.callback'));
+            && $request['redirect_url'] === route('hotspot.payment.callback', ['tx_ref' => $payment->tx_ref]));
 
-        $payment = Payment::firstOrFail();
         $this->assertSame('tenant', data_get($payment->payload, 'flutterwave_account.source'));
     }
 
@@ -337,15 +338,17 @@ class HotspotPortalTest extends TestCase
 
         Http::assertSent(fn ($request) => str_contains($request->url(), '/customers')
             && data_get($request->data(), 'email') === 'customer@example.com');
+
+        $payment = Payment::firstOrFail();
+
         Http::assertSent(fn ($request) => str_contains($request->url(), '/checkout/sessions')
             && $request['reference']
             && $request['customer_id'] === 'cus_card_12345'
             && $request['amount'] === 500.0
             && $request['currency'] === 'NGN'
-            && $request['redirect_url'] === route('hotspot.payment.callback'));
+            && $request['redirect_url'] === route('hotspot.payment.callback', ['tx_ref' => $payment->tx_ref]));
         Http::assertNotSent(fn ($request) => str_contains($request->url(), '/orchestration/direct-charges'));
 
-        $payment = Payment::firstOrFail();
         $this->assertSame('card', data_get($payment->payload, 'payment_method'));
         $this->assertSame('cks_12345', $payment->provider_reference);
         $this->assertSame('https://developersandbox.flutterwave.com/checkout/cks_12345', data_get($payment->payload, 'checkout_url'));
@@ -657,6 +660,17 @@ class HotspotPortalTest extends TestCase
             'username' => 'AA:BB:CC:DD:EE:FF',
             'attribute' => 'Cleartext-Password',
         ]);
+    }
+
+    public function test_flutterwave_callback_without_matching_payment_shows_lookup_message(): void
+    {
+        $this->get(route('hotspot.payment.callback', [
+            'status' => 'succeeded',
+            'id' => 'ord_missing_12345',
+        ]))
+            ->assertOk()
+            ->assertSee('Payment lookup needed')
+            ->assertSee('ord_missing_12345');
     }
 
     public function test_successful_flutterwave_webhook_provisions_radius_access(): void

@@ -164,7 +164,7 @@ class BillingController extends Controller
         try {
             $checkout = $flutterwave->initializeCheckout(
                 $payment->load(['tenant', 'billingPlan']),
-                route('admin.billing.payments.callback')
+                route('admin.billing.payments.callback', ['tx_ref' => $payment->tx_ref])
             );
 
             $payment->update([
@@ -199,7 +199,16 @@ class BillingController extends Controller
         $txRef = $request->query('tx_ref') ?: $request->query('reference');
         $payment = PlatformBillingPayment::with(['tenant', 'billingPlan'])
             ->where('tx_ref', $txRef)
-            ->firstOrFail();
+            ->first();
+
+        if (! $payment) {
+            Log::warning('Platform billing callback payment lookup failed', [
+                'tx_ref' => $txRef,
+                'query' => $request->query(),
+            ]);
+
+            return redirect()->route('admin.billing.index')->withErrors(['billing' => 'Could not find the returned Flutterwave payment reference. Please check billing history or contact support if money was debited.']);
+        }
 
         abort_unless($request->user()->isSuperAdmin() || $request->user()->tenant_id === $payment->tenant_id, 403);
 
