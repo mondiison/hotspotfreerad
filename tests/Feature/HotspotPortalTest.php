@@ -128,6 +128,8 @@ class HotspotPortalTest extends TestCase
         $this->get('/hotspot/portal?mac=AA:BB:CC:DD:EE:FF&nasid='.$router->nas_identifier.'&link-login='.urlencode('http://10.5.50.1/login').'&link-orig='.urlencode('http://example.com'))
             ->assertOk()
             ->assertSee('Access provisioned')
+            ->assertSee('Connecting this device...')
+            ->assertSee('Connect now')
             ->assertSee('id="mikrotik-login"', false)
             ->assertSee('http://10.5.50.1/login', false)
             ->assertSee('document.getElementById', false)
@@ -806,6 +808,8 @@ class HotspotPortalTest extends TestCase
         ])
             ->assertOk()
             ->assertSee('Access provisioned')
+            ->assertSee('Connecting this device...')
+            ->assertSee('Connect now')
             ->assertSee('id="mikrotik-login"', false)
             ->assertSee('http://10.5.50.1/login', false)
             ->assertSee('document.getElementById', false);
