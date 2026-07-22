@@ -133,7 +133,7 @@ class FlutterwaveService
             'customer_response' => $customerResponse,
             'customer_id' => (string) $customerId,
             'provider_reference' => (string) data_get($response, 'data.id'),
-            'checkout_url' => $this->checkoutUrl($response),
+            'checkout_url' => $this->hostedCheckoutUrl($response),
         ];
     }
 
@@ -220,6 +220,22 @@ class FlutterwaveService
             'data.next_action.redirect_url',
             'data.redirect_url.url',
             'data.redirect_url',
+        ] as $key) {
+            $value = data_get($response, $key);
+
+            if (filled($value) && is_string($value)) {
+                return $value;
+            }
+        }
+
+        return null;
+    }
+
+    public function hostedCheckoutUrl(array $response): ?string
+    {
+        foreach ([
+            'data.checkout_url',
+            'data.link',
         ] as $key) {
             $value = data_get($response, $key);
 

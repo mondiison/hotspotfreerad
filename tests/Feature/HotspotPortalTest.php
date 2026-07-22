@@ -403,6 +403,54 @@ class HotspotPortalTest extends TestCase
         $this->assertSame('https://developersandbox.flutterwave.com/checkout/cks_12345', data_get($payment->payload, 'checkout_url'));
     }
 
+    public function test_card_checkout_does_not_treat_callback_url_as_checkout_link(): void
+    {
+        $this->configureFlutterwave();
+        Http::fake([
+            'idp.flutterwave.com/*' => Http::response([
+                'access_token' => 'FLW_V4_TOKEN',
+                'expires_in' => 600,
+            ]),
+            'developersandbox-api.flutterwave.com/customers' => Http::response([
+                'status' => 'success',
+                'data' => [
+                    'id' => 'cus_card_12345',
+                ],
+            ], 201),
+            'developersandbox-api.flutterwave.com/checkout/sessions' => Http::response([
+                'status' => 'success',
+                'data' => [
+                    'id' => 'cks_12345',
+                    'amount' => 500,
+                    'currency' => 'NGN',
+                    'customer_id' => 'cus_card_12345',
+                    'redirect_url' => route('hotspot.payment.callback'),
+                    'reference' => 'pending',
+                ],
+            ]),
+        ]);
+        [$router, $package] = $this->routerWithPackage();
+        $router->shop->update([
+            'flutterwave_client_id' => 'tenant-client-id',
+            'flutterwave_client_secret' => 'tenant-client-secret',
+        ]);
+
+        $this->post(route('hotspot.pay'), [
+            'mac' => 'AA:BB:CC:DD:EE:FF',
+            'nasid' => $router->nas_identifier,
+            'package_id' => $package->id,
+            'email' => 'customer@example.com',
+            'phone' => '08000000000',
+            'payment_method' => 'card',
+        ])
+            ->assertOk()
+            ->assertSee('Flutterwave accepted the payment request, but did not return a checkout link');
+
+        $payment = Payment::firstOrFail();
+
+        $this->assertNull(data_get($payment->payload, 'checkout_url'));
+    }
+
     public function test_payment_step_creates_dynamic_virtual_account_for_bank_transfer(): void
     {
         $this->configureFlutterwave();
