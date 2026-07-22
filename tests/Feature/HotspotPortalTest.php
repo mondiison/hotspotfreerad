@@ -673,6 +673,105 @@ class HotspotPortalTest extends TestCase
             ->assertSee('ord_missing_12345');
     }
 
+    public function test_failed_payment_page_has_verify_and_whatsapp_support_actions(): void
+    {
+        [$router, $package] = $this->routerWithPackage();
+
+        $payment = Payment::create([
+            'shop_id' => $router->shop_id,
+            'package_id' => $package->id,
+            'provider' => 'flutterwave',
+            'tx_ref' => 'HSF-FAILED-123',
+            'provider_reference' => 'ord_failed_123',
+            'amount' => 500,
+            'gross_amount' => 500,
+            'platform_fee_amount' => 0,
+            'tenant_net_amount' => 500,
+            'currency' => 'NGN',
+            'status' => 'verification_failed',
+            'payload' => [
+                'mac' => 'AA:BB:CC:DD:EE:FF',
+                'nasid' => $router->nas_identifier,
+            ],
+        ]);
+
+        $this->get(route('hotspot.payment.callback', [
+            'tx_ref' => $payment->tx_ref,
+            'status' => 'failed',
+            'id' => 'ord_failed_123',
+        ]))
+            ->assertOk()
+            ->assertSee('Verify and connect')
+            ->assertSee('Message support on WhatsApp')
+            ->assertSee('2347063218823')
+            ->assertSee($payment->tx_ref);
+    }
+
+    public function test_manual_payment_verification_provisions_radius_access(): void
+    {
+        [$router, $package] = $this->routerWithPackage();
+
+        $payment = Payment::create([
+            'shop_id' => $router->shop_id,
+            'package_id' => $package->id,
+            'provider' => 'flutterwave',
+            'tx_ref' => 'HSF-MANUAL-VERIFY',
+            'provider_reference' => 'ord_manual_123',
+            'amount' => 500,
+            'gross_amount' => 500,
+            'platform_fee_amount' => 0,
+            'tenant_net_amount' => 500,
+            'currency' => 'NGN',
+            'status' => 'pending',
+            'payload' => [
+                'mac' => 'AA:BB:CC:DD:EE:FF',
+                'nasid' => $router->nas_identifier,
+                'link_login' => 'http://10.5.50.1/login',
+                'link_orig' => 'http://example.com',
+            ],
+        ]);
+        $router->shop->update([
+            'flutterwave_client_id' => 'tenant-client-id',
+            'flutterwave_client_secret' => 'tenant-client-secret',
+        ]);
+        $this->configureFlutterwave();
+        Http::fake([
+            'idp.flutterwave.com/*' => Http::response([
+                'access_token' => 'FLW_V4_TOKEN',
+                'expires_in' => 600,
+            ]),
+            'developersandbox-api.flutterwave.com/orders/ord_manual_123' => Http::response([
+                'status' => 'success',
+                'data' => [
+                    'id' => 'ord_manual_123',
+                    'status' => 'succeeded',
+                    'reference' => $payment->tx_ref,
+                    'amount' => 500,
+                    'currency' => 'NGN',
+                ],
+            ]),
+        ]);
+
+        $this->post(route('hotspot.payment.verify'), [
+            'tx_ref' => $payment->tx_ref,
+        ])
+            ->assertOk()
+            ->assertSee('Access provisioned')
+            ->assertSee('id="mikrotik-login"', false)
+            ->assertSee('http://10.5.50.1/login', false)
+            ->assertSee('document.getElementById', false);
+
+        $this->assertDatabaseHas('payments', [
+            'id' => $payment->id,
+            'status' => 'successful',
+            'provider_reference' => 'ord_manual_123',
+        ]);
+        $this->assertDatabaseHas('subscriptions', [
+            'payment_id' => $payment->id,
+            'mac_address' => 'AA:BB:CC:DD:EE:FF',
+        ]);
+    }
+
     public function test_successful_flutterwave_webhook_provisions_radius_access(): void
     {
         [$router, $package] = $this->routerWithPackage();

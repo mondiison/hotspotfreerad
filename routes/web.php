@@ -51,6 +51,7 @@ Route::middleware('auth')->group(function () {
 Route::get('/hotspot/portal', [PortalController::class, 'show'])->name('hotspot.portal');
 Route::post('/hotspot/pay', [PortalController::class, 'pay'])->name('hotspot.pay');
 Route::post('/hotspot/payment/bank-transfer/check', [PortalController::class, 'checkBankTransfer'])->name('hotspot.payment.bank-transfer.check');
+Route::post('/hotspot/payment/verify', [PortalController::class, 'verify'])->name('hotspot.payment.verify');
 Route::get('/hotspot/payment/callback', [PortalController::class, 'callback'])->name('hotspot.payment.callback');
 Route::post('/hotspot/payment/webhook', [PortalController::class, 'webhook'])
     ->withoutMiddleware([ValidateCsrfToken::class])

@@ -372,6 +372,65 @@ class PortalController extends Controller
         ]);
     }
 
+    public function verify(Request $request, HotspotPaymentConfirmationService $payments): View
+    {
+        $validated = $request->validate([
+            'tx_ref' => ['required', 'string', 'exists:payments,tx_ref'],
+        ]);
+
+        $payment = Payment::with(['shop.tenant', 'package'])
+            ->where('tx_ref', $validated['tx_ref'])
+            ->firstOrFail();
+
+        $providerReference = $payment->provider_reference;
+
+        if (blank($providerReference)) {
+            return view('hotspot.payment-failed', [
+                'payment' => $payment,
+                'statusMessage' => 'Flutterwave has not returned a provider reference for this payment yet. Please wait a moment and try again.',
+            ]);
+        }
+
+        try {
+            $subscription = $payments->verifyAndGrant(
+                $payment,
+                (string) $providerReference,
+                $this->paymentResourceType((string) $providerReference)
+            );
+        } catch (Throwable $exception) {
+            Log::warning('Flutterwave manual verification failed', [
+                'payment_id' => $payment->id,
+                'tx_ref' => $payment->tx_ref,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return view('hotspot.payment-failed', [
+                'payment' => $payment->fresh(['shop.tenant', 'package']),
+                'statusMessage' => 'We checked Flutterwave again, but this payment is still not confirmed.',
+            ]);
+        }
+
+        if (! $subscription) {
+            return view('hotspot.payment-failed', [
+                'payment' => $payment->fresh(['shop.tenant', 'package']),
+                'statusMessage' => 'We checked Flutterwave again, but this payment is still not confirmed.',
+            ]);
+        }
+
+        $payment->refresh();
+
+        return view('hotspot.access-granted', [
+            'router' => Router::with('shop.tenant')->where('shop_id', $payment->shop_id)->first(),
+            'package' => $payment->package,
+            'subscription' => $subscription,
+            'macAddress' => $payment->payload['mac'],
+            'username' => $payment->payload['mac'],
+            'password' => self::TEST_ACCESS_PASSWORD,
+            'loginUrl' => $payment->payload['link_login'] ?? null,
+            'originalUrl' => $payment->payload['link_orig'] ?? null,
+        ]);
+    }
+
     public function callback(Request $request, HotspotPaymentConfirmationService $payments): View
     {
         $txRef = $request->query('tx_ref') ?: $request->query('reference');
