@@ -12,3 +12,38 @@
     --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
 }
+
+@layer components {
+    main div:has(> table.w-full.text-left.text-sm) {
+        overflow-x: auto;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    main div:has(> table.w-full.text-left.text-sm)::after {
+        content: '';
+        position: sticky;
+        right: 0;
+        display: block;
+        width: 2rem;
+        height: 1px;
+        margin-top: -1px;
+        margin-left: auto;
+        background: linear-gradient(to right, transparent, rgb(255 255 255 / 0.95));
+        pointer-events: none;
+    }
+
+    main div:has(> table.w-full.text-left.text-sm) > table:not([class*='min-w-']) {
+        min-width: 760px;
+    }
+
+    main div:has(> table.w-full.text-left.text-sm) > table th,
+    main div:has(> table.w-full.text-left.text-sm) > table td {
+        white-space: nowrap;
+    }
+
+    main div:has(> table.w-full.text-left.text-sm) > table th:first-child,
+    main div:has(> table.w-full.text-left.text-sm) > table td:first-child {
+        white-space: normal;
+    }
+}
