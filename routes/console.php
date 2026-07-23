@@ -3,9 +3,11 @@
 use App\Mail\HotspotTestMail;
 use App\Models\PppoeSubscriber;
 use App\Models\SecurityActivity;
+use App\Models\Subscription;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\PppoeSubscriberManagementService;
+use App\Services\RadiusProvisioningService;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Hash;
@@ -143,10 +145,42 @@ Artisan::command('hotspot:sync-expired-pppoe {--dry-run}', function (PppoeSubscr
     return Command::SUCCESS;
 })->purpose('Revoke expired or disabled PPPoE subscribers from FreeRADIUS');
 
+Artisan::command('hotspot:sync-expired-hotspot {--dry-run}', function (RadiusProvisioningService $radius): int {
+    $expiredMacs = Subscription::query()
+        ->where('expires_at', '<=', now())
+        ->whereNotExists(function ($query): void {
+            $query
+                ->selectRaw('1')
+                ->from('subscriptions as active_subscriptions')
+                ->whereColumn('active_subscriptions.mac_address', 'subscriptions.mac_address')
+                ->where('active_subscriptions.expires_at', '>', now());
+        })
+        ->distinct()
+        ->pluck('mac_address')
+        ->filter()
+        ->values();
+
+    if ($this->option('dry-run')) {
+        $this->info($expiredMacs->count().' expired hotspot device(s) would be revoked from RADIUS.');
+
+        return Command::SUCCESS;
+    }
+
+    $expiredMacs->each(fn (string $macAddress) => $radius->revokeMacAccess($macAddress));
+
+    $this->info('Revoked '.$expiredMacs->count().' expired hotspot device(s) from RADIUS.');
+
+    return Command::SUCCESS;
+})->purpose('Revoke expired hotspot MAC access from FreeRADIUS');
+
 Schedule::command('hotspot:prune-security-activity')
     ->dailyAt('02:15')
     ->withoutOverlapping();
 
 Schedule::command('hotspot:sync-expired-pppoe')
+    ->everyFiveMinutes()
+    ->withoutOverlapping();
+
+Schedule::command('hotspot:sync-expired-hotspot')
     ->everyFiveMinutes()
     ->withoutOverlapping();
