@@ -164,8 +164,8 @@ class SetupCenterController extends Controller
             ],
             [
                 'title' => 'Create the subscriber profile',
-                'detail' => 'Create PPPoE-ready packages, then add a PPPoE customer. MMS Radius provisions the username, password, package profile, and renewal state into FreeRADIUS.',
-                'example' => 'Active PPPoE-ready plans: '.$activePppoePackageCount.'. Example: Home 10M monthly, username: customer001, password: generated or custom.',
+                'detail' => 'Create PPPoE-ready packages with bandwidth, then add a PPPoE customer. MMS Radius provisions the username, password, package profile, rate limit, and renewal state into FreeRADIUS.',
+                'example' => 'Active PPPoE-ready plans: '.$activePppoePackageCount.'. Example: Home 10M monthly, bandwidth: 5M/10M, username: customer001, password: generated or custom.',
             ],
             [
                 'title' => 'Provision the customer device',

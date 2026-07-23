@@ -72,6 +72,7 @@
                 <ul class="mt-4 space-y-3 text-sm text-zinc-600">
                     <li>Use PPPoE for fixed subscribers with username/password credentials.</li>
                     <li>Change <code>interface=bridge1</code> in the script to the subscriber VLAN or LAN bridge.</li>
+                    <li>Set bandwidth on the package in MMS Radius. FreeRADIUS sends it to MikroTik as <code>Mikrotik-Rate-Limit</code>.</li>
                     <li>Customer CPE WAN mode should be PPPoE client.</li>
                 </ul>
             </section>
@@ -89,9 +90,32 @@
             <section class="rounded-lg border border-zinc-200 bg-white shadow-sm">
                 <div class="border-b border-zinc-200 px-5 py-4">
                     <h2 class="text-base font-semibold">RouterOS PPPoE Script</h2>
-                    <p class="mt-1 text-sm text-zinc-500">Use this when this router will serve PPPoE subscribers instead of, or alongside, hotspot users.</p>
+                    <p class="mt-1 text-sm text-zinc-500">Use this when this router will serve PPPoE subscribers instead of, or alongside, hotspot users. Package bandwidth is applied by RADIUS, so the router profile should remain generic.</p>
                 </div>
                 <pre class="overflow-x-auto p-5 text-sm leading-6 text-zinc-900"><code>{{ $pppoeScript }}</code></pre>
+            </section>
+
+            <section class="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+                <div class="flex flex-col justify-between gap-3 md:flex-row md:items-start">
+                    <div>
+                        <h2 class="text-base font-semibold">PPPoE Bandwidth Check</h2>
+                        <p class="mt-1 text-sm text-zinc-500">After a customer connects, confirm MikroTik received the RADIUS package speed and accounting is updating.</p>
+                    </div>
+                    <flux:badge color="blue">Mikrotik-Rate-Limit</flux:badge>
+                </div>
+
+                <div class="mt-4 grid gap-4 md:grid-cols-2">
+                    <div class="rounded-md bg-zinc-50 p-4">
+                        <p class="text-sm font-medium">Active PPPoE user</p>
+                        <pre class="mt-2 overflow-x-auto text-xs leading-5 text-zinc-800"><code>/ppp active print detail where name="customer001"</code></pre>
+                        <p class="mt-2 text-xs leading-5 text-zinc-500">Look for the customer username, caller ID, uptime, and assigned address.</p>
+                    </div>
+                    <div class="rounded-md bg-zinc-50 p-4">
+                        <p class="text-sm font-medium">Dynamic bandwidth queue</p>
+                        <pre class="mt-2 overflow-x-auto text-xs leading-5 text-zinc-800"><code>/queue simple print where dynamic=yes</code></pre>
+                        <p class="mt-2 text-xs leading-5 text-zinc-500">The dynamic queue should reflect the selected package bandwidth, for example 5M/10M.</p>
+                    </div>
+                </div>
             </section>
 
             <section class="rounded-lg border border-zinc-200 bg-white shadow-sm">

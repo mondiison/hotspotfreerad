@@ -61,6 +61,8 @@ class MikroTikProvisioningServiceTest extends TestCase
 
         $this->assertStringContainsString('/radius add address=10.8.0.1 secret="radius-secret" service=ppp', $script);
         $this->assertStringContainsString('/ppp aaa set use-radius=yes accounting=yes interim-update=5m', $script);
+        $this->assertStringContainsString('Mikrotik-Rate-Limit', $script);
+        $this->assertStringNotContainsString('rate-limit=', $script);
         $this->assertStringContainsString('/interface pppoe-server server add interface=bridge1 service-name=mms-radius', $script);
     }
 }

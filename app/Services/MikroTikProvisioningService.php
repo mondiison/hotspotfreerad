@@ -53,6 +53,8 @@ SCRIPT;
 /ip address add address={$router->wireguard_internal_ip}/24 interface=wg-saas
 /radius add address={$radiusIp} secret="{$sharedSecret}" service=ppp authentication-port={$authPort} accounting-port={$acctPort} timeout=1000ms
 /ppp aaa set use-radius=yes accounting=yes interim-update=5m
+# PPPoE bandwidth is controlled by MMS Radius packages through Mikrotik-Rate-Limit.
+# Keep this profile generic; do not hard-code rate-limit here unless you want a router-side override.
 /ppp profile add name=mms-pppoe-profile use-radius=yes only-one=yes change-tcp-mss=yes
 /interface pppoe-server server add interface={$pppoeInterface} service-name=mms-radius default-profile=mms-pppoe-profile authentication=pap,chap,mschap1,mschap2 disabled=no
 SCRIPT;
