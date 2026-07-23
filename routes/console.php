@@ -1,9 +1,11 @@
 <?php
 
 use App\Mail\HotspotTestMail;
+use App\Models\PppoeSubscriber;
 use App\Models\SecurityActivity;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\PppoeSubscriberManagementService;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Hash;
@@ -111,6 +113,40 @@ Artisan::command('hotspot:prune-security-activity {--days=} {--dry-run}', functi
     return Command::SUCCESS;
 })->purpose('Prune old security activity audit records');
 
+Artisan::command('hotspot:sync-expired-pppoe {--dry-run}', function (PppoeSubscriberManagementService $subscribers): int {
+    $query = PppoeSubscriber::query()
+        ->with('package')
+        ->where(function ($query): void {
+            $query
+                ->where('is_active', false)
+                ->orWhere(fn ($query) => $query->whereNotNull('expires_at')->where('expires_at', '<=', now()));
+        });
+    $count = (clone $query)->count();
+
+    if ($this->option('dry-run')) {
+        $this->info("{$count} inactive or expired PPPoE subscriber(s) would be revoked from RADIUS.");
+
+        return Command::SUCCESS;
+    }
+
+    $revoked = 0;
+
+    $query->chunkById(100, function ($chunk) use ($subscribers, &$revoked): void {
+        foreach ($chunk as $subscriber) {
+            $subscribers->syncSystem($subscriber);
+            $revoked++;
+        }
+    });
+
+    $this->info("Revoked {$revoked} inactive or expired PPPoE subscriber(s) from RADIUS.");
+
+    return Command::SUCCESS;
+})->purpose('Revoke expired or disabled PPPoE subscribers from FreeRADIUS');
+
 Schedule::command('hotspot:prune-security-activity')
     ->dailyAt('02:15')
+    ->withoutOverlapping();
+
+Schedule::command('hotspot:sync-expired-pppoe')
+    ->everyFiveMinutes()
     ->withoutOverlapping();

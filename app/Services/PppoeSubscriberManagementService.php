@@ -87,6 +87,11 @@ class PppoeSubscriberManagementService
     {
         TenantAccess::assertPppoeSubscriber($subscriber, $user);
 
+        return $this->syncSystem($subscriber);
+    }
+
+    public function syncSystem(PppoeSubscriber $subscriber): PppoeSubscriber
+    {
         if ($subscriber->isCurrentlyActive()) {
             $this->radius->provisionPppoeSubscriber($subscriber);
         } else {
