@@ -259,7 +259,7 @@ class PortalController extends Controller
 
                     $checkoutUnavailableReason = 'missing_checkout_url';
                 } catch (Throwable $exception) {
-                    $checkoutUnavailableReason = 'initialization_failed';
+                    $checkoutUnavailableReason = $this->flutterwaveCheckoutFailureReason($exception);
 
                     Log::warning('Flutterwave card standard checkout initialization failed', [
                         'payment_id' => $payment->id,
@@ -598,6 +598,20 @@ class PortalController extends Controller
         }
 
         return null;
+    }
+
+    private function flutterwaveCheckoutFailureReason(Throwable $exception): string
+    {
+        if ($exception instanceof RequestException) {
+            $status = $exception->response->status();
+            $message = strtolower((string) data_get($exception->response->json(), 'message'));
+
+            if ($status === 401 || str_contains($message, 'invalid authorization key')) {
+                return 'invalid_card_secret_key';
+            }
+        }
+
+        return 'initialization_failed';
     }
 
     private function paymentResourceType(string $providerReference, mixed $hint = null): string

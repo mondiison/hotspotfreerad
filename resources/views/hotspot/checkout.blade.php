@@ -69,6 +69,8 @@
                     Flutterwave accepted the payment request, but did not return a checkout link. Check the tenant Flutterwave account/payment method configuration.
                 @elseif (($checkoutUnavailableReason ?? null) === 'missing_card_secret_key')
                     Card checkout needs the tenant Flutterwave secret key. Ask the hotspot operator to add it under Payment Setup for {{ $shop->name }}.
+                @elseif (($checkoutUnavailableReason ?? null) === 'invalid_card_secret_key')
+                    Flutterwave rejected the saved card checkout secret key. Check Payment Setup for {{ $shop->name }} and paste the Secret Key from Flutterwave API Keys, not the client secret.
                 @else
                     Flutterwave checkout could not start even though credentials were found for {{ $credentialSource['label'] ?? $shop->name }}. Check the saved client ID/secret, payment method, and Laravel logs.
                 @endif

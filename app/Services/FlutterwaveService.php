@@ -398,10 +398,21 @@ class FlutterwaveService
     private function hostedCheckoutSecretKey(Payment $payment): string
     {
         if (filled($payment->shop?->flutterwave_secret_key)) {
-            return (string) $payment->shop->flutterwave_secret_key;
+            return $this->normalizeSecretKey((string) $payment->shop->flutterwave_secret_key);
         }
 
         return '';
+    }
+
+    private function normalizeSecretKey(string $secretKey): string
+    {
+        $secretKey = trim($secretKey, " \t\n\r\0\x0B\"'");
+
+        if (Str::startsWith(Str::lower($secretKey), 'bearer ')) {
+            return trim(substr($secretKey, 7), " \t\n\r\0\x0B\"'");
+        }
+
+        return $secretKey;
     }
 
     private function baseUrl(): string

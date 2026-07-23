@@ -413,6 +413,60 @@ class HotspotPortalTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_card_checkout_shows_helpful_message_for_invalid_secret_key(): void
+    {
+        Http::fake([
+            'api.flutterwave.com/v3/payments' => Http::response([
+                'status' => 'error',
+                'message' => 'Invalid authorization key',
+                'data' => null,
+            ], 401),
+        ]);
+        [$router, $package] = $this->routerWithPackage();
+        $router->shop->update([
+            'flutterwave_secret_key' => 'wrong-secret',
+        ]);
+
+        $this->post(route('hotspot.pay'), [
+            'mac' => 'AA:BB:CC:DD:EE:FF',
+            'nasid' => $router->nas_identifier,
+            'package_id' => $package->id,
+            'email' => 'customer@example.com',
+            'phone' => '08000000000',
+            'payment_method' => 'card',
+        ])
+            ->assertOk()
+            ->assertSee('Flutterwave rejected the saved card checkout secret key');
+    }
+
+    public function test_card_checkout_accepts_secret_key_pasted_with_bearer_prefix(): void
+    {
+        Http::fake([
+            'api.flutterwave.com/v3/payments' => Http::response([
+                'status' => 'success',
+                'data' => [
+                    'link' => 'https://checkout.flutterwave.com/v3/hosted/pay/flwlnk_12345',
+                ],
+            ]),
+        ]);
+        [$router, $package] = $this->routerWithPackage();
+        $router->shop->update([
+            'flutterwave_secret_key' => 'Bearer FLWSECK_TEST-tenant-secret-key',
+        ]);
+
+        $this->post(route('hotspot.pay'), [
+            'mac' => 'AA:BB:CC:DD:EE:FF',
+            'nasid' => $router->nas_identifier,
+            'package_id' => $package->id,
+            'email' => 'customer@example.com',
+            'phone' => '08000000000',
+            'payment_method' => 'card',
+        ])
+            ->assertRedirect('https://checkout.flutterwave.com/v3/hosted/pay/flwlnk_12345');
+
+        Http::assertSent(fn ($request) => $request->hasHeader('Authorization', 'Bearer FLWSECK_TEST-tenant-secret-key'));
+    }
+
     public function test_payment_step_creates_dynamic_virtual_account_for_bank_transfer(): void
     {
         $this->configureFlutterwave();
