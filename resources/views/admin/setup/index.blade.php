@@ -147,7 +147,7 @@
                 </p>
             </div>
             <div class="flex flex-wrap gap-2">
-                <flux:button href="{{ route('admin.packages.index') }}" wire:navigate variant="outline" size="sm" icon="radio">Review plans</flux:button>
+                <flux:button href="{{ route('admin.packages.index', ['service' => 'pppoe_capable']) }}" wire:navigate variant="outline" size="sm" icon="radio">Review PPPoE plans</flux:button>
                 <flux:button href="{{ route('admin.pppoe-subscribers.index') }}" wire:navigate variant="primary" size="sm" icon="wifi">Manage PPPoE customers</flux:button>
             </div>
         </div>

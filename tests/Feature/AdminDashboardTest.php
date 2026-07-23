@@ -259,6 +259,8 @@ class AdminDashboardTest extends TestCase
             ->get(route('admin.dashboard'))
             ->assertOk()
             ->assertSee('PPPoE Service Desk')
+            ->assertSee('PPPoE Plans')
+            ->assertSee(route('admin.packages.index', ['service' => 'pppoe_capable']), false)
             ->assertSee('2 fixed subscribers')
             ->assertSee('Due Soon Customer')
             ->assertSee('due-soon')

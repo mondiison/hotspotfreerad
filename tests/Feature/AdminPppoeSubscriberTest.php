@@ -130,6 +130,8 @@ class AdminPppoeSubscriberTest extends TestCase
         $this->actingAs($user)
             ->get(route('admin.pppoe-subscribers.index'))
             ->assertOk()
+            ->assertSee('PPPoE Plans')
+            ->assertSee(route('admin.packages.index', ['service' => 'pppoe_capable']), false)
             ->assertSee('own-customer')
             ->assertDontSee('other-customer');
     }
