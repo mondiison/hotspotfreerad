@@ -7,6 +7,7 @@ use App\Models\Expense;
 use App\Models\ExpenseCategory;
 use App\Models\Package;
 use App\Models\Payment;
+use App\Models\PppoeSubscriber;
 use App\Models\Router;
 use App\Models\Shop;
 use App\Models\Subscription;
@@ -170,6 +171,102 @@ class AdminDashboardTest extends TestCase
             ->assertSee(route('tenant.public-site', $ownTenant), false)
             ->assertSee('Own Router')
             ->assertDontSee('Other Router');
+    }
+
+    public function test_dashboard_shows_pppoe_service_desk_summary(): void
+    {
+        $tenant = Tenant::create([
+            'company_name' => 'PPPoE Tenant',
+            'owner_email' => 'pppoe@example.com',
+        ]);
+        $otherTenant = Tenant::create([
+            'company_name' => 'Other Tenant',
+            'owner_email' => 'other@example.com',
+        ]);
+        $shop = Shop::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Fiber Estate',
+        ]);
+        $otherShop = Shop::create([
+            'tenant_id' => $otherTenant->id,
+            'name' => 'Other Estate',
+        ]);
+        $package = Package::create([
+            'shop_id' => $shop->id,
+            'name' => 'Home 10M',
+            'service_type' => 'pppoe',
+            'price' => 12000,
+            'currency' => 'NGN',
+            'limit_uptime_seconds' => 2592000,
+            'speed_limit_profile' => '10M/10M',
+            'is_active' => true,
+        ]);
+        $otherPackage = Package::create([
+            'shop_id' => $otherShop->id,
+            'name' => 'Other Home',
+            'service_type' => 'pppoe',
+            'price' => 12000,
+            'currency' => 'NGN',
+            'limit_uptime_seconds' => 2592000,
+            'speed_limit_profile' => '10M/10M',
+            'is_active' => true,
+        ]);
+        PppoeSubscriber::create([
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'username' => 'due-soon',
+            'password' => 'secret-pass',
+            'full_name' => 'Due Soon Customer',
+            'expires_at' => now()->addDays(3),
+            'last_provisioned_at' => now(),
+            'is_active' => true,
+        ]);
+        PppoeSubscriber::create([
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'username' => 'unsynced-user',
+            'password' => 'secret-pass',
+            'expires_at' => now()->addDays(20),
+            'is_active' => true,
+        ]);
+        PppoeSubscriber::create([
+            'shop_id' => $otherShop->id,
+            'package_id' => $otherPackage->id,
+            'username' => 'other-user',
+            'password' => 'secret-pass',
+            'expires_at' => now()->addDays(3),
+            'last_provisioned_at' => now(),
+            'is_active' => true,
+        ]);
+        DB::table('radacct')->insert([
+            'acctsessionid' => 'pppoe-session',
+            'acctuniqueid' => 'pppoe-unique-session',
+            'username' => 'due-soon',
+            'nasipaddress' => '10.8.0.10',
+            'acctstarttime' => now()->subMinutes(10),
+            'acctupdatetime' => now(),
+            'acctstoptime' => null,
+            'acctinputoctets' => 1000,
+            'acctoutputoctets' => 2000,
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('admin.dashboard'))
+            ->assertOk()
+            ->assertSee('PPPoE Service Desk')
+            ->assertSee('2 fixed subscribers')
+            ->assertSee('Due Soon Customer')
+            ->assertSee('due-soon')
+            ->assertSee('Fiber Estate')
+            ->assertSee(route('admin.pppoe-subscribers.index', ['status' => 'expiring_soon']), false)
+            ->assertSee(route('admin.pppoe-subscribers.index', ['status' => 'unsynced']), false)
+            ->assertDontSee('other-user')
+            ->assertDontSee('Other Estate');
     }
 
     public function test_tenant_admin_dashboard_shows_enforced_two_factor_status(): void

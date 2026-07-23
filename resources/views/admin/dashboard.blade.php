@@ -111,6 +111,74 @@
     <section class="mt-6 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
         <div class="flex flex-col justify-between gap-3 md:flex-row md:items-center">
             <div>
+                <p class="text-sm font-medium text-zinc-500">PPPoE Service Desk</p>
+                <h2 class="mt-1 text-xl font-semibold">{{ number_format($pppoeSummary['total']) }} fixed subscriber{{ $pppoeSummary['total'] === 1 ? '' : 's' }}</h2>
+                <p class="mt-1 text-sm text-zinc-500">Renewal, sync, and online-session snapshot for PPPoE customers.</p>
+            </div>
+
+            <div class="flex flex-wrap gap-2">
+                <flux:button href="{{ route('admin.pppoe-subscribers.index', ['status' => 'expiring_soon']) }}" wire:navigate variant="outline" size="sm" icon="clock">Due soon</flux:button>
+                <flux:button href="{{ route('admin.pppoe-subscribers.index') }}" wire:navigate variant="primary" size="sm" icon="wifi">Manage PPPoE</flux:button>
+            </div>
+        </div>
+
+        <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+            @foreach ([
+                ['label' => 'Active', 'value' => $pppoeSummary['active'], 'href' => route('admin.pppoe-subscribers.index', ['status' => 'active']), 'hint' => 'Can authenticate now'],
+                ['label' => 'Online', 'value' => is_null($pppoeSummary['online']) ? 'Not ready' : $pppoeSummary['online'], 'href' => route('admin.pppoe-subscribers.index', ['status' => 'active']), 'hint' => $pppoeSummary['accounting_ready'] ? 'Open accounting sessions' : 'radacct not ready'],
+                ['label' => 'Due Soon', 'value' => $pppoeSummary['due_soon'], 'href' => route('admin.pppoe-subscribers.index', ['status' => 'expiring_soon']), 'hint' => 'Expires within 7 days'],
+                ['label' => 'Expired', 'value' => $pppoeSummary['expired'], 'href' => route('admin.pppoe-subscribers.index', ['status' => 'expired']), 'hint' => 'Needs renewal'],
+                ['label' => 'Unsynced', 'value' => $pppoeSummary['unsynced'], 'href' => route('admin.pppoe-subscribers.index', ['status' => 'unsynced']), 'hint' => 'Not pushed to RADIUS'],
+                ['label' => 'Disabled', 'value' => $pppoeSummary['disabled'], 'href' => route('admin.pppoe-subscribers.index', ['status' => 'disabled']), 'hint' => 'Blocked from access'],
+            ] as $stat)
+                <a href="{{ $stat['href'] }}" wire:navigate class="rounded-lg border border-zinc-200 p-4 transition hover:border-zinc-400">
+                    <p class="text-sm font-medium text-zinc-500">{{ $stat['label'] }}</p>
+                    <p class="mt-3 text-2xl font-semibold">{{ is_numeric($stat['value']) ? number_format($stat['value']) : $stat['value'] }}</p>
+                    <p class="mt-2 text-xs leading-5 text-zinc-500">{{ $stat['hint'] }}</p>
+                </a>
+            @endforeach
+        </div>
+
+        <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200">
+            <table class="min-w-[760px] w-full text-left text-sm">
+                <thead class="bg-zinc-50 text-zinc-500">
+                    <tr>
+                        <th class="px-4 py-3 font-medium">Renewal Queue</th>
+                        <th class="px-4 py-3 font-medium">Package</th>
+                        <th class="px-4 py-3 font-medium">Shop</th>
+                        <th class="px-4 py-3 font-medium">Expires</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-zinc-100">
+                    @forelse ($pppoeSummary['renewal_queue'] as $subscriber)
+                        <tr>
+                            <td class="px-4 py-3">
+                                <p class="font-medium">{{ $subscriber->full_name ?: $subscriber->username }}</p>
+                                <p class="mt-1 font-mono text-xs text-zinc-500">{{ $subscriber->username }}</p>
+                            </td>
+                            <td class="px-4 py-3">
+                                <p>{{ $subscriber->package?->name ?? 'Deleted package' }}</p>
+                                <p class="mt-1 text-xs text-zinc-500">{{ $subscriber->package?->speed_limit_profile ?: 'No speed profile' }}</p>
+                            </td>
+                            <td class="px-4 py-3">
+                                <p>{{ $subscriber->shop?->name ?? 'Deleted shop' }}</p>
+                                <p class="mt-1 text-xs text-zinc-500">{{ $subscriber->shop?->tenant?->company_name }}</p>
+                            </td>
+                            <td class="px-4 py-3 text-zinc-600">{{ $subscriber->expires_at?->format('M j, Y g:i A') }}</td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="4" class="px-4 py-8 text-center text-zinc-500">No PPPoE renewals due in the next 7 days.</td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="mt-6 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+        <div class="flex flex-col justify-between gap-3 md:flex-row md:items-center">
+            <div>
                 <p class="text-sm font-medium text-zinc-500">Security Attention</p>
                 <h2 class="mt-1 text-xl font-semibold">{{ number_format($securityAttention['count']) }} event{{ $securityAttention['count'] === 1 ? '' : 's' }} in the last 30 days</h2>
                 <p class="mt-1 text-sm text-zinc-500">Failed 2FA, blocked tenant access, password changes, reset links, and disabled 2FA.</p>
