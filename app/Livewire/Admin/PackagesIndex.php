@@ -33,6 +33,8 @@ class PackagesIndex extends Component
 
     public string $name = '';
 
+    public string $service_type = 'hotspot';
+
     public string $radius_group_name = '';
 
     public string $price = '';
@@ -85,6 +87,7 @@ class PackagesIndex extends Component
         $this->editingPackageId = $package->id;
         $this->shop_id = (string) $package->shop_id;
         $this->name = (string) $package->name;
+        $this->service_type = (string) ($package->service_type ?: 'hotspot');
         $this->radius_group_name = (string) $package->radius_group_name;
         $this->price = (string) $package->price;
         $this->currency = (string) $package->currency;
@@ -207,6 +210,7 @@ class PackagesIndex extends Component
             'editingPackageId',
             'shop_id',
             'name',
+            'service_type',
             'radius_group_name',
             'price',
             'data_limit_bytes',
@@ -214,6 +218,7 @@ class PackagesIndex extends Component
             'fup_data_threshold_bytes',
             'fup_speed_limit_profile',
         ]);
+        $this->service_type = 'hotspot';
         $this->currency = 'NGN';
         $this->limit_uptime_seconds = '86400';
         $this->is_active = true;

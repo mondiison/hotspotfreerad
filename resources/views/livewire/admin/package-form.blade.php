@@ -64,7 +64,23 @@
             </section>
 
             <section class="border-t border-zinc-200 pt-6">
-                <h2 class="text-base font-semibold">Access Rules</h2>
+                <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+                    <div>
+                        <h2 class="text-base font-semibold">Access Rules</h2>
+                        <p class="mt-1 text-sm text-zinc-500">
+                            @if ($service_type === 'pppoe')
+                                PPPoE bandwidth is sent to MikroTik through FreeRADIUS as <code>Mikrotik-Rate-Limit</code>.
+                            @elseif ($service_type === 'both')
+                                The same bandwidth profile applies to hotspot customers and PPPoE subscribers.
+                            @else
+                                Hotspot customers receive this bandwidth after successful captive portal login.
+                            @endif
+                        </p>
+                    </div>
+                    <flux:badge :color="$service_type === 'pppoe' ? 'blue' : ($service_type === 'both' ? 'purple' : 'zinc')">
+                        {{ $service_type === 'pppoe' ? 'PPPoE bandwidth' : ($service_type === 'both' ? 'Shared bandwidth' : 'Hotspot bandwidth') }}
+                    </flux:badge>
+                </div>
                 <div class="mt-4 grid gap-5 md:grid-cols-2">
                     <flux:field>
                         <flux:label>Uptime</flux:label>
@@ -93,14 +109,14 @@
                     </flux:field>
 
                     <flux:field>
-                        <flux:label>Bandwidth</flux:label>
+                        <flux:label>Bandwidth / RADIUS rate limit</flux:label>
                         <flux:input wire:model.blur="speed_limit_profile" icon="signal" placeholder="5M/5M" required />
                         <div class="mt-2 flex flex-wrap gap-2">
-                            @foreach (['2M/2M', '5M/5M', '10M/10M', '20M/20M'] as $speed)
+                            @foreach (['2M/2M', '5M/5M', '5M/10M', '10M/20M', '20M/20M', '50M/50M'] as $speed)
                                 <flux:button type="button" size="xs" wire:click="setPreset('speed_limit_profile', '{{ $speed }}')">{{ $speed }}</flux:button>
                             @endforeach
                         </div>
-                        <flux:description>Upload/download format. Examples: <code>2M/5M</code>, <code>5M/5M</code>, <code>10M/20M</code>.</flux:description>
+                        <flux:description>Upload/download format. For PPPoE, MikroTik applies this as <code>Mikrotik-Rate-Limit</code>. Examples: <code>2M/5M</code>, <code>5M/10M</code>, <code>10M/20M</code>.</flux:description>
                         <flux:error name="speed_limit_profile" />
                     </flux:field>
 
@@ -193,6 +209,10 @@
                     <dd>{{ ['hotspot' => 'Hotspot', 'pppoe' => 'PPPoE', 'both' => 'Both'][$service_type] ?? 'Hotspot' }}</dd>
                 </div>
                 <div class="flex justify-between gap-4">
+                    <dt class="text-zinc-400">Bandwidth</dt>
+                    <dd>{{ filled($speed_limit_profile) ? $speed_limit_profile : 'Not set' }}</dd>
+                </div>
+                <div class="flex justify-between gap-4">
                     <dt class="text-zinc-400">Data mode</dt>
                     <dd>{{ filled($data_limit_bytes) ? 'Hard cap' : 'Unlimited' }}</dd>
                 </div>
@@ -211,8 +231,8 @@
                     <p>1 day, 5GB hard cap, 5M/5M speed.</p>
                 </div>
                 <div class="rounded-md bg-zinc-50 p-3">
-                    <p class="font-medium text-zinc-950">Weekly Unlimited</p>
-                    <p>7 days, unlimited data, 3M/3M speed.</p>
+                    <p class="font-medium text-zinc-950">PPPoE Home Basic</p>
+                    <p>30 days, unlimited data, 5M/10M bandwidth.</p>
                 </div>
                 <div class="rounded-md bg-zinc-50 p-3">
                     <p class="font-medium text-zinc-950">30-Day Fair Use</p>

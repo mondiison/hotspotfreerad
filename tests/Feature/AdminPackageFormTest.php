@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Livewire\Admin\PackageForm;
+use App\Livewire\Admin\PackagesIndex;
 use App\Models\Package;
 use App\Models\Shop;
 use App\Models\Tenant;
@@ -27,6 +28,8 @@ class AdminPackageFormTest extends TestCase
             ->assertSee('Plan Shape')
             ->assertSee('Service type')
             ->assertSee('PPPoE subscriber')
+            ->assertSee('Bandwidth / RADIUS rate limit')
+            ->assertSee('Mikrotik-Rate-Limit')
             ->assertSee('Unlimited')
             ->assertSee('30 days')
             ->assertSee('20GB')
@@ -125,6 +128,40 @@ class AdminPackageFormTest extends TestCase
             'groupname' => $groupName,
             'attribute' => 'Mikrotik-Rate-Limit',
             'value' => '10M/10M',
+        ]);
+    }
+
+    public function test_package_modal_saves_pppoe_bandwidth_to_radius_profile(): void
+    {
+        $shop = $this->shop();
+
+        $this->actingAs($this->superAdmin());
+
+        Livewire::test(PackagesIndex::class)
+            ->call('create')
+            ->assertSee('Service type')
+            ->assertSee('Bandwidth / RADIUS rate limit')
+            ->set('shop_id', (string) $shop->id)
+            ->set('name', 'Home PPPoE 10M')
+            ->set('service_type', 'pppoe')
+            ->assertSee('PPPoE bandwidth')
+            ->set('price', '8000')
+            ->set('currency', 'ngn')
+            ->set('limit_uptime_seconds', '2592000')
+            ->set('data_limit_bytes', '')
+            ->set('speed_limit_profile', '5M/10M')
+            ->set('is_active', true)
+            ->call('save')
+            ->assertHasNoErrors()
+            ->assertSee('Package created and synced to RADIUS profile.');
+
+        $package = Package::where('name', 'Home PPPoE 10M')->firstOrFail();
+
+        $this->assertSame('pppoe', $package->service_type);
+        $this->assertDatabaseHas('radgroupreply', [
+            'groupname' => $package->radius_group_name,
+            'attribute' => 'Mikrotik-Rate-Limit',
+            'value' => '5M/10M',
         ]);
     }
 

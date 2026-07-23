@@ -38,6 +38,7 @@
             <thead class="border-b border-zinc-200 bg-zinc-50 text-zinc-500">
                 <tr>
                     <th class="px-4 py-3 font-medium">Package</th>
+                    <th class="px-4 py-3 font-medium">Service</th>
                     <th class="px-4 py-3 font-medium">Shop</th>
                     <th class="px-4 py-3 font-medium">Group</th>
                     <th class="px-4 py-3 font-medium">Price</th>
@@ -56,6 +57,11 @@
                                 <flux:badge :color="$package->is_active ? 'green' : 'zinc'">{{ $package->is_active ? 'Active' : 'Inactive' }}</flux:badge>
                             </p>
                         </td>
+                        <td class="px-4 py-3">
+                            <flux:badge :color="$package->service_type === 'pppoe' ? 'blue' : ($package->service_type === 'both' ? 'purple' : 'zinc')">
+                                {{ ['hotspot' => 'Hotspot', 'pppoe' => 'PPPoE', 'both' => 'Both'][$package->service_type] ?? 'Hotspot' }}
+                            </flux:badge>
+                        </td>
                         <td class="px-4 py-3 text-zinc-600">{{ $package->shop->name }} / {{ $package->shop->tenant->company_name }}</td>
                         <td class="px-4 py-3 font-mono text-xs text-zinc-600">{{ $package->radius_group_name ?: 'Pending sync' }}</td>
                         <td class="px-4 py-3">{{ $package->currency }} {{ number_format($package->price, 2) }}</td>
@@ -69,7 +75,12 @@
                         <td class="px-4 py-3">
                             {{ $package->data_limit_bytes ? number_format($package->data_limit_bytes / 1073741824, 1).' GB' : 'Unlimited' }}
                         </td>
-                        <td class="px-4 py-3 font-mono text-xs text-zinc-600">{{ $package->speed_limit_profile }}</td>
+                        <td class="px-4 py-3">
+                            <p class="font-mono text-xs text-zinc-600">{{ $package->speed_limit_profile }}</p>
+                            @if (in_array($package->service_type, ['pppoe', 'both'], true))
+                                <p class="mt-1 text-xs text-zinc-500">PPPoE rate limit</p>
+                            @endif
+                        </td>
                         <td class="px-4 py-3">
                             <div class="flex justify-end gap-2">
                                 <flux:button type="button" variant="outline" size="sm" icon="pencil-square" wire:click="edit({{ $package->id }})" wire:loading.attr="disabled" wire:target="edit({{ $package->id }})">Edit</flux:button>
@@ -79,7 +90,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="8" class="px-4 py-10 text-center">
+                        <td colspan="9" class="px-4 py-10 text-center">
                             <p class="font-medium">No packages match this view.</p>
                             <p class="mt-1 text-sm text-zinc-500">Create internet plans with uptime, speed, and optional data caps.</p>
                             <flux:button type="button" variant="primary" icon="plus" class="mt-4" wire:click="create">Add Package</flux:button>
@@ -131,6 +142,17 @@
                         </flux:field>
 
                         <flux:field>
+                            <flux:label>Service type</flux:label>
+                            <flux:select wire:model.live="service_type" required>
+                                <option value="hotspot">Hotspot captive portal</option>
+                                <option value="pppoe">PPPoE subscriber</option>
+                                <option value="both">Hotspot and PPPoE</option>
+                            </flux:select>
+                            <flux:description>Choose PPPoE when this plan will be assigned to username/password subscriber accounts.</flux:description>
+                            <flux:error name="service_type" />
+                        </flux:field>
+
+                        <flux:field>
                             <flux:label>RADIUS group name</flux:label>
                             <flux:input wire:model.blur="radius_group_name" icon="server-stack" placeholder="Auto-generated if blank" />
                             <flux:description>Leave blank unless you need a specific FreeRADIUS group name.</flux:description>
@@ -154,7 +176,23 @@
                 </section>
 
                 <section class="border-t border-zinc-200 pt-6">
-                    <h2 class="text-sm font-semibold uppercase text-zinc-500">Access rules</h2>
+                    <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+                        <div>
+                            <h2 class="text-sm font-semibold uppercase text-zinc-500">Access rules</h2>
+                            <p class="mt-1 text-sm text-zinc-500">
+                                @if ($service_type === 'pppoe')
+                                    PPPoE subscribers receive bandwidth through <code>Mikrotik-Rate-Limit</code>.
+                                @elseif ($service_type === 'both')
+                                    One RADIUS profile will serve both captive portal and PPPoE users.
+                                @else
+                                    Captive portal users receive this profile after payment.
+                                @endif
+                            </p>
+                        </div>
+                        <flux:badge :color="$service_type === 'pppoe' ? 'blue' : ($service_type === 'both' ? 'purple' : 'zinc')">
+                            {{ $service_type === 'pppoe' ? 'PPPoE bandwidth' : ($service_type === 'both' ? 'Shared bandwidth' : 'Hotspot bandwidth') }}
+                        </flux:badge>
+                    </div>
                     <div class="mt-4 grid gap-5 md:grid-cols-2">
                         <flux:field>
                             <flux:label>Uptime</flux:label>
@@ -175,14 +213,14 @@
                         </flux:field>
 
                         <flux:field>
-                            <flux:label>Bandwidth</flux:label>
+                            <flux:label>Bandwidth / RADIUS rate limit</flux:label>
                             <flux:input wire:model.blur="speed_limit_profile" icon="signal" placeholder="5M/5M" required />
                             <div class="mt-2 flex flex-wrap gap-2">
-                                @foreach (['2M/2M', '5M/5M', '10M/10M', '20M/20M'] as $speed)
+                                @foreach (['2M/2M', '5M/5M', '5M/10M', '10M/20M', '20M/20M', '50M/50M'] as $speed)
                                     <flux:button type="button" size="xs" wire:click="setPreset('speed_limit_profile', '{{ $speed }}')">{{ $speed }}</flux:button>
                                 @endforeach
                             </div>
-                            <flux:description>Upload/download format. Examples: <code>2M/5M</code>, <code>5M/5M</code>, <code>10M/20M</code>.</flux:description>
+                            <flux:description>Upload/download format. For PPPoE, MikroTik applies this as <code>Mikrotik-Rate-Limit</code>. Examples: <code>2M/5M</code>, <code>5M/10M</code>, <code>10M/20M</code>.</flux:description>
                             <flux:error name="speed_limit_profile" />
                         </flux:field>
 
@@ -244,6 +282,14 @@
                     <section class="rounded-lg border border-zinc-200 bg-zinc-950 p-4 text-white">
                         <h2 class="text-sm font-semibold">Plan Shape</h2>
                         <dl class="mt-3 space-y-2 text-sm">
+                            <div class="flex justify-between gap-4">
+                                <dt class="text-zinc-400">Service</dt>
+                                <dd>{{ ['hotspot' => 'Hotspot', 'pppoe' => 'PPPoE', 'both' => 'Both'][$service_type] ?? 'Hotspot' }}</dd>
+                            </div>
+                            <div class="flex justify-between gap-4">
+                                <dt class="text-zinc-400">Bandwidth</dt>
+                                <dd>{{ filled($speed_limit_profile) ? $speed_limit_profile : 'Not set' }}</dd>
+                            </div>
                             <div class="flex justify-between gap-4">
                                 <dt class="text-zinc-400">Data mode</dt>
                                 <dd>{{ filled($data_limit_bytes) ? 'Hard cap' : 'Unlimited' }}</dd>
