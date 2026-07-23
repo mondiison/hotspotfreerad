@@ -54,6 +54,39 @@
         @endforeach
     </section>
 
+    <section class="mt-6 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+        <div class="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
+            <div>
+                <p class="text-sm font-medium text-zinc-500">Scheduler Health</p>
+                <h2 class="mt-2 text-xl font-semibold">{{ $schedulerHealth['label'] }}</h2>
+                <p class="mt-2 max-w-3xl text-sm leading-6 text-zinc-600">{{ $schedulerHealth['description'] }}</p>
+            </div>
+            <flux:badge :color="$schedulerHealth['is_healthy'] ? 'green' : ($schedulerHealth['last_run_at'] ? 'amber' : 'zinc')">
+                {{ $schedulerHealth['is_healthy'] ? 'Cron active' : 'Check cron' }}
+            </flux:badge>
+        </div>
+
+        <div class="mt-5 grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
+            <div class="rounded-lg border border-zinc-200 p-4">
+                <p class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Last heartbeat</p>
+                <p class="mt-2 text-lg font-semibold">
+                    {{ $schedulerHealth['last_run_at'] ? $schedulerHealth['last_run_at']->format('M j, Y g:i A') : 'No heartbeat yet' }}
+                </p>
+                <p class="mt-2 text-sm leading-6 text-zinc-600">
+                    {{ $schedulerHealth['last_seen'] ? 'Seen '.$schedulerHealth['last_seen'].'.' : 'Run the scheduler command or wait for cron after adding it.' }}
+                </p>
+            </div>
+
+            <div class="rounded-lg border border-zinc-200 p-4">
+                <p class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Pi cron entry</p>
+                <pre class="mt-3 overflow-x-auto rounded-md bg-zinc-950 p-3 text-xs leading-5 text-white"><code>{{ $schedulerHealth['command'] }}</code></pre>
+                <p class="mt-3 text-sm leading-6 text-zinc-600">
+                    This keeps hotspot expiry, PPPoE expiry, security pruning, and future queued maintenance moving automatically.
+                </p>
+            </div>
+        </div>
+    </section>
+
     <section class="mt-6 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm" id="pppoe">
         <div class="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
             <div>

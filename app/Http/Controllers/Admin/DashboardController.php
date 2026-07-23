@@ -17,17 +17,16 @@ use App\Models\TenantBillingSubscription;
 use App\Models\User;
 use App\Services\SecurityActivityReportService;
 use App\Support\RadiusAccountingStats;
+use App\Support\SchedulerHealth;
 use App\Support\TenantAccess;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 class DashboardController extends Controller
 {
-    public function __invoke(Request $request, RadiusAccountingStats $radiusStats, SecurityActivityReportService $securityActivities): View
+    public function __invoke(Request $request, RadiusAccountingStats $radiusStats, SecurityActivityReportService $securityActivities, SchedulerHealth $schedulerHealth): View
     {
         $user = $request->user();
         $shopQuery = TenantAccess::scopeShops(Shop::query(), $user);
@@ -156,7 +155,7 @@ class DashboardController extends Controller
             'radiusAccountingReady' => $radiusSummary['ready'],
             'activeSubscriptionCount' => $activeSubscriptionCount,
             'pppoeSummary' => $this->pppoeSummary($shopIds),
-            'schedulerHealth' => $this->schedulerHealth(),
+            'schedulerHealth' => $schedulerHealth->summary(),
             'paidRevenue' => $paidRevenue,
             'platformCommission' => $platformCommission,
             'tenantNetRevenue' => $tenantNetRevenue,
@@ -283,28 +282,6 @@ class DashboardController extends Controller
                 ->orderBy('expires_at')
                 ->take(5)
                 ->get(),
-        ];
-    }
-
-    private function schedulerHealth(): array
-    {
-        $lastRunAt = Cache::get('hotspot.scheduler.last_run_at');
-        $lastRun = $lastRunAt ? Carbon::parse($lastRunAt) : null;
-        $isHealthy = $lastRun && $lastRun->greaterThanOrEqualTo(now()->subMinutes(3));
-
-        return [
-            'last_run_at' => $lastRun,
-            'is_healthy' => $isHealthy,
-            'label' => match (true) {
-                $isHealthy => 'Healthy',
-                $lastRun !== null => 'Delayed',
-                default => 'Not seen yet',
-            },
-            'description' => match (true) {
-                $isHealthy => 'Laravel scheduler has checked in recently.',
-                $lastRun !== null => 'Cron may be delayed. Confirm schedule:run is installed on the Pi.',
-                default => 'No scheduler heartbeat has been recorded yet.',
-            },
         ];
     }
 

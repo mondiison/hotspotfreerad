@@ -8,9 +8,9 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Services\PppoeSubscriberManagementService;
 use App\Services\RadiusProvisioningService;
+use App\Support\SchedulerHealth;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Schedule;
@@ -87,8 +87,8 @@ Artisan::command('hotspot:test-mail {email}', function (string $email): void {
     $this->info("Test email handed to mailer for {$email}");
 })->purpose('Send a test email and show the active mail transport without secrets');
 
-Artisan::command('hotspot:scheduler-heartbeat', function (): int {
-    Cache::forever('hotspot.scheduler.last_run_at', now()->toISOString());
+Artisan::command('hotspot:scheduler-heartbeat', function (SchedulerHealth $schedulerHealth): int {
+    $schedulerHealth->record();
 
     $this->info('Scheduler heartbeat recorded at '.now()->toDateTimeString().'.');
 

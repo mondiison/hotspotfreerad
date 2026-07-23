@@ -8,6 +8,7 @@ use App\Models\Shop;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
 
 class AdminSetupCenterTest extends TestCase
@@ -16,6 +17,8 @@ class AdminSetupCenterTest extends TestCase
 
     public function test_tenant_admin_sees_setup_center_with_pppoe_guidance(): void
     {
+        Cache::forever('hotspot.scheduler.last_run_at', now()->toISOString());
+
         $tenant = Tenant::create([
             'company_name' => 'MMS Tenant',
             'owner_email' => 'owner@example.com',
@@ -65,6 +68,9 @@ class AdminSetupCenterTest extends TestCase
             ->assertSee('OPay and bank transfer')
             ->assertSee('Card checkout')
             ->assertSee('Webhook')
+            ->assertSee('Scheduler Health')
+            ->assertSee('Healthy')
+            ->assertSee('Cron active')
             ->assertSee('Park Area')
             ->assertSee(route('admin.routers.show', $router), false);
     }
@@ -85,6 +91,8 @@ class AdminSetupCenterTest extends TestCase
             ->get(route('admin.setup.index'))
             ->assertOk()
             ->assertSee('Add first shop')
+            ->assertSee('Enable Laravel scheduler')
+            ->assertSee('No heartbeat yet')
             ->assertSee('Create a shop first, then continue with routers, packages, and payments.')
             ->assertSee('0 OPay/transfer ready, 0 card ready, 0 webhook ready.');
     }

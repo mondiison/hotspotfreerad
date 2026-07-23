@@ -7,13 +7,14 @@ use App\Models\Package;
 use App\Models\Router;
 use App\Models\Shop;
 use App\Models\Tenant;
+use App\Support\SchedulerHealth;
 use App\Support\TenantAccess;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
 
 class SetupCenterController extends Controller
 {
-    public function __invoke(Request $request): View
+    public function __invoke(Request $request, SchedulerHealth $schedulerHealth): View
     {
         $user = $request->user();
         $shopQuery = TenantAccess::scopeShops(Shop::with(['tenant', 'routers']), $user);
@@ -29,6 +30,7 @@ class SetupCenterController extends Controller
             ->count();
         $tenant = $user->tenant_id ? Tenant::find($user->tenant_id) : null;
         $firstRouter = TenantAccess::scopeRouters(Router::with('shop.tenant'), $user)->oldest()->first();
+        $scheduler = $schedulerHealth->summary();
 
         $paymentReady = [
             'opay_transfer' => $shops->filter->hasCompleteFlutterwaveCredentials()->count(),
@@ -84,6 +86,17 @@ class SetupCenterController extends Controller
                 'route' => $shops->isEmpty() ? 'admin.shops.create' : 'admin.payment-settings.index',
                 'action' => $shops->isEmpty() ? 'Add shop first' : 'Open payment setup',
                 'hint' => $paymentReady['opay_transfer'].' OPay/transfer ready, '.$paymentReady['card'].' card ready, '.$paymentReady['webhook'].' webhook ready.',
+            ],
+            [
+                'phase' => 'Automation',
+                'label' => 'Enable Laravel scheduler',
+                'description' => 'Runs expiry cleanup, hotspot revocation, PPPoE revocation, and recurring maintenance every minute from cron.',
+                'complete' => $scheduler['is_healthy'],
+                'route' => 'admin.setup.index',
+                'action' => $scheduler['is_healthy'] ? 'Scheduler healthy' : 'Review cron command',
+                'hint' => $scheduler['last_run_at']
+                    ? 'Last heartbeat '.$scheduler['last_seen'].'. '.$scheduler['description']
+                    : 'Add the cron entry on the Pi, then wait one minute or run php artisan hotspot:scheduler-heartbeat once.',
             ],
             [
                 'phase' => 'Test',
@@ -171,6 +184,7 @@ class SetupCenterController extends Controller
             'shops' => $shops,
             'firstRouter' => $firstRouter,
             'paymentReady' => $paymentReady,
+            'schedulerHealth' => $scheduler,
             'provisioningMethods' => $provisioningMethods,
             'pppoeWizard' => $pppoeWizard,
             'completedCount' => collect($steps)->where('complete', true)->count(),
