@@ -18,6 +18,7 @@ class PackageManagementService
         return [
             'shop_id' => ['required', TenantAccess::shopExistsRule($user)],
             'name' => ['required', 'string', 'max:255'],
+            'service_type' => ['required', Rule::in(['hotspot', 'pppoe', 'both'])],
             'radius_group_name' => ['nullable', 'string', 'max:64', Rule::unique('packages')->ignore($package)],
             'price' => ['required', 'numeric', 'min:1', 'max:99999999.99'],
             'currency' => ['required', 'string', 'size:3'],
@@ -32,6 +33,10 @@ class PackageManagementService
 
     public function validated(Request $request, ?InternetPackage $package = null): array
     {
+        $request->merge([
+            'service_type' => $request->input('service_type', $package?->service_type ?: 'hotspot'),
+        ]);
+
         return $this->normalize(
             $request->validate($this->rules($request->user(), $package)) + ['is_active' => false]
         );
@@ -66,6 +71,7 @@ class PackageManagementService
         }
 
         $data['currency'] = strtoupper($data['currency'] ?? 'NGN');
+        $data['service_type'] = $data['service_type'] ?? 'hotspot';
         $data['is_active'] = (bool) ($data['is_active'] ?? false);
 
         return $data;

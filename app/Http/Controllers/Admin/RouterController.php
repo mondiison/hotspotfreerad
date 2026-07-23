@@ -57,6 +57,7 @@ class RouterController extends Controller
         return view('admin.routers.show', [
             'router' => $router->load('shop.tenant'),
             'script' => $mikroTik->generateScript($router),
+            'pppoeScript' => $mikroTik->generatePppoeScript($router),
             'loginTemplate' => $mikroTik->generateLoginTemplate(),
             'provisioningConfig' => [
                 'portal_url' => rtrim(config('app.url'), '/').'/hotspot/portal',

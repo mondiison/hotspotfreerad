@@ -19,6 +19,8 @@ class PackageForm extends Component
 
     public string $name = '';
 
+    public string $service_type = 'hotspot';
+
     public string $radius_group_name = '';
 
     public string $price = '';
@@ -49,6 +51,7 @@ class PackageForm extends Component
 
         $this->shop_id = (string) $package->shop_id;
         $this->name = (string) $package->name;
+        $this->service_type = (string) ($package->service_type ?: 'hotspot');
         $this->radius_group_name = (string) $package->radius_group_name;
         $this->price = (string) $package->price;
         $this->currency = (string) $package->currency;
@@ -72,6 +75,7 @@ class PackageForm extends Component
     public function save(PackageManagementService $packages)
     {
         $package = $this->package();
+        $this->service_type = $this->service_type ?: ($package?->service_type ?: 'hotspot');
 
         $data = $this->validate($packages->rules(auth()->user(), $package));
 

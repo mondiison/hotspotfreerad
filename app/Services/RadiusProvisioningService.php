@@ -21,7 +21,7 @@ class RadiusProvisioningService
                 'secret' => $router->shared_secret,
                 'server' => null,
                 'community' => null,
-                'description' => $router->name,
+                'description' => $router->name.' (services: hotspot, ppp)',
             ]
         );
     }

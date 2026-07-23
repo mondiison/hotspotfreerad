@@ -44,7 +44,10 @@ class PortalController extends Controller
         }
 
         $router = Router::query()
-            ->with(['shop.tenant', 'shop.packages' => fn ($query) => $query->where('is_active', true)->orderBy('price')])
+            ->with(['shop.tenant', 'shop.packages' => fn ($query) => $query
+                ->where('is_active', true)
+                ->whereIn('service_type', ['hotspot', 'both'])
+                ->orderBy('price')])
             ->where('nas_identifier', $validated['nasid'])
             ->first();
 

@@ -30,6 +30,17 @@
                     </flux:field>
 
                     <flux:field>
+                        <flux:label>Service type</flux:label>
+                        <flux:select wire:model.live="service_type" required>
+                            <option value="hotspot">Hotspot captive portal</option>
+                            <option value="pppoe">PPPoE subscriber</option>
+                            <option value="both">Hotspot and PPPoE</option>
+                        </flux:select>
+                        <flux:description>Hotspot packages appear in the captive portal. PPPoE packages are for username/password subscriber accounts.</flux:description>
+                        <flux:error name="service_type" />
+                    </flux:field>
+
+                    <flux:field>
                         <flux:label>RADIUS group name</flux:label>
                         <flux:input wire:model.blur="radius_group_name" icon="server-stack" placeholder="Auto-generated if blank" />
                         <flux:description>Leave blank unless you need a specific FreeRADIUS group name.</flux:description>
@@ -175,7 +186,11 @@
             <dl class="mt-4 space-y-3 text-sm">
                 <div class="flex justify-between gap-4">
                     <dt class="text-zinc-400">Visibility</dt>
-                    <dd>{{ $is_active ? 'Captive portal ready' : 'Hidden' }}</dd>
+                    <dd>{{ $is_active ? ($service_type === 'pppoe' ? 'PPPoE ready' : 'Portal ready') : 'Hidden' }}</dd>
+                </div>
+                <div class="flex justify-between gap-4">
+                    <dt class="text-zinc-400">Service</dt>
+                    <dd>{{ ['hotspot' => 'Hotspot', 'pppoe' => 'PPPoE', 'both' => 'Both'][$service_type] ?? 'Hotspot' }}</dd>
                 </div>
                 <div class="flex justify-between gap-4">
                     <dt class="text-zinc-400">Data mode</dt>

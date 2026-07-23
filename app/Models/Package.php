@@ -20,6 +20,16 @@ class Package extends Model
         ];
     }
 
+    public function supportsHotspot(): bool
+    {
+        return in_array($this->service_type ?: 'hotspot', ['hotspot', 'both'], true);
+    }
+
+    public function supportsPppoe(): bool
+    {
+        return in_array($this->service_type ?: 'hotspot', ['pppoe', 'both'], true);
+    }
+
     public function shop(): BelongsTo
     {
         return $this->belongsTo(Shop::class);

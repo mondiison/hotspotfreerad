@@ -19,7 +19,14 @@ class SetupCenterController extends Controller
         $shopQuery = TenantAccess::scopeShops(Shop::with(['tenant', 'routers']), $user);
         $shops = $shopQuery->withCount(['routers', 'packages'])->orderBy('name')->get();
         $routerCount = TenantAccess::scopeRouters(Router::query(), $user)->count();
-        $activePackageCount = TenantAccess::scopePackages(Package::query(), $user)->where('is_active', true)->count();
+        $activePackageCount = TenantAccess::scopePackages(Package::query(), $user)
+            ->where('is_active', true)
+            ->whereIn('service_type', ['hotspot', 'both'])
+            ->count();
+        $activePppoePackageCount = TenantAccess::scopePackages(Package::query(), $user)
+            ->where('is_active', true)
+            ->whereIn('service_type', ['pppoe', 'both'])
+            ->count();
         $tenant = $user->tenant_id ? Tenant::find($user->tenant_id) : null;
         $firstRouter = TenantAccess::scopeRouters(Router::with('shop.tenant'), $user)->oldest()->first();
 
@@ -67,7 +74,7 @@ class SetupCenterController extends Controller
                 'complete' => $activePackageCount > 0,
                 'route' => $activePackageCount > 0 ? 'admin.packages.index' : 'admin.packages.create',
                 'action' => $activePackageCount > 0 ? 'Review packages' : 'Add package',
-                'hint' => $activePackageCount > 0 ? $activePackageCount.' active package available on the captive portal.' : 'Customers need at least one active package to buy access.',
+                'hint' => $activePackageCount > 0 ? $activePackageCount.' active hotspot package available on the captive portal.' : 'Customers need at least one active hotspot package to buy access.',
             ],
             [
                 'phase' => 'Payments',
@@ -145,7 +152,7 @@ class SetupCenterController extends Controller
             [
                 'title' => 'Create the subscriber profile',
                 'detail' => 'Use package limits to decide uptime, speed, and total transfer. PPPoE accounts will map to RADIUS groups in the same spirit as hotspot packages.',
-                'example' => 'Plan: Home 10M monthly, username: customer001, password: generated or custom.',
+                'example' => 'Active PPPoE-ready plans: '.$activePppoePackageCount.'. Example: Home 10M monthly, username: customer001, password: generated or custom.',
             ],
             [
                 'title' => 'Provision the customer device',

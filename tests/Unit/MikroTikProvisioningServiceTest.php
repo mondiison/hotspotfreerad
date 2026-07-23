@@ -35,8 +35,32 @@ class MikroTikProvisioningServiceTest extends TestCase
         $this->assertStringContainsString('/system identity set name="shop-main-router"', $script);
         $this->assertStringContainsString('endpoint-address=vpn.example.com', $script);
         $this->assertStringContainsString('/ip address add address=10.8.0.10/24 interface=wg-saas', $script);
-        $this->assertStringContainsString('/radius add address=10.8.0.1 secret="radius-secret"', $script);
+        $this->assertStringContainsString('/radius add address=10.8.0.1 secret="radius-secret" service=hotspot,ppp', $script);
         $this->assertStringContainsString('authentication-port=1812 accounting-port=1813', $script);
         $this->assertStringContainsString('/ip hotspot walled-garden add dst-host=portal.example.com action=allow', $script);
+    }
+
+    public function test_it_generates_a_routeros_pppoe_script(): void
+    {
+        config([
+            'services.radius.server_ip' => '10.8.0.1',
+            'services.radius.auth_port' => 1812,
+            'services.radius.acct_port' => 1813,
+            'services.wireguard.endpoint_host' => 'vpn.example.com',
+            'services.wireguard.endpoint_port' => 13231,
+            'services.wireguard.public_key' => 'server-public-key',
+        ]);
+
+        $router = new Router([
+            'nas_identifier' => 'shop-main-router',
+            'wireguard_internal_ip' => '10.8.0.10',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        $script = app(MikroTikProvisioningService::class)->generatePppoeScript($router);
+
+        $this->assertStringContainsString('/radius add address=10.8.0.1 secret="radius-secret" service=ppp', $script);
+        $this->assertStringContainsString('/ppp aaa set use-radius=yes accounting=yes interim-update=5m', $script);
+        $this->assertStringContainsString('/interface pppoe-server server add interface=bridge1 service-name=mms-radius', $script);
     }
 }

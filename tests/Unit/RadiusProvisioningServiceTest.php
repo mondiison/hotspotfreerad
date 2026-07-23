@@ -43,7 +43,7 @@ class RadiusProvisioningServiceTest extends TestCase
             'shortname' => 'shop-router-1',
             'type' => 'mikrotik',
             'secret' => 'radius-secret',
-            'description' => 'Main Router',
+            'description' => 'Main Router (services: hotspot, ppp)',
         ]);
     }
 

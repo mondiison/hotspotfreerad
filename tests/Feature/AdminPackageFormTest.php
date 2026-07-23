@@ -25,6 +25,8 @@ class AdminPackageFormTest extends TestCase
             ->assertOk()
             ->assertSee($shop->name)
             ->assertSee('Plan Shape')
+            ->assertSee('Service type')
+            ->assertSee('PPPoE subscriber')
             ->assertSee('Unlimited')
             ->assertSee('30 days')
             ->assertSee('20GB')
@@ -98,6 +100,7 @@ class AdminPackageFormTest extends TestCase
         ])
             ->set('shop_id', (string) $shop->id)
             ->set('name', 'Livewire Weekly')
+            ->set('service_type', 'both')
             ->set('price', '1500')
             ->set('currency', 'ngn')
             ->set('limit_uptime_seconds', '604800')
@@ -110,6 +113,7 @@ class AdminPackageFormTest extends TestCase
         $this->assertDatabaseHas('packages', [
             'shop_id' => $shop->id,
             'name' => 'Livewire Weekly',
+            'service_type' => 'both',
             'currency' => 'NGN',
             'data_limit_bytes' => null,
         ]);
