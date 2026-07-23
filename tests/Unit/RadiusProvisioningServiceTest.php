@@ -3,6 +3,7 @@
 namespace Tests\Unit;
 
 use App\Models\Package;
+use App\Models\PppoeSubscriber;
 use App\Models\Router;
 use App\Models\Shop;
 use App\Models\Subscription;
@@ -124,6 +125,44 @@ class RadiusProvisioningServiceTest extends TestCase
 
         $this->assertDatabaseMissing('radcheck', ['username' => 'AA:BB:CC:DD:EE:FF']);
         $this->assertDatabaseMissing('radusergroup', ['username' => 'AA:BB:CC:DD:EE:FF']);
+    }
+
+    public function test_it_provisions_and_revokes_pppoe_subscriber_access(): void
+    {
+        $package = $this->package();
+        $package->update(['service_type' => 'pppoe']);
+        $subscriber = PppoeSubscriber::create([
+            'shop_id' => $package->shop_id,
+            'package_id' => $package->id,
+            'username' => 'customer001',
+            'password' => 'secret-pass',
+            'starts_at' => now(),
+            'expires_at' => now()->addMonth(),
+            'is_active' => true,
+        ]);
+
+        $service = app(RadiusProvisioningService::class);
+
+        $service->provisionPppoeSubscriber($subscriber);
+        $package->refresh();
+
+        $this->assertDatabaseHas('radcheck', [
+            'username' => 'customer001',
+            'attribute' => 'Cleartext-Password',
+            'op' => ':=',
+            'value' => 'secret-pass',
+        ]);
+        $this->assertDatabaseHas('radusergroup', [
+            'username' => 'customer001',
+            'groupname' => $package->radius_group_name,
+            'priority' => 1,
+        ]);
+        $this->assertNotNull($subscriber->refresh()->last_provisioned_at);
+
+        $service->revokePppoeSubscriber($subscriber);
+
+        $this->assertDatabaseMissing('radcheck', ['username' => 'customer001']);
+        $this->assertDatabaseMissing('radusergroup', ['username' => 'customer001']);
     }
 
     private function createRadiusTables(): void

@@ -8,6 +8,7 @@ use App\Http\Controllers\Admin\PackageController;
 use App\Http\Controllers\Admin\PaymentController;
 use App\Http\Controllers\Admin\PaymentSettingsController;
 use App\Http\Controllers\Admin\ProfileController;
+use App\Http\Controllers\Admin\PppoeSubscriberController;
 use App\Http\Controllers\Admin\RouterController;
 use App\Http\Controllers\Admin\SalesReportController;
 use App\Http\Controllers\Admin\SecurityActivityController;
@@ -90,6 +91,7 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::resource('packages', PackageController::class)->except('show');
     Route::get('subscriptions-export', [SubscriptionController::class, 'export'])->name('subscriptions.export');
     Route::get('subscriptions', [SubscriptionController::class, 'index'])->name('subscriptions.index');
+    Route::get('pppoe-subscribers', [PppoeSubscriberController::class, 'index'])->name('pppoe-subscribers.index');
     Route::get('payments-export', [PaymentController::class, 'export'])->name('payments.export');
     Route::get('payments', [PaymentController::class, 'index'])->name('payments.index');
     Route::resource('expense-categories', ExpenseCategoryController::class)->except('show');

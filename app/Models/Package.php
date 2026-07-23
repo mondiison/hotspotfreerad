@@ -44,4 +44,9 @@ class Package extends Model
     {
         return $this->hasMany(Subscription::class);
     }
+
+    public function pppoeSubscribers(): HasMany
+    {
+        return $this->hasMany(PppoeSubscriber::class);
+    }
 }

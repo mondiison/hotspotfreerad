@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Models\Expense;
 use App\Models\Package;
+use App\Models\PppoeSubscriber;
 use App\Models\Router;
 use App\Models\Shop;
 use App\Models\Subscription;
@@ -66,6 +67,13 @@ class TenantAccess
             : $query->whereHas('shop', fn (Builder $shop) => $shop->where('tenant_id', $user->tenant_id));
     }
 
+    public static function scopePppoeSubscribers(Builder $query, User $user): Builder
+    {
+        return $user->isSuperAdmin()
+            ? $query
+            : $query->whereHas('shop', fn (Builder $shop) => $shop->where('tenant_id', $user->tenant_id));
+    }
+
     public static function assertShop(Shop $shop, User $user): void
     {
         abort_unless($user->isSuperAdmin() || $shop->tenant_id === $user->tenant_id, 403);
@@ -95,6 +103,13 @@ class TenantAccess
         $subscription->loadMissing('shop');
 
         self::assertShop($subscription->shop, $user);
+    }
+
+    public static function assertPppoeSubscriber(PppoeSubscriber $subscriber, User $user): void
+    {
+        $subscriber->loadMissing('shop');
+
+        self::assertShop($subscriber->shop, $user);
     }
 
     public static function shopExistsRule(User $user): Exists

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Package;
+use App\Models\PppoeSubscriber;
 use App\Models\Router;
 use App\Models\Subscription;
 use Illuminate\Support\Facades\DB;
@@ -83,6 +84,41 @@ class RadiusProvisioningService
         DB::table('radcheck')->where('username', $macAddress)->delete();
         DB::table('radreply')->where('username', $macAddress)->delete();
         DB::table('radusergroup')->where('username', $macAddress)->delete();
+    }
+
+    public function provisionPppoeSubscriber(PppoeSubscriber $subscriber): void
+    {
+        $subscriber->loadMissing('package');
+
+        $groupName = $this->syncPackageProfile($subscriber->package);
+
+        DB::table('radcheck')->updateOrInsert(
+            [
+                'username' => $subscriber->username,
+                'attribute' => 'Cleartext-Password',
+            ],
+            [
+                'op' => ':=',
+                'value' => $subscriber->password,
+            ]
+        );
+
+        DB::table('radusergroup')->updateOrInsert(
+            ['username' => $subscriber->username],
+            [
+                'groupname' => $groupName,
+                'priority' => 1,
+            ]
+        );
+
+        $subscriber->forceFill(['last_provisioned_at' => now()])->save();
+    }
+
+    public function revokePppoeSubscriber(PppoeSubscriber $subscriber): void
+    {
+        DB::table('radcheck')->where('username', $subscriber->username)->delete();
+        DB::table('radreply')->where('username', $subscriber->username)->delete();
+        DB::table('radusergroup')->where('username', $subscriber->username)->delete();
     }
 
     private function upsertGroupReply(string $groupName, string $attribute, string $value): void
