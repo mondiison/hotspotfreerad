@@ -80,6 +80,7 @@ class PackagesIndex extends Component
     public function create(): void
     {
         $this->resetForm();
+        $this->service_type = $this->defaultServiceTypeForCurrentFilter();
         $this->showFormModal = true;
     }
 
@@ -254,6 +255,15 @@ class PackagesIndex extends Component
         $this->limit_uptime_seconds = '86400';
         $this->is_active = true;
         $this->resetValidation();
+    }
+
+    private function defaultServiceTypeForCurrentFilter(): string
+    {
+        return match ($this->service) {
+            'pppoe', 'pppoe_capable' => 'pppoe',
+            'both' => 'both',
+            default => 'hotspot',
+        };
     }
 
     private function validateOnlyFilters(): void

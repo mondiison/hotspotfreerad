@@ -165,6 +165,37 @@ class AdminPackageFormTest extends TestCase
         ]);
     }
 
+    public function test_package_modal_defaults_service_type_from_current_filter(): void
+    {
+        $shop = $this->shop();
+
+        $this->actingAs($this->superAdmin());
+
+        Livewire::test(PackagesIndex::class, [
+            'filters' => ['service' => 'pppoe_capable'],
+        ])
+            ->call('create')
+            ->assertSet('showFormModal', true)
+            ->assertSet('service_type', 'pppoe')
+            ->assertSee('PPPoE bandwidth');
+
+        Livewire::test(PackagesIndex::class, [
+            'filters' => ['service' => 'both'],
+        ])
+            ->call('create')
+            ->assertSet('showFormModal', true)
+            ->assertSet('service_type', 'both')
+            ->assertSee('Shared bandwidth');
+
+        Livewire::test(PackagesIndex::class, [
+            'filters' => ['service' => 'hotspot_capable'],
+        ])
+            ->call('create')
+            ->assertSet('showFormModal', true)
+            ->assertSet('service_type', 'hotspot')
+            ->assertSee($shop->name);
+    }
+
     private function shop(): Shop
     {
         $tenant = Tenant::create([
