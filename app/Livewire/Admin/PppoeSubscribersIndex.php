@@ -27,11 +27,15 @@ class PppoeSubscribersIndex extends Component
 
     public bool $showInspectModal = false;
 
+    public bool $showSetupNoteModal = false;
+
     public ?int $editingSubscriberId = null;
 
     public ?int $deletingSubscriberId = null;
 
     public ?int $selectedSubscriberId = null;
+
+    public ?int $setupNoteSubscriberId = null;
 
     public string $shop_id = '';
 
@@ -171,6 +175,21 @@ class PppoeSubscribersIndex extends Component
         $this->selectedSubscriberId = null;
     }
 
+    public function setupNote(int $subscriberId): void
+    {
+        $subscriber = PppoeSubscriber::with(['shop.tenant', 'package'])->findOrFail($subscriberId);
+        TenantAccess::assertPppoeSubscriber($subscriber, auth()->user());
+
+        $this->setupNoteSubscriberId = $subscriber->id;
+        $this->showSetupNoteModal = true;
+    }
+
+    public function closeSetupNote(): void
+    {
+        $this->showSetupNoteModal = false;
+        $this->setupNoteSubscriberId = null;
+    }
+
     public function clearFilters(): void
     {
         $this->reset(['search', 'status']);
@@ -205,6 +224,7 @@ class PppoeSubscribersIndex extends Component
             'packages' => $this->packages(),
             'deletingSubscriber' => $this->deletingSubscriberId ? PppoeSubscriber::find($this->deletingSubscriberId) : null,
             'selectedSubscriber' => $this->selectedSubscriber($reports),
+            'setupNoteSubscriber' => $this->setupNoteSubscriber(),
         ]);
     }
 
@@ -223,6 +243,23 @@ class PppoeSubscribersIndex extends Component
         TenantAccess::assertPppoeSubscriber($subscriber, auth()->user());
         $reports->attachUsage(collect([$subscriber]));
         $subscriber->setAttribute('radius_sessions', $reports->sessionsFor($subscriber));
+
+        return $subscriber;
+    }
+
+    private function setupNoteSubscriber(): ?PppoeSubscriber
+    {
+        if (! $this->setupNoteSubscriberId) {
+            return null;
+        }
+
+        $subscriber = PppoeSubscriber::with(['shop.tenant', 'package'])->find($this->setupNoteSubscriberId);
+
+        if (! $subscriber) {
+            return null;
+        }
+
+        TenantAccess::assertPppoeSubscriber($subscriber, auth()->user());
 
         return $subscriber;
     }

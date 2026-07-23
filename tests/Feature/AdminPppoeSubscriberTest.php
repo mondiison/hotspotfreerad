@@ -215,6 +215,37 @@ class AdminPppoeSubscriberTest extends TestCase
             ->assertSee('Still online / no stop');
     }
 
+    public function test_tenant_admin_can_open_pppoe_customer_setup_note(): void
+    {
+        [$tenant, $shop, $package] = $this->fixture();
+        $subscriber = PppoeSubscriber::create([
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'username' => 'customer001',
+            'password' => 'secret-pass',
+            'full_name' => 'Customer One',
+            'phone' => '07063218823',
+            'starts_at' => now(),
+            'expires_at' => now()->addMonth(),
+            'is_active' => true,
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user);
+
+        Livewire::test(PppoeSubscribersIndex::class)
+            ->call('setupNote', $subscriber->id)
+            ->assertSee('Customer Setup Note')
+            ->assertSee('WAN connection type: PPPoE')
+            ->assertSee('Username: customer001')
+            ->assertSee('Password: secret-pass')
+            ->assertSee('https://wa.me/07063218823', false);
+    }
+
     private function fixture(string $tenantName = 'Demo Tenant', string $shopName = 'Demo Shop'): array
     {
         $tenant = Tenant::create([

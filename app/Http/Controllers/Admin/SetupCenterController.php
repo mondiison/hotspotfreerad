@@ -110,14 +110,14 @@ class SetupCenterController extends Controller
             ],
             [
                 'label' => 'MikroTik PPPoE',
-                'status' => 'Guided',
+                'status' => 'Live',
                 'description' => 'Best for home broadband, estates, fixed wireless, CPE installs, and monthly subscribers.',
                 'customer_identity' => 'Username and password assigned to customer/CPE',
                 'router_work' => 'PPPoE server, PPP profile, RADIUS ppp service, accounting enabled.',
                 'billing_work' => 'Customer account renewal extends PPPoE credentials instead of captive portal MAC access.',
-                'action_route' => 'admin.setup.index',
-                'action_parameters' => ['method' => 'pppoe'],
-                'action' => 'View PPPoE guide',
+                'action_route' => 'admin.pppoe-subscribers.index',
+                'action_parameters' => [],
+                'action' => 'Manage PPPoE customers',
             ],
             [
                 'label' => 'MikroTik CPE / Client Router',
@@ -151,7 +151,7 @@ class SetupCenterController extends Controller
             ],
             [
                 'title' => 'Create the subscriber profile',
-                'detail' => 'Use package limits to decide uptime, speed, and total transfer. PPPoE accounts will map to RADIUS groups in the same spirit as hotspot packages.',
+                'detail' => 'Create PPPoE-ready packages, then add a PPPoE customer. MMS Radius provisions the username, password, package profile, and renewal state into FreeRADIUS.',
                 'example' => 'Active PPPoE-ready plans: '.$activePppoePackageCount.'. Example: Home 10M monthly, username: customer001, password: generated or custom.',
             ],
             [

@@ -58,7 +58,7 @@
         <div class="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
             <div>
                 <p class="text-sm font-medium text-zinc-500">Provisioning Methods</p>
-                <h2 class="mt-2 text-xl font-semibold">Hotspot today, PPPoE ready path next</h2>
+                <h2 class="mt-2 text-xl font-semibold">Hotspot and PPPoE operating paths</h2>
                 <p class="mt-2 max-w-3xl text-sm leading-6 text-zinc-600">
                     Use Hotspot for captive portal packages. Use PPPoE when each subscriber has a fixed account on a CPE, ONT, or home router.
                 </p>
@@ -110,10 +110,13 @@
                 <p class="text-sm font-medium text-zinc-500">PPPoE Wizard</p>
                 <h2 class="mt-2 text-xl font-semibold">Subscriber provisioning flow</h2>
                 <p class="mt-2 max-w-3xl text-sm leading-6 text-zinc-600">
-                    This is the operating model we will turn into full PPPoE account creation: package, username/password, RADIUS profile, CPE setup, accounting, and renewal.
+                    Use this flow for fixed broadband subscribers: create the PPPoE package, provision the customer, hand off the CPE settings, then inspect accounting and renew when due.
                 </p>
             </div>
-            <flux:button href="{{ route('admin.packages.index') }}" wire:navigate variant="outline" size="sm" icon="radio">Review plans</flux:button>
+            <div class="flex flex-wrap gap-2">
+                <flux:button href="{{ route('admin.packages.index') }}" wire:navigate variant="outline" size="sm" icon="radio">Review plans</flux:button>
+                <flux:button href="{{ route('admin.pppoe-subscribers.index') }}" wire:navigate variant="primary" size="sm" icon="wifi">Manage PPPoE customers</flux:button>
+            </div>
         </div>
 
         <div class="mt-5 grid gap-4 lg:grid-cols-4">

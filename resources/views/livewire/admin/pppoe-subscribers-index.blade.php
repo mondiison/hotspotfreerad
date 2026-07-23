@@ -120,6 +120,9 @@
                                 <flux:button type="button" wire:click="inspect({{ $subscriber->id }})" wire:loading.attr="disabled" wire:target="inspect({{ $subscriber->id }})" variant="outline" size="sm" icon="magnifying-glass">
                                     Inspect
                                 </flux:button>
+                                <flux:button type="button" wire:click="setupNote({{ $subscriber->id }})" wire:loading.attr="disabled" wire:target="setupNote({{ $subscriber->id }})" variant="outline" size="sm" icon="clipboard-document-list">
+                                    Setup
+                                </flux:button>
                                 <flux:button type="button" wire:click="edit({{ $subscriber->id }})" wire:loading.attr="disabled" wire:target="edit({{ $subscriber->id }})" variant="outline" size="sm" icon="pencil-square">Edit</flux:button>
                                 <flux:button type="button" wire:click="confirmDelete({{ $subscriber->id }})" wire:loading.attr="disabled" wire:target="confirmDelete({{ $subscriber->id }})" variant="danger" size="sm" icon="trash">Delete</flux:button>
                             </div>
@@ -358,6 +361,94 @@
                         <span wire:loading wire:target="renew({{ $selectedSubscriber->id }})">Renewing...</span>
                     </flux:button>
                     <flux:button type="button" variant="ghost" wire:click="closeInspect">Close</flux:button>
+                </div>
+            </div>
+        @endif
+    </flux:modal>
+
+    <flux:modal wire:model.self="showSetupNoteModal" class="md:w-3xl" :dismissible="true" variant="flyout">
+        @if ($setupNoteSubscriber)
+            @php
+                $setupLines = [
+                    'PPPoE customer setup',
+                    'Customer: '.($setupNoteSubscriber->full_name ?: 'Unnamed customer'),
+                    'Shop: '.($setupNoteSubscriber->shop?->name ?? 'Deleted shop'),
+                    'Package: '.($setupNoteSubscriber->package?->name ?? 'Deleted package'),
+                    'Speed profile: '.($setupNoteSubscriber->package?->speed_limit_profile ?: 'Not set'),
+                    'WAN connection type: PPPoE',
+                    'Username: '.$setupNoteSubscriber->username,
+                    'Password: '.$setupNoteSubscriber->password,
+                    'Service name: leave blank unless the installer configured a specific service name',
+                    'DNS/IP: automatic from the provider router',
+                    'Expires: '.($setupNoteSubscriber->expires_at ? $setupNoteSubscriber->expires_at->format('M j, Y g:i A') : 'No expiry set'),
+                    'After saving the CPE/ONT, confirm it appears online in MMS Radius accounting.',
+                ];
+                $setupText = implode("\n", $setupLines);
+                $whatsAppPhone = preg_replace('/\D+/', '', (string) $setupNoteSubscriber->phone);
+                $whatsAppUrl = $whatsAppPhone ? 'https://wa.me/'.$whatsAppPhone.'?text='.rawurlencode($setupText) : null;
+            @endphp
+
+            <div class="space-y-6">
+                <div class="flex flex-col justify-between gap-3 md:flex-row md:items-start">
+                    <div>
+                        <flux:heading level="2" size="lg">Customer Setup Note</flux:heading>
+                        <flux:text class="mt-2 text-sm text-zinc-500">
+                            Share these PPPoE settings with the installer or enter them on the customer CPE/ONT.
+                        </flux:text>
+                    </div>
+                    <flux:badge :color="$setupNoteSubscriber->isCurrentlyActive() ? 'green' : 'amber'">
+                        {{ $setupNoteSubscriber->isCurrentlyActive() ? 'Ready to connect' : 'Not currently active' }}
+                    </flux:badge>
+                </div>
+
+                <section class="grid gap-3 rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-sm md:grid-cols-2">
+                    <div>
+                        <p class="text-xs font-medium uppercase text-zinc-500">WAN type</p>
+                        <p class="mt-1 font-semibold">PPPoE</p>
+                    </div>
+                    <div>
+                        <p class="text-xs font-medium uppercase text-zinc-500">Service name</p>
+                        <p class="mt-1 font-semibold">Leave blank unless required</p>
+                    </div>
+                    <div>
+                        <p class="text-xs font-medium uppercase text-zinc-500">Username</p>
+                        <p class="mt-1 font-mono text-sm font-semibold">{{ $setupNoteSubscriber->username }}</p>
+                    </div>
+                    <div>
+                        <p class="text-xs font-medium uppercase text-zinc-500">Password</p>
+                        <p class="mt-1 font-mono text-sm font-semibold">{{ $setupNoteSubscriber->password }}</p>
+                    </div>
+                    <div>
+                        <p class="text-xs font-medium uppercase text-zinc-500">IP/DNS mode</p>
+                        <p class="mt-1 font-semibold">Automatic</p>
+                    </div>
+                    <div>
+                        <p class="text-xs font-medium uppercase text-zinc-500">Package</p>
+                        <p class="mt-1 font-semibold">{{ $setupNoteSubscriber->package?->name ?? 'Deleted package' }}</p>
+                    </div>
+                </section>
+
+                <flux:field>
+                    <flux:label>Copyable installer note</flux:label>
+                    <textarea
+                        readonly
+                        rows="12"
+                        class="w-full rounded-lg border border-zinc-200 bg-white px-3 py-3 font-mono text-xs leading-5 text-zinc-800 shadow-sm focus:border-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-200"
+                    >{{ $setupText }}</textarea>
+                    <flux:description>Use this for MikroTik CPE, TP-Link, Huawei ONT, FiberHome, Ubiquiti, or any router with PPPoE client mode.</flux:description>
+                </flux:field>
+
+                <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
+                    Keep this password between the customer and installer. If it is exposed, use Edit to reset the PPPoE password and resync FreeRADIUS.
+                </div>
+
+                <div class="flex flex-col justify-end gap-3 sm:flex-row">
+                    @if ($whatsAppUrl)
+                        <flux:button href="{{ $whatsAppUrl }}" target="_blank" variant="outline" icon="chat-bubble-left-right">
+                            Send WhatsApp
+                        </flux:button>
+                    @endif
+                    <flux:button type="button" variant="ghost" wire:click="closeSetupNote">Close</flux:button>
                 </div>
             </div>
         @endif

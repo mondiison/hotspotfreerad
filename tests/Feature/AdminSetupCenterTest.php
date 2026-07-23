@@ -60,6 +60,8 @@ class AdminSetupCenterTest extends TestCase
             ->assertSee('MikroTik CPE / Client Router')
             ->assertSee('Other Router / ONT')
             ->assertSee('PPPoE Wizard')
+            ->assertSee('Manage PPPoE customers')
+            ->assertSee(route('admin.pppoe-subscribers.index'), false)
             ->assertSee('OPay and bank transfer')
             ->assertSee('Card checkout')
             ->assertSee('Webhook')
