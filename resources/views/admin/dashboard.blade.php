@@ -109,6 +109,28 @@
     </section>
 
     <section class="mt-6 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+        <div class="flex flex-col justify-between gap-4 md:flex-row md:items-center">
+            <div>
+                <p class="text-sm font-medium text-zinc-500">Scheduler Health</p>
+                <div class="mt-2 flex flex-wrap items-center gap-2">
+                    <h2 class="text-xl font-semibold">{{ $schedulerHealth['label'] }}</h2>
+                    <flux:badge :color="$schedulerHealth['is_healthy'] ? 'green' : ($schedulerHealth['last_run_at'] ? 'amber' : 'zinc')">
+                        {{ $schedulerHealth['is_healthy'] ? 'Cron active' : 'Check cron' }}
+                    </flux:badge>
+                </div>
+                <p class="mt-2 text-sm leading-6 text-zinc-600">{{ $schedulerHealth['description'] }}</p>
+                <p class="mt-1 text-xs text-zinc-500">
+                    {{ $schedulerHealth['last_run_at'] ? 'Last heartbeat '.$schedulerHealth['last_run_at']->diffForHumans().' at '.$schedulerHealth['last_run_at']->format('M j, Y g:i A') : 'Run php artisan schedule:run or wait for cron to check in.' }}
+                </p>
+            </div>
+
+            <div class="rounded-lg border border-zinc-200 bg-zinc-50 p-4 font-mono text-xs leading-5 text-zinc-700">
+                * * * * * cd /var/www/hotspotfreerad && php artisan schedule:run &gt;&gt; /dev/null 2&gt;&amp;1
+            </div>
+        </div>
+    </section>
+
+    <section class="mt-6 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
         <div class="flex flex-col justify-between gap-3 md:flex-row md:items-center">
             <div>
                 <p class="text-sm font-medium text-zinc-500">PPPoE Service Desk</p>

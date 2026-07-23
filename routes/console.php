@@ -10,6 +10,7 @@ use App\Services\PppoeSubscriberManagementService;
 use App\Services\RadiusProvisioningService;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Schedule;
@@ -85,6 +86,14 @@ Artisan::command('hotspot:test-mail {email}', function (string $email): void {
 
     $this->info("Test email handed to mailer for {$email}");
 })->purpose('Send a test email and show the active mail transport without secrets');
+
+Artisan::command('hotspot:scheduler-heartbeat', function (): int {
+    Cache::forever('hotspot.scheduler.last_run_at', now()->toISOString());
+
+    $this->info('Scheduler heartbeat recorded at '.now()->toDateTimeString().'.');
+
+    return Command::SUCCESS;
+})->purpose('Record the last time the Laravel scheduler ran');
 
 Artisan::command('hotspot:prune-security-activity {--days=} {--dry-run}', function (): int {
     $optionDays = $this->option('days');
@@ -175,6 +184,10 @@ Artisan::command('hotspot:sync-expired-hotspot {--dry-run}', function (RadiusPro
 
 Schedule::command('hotspot:prune-security-activity')
     ->dailyAt('02:15')
+    ->withoutOverlapping();
+
+Schedule::command('hotspot:scheduler-heartbeat')
+    ->everyMinute()
     ->withoutOverlapping();
 
 Schedule::command('hotspot:sync-expired-pppoe')

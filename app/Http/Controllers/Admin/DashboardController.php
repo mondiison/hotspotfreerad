@@ -20,6 +20,8 @@ use App\Support\RadiusAccountingStats;
 use App\Support\TenantAccess;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -154,6 +156,7 @@ class DashboardController extends Controller
             'radiusAccountingReady' => $radiusSummary['ready'],
             'activeSubscriptionCount' => $activeSubscriptionCount,
             'pppoeSummary' => $this->pppoeSummary($shopIds),
+            'schedulerHealth' => $this->schedulerHealth(),
             'paidRevenue' => $paidRevenue,
             'platformCommission' => $platformCommission,
             'tenantNetRevenue' => $tenantNetRevenue,
@@ -280,6 +283,28 @@ class DashboardController extends Controller
                 ->orderBy('expires_at')
                 ->take(5)
                 ->get(),
+        ];
+    }
+
+    private function schedulerHealth(): array
+    {
+        $lastRunAt = Cache::get('hotspot.scheduler.last_run_at');
+        $lastRun = $lastRunAt ? Carbon::parse($lastRunAt) : null;
+        $isHealthy = $lastRun && $lastRun->greaterThanOrEqualTo(now()->subMinutes(3));
+
+        return [
+            'last_run_at' => $lastRun,
+            'is_healthy' => $isHealthy,
+            'label' => match (true) {
+                $isHealthy => 'Healthy',
+                $lastRun !== null => 'Delayed',
+                default => 'Not seen yet',
+            },
+            'description' => match (true) {
+                $isHealthy => 'Laravel scheduler has checked in recently.',
+                $lastRun !== null => 'Cron may be delayed. Confirm schedule:run is installed on the Pi.',
+                default => 'No scheduler heartbeat has been recorded yet.',
+            },
         ];
     }
 
