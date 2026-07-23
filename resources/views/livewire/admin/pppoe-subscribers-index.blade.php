@@ -30,13 +30,38 @@
         </div>
     @endif
 
+    <section class="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+        @foreach ([
+            ['key' => '', 'label' => 'Customers', 'value' => $summary['total'], 'hint' => 'All matching PPPoE records'],
+            ['key' => 'active', 'label' => 'Active', 'value' => $summary['active'], 'hint' => 'Can authenticate now'],
+            ['key' => 'expiring_soon', 'label' => 'Due soon', 'value' => $summary['expiring_soon'], 'hint' => 'Expires within 7 days'],
+            ['key' => 'expired', 'label' => 'Expired', 'value' => $summary['expired'], 'hint' => 'Needs renewal'],
+            ['key' => 'disabled', 'label' => 'Disabled', 'value' => $summary['disabled'], 'hint' => 'Blocked from RADIUS'],
+            ['key' => 'unsynced', 'label' => 'Unsynced', 'value' => $summary['unsynced'], 'hint' => 'Not yet pushed to RADIUS'],
+        ] as $stat)
+            <button
+                type="button"
+                wire:click="$set('status', '{{ $stat['key'] }}')"
+                wire:loading.attr="disabled"
+                wire:target="status"
+                class="rounded-lg border px-4 py-3 text-left shadow-sm transition hover:border-zinc-400 {{ $status === $stat['key'] ? 'border-zinc-950 bg-zinc-950 text-white' : 'border-zinc-200 bg-white text-zinc-950' }}"
+            >
+                <span class="block text-xs font-medium uppercase {{ $status === $stat['key'] ? 'text-zinc-300' : 'text-zinc-500' }}">{{ $stat['label'] }}</span>
+                <span class="mt-2 block text-2xl font-semibold">{{ number_format($stat['value']) }}</span>
+                <span class="mt-1 block text-xs {{ $status === $stat['key'] ? 'text-zinc-300' : 'text-zinc-500' }}">{{ $stat['hint'] }}</span>
+            </button>
+        @endforeach
+    </section>
+
     <section class="grid min-w-0 gap-3 rounded-lg border border-zinc-200 bg-white p-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_180px_auto] [&>*]:min-w-0">
         <flux:input wire:model.live.debounce.350ms="search" icon="magnifying-glass" placeholder="Search username, name, phone, email, shop" />
         <flux:select wire:model.live="status">
             <flux:select.option value="">All statuses</flux:select.option>
             <flux:select.option value="active">Active</flux:select.option>
+            <flux:select.option value="expiring_soon">Expiring within 7 days</flux:select.option>
             <flux:select.option value="expired">Expired</flux:select.option>
             <flux:select.option value="disabled">Disabled</flux:select.option>
+            <flux:select.option value="unsynced">Unsynced to RADIUS</flux:select.option>
         </flux:select>
         <flux:button type="button" variant="outline" icon="x-mark" class="w-full sm:col-span-2 lg:col-span-1 lg:w-auto" wire:click="clearFilters" wire:loading.attr="disabled" wire:target="clearFilters,search,status">
             Reset
@@ -91,6 +116,12 @@
                             <flux:badge :color="$isActive ? 'green' : ($subscriber->is_active ? 'amber' : 'zinc')">
                                 {{ $isActive ? 'Active' : ($subscriber->is_active ? 'Expired' : 'Disabled') }}
                             </flux:badge>
+                            @if ($subscriber->is_active && $subscriber->expires_at && $subscriber->expires_at->isFuture() && $subscriber->expires_at->lessThanOrEqualTo(now()->addDays(7)))
+                                <flux:badge color="amber" class="ml-1">Due soon</flux:badge>
+                            @endif
+                            @if (! $subscriber->last_provisioned_at)
+                                <flux:badge color="zinc" class="ml-1">Unsynced</flux:badge>
+                            @endif
                             <p class="mt-2 text-xs text-zinc-500">
                                 {{ $subscriber->expires_at ? 'Expires '.$subscriber->expires_at->format('M j, Y g:i A') : 'No expiry set' }}
                             </p>

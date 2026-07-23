@@ -210,16 +210,23 @@ class PppoeSubscribersIndex extends Component
                         ->orWhere('email', 'like', "%{$this->search}%")
                         ->orWhereHas('shop', fn ($shop) => $shop->where('name', 'like', "%{$this->search}%"));
                 });
-            })
+            });
+
+        $summary = $this->summary(clone $query);
+
+        $query
             ->when($this->status === 'active', fn ($query) => $query->where('is_active', true)->where(fn ($query) => $query->whereNull('expires_at')->orWhere('expires_at', '>', now())))
+            ->when($this->status === 'expiring_soon', fn ($query) => $query->where('is_active', true)->whereBetween('expires_at', [now(), now()->addDays(7)]))
             ->when($this->status === 'expired', fn ($query) => $query->whereNotNull('expires_at')->where('expires_at', '<=', now()))
-            ->when($this->status === 'disabled', fn ($query) => $query->where('is_active', false));
+            ->when($this->status === 'disabled', fn ($query) => $query->where('is_active', false))
+            ->when($this->status === 'unsynced', fn ($query) => $query->whereNull('last_provisioned_at'));
 
         $subscribers = $query->latest()->paginate(15);
         $reports->attachUsage($subscribers->getCollection());
 
         return view('livewire.admin.pppoe-subscribers-index', [
             'subscribers' => $subscribers,
+            'summary' => $summary,
             'shops' => $this->shops(),
             'packages' => $this->packages(),
             'deletingSubscriber' => $this->deletingSubscriberId ? PppoeSubscriber::find($this->deletingSubscriberId) : null,
@@ -245,6 +252,27 @@ class PppoeSubscribersIndex extends Component
         $subscriber->setAttribute('radius_sessions', $reports->sessionsFor($subscriber));
 
         return $subscriber;
+    }
+
+    private function summary($query): array
+    {
+        return [
+            'total' => (clone $query)->count(),
+            'active' => (clone $query)
+                ->where('is_active', true)
+                ->where(fn ($query) => $query->whereNull('expires_at')->orWhere('expires_at', '>', now()))
+                ->count(),
+            'expiring_soon' => (clone $query)
+                ->where('is_active', true)
+                ->whereBetween('expires_at', [now(), now()->addDays(7)])
+                ->count(),
+            'expired' => (clone $query)
+                ->whereNotNull('expires_at')
+                ->where('expires_at', '<=', now())
+                ->count(),
+            'disabled' => (clone $query)->where('is_active', false)->count(),
+            'unsynced' => (clone $query)->whereNull('last_provisioned_at')->count(),
+        ];
     }
 
     private function setupNoteSubscriber(): ?PppoeSubscriber
@@ -307,7 +335,7 @@ class PppoeSubscribersIndex extends Component
         validator([
             'status' => $this->status ?: null,
         ], [
-            'status' => ['nullable', Rule::in(['active', 'expired', 'disabled'])],
+            'status' => ['nullable', Rule::in(['active', 'expiring_soon', 'expired', 'disabled', 'unsynced'])],
         ])->validate();
     }
 }

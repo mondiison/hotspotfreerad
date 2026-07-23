@@ -246,6 +246,54 @@ class AdminPppoeSubscriberTest extends TestCase
             ->assertSee('https://wa.me/07063218823', false);
     }
 
+    public function test_tenant_admin_can_filter_pppoe_customers_due_for_renewal(): void
+    {
+        [$tenant, $shop, $package] = $this->fixture();
+        PppoeSubscriber::create([
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'username' => 'due-soon',
+            'password' => 'secret-pass',
+            'expires_at' => now()->addDays(3),
+            'last_provisioned_at' => now(),
+            'is_active' => true,
+        ]);
+        PppoeSubscriber::create([
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'username' => 'safe-monthly',
+            'password' => 'secret-pass',
+            'expires_at' => now()->addDays(20),
+            'last_provisioned_at' => now(),
+            'is_active' => true,
+        ]);
+        PppoeSubscriber::create([
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'username' => 'not-synced',
+            'password' => 'secret-pass',
+            'expires_at' => now()->addDays(20),
+            'is_active' => true,
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user);
+
+        Livewire::test(PppoeSubscribersIndex::class)
+            ->assertSee('Due soon')
+            ->assertSee('Unsynced')
+            ->set('status', 'expiring_soon')
+            ->assertSee('due-soon')
+            ->assertDontSee('safe-monthly')
+            ->set('status', 'unsynced')
+            ->assertSee('not-synced')
+            ->assertDontSee('due-soon');
+    }
+
     private function fixture(string $tenantName = 'Demo Tenant', string $shopName = 'Demo Shop'): array
     {
         $tenant = Tenant::create([
