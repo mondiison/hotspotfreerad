@@ -134,6 +134,87 @@ class AdminPppoeSubscriberTest extends TestCase
             ->assertDontSee('other-customer');
     }
 
+    public function test_tenant_admin_can_renew_pppoe_subscriber(): void
+    {
+        [$tenant, $shop, $package] = $this->fixture();
+        $currentExpiry = now()->addDays(5);
+        $subscriber = PppoeSubscriber::create([
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'username' => 'customer001',
+            'password' => 'secret-pass',
+            'starts_at' => now()->subMonth(),
+            'expires_at' => $currentExpiry,
+            'is_active' => true,
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user);
+
+        Livewire::test(PppoeSubscribersIndex::class)
+            ->call('renew', $subscriber->id)
+            ->assertSee('PPPoE subscriber renewed and synced to RADIUS.');
+
+        $subscriber->refresh();
+
+        $this->assertTrue($subscriber->is_active);
+        $this->assertTrue($subscriber->expires_at->greaterThan($currentExpiry->copy()->addDays(29)));
+        $this->assertDatabaseHas('radcheck', [
+            'username' => 'customer001',
+            'attribute' => 'Cleartext-Password',
+            'value' => 'secret-pass',
+        ]);
+    }
+
+    public function test_pppoe_subscriber_index_shows_usage_and_inspect_sessions(): void
+    {
+        [$tenant, $shop, $package] = $this->fixture();
+        $subscriber = PppoeSubscriber::create([
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'username' => 'customer001',
+            'password' => 'secret-pass',
+            'starts_at' => now()->subDay(),
+            'expires_at' => now()->addMonth(),
+            'is_active' => true,
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        \DB::table('radacct')->insert([
+            'acctsessionid' => 'session-001',
+            'acctuniqueid' => 'unique-001',
+            'username' => 'customer001',
+            'nasipaddress' => '10.8.0.10',
+            'framedipaddress' => '10.10.10.2',
+            'callingstationid' => 'AA:BB:CC:DD:EE:FF',
+            'acctstarttime' => now()->subHour(),
+            'acctupdatetime' => now(),
+            'acctstoptime' => null,
+            'acctsessiontime' => 3600,
+            'acctinputoctets' => 512,
+            'acctoutputoctets' => 1536,
+            'acctterminatecause' => null,
+        ]);
+
+        $this->actingAs($user);
+
+        Livewire::test(PppoeSubscribersIndex::class)
+            ->assertSee('2.0 KB')
+            ->assertSee('1 online')
+            ->call('inspect', $subscriber->id)
+            ->assertSee('PPPoE Activity')
+            ->assertSee('session-001')
+            ->assertSee('Still online / no stop');
+    }
+
     private function fixture(string $tenantName = 'Demo Tenant', string $shopName = 'Demo Shop'): array
     {
         $tenant = Tenant::create([
@@ -192,6 +273,25 @@ class AdminPppoeSubscriberTest extends TestCase
             $table->string('attribute');
             $table->string('op', 2);
             $table->string('value');
+        });
+
+        Schema::create('radacct', function (Blueprint $table) {
+            $table->id('radacctid');
+            $table->string('acctsessionid')->nullable();
+            $table->string('acctuniqueid')->nullable();
+            $table->string('username')->nullable();
+            $table->string('nasipaddress')->nullable();
+            $table->string('framedipaddress')->nullable();
+            $table->string('callingstationid')->nullable();
+            $table->dateTime('acctstarttime')->nullable();
+            $table->dateTime('acctupdatetime')->nullable();
+            $table->dateTime('acctstoptime')->nullable();
+            $table->integer('acctsessiontime')->nullable();
+            $table->unsignedInteger('acctinputoctets')->nullable();
+            $table->unsignedInteger('acctoutputoctets')->nullable();
+            $table->unsignedInteger('acctinputgigawords')->nullable();
+            $table->unsignedInteger('acctoutputgigawords')->nullable();
+            $table->string('acctterminatecause')->nullable();
         });
     }
 }

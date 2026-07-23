@@ -64,6 +64,25 @@ class PppoeSubscriberManagementService
         return $subscriber;
     }
 
+    public function renew(PppoeSubscriber $subscriber, User $user): PppoeSubscriber
+    {
+        TenantAccess::assertPppoeSubscriber($subscriber, $user);
+        $subscriber->loadMissing('package');
+
+        $startsAt = now();
+        $baseExpiry = $subscriber->expires_at?->isFuture() ? $subscriber->expires_at : $startsAt;
+
+        $subscriber->forceFill([
+            'starts_at' => $subscriber->starts_at ?: $startsAt,
+            'expires_at' => $baseExpiry->copy()->addSeconds((int) $subscriber->package->limit_uptime_seconds),
+            'is_active' => true,
+        ])->save();
+
+        $this->radius->provisionPppoeSubscriber($subscriber);
+
+        return $subscriber;
+    }
+
     public function delete(PppoeSubscriber $subscriber, User $user): void
     {
         TenantAccess::assertPppoeSubscriber($subscriber, $user);

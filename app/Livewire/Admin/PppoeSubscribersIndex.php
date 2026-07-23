@@ -6,6 +6,7 @@ use App\Models\Package;
 use App\Models\PppoeSubscriber;
 use App\Models\Shop;
 use App\Services\PppoeSubscriberManagementService;
+use App\Services\PppoeSubscriberReportService;
 use App\Support\TenantAccess;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
@@ -24,9 +25,13 @@ class PppoeSubscribersIndex extends Component
 
     public bool $showDeleteModal = false;
 
+    public bool $showInspectModal = false;
+
     public ?int $editingSubscriberId = null;
 
     public ?int $deletingSubscriberId = null;
+
+    public ?int $selectedSubscriberId = null;
 
     public string $shop_id = '';
 
@@ -143,13 +148,36 @@ class PppoeSubscribersIndex extends Component
         $this->savedMessage = 'PPPoE subscriber removed from RADIUS.';
     }
 
+    public function renew(int $subscriberId, PppoeSubscriberManagementService $subscribers): void
+    {
+        $subscriber = PppoeSubscriber::with('package')->findOrFail($subscriberId);
+        $subscribers->renew($subscriber, auth()->user());
+
+        $this->savedMessage = 'PPPoE subscriber renewed and synced to RADIUS.';
+    }
+
+    public function inspect(int $subscriberId): void
+    {
+        $subscriber = PppoeSubscriber::with(['shop.tenant', 'package'])->findOrFail($subscriberId);
+        TenantAccess::assertPppoeSubscriber($subscriber, auth()->user());
+
+        $this->selectedSubscriberId = $subscriber->id;
+        $this->showInspectModal = true;
+    }
+
+    public function closeInspect(): void
+    {
+        $this->showInspectModal = false;
+        $this->selectedSubscriberId = null;
+    }
+
     public function clearFilters(): void
     {
         $this->reset(['search', 'status']);
         $this->resetPage();
     }
 
-    public function render()
+    public function render(PppoeSubscriberReportService $reports)
     {
         $this->validateOnlyFilters();
 
@@ -168,12 +196,35 @@ class PppoeSubscribersIndex extends Component
             ->when($this->status === 'expired', fn ($query) => $query->whereNotNull('expires_at')->where('expires_at', '<=', now()))
             ->when($this->status === 'disabled', fn ($query) => $query->where('is_active', false));
 
+        $subscribers = $query->latest()->paginate(15);
+        $reports->attachUsage($subscribers->getCollection());
+
         return view('livewire.admin.pppoe-subscribers-index', [
-            'subscribers' => $query->latest()->paginate(15),
+            'subscribers' => $subscribers,
             'shops' => $this->shops(),
             'packages' => $this->packages(),
             'deletingSubscriber' => $this->deletingSubscriberId ? PppoeSubscriber::find($this->deletingSubscriberId) : null,
+            'selectedSubscriber' => $this->selectedSubscriber($reports),
         ]);
+    }
+
+    private function selectedSubscriber(PppoeSubscriberReportService $reports): ?PppoeSubscriber
+    {
+        if (! $this->selectedSubscriberId) {
+            return null;
+        }
+
+        $subscriber = PppoeSubscriber::with(['shop.tenant', 'package'])->find($this->selectedSubscriberId);
+
+        if (! $subscriber) {
+            return null;
+        }
+
+        TenantAccess::assertPppoeSubscriber($subscriber, auth()->user());
+        $reports->attachUsage(collect([$subscriber]));
+        $subscriber->setAttribute('radius_sessions', $reports->sessionsFor($subscriber));
+
+        return $subscriber;
     }
 
     private function shops(): Collection
