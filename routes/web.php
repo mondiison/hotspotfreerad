@@ -12,6 +12,7 @@ use App\Http\Controllers\Admin\RouterController;
 use App\Http\Controllers\Admin\SalesReportController;
 use App\Http\Controllers\Admin\SecurityActivityController;
 use App\Http\Controllers\Admin\SecurityController;
+use App\Http\Controllers\Admin\SetupCenterController;
 use App\Http\Controllers\Admin\ShopController;
 use App\Http\Controllers\Admin\SubscriptionController;
 use App\Http\Controllers\Admin\TenantBrandController;
@@ -63,6 +64,7 @@ Route::post('/billing/payment/webhook', [BillingController::class, 'webhook'])
 
 Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::get('/', DashboardController::class)->name('dashboard');
+    Route::get('setup', SetupCenterController::class)->name('setup.index');
     Route::get('profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::put('profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::view('passkeys', 'admin.passkeys.index')->name('passkeys.index');

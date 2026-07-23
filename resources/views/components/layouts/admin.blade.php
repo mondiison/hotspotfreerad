@@ -69,6 +69,7 @@
                 @php
                     $links = [
                         ['label' => 'Dashboard', 'route' => 'admin.dashboard', 'icon' => 'squares-2x2'],
+                        ['label' => 'Setup', 'route' => 'admin.setup.index', 'icon' => 'rocket-launch'],
                         ['label' => 'Tenants', 'route' => 'admin.tenants.index', 'icon' => 'building-storefront', 'super_admin' => true],
                         ['label' => 'Security', 'route' => 'admin.security.index', 'icon' => 'shield-check', 'super_admin' => true],
                         ['label' => 'Activity', 'route' => 'admin.security-activity.index', 'icon' => 'clock'],
