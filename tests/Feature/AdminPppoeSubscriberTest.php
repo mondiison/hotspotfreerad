@@ -170,6 +170,80 @@ class AdminPppoeSubscriberTest extends TestCase
         ]);
     }
 
+    public function test_tenant_admin_can_resync_pppoe_subscriber_to_radius(): void
+    {
+        [$tenant, $shop, $package] = $this->fixture();
+        $subscriber = PppoeSubscriber::create([
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'username' => 'customer001',
+            'password' => 'secret-pass',
+            'starts_at' => now(),
+            'expires_at' => now()->addMonth(),
+            'is_active' => true,
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user);
+
+        Livewire::test(PppoeSubscribersIndex::class)
+            ->call('sync', $subscriber->id)
+            ->assertSee('PPPoE subscriber synced to RADIUS.');
+
+        $this->assertNotNull($subscriber->refresh()->last_provisioned_at);
+        $this->assertDatabaseHas('radcheck', [
+            'username' => 'customer001',
+            'attribute' => 'Cleartext-Password',
+            'value' => 'secret-pass',
+        ]);
+        $this->assertDatabaseHas('radusergroup', [
+            'username' => 'customer001',
+            'groupname' => $package->refresh()->radius_group_name,
+        ]);
+    }
+
+    public function test_tenant_admin_can_bulk_sync_only_their_unsynced_pppoe_subscribers(): void
+    {
+        [$tenant, $shop, $package] = $this->fixture();
+        [$otherTenant, $otherShop, $otherPackage] = $this->fixture('Other Tenant', 'Other Shop');
+        PppoeSubscriber::create([
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'username' => 'own-unsynced',
+            'password' => 'secret-pass',
+            'starts_at' => now(),
+            'expires_at' => now()->addMonth(),
+            'is_active' => true,
+        ]);
+        PppoeSubscriber::create([
+            'shop_id' => $otherShop->id,
+            'package_id' => $otherPackage->id,
+            'username' => 'other-unsynced',
+            'password' => 'secret-pass',
+            'starts_at' => now(),
+            'expires_at' => now()->addMonth(),
+            'is_active' => true,
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user);
+
+        Livewire::test(PppoeSubscribersIndex::class)
+            ->call('syncUnsynced')
+            ->assertSee('1 PPPoE subscriber synced to RADIUS.');
+
+        $this->assertDatabaseHas('radcheck', ['username' => 'own-unsynced']);
+        $this->assertDatabaseMissing('radcheck', ['username' => 'other-unsynced']);
+    }
+
     public function test_pppoe_subscriber_index_shows_usage_and_inspect_sessions(): void
     {
         [$tenant, $shop, $package] = $this->fixture();

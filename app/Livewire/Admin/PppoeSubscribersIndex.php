@@ -160,6 +160,31 @@ class PppoeSubscribersIndex extends Component
         $this->savedMessage = 'PPPoE subscriber renewed and synced to RADIUS.';
     }
 
+    public function sync(int $subscriberId, PppoeSubscriberManagementService $subscribers): void
+    {
+        $subscriber = PppoeSubscriber::with('package')->findOrFail($subscriberId);
+        $subscribers->sync($subscriber, auth()->user());
+
+        $this->savedMessage = 'PPPoE subscriber synced to RADIUS.';
+    }
+
+    public function syncUnsynced(PppoeSubscriberManagementService $subscribers): void
+    {
+        $query = TenantAccess::scopePppoeSubscribers(PppoeSubscriber::with('package'), auth()->user())
+            ->whereNull('last_provisioned_at');
+        $syncedCount = 0;
+
+        $query->chunkById(100, function ($chunk) use ($subscribers, &$syncedCount): void {
+            foreach ($chunk as $subscriber) {
+                $subscribers->sync($subscriber, auth()->user());
+                $syncedCount++;
+            }
+        });
+
+        $this->savedMessage = $syncedCount.' PPPoE '.str('subscriber')->plural($syncedCount).' synced to RADIUS.';
+        $this->resetPage();
+    }
+
     public function inspect(int $subscriberId): void
     {
         $subscriber = PppoeSubscriber::with(['shop.tenant', 'package'])->findOrFail($subscriberId);

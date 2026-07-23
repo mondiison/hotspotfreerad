@@ -83,6 +83,19 @@ class PppoeSubscriberManagementService
         return $subscriber;
     }
 
+    public function sync(PppoeSubscriber $subscriber, User $user): PppoeSubscriber
+    {
+        TenantAccess::assertPppoeSubscriber($subscriber, $user);
+
+        if ($subscriber->isCurrentlyActive()) {
+            $this->radius->provisionPppoeSubscriber($subscriber);
+        } else {
+            $this->radius->revokePppoeSubscriber($subscriber);
+        }
+
+        return $subscriber->refresh();
+    }
+
     public function delete(PppoeSubscriber $subscriber, User $user): void
     {
         TenantAccess::assertPppoeSubscriber($subscriber, $user);

@@ -23,6 +23,10 @@
             <flux:button href="{{ route('admin.pppoe-subscribers.export', array_filter(['search' => $search, 'status' => $status])) }}" variant="outline" icon="arrow-down-tray">
                 Export CSV
             </flux:button>
+            <flux:button type="button" wire:click="syncUnsynced" variant="outline" icon="arrow-path" wire:loading.attr="disabled" wire:target="syncUnsynced">
+                <span wire:loading.remove wire:target="syncUnsynced">Sync Unsynced</span>
+                <span wire:loading wire:target="syncUnsynced">Syncing...</span>
+            </flux:button>
             <flux:button type="button" wire:click="create" variant="primary" icon="plus" wire:loading.attr="disabled" wire:target="create">
                 Add PPPoE Customer
             </flux:button>
@@ -73,7 +77,7 @@
         </flux:button>
     </section>
 
-    <div wire:loading.flex wire:target="search,status,clearFilters,save,delete,renew" class="mt-4 hidden rounded-md border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
+    <div wire:loading.flex wire:target="search,status,clearFilters,save,delete,renew,sync,syncUnsynced" class="mt-4 hidden rounded-md border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
         Updating PPPoE customers...
     </div>
 
@@ -152,6 +156,10 @@
                                 <flux:button type="button" wire:click="renew({{ $subscriber->id }})" wire:loading.attr="disabled" wire:target="renew({{ $subscriber->id }})" variant="outline" size="sm" icon="arrow-path">
                                     <span wire:loading.remove wire:target="renew({{ $subscriber->id }})">Renew</span>
                                     <span wire:loading wire:target="renew({{ $subscriber->id }})">Renewing...</span>
+                                </flux:button>
+                                <flux:button type="button" wire:click="sync({{ $subscriber->id }})" wire:loading.attr="disabled" wire:target="sync({{ $subscriber->id }})" variant="outline" size="sm" icon="cloud-arrow-up">
+                                    <span wire:loading.remove wire:target="sync({{ $subscriber->id }})">Sync</span>
+                                    <span wire:loading wire:target="sync({{ $subscriber->id }})">Syncing...</span>
                                 </flux:button>
                                 <flux:button type="button" wire:click="inspect({{ $subscriber->id }})" wire:loading.attr="disabled" wire:target="inspect({{ $subscriber->id }})" variant="outline" size="sm" icon="magnifying-glass">
                                     Inspect
