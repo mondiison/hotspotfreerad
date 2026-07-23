@@ -248,7 +248,7 @@ class AdminIndexFilterTest extends TestCase
             'nasname' => '10.8.0.50',
             'shortname' => 'livewire-router',
             'secret' => 'radius-secret',
-            'description' => 'Livewire Router',
+            'description' => 'Livewire Router (services: hotspot, ppp)',
         ]);
     }
 
@@ -286,7 +286,7 @@ class AdminIndexFilterTest extends TestCase
             'nasname' => '10.8.0.61',
             'shortname' => 'updated-router',
             'secret' => 'original-secret',
-            'description' => 'Updated Router',
+            'description' => 'Updated Router (services: hotspot, ppp)',
         ]);
     }
 
@@ -376,6 +376,37 @@ class AdminIndexFilterTest extends TestCase
             ->assertOk()
             ->assertSee($activePackage->name)
             ->assertDontSee($inactivePackage->name);
+    }
+
+    public function test_package_index_can_filter_by_service_type(): void
+    {
+        $shop = $this->shop();
+        $hotspotPackage = Package::create([
+            'shop_id' => $shop->id,
+            'name' => 'Hotspot Daily',
+            'service_type' => 'hotspot',
+            'price' => 1000,
+            'currency' => 'NGN',
+            'limit_uptime_seconds' => 86400,
+            'speed_limit_profile' => '5M/5M',
+            'is_active' => true,
+        ]);
+        $pppoePackage = Package::create([
+            'shop_id' => $shop->id,
+            'name' => 'Home PPPoE',
+            'service_type' => 'pppoe',
+            'price' => 8000,
+            'currency' => 'NGN',
+            'limit_uptime_seconds' => 2592000,
+            'speed_limit_profile' => '5M/10M',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($this->superAdmin())
+            ->get(route('admin.packages.index', ['service' => 'pppoe_capable']))
+            ->assertOk()
+            ->assertSee($pppoePackage->name)
+            ->assertDontSee($hotspotPackage->name);
     }
 
     public function test_livewire_package_index_creates_package_and_syncs_radius(): void
@@ -484,11 +515,13 @@ class AdminIndexFilterTest extends TestCase
             ->assertSet('speed_limit_profile', '20M/20M')
             ->set('search', 'Daily')
             ->set('status', 'active')
+            ->set('service', 'hotspot_capable')
             ->assertSee('Daily 5GB')
             ->assertDontSee('Legacy Plan')
             ->call('clearFilters')
             ->assertSet('search', '')
             ->assertSet('status', '')
+            ->assertSet('service', '')
             ->assertSee('Legacy Plan');
     }
 

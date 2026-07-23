@@ -17,7 +17,7 @@ class PackageController extends Controller
     public function index(): View
     {
         return view('admin.packages.index', [
-            'filters' => request()->only(['search', 'status']),
+            'filters' => request()->only(['search', 'status', 'service']),
         ]);
     }
 

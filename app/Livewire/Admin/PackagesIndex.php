@@ -21,6 +21,8 @@ class PackagesIndex extends Component
 
     public string $status = '';
 
+    public string $service = '';
+
     public bool $showFormModal = false;
 
     public bool $showDeleteModal = false;
@@ -58,17 +60,19 @@ class PackagesIndex extends Component
     protected $queryString = [
         'search' => ['except' => ''],
         'status' => ['except' => ''],
+        'service' => ['except' => ''],
     ];
 
     public function mount(array $filters = []): void
     {
         $this->search = (string) ($filters['search'] ?? '');
         $this->status = (string) ($filters['status'] ?? '');
+        $this->service = (string) ($filters['service'] ?? '');
     }
 
     public function updated($property): void
     {
-        if (in_array($property, ['search', 'status'], true)) {
+        if (in_array($property, ['search', 'status', 'service'], true)) {
             $this->resetPage();
         }
     }
@@ -164,7 +168,7 @@ class PackagesIndex extends Component
 
     public function clearFilters(): void
     {
-        $this->reset(['search', 'status']);
+        $this->reset(['search', 'status', 'service']);
         $this->resetPage();
     }
 
@@ -186,6 +190,11 @@ class PackagesIndex extends Component
             })
             ->when($this->status === 'active', fn ($query) => $query->where('is_active', true))
             ->when($this->status === 'inactive', fn ($query) => $query->where('is_active', false))
+            ->when($this->service === 'hotspot', fn ($query) => $query->where('service_type', 'hotspot'))
+            ->when($this->service === 'pppoe', fn ($query) => $query->where('service_type', 'pppoe'))
+            ->when($this->service === 'both', fn ($query) => $query->where('service_type', 'both'))
+            ->when($this->service === 'pppoe_capable', fn ($query) => $query->whereIn('service_type', ['pppoe', 'both']))
+            ->when($this->service === 'hotspot_capable', fn ($query) => $query->whereIn('service_type', ['hotspot', 'both']))
             ->latest()
             ->paginate(15);
 
@@ -227,8 +236,12 @@ class PackagesIndex extends Component
 
     private function validateOnlyFilters(): void
     {
-        validator(['status' => $this->status ?: null], [
+        validator([
+            'status' => $this->status ?: null,
+            'service' => $this->service ?: null,
+        ], [
             'status' => ['nullable', Rule::in(['active', 'inactive'])],
+            'service' => ['nullable', Rule::in(['hotspot', 'pppoe', 'both', 'pppoe_capable', 'hotspot_capable'])],
         ])->validate();
     }
 }
