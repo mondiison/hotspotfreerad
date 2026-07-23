@@ -19,9 +19,14 @@
         <div>
             <p class="text-sm text-zinc-500">Create fixed subscriber credentials for PPPoE CPE, ONT, or customer routers.</p>
         </div>
-        <flux:button type="button" wire:click="create" variant="primary" icon="plus" wire:loading.attr="disabled" wire:target="create">
-            Add PPPoE Customer
-        </flux:button>
+        <div class="flex flex-wrap gap-2">
+            <flux:button href="{{ route('admin.pppoe-subscribers.export', array_filter(['search' => $search, 'status' => $status])) }}" variant="outline" icon="arrow-down-tray">
+                Export CSV
+            </flux:button>
+            <flux:button type="button" wire:click="create" variant="primary" icon="plus" wire:loading.attr="disabled" wire:target="create">
+                Add PPPoE Customer
+            </flux:button>
+        </div>
     </div>
 
     @if ($savedMessage)

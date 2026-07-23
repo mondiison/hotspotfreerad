@@ -294,6 +294,74 @@ class AdminPppoeSubscriberTest extends TestCase
             ->assertDontSee('due-soon');
     }
 
+    public function test_tenant_admin_can_export_filtered_pppoe_customers(): void
+    {
+        [$tenant, $shop, $package] = $this->fixture();
+        [$otherTenant, $otherShop, $otherPackage] = $this->fixture('Other Tenant', 'Other Shop');
+        PppoeSubscriber::create([
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'username' => 'due-soon',
+            'password' => 'secret-pass',
+            'full_name' => 'Due Soon Customer',
+            'phone' => '07063218823',
+            'expires_at' => now()->addDays(3),
+            'last_provisioned_at' => now(),
+            'is_active' => true,
+        ]);
+        PppoeSubscriber::create([
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'username' => 'safe-monthly',
+            'password' => 'secret-pass',
+            'expires_at' => now()->addDays(20),
+            'last_provisioned_at' => now(),
+            'is_active' => true,
+        ]);
+        PppoeSubscriber::create([
+            'shop_id' => $otherShop->id,
+            'package_id' => $otherPackage->id,
+            'username' => 'other-tenant',
+            'password' => 'secret-pass',
+            'expires_at' => now()->addDays(3),
+            'last_provisioned_at' => now(),
+            'is_active' => true,
+        ]);
+        \DB::table('radacct')->insert([
+            'acctsessionid' => 'session-001',
+            'acctuniqueid' => 'unique-001',
+            'username' => 'due-soon',
+            'nasipaddress' => '10.8.0.10',
+            'acctstarttime' => now()->subHour(),
+            'acctupdatetime' => now(),
+            'acctstoptime' => null,
+            'acctinputoctets' => 1024,
+            'acctoutputoctets' => 2048,
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $response = $this->actingAs($user)->get(route('admin.pppoe-subscribers.export', [
+            'status' => 'expiring_soon',
+        ]));
+
+        $response->assertOk();
+        $response->assertHeader('content-type', 'text/csv; charset=UTF-8');
+
+        $csv = $response->streamedContent();
+
+        $this->assertStringContainsString('PPPoE Customers', $csv);
+        $this->assertStringContainsString('due-soon', $csv);
+        $this->assertStringContainsString('Due Soon Customer', $csv);
+        $this->assertStringContainsString('3072', $csv);
+        $this->assertStringNotContainsString('safe-monthly', $csv);
+        $this->assertStringNotContainsString('other-tenant', $csv);
+        $this->assertStringNotContainsString('secret-pass', $csv);
+    }
+
     private function fixture(string $tenantName = 'Demo Tenant', string $shopName = 'Demo Shop'): array
     {
         $tenant = Tenant::create([
