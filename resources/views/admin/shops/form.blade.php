@@ -73,6 +73,13 @@
                     </flux:field>
 
                     <flux:field>
+                        <flux:label>Flutterwave secret key</flux:label>
+                        <flux:input name="flutterwave_secret_key" value="{{ old('flutterwave_secret_key') }}" icon="lock-closed" placeholder="{{ $shop->exists ? 'Leave blank to keep current value' : 'Example: FLWSECK_TEST-...' }}" viewable />
+                        <flux:description>Needed for Card hosted checkout. Client ID/secret still powers OPay and transfer.</flux:description>
+                        <flux:error name="flutterwave_secret_key" />
+                    </flux:field>
+
+                    <flux:field>
                         <flux:label>Flutterwave webhook secret hash</flux:label>
                         <flux:input name="flutterwave_webhook_secret" value="{{ old('flutterwave_webhook_secret') }}" icon="shield-check" placeholder="{{ $shop->exists ? 'Leave blank to keep current value' : 'Optional: tenant webhook verif-hash' }}" viewable />
                         <flux:description>Use the verif-hash from this tenant's Flutterwave webhook settings. Payment callbacks can still verify successful payments, but webhooks need this value.</flux:description>

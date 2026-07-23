@@ -14,7 +14,10 @@
 
         <div class="flex flex-wrap gap-2">
             <flux:badge :color="$shop->hasCompleteFlutterwaveCredentials() ? 'emerald' : 'amber'" size="sm">
-                {{ $shop->hasCompleteFlutterwaveCredentials() ? 'Payments configured' : 'Payments not configured' }}
+                {{ $shop->hasCompleteFlutterwaveCredentials() ? 'OPay/transfer ready' : 'OPay/transfer missing' }}
+            </flux:badge>
+            <flux:badge :color="$shop->hasFlutterwaveHostedCheckoutKey() ? 'emerald' : 'amber'" size="sm">
+                {{ $shop->hasFlutterwaveHostedCheckoutKey() ? 'Card checkout ready' : 'Card key missing' }}
             </flux:badge>
             <flux:badge :color="$shop->hasFlutterwaveWebhookSecret() ? 'emerald' : 'zinc'" size="sm">
                 {{ $shop->hasFlutterwaveWebhookSecret() ? 'Webhook ready' : 'Webhook missing' }}
@@ -54,6 +57,18 @@
         </flux:field>
 
         <flux:field>
+            <flux:label>Flutterwave secret key</flux:label>
+            <flux:input
+                wire:model.blur="flutterwave_secret_key"
+                icon="lock-closed"
+                placeholder="{{ $shop->hasFlutterwaveHostedCheckoutKey() ? 'Leave blank to keep saved secret key' : 'Example: FLWSECK_TEST-... or FLWSECK-...' }}"
+                viewable
+            />
+            <flux:description>Needed for Card hosted checkout. Get it from Flutterwave Dashboard > Settings > API Keys. Keep Client ID/secret for OPay and transfer.</flux:description>
+            <flux:error name="flutterwave_secret_key" />
+        </flux:field>
+
+        <flux:field>
             <flux:label>Webhook secret hash</flux:label>
             <flux:input
                 wire:model.blur="flutterwave_webhook_secret"
@@ -76,6 +91,12 @@
         @if ($shop->hasFlutterwaveWebhookSecret())
             <div class="rounded-md border border-zinc-200 p-3">
                 <flux:checkbox wire:model.live="clear_flutterwave_webhook_secret" label="Clear webhook secret" />
+            </div>
+        @endif
+
+        @if ($shop->hasFlutterwaveHostedCheckoutKey())
+            <div class="rounded-md border border-zinc-200 p-3">
+                <flux:checkbox wire:model.live="clear_flutterwave_secret_key" label="Clear card checkout secret key" />
             </div>
         @endif
     </div>

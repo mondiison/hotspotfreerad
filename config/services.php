@@ -54,8 +54,10 @@ return [
     'flutterwave' => [
         'auth_url' => env('FLUTTERWAVE_AUTH_URL', 'https://idp.flutterwave.com/realms/flutterwave/protocol/openid-connect/token'),
         'base_url' => env('FLUTTERWAVE_BASE_URL', 'https://developersandbox-api.flutterwave.com'),
+        'standard_base_url' => env('FLUTTERWAVE_STANDARD_BASE_URL', 'https://api.flutterwave.com/v3'),
         'client_id' => env('FLUTTERWAVE_CLIENT_ID'),
         'client_secret' => env('FLUTTERWAVE_CLIENT_SECRET'),
+        'secret_key' => env('FLUTTERWAVE_SECRET_KEY'),
         'default_payment_method' => env('FLUTTERWAVE_DEFAULT_PAYMENT_METHOD', 'opay'),
         'webhook_secret_hash' => env('FLUTTERWAVE_WEBHOOK_SECRET_HASH'),
     ],

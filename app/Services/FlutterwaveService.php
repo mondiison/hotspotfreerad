@@ -140,6 +140,58 @@ class FlutterwaveService
     /**
      * @throws RequestException
      */
+    public function createStandardHostedCheckout(Payment $payment, array $customer, string $redirectUrl): array
+    {
+        $response = Http::withToken($this->hostedCheckoutSecretKey($payment))
+            ->acceptJson()
+            ->post($this->standardBaseUrl().'/payments', [
+                'tx_ref' => $payment->tx_ref,
+                'amount' => (float) $payment->amount,
+                'currency' => $payment->currency,
+                'redirect_url' => $redirectUrl,
+                'payment_options' => 'card',
+                'customer' => [
+                    'email' => $customer['email'] ?: 'guest-'.$payment->id.'@hotspot.local',
+                    'phonenumber' => (string) ($customer['phone'] ?? ''),
+                    'name' => (string) ($customer['name'] ?? 'Hotspot Customer'),
+                ],
+                'customizations' => [
+                    'title' => $payment->shop->name.' hotspot',
+                    'description' => $payment->package->name,
+                ],
+                'meta' => [
+                    'payment_id' => $payment->id,
+                    'payment_reference' => $payment->tx_ref,
+                    'checkout_version' => 'standard_v3',
+                    'credential_source' => $this->hostedCheckoutCredentialSource($payment)['source'],
+                    'credential_label' => $this->hostedCheckoutCredentialSource($payment)['label'],
+                    'tenant_id' => $payment->shop->tenant_id,
+                    'tenant_name' => $payment->shop->tenant->company_name,
+                    'shop_id' => $payment->shop_id,
+                    'shop_name' => $payment->shop->name,
+                    'package_id' => $payment->package_id,
+                    'package_name' => $payment->package->name,
+                    'device_mac' => data_get($payment->payload, 'mac'),
+                    'nas_identifier' => data_get($payment->payload, 'nasid'),
+                ],
+                'configurations' => [
+                    'session_duration' => 30,
+                    'max_retry_attempt' => 3,
+                ],
+            ])
+            ->throw()
+            ->json();
+
+        return [
+            'response' => $response,
+            'provider_reference' => null,
+            'checkout_url' => $this->standardCheckoutUrl($response),
+        ];
+    }
+
+    /**
+     * @throws RequestException
+     */
     public function virtualAccountCharges(Payment $payment, string $virtualAccountId): array
     {
         return Http::withToken($this->accessToken($payment))
@@ -156,6 +208,14 @@ class FlutterwaveService
      */
     public function verifyPayment(Payment $payment, string $providerReference, string $type = 'order'): array
     {
+        if (data_get($payment->payload, 'flutterwave_checkout_version') === 'standard_v3') {
+            return Http::withToken($this->hostedCheckoutSecretKey($payment))
+                ->acceptJson()
+                ->get($this->standardBaseUrl()."/transactions/{$providerReference}/verify")
+                ->throw()
+                ->json();
+        }
+
         $resource = Str::startsWith($type, 'order') ? 'orders' : 'charges';
 
         return Http::withToken($this->accessToken($payment))
@@ -177,6 +237,11 @@ class FlutterwaveService
         return filled($this->clientId($payment)) && filled($this->clientSecret($payment));
     }
 
+    public function hasHostedCheckoutFor(Payment $payment): bool
+    {
+        return filled($this->hostedCheckoutSecretKey($payment));
+    }
+
     public function credentialSource(Payment $payment): array
     {
         if (filled($payment->shop?->flutterwave_client_id) && filled($payment->shop?->flutterwave_client_secret)) {
@@ -189,6 +254,21 @@ class FlutterwaveService
         return [
             'source' => 'unconfigured',
             'label' => 'Tenant payment account not configured',
+        ];
+    }
+
+    public function hostedCheckoutCredentialSource(Payment $payment): array
+    {
+        if (filled($payment->shop?->flutterwave_secret_key)) {
+            return [
+                'source' => 'tenant',
+                'label' => $payment->shop->tenant->company_name.' / '.$payment->shop->name,
+            ];
+        }
+
+        return [
+            'source' => 'unconfigured',
+            'label' => 'Card checkout secret key not configured',
         ];
     }
 
@@ -236,6 +316,22 @@ class FlutterwaveService
         foreach ([
             'data.checkout_url',
             'data.link',
+        ] as $key) {
+            $value = data_get($response, $key);
+
+            if (filled($value) && is_string($value)) {
+                return $value;
+            }
+        }
+
+        return null;
+    }
+
+    public function standardCheckoutUrl(array $response): ?string
+    {
+        foreach ([
+            'data.link',
+            'data.checkout_url',
         ] as $key) {
             $value = data_get($response, $key);
 
@@ -299,9 +395,23 @@ class FlutterwaveService
         return '';
     }
 
+    private function hostedCheckoutSecretKey(Payment $payment): string
+    {
+        if (filled($payment->shop?->flutterwave_secret_key)) {
+            return (string) $payment->shop->flutterwave_secret_key;
+        }
+
+        return '';
+    }
+
     private function baseUrl(): string
     {
         return rtrim((string) config('services.flutterwave.base_url'), '/');
+    }
+
+    private function standardBaseUrl(): string
+    {
+        return rtrim((string) config('services.flutterwave.standard_base_url'), '/');
     }
 
     private function paymentMethodType(?string $selectedMethod = null): string

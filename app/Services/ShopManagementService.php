@@ -18,6 +18,7 @@ class ShopManagementService
             'location_city' => ['nullable', 'string', 'max:255'],
             'flutterwave_client_id' => ['nullable', 'string'],
             'flutterwave_client_secret' => ['nullable', 'string'],
+            'flutterwave_secret_key' => ['nullable', 'string'],
             'flutterwave_webhook_secret' => ['nullable', 'string'],
             'is_active' => ['nullable', 'boolean'],
         ];
@@ -63,7 +64,7 @@ class ShopManagementService
         $data['location_city'] = filled($data['location_city'] ?? null) ? $data['location_city'] : null;
         $data['is_active'] = (bool) ($data['is_active'] ?? false);
 
-        foreach (['flutterwave_client_id', 'flutterwave_client_secret', 'flutterwave_webhook_secret'] as $field) {
+        foreach (['flutterwave_client_id', 'flutterwave_client_secret', 'flutterwave_secret_key', 'flutterwave_webhook_secret'] as $field) {
             if (blank($data[$field] ?? null)) {
                 unset($data[$field]);
             }

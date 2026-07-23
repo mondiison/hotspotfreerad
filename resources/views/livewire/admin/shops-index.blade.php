@@ -125,7 +125,7 @@
                         <div class="mb-4">
                             <h2 class="text-sm font-semibold text-zinc-950">Flutterwave payments</h2>
                             <p class="mt-1 text-sm leading-6 text-zinc-600">
-                                Add this shop's Flutterwave v4 client ID and client secret so hotspot customer payments settle into the tenant's own Flutterwave account.
+                                Add this shop's Flutterwave keys so hotspot customer payments settle into the tenant's own Flutterwave account.
                             </p>
                         </div>
 
@@ -142,6 +142,13 @@
                                 <flux:input wire:model.blur="flutterwave_client_secret" icon="key" placeholder="{{ $editingShopId ? 'Leave blank to keep current value' : 'Paste the matching v4 client secret' }}" viewable />
                                 <flux:description>The app uses this only on the server to request Flutterwave access tokens.</flux:description>
                                 <flux:error name="flutterwave_client_secret" />
+                            </flux:field>
+
+                            <flux:field>
+                                <flux:label>Flutterwave secret key</flux:label>
+                                <flux:input wire:model.blur="flutterwave_secret_key" icon="lock-closed" placeholder="{{ $editingShopId ? 'Leave blank to keep current value' : 'Example: FLWSECK_TEST-...' }}" viewable />
+                                <flux:description>Needed for Card hosted checkout. Client ID/secret still powers OPay and transfer.</flux:description>
+                                <flux:error name="flutterwave_secret_key" />
                             </flux:field>
 
                             <flux:field>

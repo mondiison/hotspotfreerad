@@ -31,7 +31,8 @@ class AdminPaymentSettingsTest extends TestCase
             ->assertOk()
             ->assertSee('Payment Setup')
             ->assertSee($ownShop->name)
-            ->assertSee('Payments configured')
+            ->assertSee('OPay/transfer ready')
+            ->assertSee('Card checkout ready')
             ->assertDontSee($otherShop->name);
     }
 
@@ -49,6 +50,7 @@ class AdminPaymentSettingsTest extends TestCase
             ->put(route('admin.payment-settings.update', $shop), [
                 'flutterwave_client_id' => 'tenant-client-id',
                 'flutterwave_client_secret' => 'tenant-client-secret',
+                'flutterwave_secret_key' => 'FLWSECK_TEST-tenant-secret-key',
                 'flutterwave_webhook_secret' => 'tenant-webhook-secret',
             ])
             ->assertRedirect(route('admin.payment-settings.index'));
@@ -56,9 +58,11 @@ class AdminPaymentSettingsTest extends TestCase
         $shop->refresh();
 
         $this->assertTrue($shop->hasCompleteFlutterwaveCredentials());
+        $this->assertTrue($shop->hasFlutterwaveHostedCheckoutKey());
         $this->assertTrue($shop->hasFlutterwaveWebhookSecret());
         $this->assertSame('tenant-client-id', $shop->flutterwave_client_id);
         $this->assertSame('tenant-client-secret', $shop->flutterwave_client_secret);
+        $this->assertSame('FLWSECK_TEST-tenant-secret-key', $shop->flutterwave_secret_key);
         $this->assertSame('tenant-webhook-secret', $shop->flutterwave_webhook_secret);
     }
 
@@ -117,17 +121,20 @@ class AdminPaymentSettingsTest extends TestCase
         Livewire::test(PaymentSettingsCard::class, ['shop' => $shop])
             ->set('flutterwave_client_id', 'livewire-client-id')
             ->set('flutterwave_client_secret', 'livewire-client-secret')
+            ->set('flutterwave_secret_key', 'FLWSECK_TEST-livewire-secret-key')
             ->set('flutterwave_webhook_secret', 'livewire-webhook-secret')
             ->call('save')
             ->assertHasNoErrors()
             ->assertSee('Payment settings updated for Livewire Shop.')
-            ->assertSee('Payments configured')
+            ->assertSee('OPay/transfer ready')
+            ->assertSee('Card checkout ready')
             ->assertSee('Webhook ready');
 
         $shop->refresh();
 
         $this->assertSame('livewire-client-id', $shop->flutterwave_client_id);
         $this->assertSame('livewire-client-secret', $shop->flutterwave_client_secret);
+        $this->assertSame('FLWSECK_TEST-livewire-secret-key', $shop->flutterwave_secret_key);
         $this->assertSame('livewire-webhook-secret', $shop->flutterwave_webhook_secret);
     }
 
@@ -165,17 +172,20 @@ class AdminPaymentSettingsTest extends TestCase
 
         Livewire::test(PaymentSettingsCard::class, ['shop' => $shop])
             ->set('clear_flutterwave_credentials', true)
+            ->set('clear_flutterwave_secret_key', true)
             ->set('clear_flutterwave_webhook_secret', true)
             ->call('save')
             ->assertHasNoErrors()
             ->assertSee('Payment settings updated for Configured Shop.')
-            ->assertSee('Payments not configured')
+            ->assertSee('OPay/transfer missing')
+            ->assertSee('Card key missing')
             ->assertSee('Webhook missing');
 
         $shop->refresh();
 
         $this->assertNull($shop->flutterwave_client_id);
         $this->assertNull($shop->flutterwave_client_secret);
+        $this->assertNull($shop->flutterwave_secret_key);
         $this->assertNull($shop->flutterwave_webhook_secret);
     }
 
@@ -201,6 +211,7 @@ class AdminPaymentSettingsTest extends TestCase
             'is_active' => true,
             'flutterwave_client_id' => $configured ? 'client-id' : null,
             'flutterwave_client_secret' => $configured ? 'client-secret' : null,
+            'flutterwave_secret_key' => $configured ? 'FLWSECK_TEST-secret-key' : null,
             'flutterwave_webhook_secret' => $configured ? 'webhook-secret' : null,
         ]);
     }

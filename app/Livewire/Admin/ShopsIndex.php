@@ -40,6 +40,8 @@ class ShopsIndex extends Component
 
     public string $flutterwave_client_secret = '';
 
+    public string $flutterwave_secret_key = '';
+
     public string $flutterwave_webhook_secret = '';
 
     public bool $is_active = true;
@@ -186,6 +188,7 @@ class ShopsIndex extends Component
             'location_city',
             'flutterwave_client_id',
             'flutterwave_client_secret',
+            'flutterwave_secret_key',
             'flutterwave_webhook_secret',
         ]);
         $this->is_active = true;

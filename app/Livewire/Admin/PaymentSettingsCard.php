@@ -14,9 +14,13 @@ class PaymentSettingsCard extends Component
 
     public string $flutterwave_client_secret = '';
 
+    public string $flutterwave_secret_key = '';
+
     public string $flutterwave_webhook_secret = '';
 
     public bool $clear_flutterwave_credentials = false;
+
+    public bool $clear_flutterwave_secret_key = false;
 
     public bool $clear_flutterwave_webhook_secret = false;
 
@@ -37,8 +41,10 @@ class PaymentSettingsCard extends Component
         $this->reset([
             'flutterwave_client_id',
             'flutterwave_client_secret',
+            'flutterwave_secret_key',
             'flutterwave_webhook_secret',
             'clear_flutterwave_credentials',
+            'clear_flutterwave_secret_key',
             'clear_flutterwave_webhook_secret',
         ]);
 

@@ -13,6 +13,7 @@ class Shop extends Model
     protected $hidden = [
         'flutterwave_client_id',
         'flutterwave_client_secret',
+        'flutterwave_secret_key',
         'flutterwave_webhook_secret',
     ];
 
@@ -21,6 +22,7 @@ class Shop extends Model
         return [
             'flutterwave_client_id' => 'encrypted',
             'flutterwave_client_secret' => 'encrypted',
+            'flutterwave_secret_key' => 'encrypted',
             'flutterwave_webhook_secret' => 'encrypted',
             'is_active' => 'boolean',
         ];
@@ -59,6 +61,11 @@ class Shop extends Model
     public function hasCompleteFlutterwaveCredentials(): bool
     {
         return filled($this->flutterwave_client_id) && filled($this->flutterwave_client_secret);
+    }
+
+    public function hasFlutterwaveHostedCheckoutKey(): bool
+    {
+        return filled($this->flutterwave_secret_key);
     }
 
     public function hasFlutterwaveWebhookSecret(): bool

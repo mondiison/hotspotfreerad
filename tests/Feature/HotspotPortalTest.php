@@ -344,35 +344,20 @@ class HotspotPortalTest extends TestCase
 
     public function test_payment_step_creates_hosted_checkout_session_for_card(): void
     {
-        $this->configureFlutterwave();
         Http::fake([
-            'idp.flutterwave.com/*' => Http::response([
-                'access_token' => 'FLW_V4_TOKEN',
-                'expires_in' => 600,
-            ]),
-            'developersandbox-api.flutterwave.com/customers' => Http::response([
+            'api.flutterwave.com/v3/payments' => Http::response([
                 'status' => 'success',
                 'data' => [
-                    'id' => 'cus_card_12345',
-                ],
-            ], 201),
-            'developersandbox-api.flutterwave.com/checkout/sessions' => Http::response([
-                'status' => 'success',
-                'data' => [
-                    'id' => 'cks_12345',
                     'amount' => 500,
                     'currency' => 'NGN',
-                    'customer_id' => 'cus_card_12345',
-                    'link' => 'https://developersandbox.flutterwave.com/checkout/cks_12345',
-                    'redirect_url' => route('hotspot.payment.callback'),
-                    'reference' => 'pending',
+                    'link' => 'https://checkout.flutterwave.com/v3/hosted/pay/flwlnk_12345',
+                    'tx_ref' => 'pending',
                 ],
             ]),
         ]);
         [$router, $package] = $this->routerWithPackage();
         $router->shop->update([
-            'flutterwave_client_id' => 'tenant-client-id',
-            'flutterwave_client_secret' => 'tenant-client-secret',
+            'flutterwave_secret_key' => 'FLWSECK_TEST-tenant-secret-key',
         ]);
 
         $this->post(route('hotspot.pay'), [
@@ -383,52 +368,28 @@ class HotspotPortalTest extends TestCase
             'phone' => '08000000000',
             'payment_method' => 'card',
         ])
-            ->assertRedirect('https://developersandbox.flutterwave.com/checkout/cks_12345');
-
-        Http::assertSent(fn ($request) => str_contains($request->url(), '/customers')
-            && data_get($request->data(), 'email') === 'customer@example.com');
+            ->assertRedirect('https://checkout.flutterwave.com/v3/hosted/pay/flwlnk_12345');
 
         $payment = Payment::firstOrFail();
 
-        Http::assertSent(fn ($request) => str_contains($request->url(), '/checkout/sessions')
-            && $request['reference']
-            && $request['customer_id'] === 'cus_card_12345'
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/v3/payments')
+            && $request['tx_ref'] === $payment->tx_ref
             && $request['amount'] === 500.0
             && $request['currency'] === 'NGN'
+            && $request['payment_options'] === 'card'
+            && $request['customer']['email'] === 'customer@example.com'
             && $request['redirect_url'] === route('hotspot.payment.callback', ['tx_ref' => $payment->tx_ref]));
         Http::assertNotSent(fn ($request) => str_contains($request->url(), '/orchestration/direct-charges'));
 
         $this->assertSame('card', data_get($payment->payload, 'payment_method'));
-        $this->assertSame('cks_12345', $payment->provider_reference);
-        $this->assertSame('https://developersandbox.flutterwave.com/checkout/cks_12345', data_get($payment->payload, 'checkout_url'));
+        $this->assertNull($payment->provider_reference);
+        $this->assertSame('standard_v3', data_get($payment->payload, 'flutterwave_checkout_version'));
+        $this->assertSame('https://checkout.flutterwave.com/v3/hosted/pay/flwlnk_12345', data_get($payment->payload, 'checkout_url'));
     }
 
-    public function test_card_checkout_does_not_treat_callback_url_as_checkout_link(): void
+    public function test_card_checkout_requires_tenant_secret_key(): void
     {
-        $this->configureFlutterwave();
-        Http::fake([
-            'idp.flutterwave.com/*' => Http::response([
-                'access_token' => 'FLW_V4_TOKEN',
-                'expires_in' => 600,
-            ]),
-            'developersandbox-api.flutterwave.com/customers' => Http::response([
-                'status' => 'success',
-                'data' => [
-                    'id' => 'cus_card_12345',
-                ],
-            ], 201),
-            'developersandbox-api.flutterwave.com/checkout/sessions' => Http::response([
-                'status' => 'success',
-                'data' => [
-                    'id' => 'cks_12345',
-                    'amount' => 500,
-                    'currency' => 'NGN',
-                    'customer_id' => 'cus_card_12345',
-                    'redirect_url' => route('hotspot.payment.callback'),
-                    'reference' => 'pending',
-                ],
-            ]),
-        ]);
+        Http::fake();
         [$router, $package] = $this->routerWithPackage();
         $router->shop->update([
             'flutterwave_client_id' => 'tenant-client-id',
@@ -444,11 +405,12 @@ class HotspotPortalTest extends TestCase
             'payment_method' => 'card',
         ])
             ->assertOk()
-            ->assertSee('Flutterwave accepted the payment request, but did not return a checkout link');
+            ->assertSee('Card checkout needs the tenant Flutterwave secret key');
 
         $payment = Payment::firstOrFail();
 
         $this->assertNull(data_get($payment->payload, 'checkout_url'));
+        Http::assertNothingSent();
     }
 
     public function test_payment_step_creates_dynamic_virtual_account_for_bank_transfer(): void
@@ -756,6 +718,63 @@ class HotspotPortalTest extends TestCase
         $this->assertDatabaseHas('radcheck', [
             'username' => 'AA:BB:CC:DD:EE:FF',
             'attribute' => 'Cleartext-Password',
+        ]);
+    }
+
+    public function test_successful_standard_card_callback_provisions_radius_access(): void
+    {
+        [$router, $package] = $this->routerWithPackage();
+
+        $payment = Payment::create([
+            'shop_id' => $router->shop_id,
+            'package_id' => $package->id,
+            'provider' => 'flutterwave',
+            'tx_ref' => 'HSF-STANDARD-CARD',
+            'amount' => 500,
+            'gross_amount' => 500,
+            'platform_fee_amount' => 0,
+            'tenant_net_amount' => 500,
+            'currency' => 'NGN',
+            'status' => 'pending',
+            'payload' => [
+                'mac' => 'AA:BB:CC:DD:EE:FF',
+                'nasid' => $router->nas_identifier,
+                'payment_method' => 'card',
+                'flutterwave_checkout_version' => 'standard_v3',
+            ],
+        ]);
+        $router->shop->update([
+            'flutterwave_secret_key' => 'FLWSECK_TEST-tenant-secret-key',
+        ]);
+        Http::fake([
+            'api.flutterwave.com/v3/transactions/123456/verify' => Http::response([
+                'status' => 'success',
+                'data' => [
+                    'id' => 123456,
+                    'status' => 'successful',
+                    'tx_ref' => $payment->tx_ref,
+                    'amount' => 500,
+                    'currency' => 'NGN',
+                ],
+            ]),
+        ]);
+
+        $this->get(route('hotspot.payment.callback', [
+            'tx_ref' => $payment->tx_ref,
+            'status' => 'successful',
+            'transaction_id' => '123456',
+        ]))
+            ->assertOk()
+            ->assertSee('Access provisioned');
+
+        $this->assertDatabaseHas('payments', [
+            'id' => $payment->id,
+            'status' => 'successful',
+            'provider_reference' => '123456',
+        ]);
+        $this->assertDatabaseHas('subscriptions', [
+            'payment_id' => $payment->id,
+            'mac_address' => 'AA:BB:CC:DD:EE:FF',
         ]);
     }
 

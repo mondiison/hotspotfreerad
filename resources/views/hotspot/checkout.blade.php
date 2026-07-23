@@ -67,6 +67,8 @@
                     This shop has no complete Flutterwave client ID and client secret saved for hotspot customer payments. Check Payment Setup for {{ $shop->name }}.
                 @elseif (($checkoutUnavailableReason ?? null) === 'missing_checkout_url')
                     Flutterwave accepted the payment request, but did not return a checkout link. Check the tenant Flutterwave account/payment method configuration.
+                @elseif (($checkoutUnavailableReason ?? null) === 'missing_card_secret_key')
+                    Card checkout needs the tenant Flutterwave secret key. Ask the hotspot operator to add it under Payment Setup for {{ $shop->name }}.
                 @else
                     Flutterwave checkout could not start even though credentials were found for {{ $credentialSource['label'] ?? $shop->name }}. Check the saved client ID/secret, payment method, and Laravel logs.
                 @endif
