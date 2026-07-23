@@ -19,6 +19,28 @@
         </flux:button>
     </div>
 
+    <section class="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        @foreach ([
+            ['label' => 'Packages', 'value' => $summary['total'], 'hint' => 'All tenant plans', 'service' => '', 'status' => ''],
+            ['label' => 'Active', 'value' => $summary['active'], 'hint' => 'Visible or assignable', 'service' => '', 'status' => 'active'],
+            ['label' => 'Hotspot-capable', 'value' => $summary['hotspot_capable'], 'hint' => 'Captive portal offers', 'service' => 'hotspot_capable', 'status' => ''],
+            ['label' => 'PPPoE-capable', 'value' => $summary['pppoe_capable'], 'hint' => 'Subscriber credentials', 'service' => 'pppoe_capable', 'status' => ''],
+            ['label' => 'Shared', 'value' => $summary['shared'], 'hint' => 'Hotspot and PPPoE', 'service' => 'both', 'status' => ''],
+        ] as $stat)
+            <button
+                type="button"
+                wire:click="filterBy('{{ $stat['service'] }}', '{{ $stat['status'] }}')"
+                wire:loading.attr="disabled"
+                wire:target="filterBy"
+                class="rounded-lg border px-4 py-3 text-left shadow-sm transition hover:border-zinc-400 {{ $service === $stat['service'] && $status === $stat['status'] ? 'border-zinc-950 bg-zinc-950 text-white' : 'border-zinc-200 bg-white text-zinc-950' }}"
+            >
+                <span class="block text-xs font-medium uppercase {{ $service === $stat['service'] && $status === $stat['status'] ? 'text-zinc-300' : 'text-zinc-500' }}">{{ $stat['label'] }}</span>
+                <span class="mt-2 block text-2xl font-semibold">{{ number_format($stat['value']) }}</span>
+                <span class="mt-1 block text-xs {{ $service === $stat['service'] && $status === $stat['status'] ? 'text-zinc-300' : 'text-zinc-500' }}">{{ $stat['hint'] }}</span>
+            </button>
+        @endforeach
+    </section>
+
     <section class="mb-4 rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
         <div class="grid min-w-0 gap-3 md:grid-cols-[minmax(0,1fr)_170px_210px_auto] [&>*]:min-w-0">
             <flux:input wire:model.live.debounce.350ms="search" icon="magnifying-glass" placeholder="Search package, shop, group, or speed" />

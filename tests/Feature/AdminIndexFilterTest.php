@@ -401,11 +401,23 @@ class AdminIndexFilterTest extends TestCase
             'speed_limit_profile' => '5M/10M',
             'is_active' => true,
         ]);
+        $sharedPackage = Package::create([
+            'shop_id' => $shop->id,
+            'name' => 'Hybrid Access',
+            'service_type' => 'both',
+            'price' => 3000,
+            'currency' => 'NGN',
+            'limit_uptime_seconds' => 604800,
+            'speed_limit_profile' => '10M/10M',
+            'is_active' => true,
+        ]);
 
         $this->actingAs($this->superAdmin())
             ->get(route('admin.packages.index', ['service' => 'pppoe_capable']))
             ->assertOk()
+            ->assertSee('PPPoE-capable')
             ->assertSee($pppoePackage->name)
+            ->assertSee($sharedPackage->name)
             ->assertDontSee($hotspotPackage->name);
     }
 
@@ -498,6 +510,7 @@ class AdminIndexFilterTest extends TestCase
         Package::create([
             'shop_id' => $shop->id,
             'name' => 'Legacy Plan',
+            'service_type' => 'pppoe',
             'price' => 500,
             'currency' => 'NGN',
             'limit_uptime_seconds' => 3600,
@@ -516,6 +529,16 @@ class AdminIndexFilterTest extends TestCase
             ->set('search', 'Daily')
             ->set('status', 'active')
             ->set('service', 'hotspot_capable')
+            ->assertSee('Daily 5GB')
+            ->assertDontSee('Legacy Plan')
+            ->call('filterBy', 'pppoe_capable', '')
+            ->assertSet('service', 'pppoe_capable')
+            ->assertSet('status', '')
+            ->assertSet('search', '')
+            ->assertSee('Legacy Plan')
+            ->call('filterBy', '', 'active')
+            ->assertSet('service', '')
+            ->assertSet('status', 'active')
             ->assertSee('Daily 5GB')
             ->assertDontSee('Legacy Plan')
             ->call('clearFilters')

@@ -172,6 +172,14 @@ class PackagesIndex extends Component
         $this->resetPage();
     }
 
+    public function filterBy(string $service = '', string $status = ''): void
+    {
+        $this->search = '';
+        $this->service = $service;
+        $this->status = $status;
+        $this->resetPage();
+    }
+
     public function render()
     {
         $this->validateOnlyFilters();
@@ -200,10 +208,24 @@ class PackagesIndex extends Component
 
         return view('livewire.admin.packages-index', [
             'packages' => $packages,
+            'summary' => $this->summary($user),
             'shops' => $this->shops(),
             'billingUsage' => $this->editingPackageId ? null : BillingPlanLimits::usageSummary($user, 'packages'),
             'deletingPackage' => $this->deletingPackageId ? InternetPackage::find($this->deletingPackageId) : null,
         ]);
+    }
+
+    private function summary($user): array
+    {
+        $query = TenantAccess::scopePackages(InternetPackage::query(), $user);
+
+        return [
+            'total' => (clone $query)->count(),
+            'active' => (clone $query)->where('is_active', true)->count(),
+            'hotspot_capable' => (clone $query)->whereIn('service_type', ['hotspot', 'both'])->count(),
+            'pppoe_capable' => (clone $query)->whereIn('service_type', ['pppoe', 'both'])->count(),
+            'shared' => (clone $query)->where('service_type', 'both')->count(),
+        ];
     }
 
     private function shops(): Collection
