@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Voucher extends Model
 {
@@ -41,5 +42,10 @@ class Voucher extends Model
     public function soldBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'sold_by_user_id');
+    }
+
+    public function payment(): HasOne
+    {
+        return $this->hasOne(Payment::class);
     }
 }

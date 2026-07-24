@@ -6,8 +6,10 @@ use App\Models\SecurityActivity;
 use App\Models\Subscription;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Models\Voucher;
 use App\Services\PppoeSubscriberManagementService;
 use App\Services\RadiusProvisioningService;
+use App\Services\VoucherManagementService;
 use App\Support\SchedulerHealth;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -123,6 +125,45 @@ Artisan::command('hotspot:prune-security-activity {--days=} {--dry-run}', functi
 
     return Command::SUCCESS;
 })->purpose('Prune old security activity audit records');
+
+Artisan::command('hotspot:backfill-voucher-payments {--dry-run}', function (VoucherManagementService $vouchers): int {
+    $query = Voucher::query()
+        ->with(['shop.tenant', 'package', 'soldBy'])
+        ->whereNotNull('sold_at')
+        ->whereNotNull('sale_amount')
+        ->whereDoesntHave('payment');
+    $count = (clone $query)->count();
+
+    if ($this->option('dry-run')) {
+        $this->info("{$count} sold voucher(s) would receive internal payment records.");
+
+        return Command::SUCCESS;
+    }
+
+    $created = 0;
+
+    $query->chunkById(100, function ($chunk) use ($vouchers, &$created): void {
+        foreach ($chunk as $voucher) {
+            if (! $voucher->shop || ! $voucher->package) {
+                continue;
+            }
+
+            $vouchers->recordVoucherPayment(
+                $voucher,
+                $voucher->shop,
+                (float) $voucher->sale_amount,
+                $voucher->sale_reference,
+                $voucher->soldBy,
+            );
+
+            $created++;
+        }
+    });
+
+    $this->info("Created {$created} internal payment record(s) for sold vouchers.");
+
+    return Command::SUCCESS;
+})->purpose('Create internal payment records for existing sold vouchers');
 
 Artisan::command('hotspot:sync-expired-pppoe {--dry-run}', function (PppoeSubscriberManagementService $subscribers): int {
     $query = PppoeSubscriber::query()

@@ -38,6 +38,11 @@ class Payment extends Model
         return $this->belongsTo(Customer::class);
     }
 
+    public function voucher(): BelongsTo
+    {
+        return $this->belongsTo(Voucher::class);
+    }
+
     public function subscription(): HasOne
     {
         return $this->hasOne(Subscription::class);

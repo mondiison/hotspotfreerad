@@ -61,6 +61,7 @@
         <flux:select wire:model.live="provider">
             <flux:select.option value="">All providers</flux:select.option>
             <flux:select.option value="flutterwave">Flutterwave</flux:select.option>
+            <flux:select.option value="voucher_cash">Voucher cash</flux:select.option>
         </flux:select>
         <flux:button type="button" variant="outline" icon="x-mark" class="w-full" wire:click="clearFilters" wire:loading.attr="disabled" wire:target="clearFilters,from,to,search,status,provider">
             Reset

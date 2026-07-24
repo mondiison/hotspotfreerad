@@ -30,7 +30,7 @@ class PaymentReportService
             'to' => ['nullable', 'date', 'after_or_equal:from'],
             'search' => ['nullable', 'string', 'max:255'],
             'status' => ['nullable', 'in:attention,pending,successful,failed,verification_failed'],
-            'provider' => ['nullable', 'in:flutterwave'],
+            'provider' => ['nullable', 'in:flutterwave,voucher_cash'],
         ])->validate();
 
         $preset = $data['preset'] ?? null;
@@ -77,7 +77,8 @@ class PaymentReportService
                             ->orWhere('phone', 'like', "%{$search}%")
                             ->orWhere('mac_address', 'like', "%{$search}%"))
                         ->orWhereHas('shop', fn ($shop) => $shop->where('name', 'like', "%{$search}%"))
-                        ->orWhereHas('package', fn ($package) => $package->where('name', 'like', "%{$search}%"));
+                        ->orWhereHas('package', fn ($package) => $package->where('name', 'like', "%{$search}%"))
+                        ->orWhereHas('voucher', fn ($voucher) => $voucher->where('code', 'like', "%{$search}%"));
                 });
             })
             ->when($filters['status'] === 'attention', fn ($query) => $query->whereIn('status', ['pending', 'failed', 'verification_failed']))

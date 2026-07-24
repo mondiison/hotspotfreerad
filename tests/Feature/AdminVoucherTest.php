@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Livewire\Admin\VouchersIndex;
 use App\Models\Package;
+use App\Models\Payment;
 use App\Models\Router;
 use App\Models\Shop;
 use App\Models\Subscription;
@@ -616,6 +617,14 @@ class AdminVoucherTest extends TestCase
         $this->assertSame('CASH-001', $voucher->sale_reference);
         $this->assertSame($user->id, $voucher->sold_by_user_id);
         $this->assertNotNull($voucher->sold_at);
+        $this->assertDatabaseHas('payments', [
+            'voucher_id' => $voucher->id,
+            'provider' => 'voucher_cash',
+            'tx_ref' => 'VCH-'.str_pad((string) $voucher->id, 8, '0', STR_PAD_LEFT),
+            'provider_reference' => 'CASH-001',
+            'status' => 'successful',
+            'amount' => 900,
+        ]);
     }
 
     public function test_tenant_admin_can_reverse_sold_voucher_before_redemption(): void
@@ -665,6 +674,47 @@ class AdminVoucherTest extends TestCase
         $this->assertNull($voucher->sale_amount);
         $this->assertNull($voucher->sale_reference);
         $this->assertNull($voucher->sale_notes);
+    }
+
+    public function test_reversing_voucher_sale_removes_it_from_successful_payments(): void
+    {
+        [$tenant, $shop, $package] = $this->fixture();
+        $cashier = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+        $batch = VoucherBatch::create([
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'name' => 'Reverse Payment Batch',
+            'quantity' => 1,
+            'code_length' => 8,
+            'status' => 'active',
+        ]);
+        $voucher = Voucher::create([
+            'voucher_batch_id' => $batch->id,
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'code' => 'MMS-REVPAY',
+            'status' => 'unused',
+        ]);
+
+        $this->actingAs($cashier);
+
+        Livewire::test(VouchersIndex::class)
+            ->call('confirmSale', $voucher->id)
+            ->set('sale_amount', '1000')
+            ->set('sale_reference', 'CASH-REV')
+            ->call('markSold')
+            ->call('confirmReverseSale', $voucher->id)
+            ->call('reverseSale')
+            ->assertHasNoErrors();
+
+        $payment = Payment::where('voucher_id', $voucher->id)->firstOrFail();
+
+        $this->assertSame('failed', $payment->status);
+        $this->assertNotNull(data_get($payment->payload, 'voucher_sale_reversed_at'));
     }
 
     public function test_tenant_admin_cannot_reverse_used_voucher_sale(): void
@@ -791,6 +841,64 @@ class AdminVoucherTest extends TestCase
         $this->assertSame('used', $voucher->status);
         $this->assertSame('1000.00', (string) $voucher->sale_amount);
         $this->assertNotNull($voucher->subscription_id);
+    }
+
+    public function test_redeeming_sold_voucher_links_access_to_voucher_payment(): void
+    {
+        [$tenant, $shop, $package] = $this->fixture();
+        $router = Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'Main Router',
+            'nas_identifier' => 'shop-router',
+            'wireguard_internal_ip' => '10.8.0.10',
+            'shared_secret' => 'radius-secret',
+        ]);
+        $batch = VoucherBatch::create([
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'name' => 'Sold Payment Batch',
+            'quantity' => 1,
+            'code_length' => 8,
+            'status' => 'active',
+        ]);
+        $voucher = Voucher::create([
+            'voucher_batch_id' => $batch->id,
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'code' => 'MMS-PAYLINK',
+            'status' => 'sold',
+            'sold_at' => now(),
+            'sale_amount' => 1000,
+        ]);
+        $payment = Payment::create([
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'voucher_id' => $voucher->id,
+            'provider' => 'voucher_cash',
+            'tx_ref' => 'VCH-'.str_pad((string) $voucher->id, 8, '0', STR_PAD_LEFT),
+            'amount' => 1000,
+            'gross_amount' => 1000,
+            'platform_fee_amount' => 0,
+            'tenant_net_amount' => 1000,
+            'commission_rate' => 0,
+            'billing_model' => 'subscription',
+            'currency' => 'NGN',
+            'status' => 'successful',
+            'paid_at' => now(),
+        ]);
+
+        $this->post(route('hotspot.voucher.redeem'), [
+            'mac' => 'AA:BB:CC:DD:EE:FF',
+            'nasid' => $router->nas_identifier,
+            'voucher_code' => 'MMS-PAYLINK',
+        ])->assertOk();
+
+        $voucher->refresh();
+        $payment->refresh();
+
+        $this->assertSame($payment->id, $voucher->subscription->payment_id);
+        $this->assertNotNull($payment->customer_id);
+        $this->assertSame('AA:BB:CC:DD:EE:FF', data_get($payment->payload, 'mac'));
     }
 
     public function test_hotspot_customer_cannot_redeem_voided_voucher(): void

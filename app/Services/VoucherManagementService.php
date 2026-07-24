@@ -4,11 +4,14 @@ namespace App\Services;
 
 use App\Models\Customer;
 use App\Models\Package;
+use App\Models\Payment;
 use App\Models\Router;
+use App\Models\Shop;
 use App\Models\Subscription;
 use App\Models\User;
 use App\Models\Voucher;
 use App\Models\VoucherBatch;
+use App\Support\PaymentCommission;
 use App\Support\TenantAccess;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -77,7 +80,7 @@ class VoucherManagementService
     {
         return DB::transaction(function () use ($router, $macAddress, $code): Subscription {
             $voucher = Voucher::query()
-                ->with(['batch', 'package', 'shop.tenant'])
+                ->with(['batch', 'package', 'payment', 'shop.tenant'])
                 ->where('code', $this->normalizeCode($code))
                 ->lockForUpdate()
                 ->first();
@@ -106,13 +109,15 @@ class VoucherManagementService
                 ]);
             }
 
-            Customer::updateOrCreate(
+            $customer = Customer::updateOrCreate(
                 [
                     'shop_id' => $router->shop_id,
                     'mac_address' => $macAddress,
                 ],
                 []
             );
+
+            $paymentId = $voucher->payment?->id;
 
             $subscription = Subscription::updateOrCreate(
                 [
@@ -121,11 +126,23 @@ class VoucherManagementService
                 ],
                 [
                     'package_id' => $voucher->package_id,
+                    'payment_id' => $paymentId,
                     'starts_at' => now(),
                     'expires_at' => now()->addSeconds((int) $voucher->package->limit_uptime_seconds),
                     'is_throttled' => false,
                 ]
             );
+
+            if ($voucher->payment) {
+                $voucher->payment->update([
+                    'customer_id' => $customer->id,
+                    'payload' => array_merge($voucher->payment->payload ?? [], [
+                        'mac' => $macAddress,
+                        'voucher_code' => $voucher->code,
+                        'subscription_id' => $subscription->id,
+                    ]),
+                ]);
+            }
 
             $voucher->update([
                 'status' => 'used',
@@ -150,18 +167,25 @@ class VoucherManagementService
             ]);
         }
 
-        $voucher->loadMissing('package');
+        return DB::transaction(function () use ($voucher, $data, $user): Voucher {
+            $voucher->loadMissing(['package', 'shop.tenant']);
+            $soldAt = now();
+            $saleAmount = round((float) ($data['sale_amount'] ?? $voucher->package?->price ?? 0), 2);
+            $saleReference = filled($data['sale_reference'] ?? null) ? (string) $data['sale_reference'] : null;
 
-        $voucher->forceFill([
-            'status' => 'sold',
-            'sold_by_user_id' => $user->id,
-            'sold_at' => now(),
-            'sale_amount' => $data['sale_amount'] ?? $voucher->package?->price,
-            'sale_reference' => filled($data['sale_reference'] ?? null) ? (string) $data['sale_reference'] : null,
-            'sale_notes' => filled($data['sale_notes'] ?? null) ? (string) $data['sale_notes'] : null,
-        ])->save();
+            $voucher->forceFill([
+                'status' => 'sold',
+                'sold_by_user_id' => $user->id,
+                'sold_at' => $soldAt,
+                'sale_amount' => $saleAmount,
+                'sale_reference' => $saleReference,
+                'sale_notes' => filled($data['sale_notes'] ?? null) ? (string) $data['sale_notes'] : null,
+            ])->save();
 
-        return $voucher;
+            $this->recordVoucherPayment($voucher, $voucher->shop, $saleAmount, $saleReference, $user);
+
+            return $voucher;
+        });
     }
 
     public function reverseSale(Voucher $voucher, User $user): Voucher
@@ -174,16 +198,29 @@ class VoucherManagementService
             ]);
         }
 
-        $voucher->forceFill([
-            'status' => 'unused',
-            'sold_by_user_id' => null,
-            'sold_at' => null,
-            'sale_amount' => null,
-            'sale_reference' => null,
-            'sale_notes' => null,
-        ])->save();
+        DB::transaction(function () use ($voucher): void {
+            $voucher->loadMissing('payment');
 
-        $voucher->batch?->forceFill(['status' => 'active'])->save();
+            $voucher->forceFill([
+                'status' => 'unused',
+                'sold_by_user_id' => null,
+                'sold_at' => null,
+                'sale_amount' => null,
+                'sale_reference' => null,
+                'sale_notes' => null,
+            ])->save();
+
+            if ($voucher->payment) {
+                $voucher->payment->update([
+                    'status' => 'failed',
+                    'payload' => array_merge($voucher->payment->payload ?? [], [
+                        'voucher_sale_reversed_at' => now()->toDateTimeString(),
+                    ]),
+                ]);
+            }
+
+            $voucher->batch?->forceFill(['status' => 'active'])->save();
+        });
 
         return $voucher;
     }
@@ -228,5 +265,34 @@ class VoucherManagementService
         }
 
         return $codes;
+    }
+
+    public function recordVoucherPayment(Voucher $voucher, Shop $shop, float $amount, ?string $saleReference, ?User $user = null): Payment
+    {
+        $paymentData = array_merge([
+            'shop_id' => $voucher->shop_id,
+            'package_id' => $voucher->package_id,
+            'provider' => 'voucher_cash',
+            'tx_ref' => 'VCH-'.str_pad((string) $voucher->id, 8, '0', STR_PAD_LEFT),
+            'provider_reference' => $saleReference,
+            'amount' => $amount,
+            'currency' => $voucher->package?->currency ?? 'NGN',
+            'status' => 'successful',
+            'paid_at' => $voucher->sold_at,
+            'payload' => [
+                'voucher_id' => $voucher->id,
+                'voucher_code' => $voucher->code,
+                'voucher_batch_id' => $voucher->voucher_batch_id,
+                'sold_by_user_id' => $user?->id ?? $voucher->sold_by_user_id,
+                'sale_reference' => $saleReference,
+                'sale_notes' => $voucher->sale_notes,
+                'payment_channel' => 'voucher_cash',
+            ],
+        ], PaymentCommission::forShop($shop, $amount));
+
+        return Payment::updateOrCreate(
+            ['voucher_id' => $voucher->id],
+            $paymentData
+        );
     }
 }
