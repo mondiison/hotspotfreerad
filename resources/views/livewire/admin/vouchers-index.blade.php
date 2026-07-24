@@ -377,6 +377,10 @@
                                             <flux:button type="button" size="sm" variant="outline" icon="banknotes" wire:click="confirmSale({{ $voucher->id }})" wire:loading.attr="disabled" wire:target="confirmSale({{ $voucher->id }})">
                                                 Mark sold
                                             </flux:button>
+                                        @elseif ($voucher->status === 'sold')
+                                            <flux:button type="button" size="sm" variant="outline" icon="arrow-uturn-left" wire:click="confirmReverseSale({{ $voucher->id }})" wire:loading.attr="disabled" wire:target="confirmReverseSale({{ $voucher->id }})">
+                                                Reverse sale
+                                            </flux:button>
                                         @else
                                             <span class="text-xs text-zinc-400">-</span>
                                         @endif
@@ -431,6 +435,31 @@
                 </flux:button>
             </div>
         </form>
+    </flux:modal>
+
+    <flux:modal wire:model.self="showReverseSaleModal" class="md:w-lg" :dismissible="false">
+        <div class="space-y-5">
+            <div>
+                <flux:heading size="lg">Reverse Voucher Sale?</flux:heading>
+                <flux:text class="mt-2 text-sm text-zinc-500">
+                    This clears the recorded sale amount, reference, notes, and cashier from the voucher, then returns it to unused stock.
+                </flux:text>
+            </div>
+
+            <flux:error name="reverse_sale_voucher_id" />
+
+            <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                Use this only for a mistaken sale entry or a customer refund before the voucher is redeemed.
+            </div>
+
+            <div class="flex justify-end gap-3">
+                <flux:button type="button" variant="ghost" wire:click="$set('showReverseSaleModal', false)">Cancel</flux:button>
+                <flux:button type="button" variant="danger" icon="arrow-uturn-left" wire:click="reverseSale" wire:loading.attr="disabled" wire:target="reverseSale">
+                    <span wire:loading.remove wire:target="reverseSale">Reverse sale</span>
+                    <span wire:loading wire:target="reverseSale">Reversing...</span>
+                </flux:button>
+            </div>
+        </div>
     </flux:modal>
 
     <flux:modal wire:model.self="showVoidModal" class="md:w-lg" :dismissible="false">

@@ -164,6 +164,30 @@ class VoucherManagementService
         return $voucher;
     }
 
+    public function reverseSale(Voucher $voucher, User $user): Voucher
+    {
+        TenantAccess::assertVoucher($voucher, $user);
+
+        if ($voucher->status !== 'sold') {
+            throw ValidationException::withMessages([
+                'reverse_sale_voucher_id' => 'Only sold and unredeemed vouchers can have their sale reversed.',
+            ]);
+        }
+
+        $voucher->forceFill([
+            'status' => 'unused',
+            'sold_by_user_id' => null,
+            'sold_at' => null,
+            'sale_amount' => null,
+            'sale_reference' => null,
+            'sale_notes' => null,
+        ])->save();
+
+        $voucher->batch?->forceFill(['status' => 'active'])->save();
+
+        return $voucher;
+    }
+
     public function voidUnusedBatchVouchers(VoucherBatch $batch, User $user): int
     {
         TenantAccess::assertVoucherBatch($batch, $user);

@@ -618,6 +618,93 @@ class AdminVoucherTest extends TestCase
         $this->assertNotNull($voucher->sold_at);
     }
 
+    public function test_tenant_admin_can_reverse_sold_voucher_before_redemption(): void
+    {
+        [$tenant, $shop, $package] = $this->fixture();
+        $cashier = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+        $batch = VoucherBatch::create([
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'name' => 'Refund Batch',
+            'quantity' => 1,
+            'code_length' => 8,
+            'status' => 'active',
+        ]);
+        $voucher = Voucher::create([
+            'voucher_batch_id' => $batch->id,
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'sold_by_user_id' => $cashier->id,
+            'code' => 'MMS-REFUND1',
+            'status' => 'sold',
+            'sold_at' => now(),
+            'sale_amount' => 1000,
+            'sale_reference' => 'CASH-REFUND',
+            'sale_notes' => 'Customer changed plan',
+        ]);
+
+        $this->actingAs($cashier);
+
+        Livewire::test(VouchersIndex::class)
+            ->call('inspect', $batch->id)
+            ->call('confirmReverseSale', $voucher->id)
+            ->assertSet('showReverseSaleModal', true)
+            ->call('reverseSale')
+            ->assertSet('showReverseSaleModal', false)
+            ->assertSee('MMS-REFUND1 sale reversed and returned to unused.');
+
+        $voucher->refresh();
+
+        $this->assertSame('unused', $voucher->status);
+        $this->assertNull($voucher->sold_by_user_id);
+        $this->assertNull($voucher->sold_at);
+        $this->assertNull($voucher->sale_amount);
+        $this->assertNull($voucher->sale_reference);
+        $this->assertNull($voucher->sale_notes);
+    }
+
+    public function test_tenant_admin_cannot_reverse_used_voucher_sale(): void
+    {
+        [$tenant, $shop, $package] = $this->fixture();
+        $batch = VoucherBatch::create([
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'name' => 'Used Sale Batch',
+            'quantity' => 1,
+            'code_length' => 8,
+            'status' => 'active',
+        ]);
+        $voucher = Voucher::create([
+            'voucher_batch_id' => $batch->id,
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'code' => 'MMS-USED-SALE',
+            'status' => 'used',
+            'sold_at' => now(),
+            'sale_amount' => 1000,
+            'used_at' => now(),
+            'used_mac_address' => 'AA:BB:CC:DD:EE:FF',
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user);
+
+        Livewire::test(VouchersIndex::class)
+            ->call('confirmReverseSale', $voucher->id)
+            ->assertHasErrors(['reverse_sale_voucher_id']);
+
+        $this->assertSame('used', $voucher->refresh()->status);
+        $this->assertSame('1000.00', (string) $voucher->sale_amount);
+    }
+
     public function test_voiding_unused_vouchers_keeps_sold_vouchers_redeemable(): void
     {
         [$tenant, $shop, $package] = $this->fixture();

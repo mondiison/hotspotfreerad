@@ -40,11 +40,15 @@ class VouchersIndex extends Component
 
     public bool $showSaleModal = false;
 
+    public bool $showReverseSaleModal = false;
+
     public ?int $selectedBatchId = null;
 
     public ?int $voidBatchId = null;
 
     public ?int $saleVoucherId = null;
+
+    public ?int $reverseSaleVoucherId = null;
 
     public string $sale_amount = '';
 
@@ -220,6 +224,36 @@ class VouchersIndex extends Component
         $this->showSaleModal = false;
         $this->saleVoucherId = null;
         $this->reset(['sale_amount', 'sale_reference', 'sale_notes']);
+    }
+
+    public function confirmReverseSale(int $voucherId): void
+    {
+        $voucher = Voucher::with('shop')->findOrFail($voucherId);
+        TenantAccess::assertVoucher($voucher, auth()->user());
+
+        if ($voucher->status !== 'sold') {
+            $this->addError('reverse_sale_voucher_id', 'Only sold and unredeemed vouchers can have their sale reversed.');
+            return;
+        }
+
+        $this->reverseSaleVoucherId = $voucher->id;
+        $this->showReverseSaleModal = true;
+        $this->resetValidation('reverse_sale_voucher_id');
+    }
+
+    public function reverseSale(VoucherManagementService $vouchers): void
+    {
+        if (! $this->reverseSaleVoucherId) {
+            return;
+        }
+
+        $voucher = Voucher::findOrFail($this->reverseSaleVoucherId);
+        $vouchers->reverseSale($voucher, auth()->user());
+
+        $this->savedMessage = "{$voucher->code} sale reversed and returned to unused.";
+        $this->selectedBatchId = $voucher->voucher_batch_id;
+        $this->showReverseSaleModal = false;
+        $this->reverseSaleVoucherId = null;
     }
 
     public function render()
