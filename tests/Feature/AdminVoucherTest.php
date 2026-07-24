@@ -301,6 +301,104 @@ class AdminVoucherTest extends TestCase
         $this->assertStringNotContainsString('MMS-EXPORT-UNUSED', $csv);
     }
 
+    public function test_voucher_dashboard_reports_sales_value_by_sold_date_range(): void
+    {
+        [$tenant, $shop, $package] = $this->fixture();
+        $batch = VoucherBatch::create([
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'name' => 'Sales Value Batch',
+            'quantity' => 2,
+            'code_length' => 8,
+            'status' => 'active',
+        ]);
+        Voucher::create([
+            'voucher_batch_id' => $batch->id,
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'code' => 'MMS-SALE-JULY',
+            'status' => 'sold',
+            'sold_at' => now()->setDate(2026, 7, 12),
+            'sale_amount' => 900,
+        ]);
+        Voucher::create([
+            'voucher_batch_id' => $batch->id,
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'code' => 'MMS-SALE-AUG',
+            'status' => 'sold',
+            'sold_at' => now()->setDate(2026, 8, 2),
+            'sale_amount' => 1200,
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user);
+
+        Livewire::test(VouchersIndex::class)
+            ->set('sold_from', '2026-07-01')
+            ->set('sold_to', '2026-07-31')
+            ->assertSee('NGN 2,100.00')
+            ->assertSee('NGN 900.00')
+            ->assertSee('1 sold voucher(s)')
+            ->assertSee('Sales Value Batch');
+    }
+
+    public function test_voucher_export_can_filter_by_sold_date_range(): void
+    {
+        [$tenant, $shop, $package] = $this->fixture();
+        $batch = VoucherBatch::create([
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'name' => 'Sold Export Batch',
+            'quantity' => 2,
+            'code_length' => 8,
+            'status' => 'active',
+        ]);
+        Voucher::create([
+            'voucher_batch_id' => $batch->id,
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'code' => 'MMS-SOLD-JULY',
+            'status' => 'sold',
+            'sold_at' => now()->setDate(2026, 7, 12),
+            'sale_amount' => 900,
+            'sale_reference' => 'CASH-JULY',
+        ]);
+        Voucher::create([
+            'voucher_batch_id' => $batch->id,
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'code' => 'MMS-SOLD-AUG',
+            'status' => 'sold',
+            'sold_at' => now()->setDate(2026, 8, 2),
+            'sale_amount' => 1200,
+            'sale_reference' => 'CASH-AUG',
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $response = $this->actingAs($user)->get(route('admin.vouchers.export', [
+            'status' => 'sold',
+            'sold_from' => '2026-07-01',
+            'sold_to' => '2026-07-31',
+        ]));
+
+        $response->assertOk();
+        $csv = $response->streamedContent();
+
+        $this->assertStringContainsString('"Sold From",2026-07-01', $csv);
+        $this->assertStringContainsString('MMS-SOLD-JULY', $csv);
+        $this->assertStringContainsString('CASH-JULY', $csv);
+        $this->assertStringNotContainsString('MMS-SOLD-AUG', $csv);
+    }
+
     public function test_tenant_admin_can_export_unused_vouchers_from_batch(): void
     {
         [$tenant, $shop, $package] = $this->fixture();

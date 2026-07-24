@@ -16,7 +16,7 @@ class VoucherController extends Controller
     public function index(Request $request): View
     {
         return view('admin.vouchers.index', [
-            'filters' => $request->only(['search', 'status', 'shop', 'used_from', 'used_to']),
+            'filters' => $request->only(['search', 'status', 'shop', 'used_from', 'used_to', 'sold_from', 'sold_to']),
         ]);
     }
 
@@ -59,6 +59,8 @@ class VoucherController extends Controller
             fputcsv($handle, ['Shop', $filters['shop'] ?: 'All']);
             fputcsv($handle, ['Used From', $filters['used_from'] ?: 'All']);
             fputcsv($handle, ['Used To', $filters['used_to'] ?: 'All']);
+            fputcsv($handle, ['Sold From', $filters['sold_from'] ?: 'All']);
+            fputcsv($handle, ['Sold To', $filters['sold_to'] ?: 'All']);
             fputcsv($handle, []);
             fputcsv($handle, [
                 'Code',
@@ -162,6 +164,12 @@ class VoucherController extends Controller
                     ->when($filters['used_from'], fn ($query) => $query->where('used_at', '>=', $filters['used_from'].' 00:00:00'))
                     ->when($filters['used_to'], fn ($query) => $query->where('used_at', '<=', $filters['used_to'].' 23:59:59'));
             })
+            ->when($filters['sold_from'] || $filters['sold_to'], function ($query) use ($filters): void {
+                $query
+                    ->whereNotNull('sold_at')
+                    ->when($filters['sold_from'], fn ($query) => $query->where('sold_at', '>=', $filters['sold_from'].' 00:00:00'))
+                    ->when($filters['sold_to'], fn ($query) => $query->where('sold_at', '<=', $filters['sold_to'].' 23:59:59'));
+            })
             ->when($filters['search'], function ($query) use ($filters): void {
                 $search = $filters['search'];
 
@@ -204,7 +212,7 @@ class VoucherController extends Controller
     }
 
     /**
-     * @return array{search:string,status:string,shop:string,used_from:string,used_to:string}
+     * @return array{search:string,status:string,shop:string,used_from:string,used_to:string,sold_from:string,sold_to:string}
      */
     private function filters(Request $request): array
     {
@@ -214,6 +222,8 @@ class VoucherController extends Controller
             'shop' => ['nullable', TenantAccess::shopExistsRule($request->user())],
             'used_from' => ['nullable', 'date'],
             'used_to' => ['nullable', 'date', 'after_or_equal:used_from'],
+            'sold_from' => ['nullable', 'date'],
+            'sold_to' => ['nullable', 'date', 'after_or_equal:sold_from'],
         ]);
 
         return [
@@ -222,6 +232,8 @@ class VoucherController extends Controller
             'shop' => (string) ($validated['shop'] ?? ''),
             'used_from' => (string) ($validated['used_from'] ?? ''),
             'used_to' => (string) ($validated['used_to'] ?? ''),
+            'sold_from' => (string) ($validated['sold_from'] ?? ''),
+            'sold_to' => (string) ($validated['sold_to'] ?? ''),
         ];
     }
 }

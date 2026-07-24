@@ -18,15 +18,16 @@
         </div>
     </div>
 
-    <section class="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-7">
+    <section class="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
         @foreach ([
             ['label' => 'Vouchers', 'value' => $summary['total'], 'hint' => 'All generated codes', 'status' => ''],
             ['label' => 'Unused', 'value' => $summary['unused'], 'hint' => 'Ready to sell or print', 'status' => 'unused'],
             ['label' => 'Sold', 'value' => $summary['sold'], 'hint' => 'Sold, not yet redeemed', 'status' => 'sold'],
             ['label' => 'Used', 'value' => $summary['used'], 'hint' => 'Redeemed by devices', 'status' => 'used'],
             ['label' => 'Voided', 'value' => $summary['void'], 'hint' => 'Disabled before use', 'status' => 'void'],
+            ['label' => 'Sold value', 'value' => 'NGN '.number_format($summary['sold_revenue'], 2), 'hint' => 'All recorded voucher sales', 'status' => 'sold'],
+            ['label' => 'Sales in range', 'value' => 'NGN '.number_format($summary['sold_revenue_in_filter'], 2), 'hint' => number_format($summary['sold_in_filter']).' sold voucher(s)', 'status' => 'sold'],
             ['label' => 'Used this month', 'value' => $summary['used_this_month'], 'hint' => 'Monthly voucher activity', 'status' => 'used', 'action' => 'filterUsedThisMonth'],
-            ['label' => 'Used in range', 'value' => $summary['used_in_filter'], 'hint' => 'Matches date/shop filters', 'status' => 'used'],
         ] as $stat)
             @php($isActiveStat = $status === $stat['status'] && (($stat['action'] ?? '') !== 'filterUsedThisMonth' || ($used_from === now()->startOfMonth()->toDateString() && $used_to === now()->endOfMonth()->toDateString())))
             <button
@@ -37,13 +38,13 @@
                 class="rounded-lg border px-4 py-3 text-left shadow-sm transition hover:border-zinc-400 {{ $isActiveStat ? 'border-zinc-950 bg-zinc-950 text-white' : 'border-zinc-200 bg-white text-zinc-950' }}"
             >
                 <span class="block text-xs font-medium uppercase {{ $isActiveStat ? 'text-zinc-300' : 'text-zinc-500' }}">{{ $stat['label'] }}</span>
-                <span class="mt-2 block text-2xl font-semibold">{{ number_format($stat['value']) }}</span>
+                <span class="mt-2 block text-2xl font-semibold">{{ is_numeric($stat['value']) ? number_format($stat['value']) : $stat['value'] }}</span>
                 <span class="mt-1 block text-xs {{ $isActiveStat ? 'text-zinc-300' : 'text-zinc-500' }}">{{ $stat['hint'] }}</span>
             </button>
         @endforeach
     </section>
 
-    <section class="mb-4 grid min-w-0 gap-3 rounded-lg border border-zinc-200 bg-white p-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_190px_190px_150px_150px_auto] [&>*]:min-w-0">
+    <section class="mb-4 grid min-w-0 gap-3 rounded-lg border border-zinc-200 bg-white p-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_190px_190px_150px_150px_150px_150px_auto] [&>*]:min-w-0">
         <flux:input wire:model.live.debounce.350ms="search" icon="magnifying-glass" placeholder="Search batch, shop, package, prefix" />
         <flux:select wire:model.live="shop">
             <flux:select.option value="">All shops</flux:select.option>
@@ -60,14 +61,16 @@
             <flux:select.option value="used">Has used codes</flux:select.option>
             <flux:select.option value="void">Voided batches</flux:select.option>
         </flux:select>
+        <flux:input type="date" wire:model.live="sold_from" aria-label="Sold from date" />
+        <flux:input type="date" wire:model.live="sold_to" aria-label="Sold to date" />
         <flux:input type="date" wire:model.live="used_from" aria-label="Used from date" />
         <flux:input type="date" wire:model.live="used_to" aria-label="Used to date" />
-        <flux:button type="button" variant="outline" icon="x-mark" wire:click="clearFilters" wire:loading.attr="disabled" wire:target="clearFilters,search,status,shop,used_from,used_to">
+        <flux:button type="button" variant="outline" icon="x-mark" wire:click="clearFilters" wire:loading.attr="disabled" wire:target="clearFilters,search,status,shop,used_from,used_to,sold_from,sold_to">
             Reset
         </flux:button>
     </section>
 
-    <div wire:loading.flex wire:target="search,status,shop,used_from,used_to,clearFilters,filterBy,save" class="mb-4 hidden rounded-md border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
+    <div wire:loading.flex wire:target="search,status,shop,used_from,used_to,sold_from,sold_to,clearFilters,filterBy,save" class="mb-4 hidden rounded-md border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
         Updating vouchers...
     </div>
 

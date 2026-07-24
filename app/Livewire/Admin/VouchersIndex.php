@@ -28,6 +28,10 @@ class VouchersIndex extends Component
 
     public string $used_to = '';
 
+    public string $sold_from = '';
+
+    public string $sold_to = '';
+
     public bool $showGenerateModal = false;
 
     public bool $showInspectModal = false;
@@ -70,6 +74,8 @@ class VouchersIndex extends Component
         'shop' => ['except' => ''],
         'used_from' => ['except' => ''],
         'used_to' => ['except' => ''],
+        'sold_from' => ['except' => ''],
+        'sold_to' => ['except' => ''],
     ];
 
     public function mount(array $filters = []): void
@@ -79,11 +85,13 @@ class VouchersIndex extends Component
         $this->shop = (string) ($filters['shop'] ?? '');
         $this->used_from = (string) ($filters['used_from'] ?? '');
         $this->used_to = (string) ($filters['used_to'] ?? '');
+        $this->sold_from = (string) ($filters['sold_from'] ?? '');
+        $this->sold_to = (string) ($filters['sold_to'] ?? '');
     }
 
     public function updated($property): void
     {
-        if (in_array($property, ['search', 'status', 'shop', 'used_from', 'used_to'], true)) {
+        if (in_array($property, ['search', 'status', 'shop', 'used_from', 'used_to', 'sold_from', 'sold_to'], true)) {
             $this->resetPage();
         }
     }
@@ -131,7 +139,7 @@ class VouchersIndex extends Component
 
     public function clearFilters(): void
     {
-        $this->reset(['search', 'status', 'shop', 'used_from', 'used_to']);
+        $this->reset(['search', 'status', 'shop', 'used_from', 'used_to', 'sold_from', 'sold_to']);
         $this->resetPage();
     }
 
@@ -242,7 +250,8 @@ class VouchersIndex extends Component
             ->when($this->status === 'void', fn ($query) => $query->where('status', 'void'))
             ->when($this->status === 'exhausted', fn ($query) => $query->has('vouchers')->whereDoesntHave('vouchers', fn ($voucher) => $voucher->whereIn('status', ['unused', 'sold'])))
             ->when(in_array($this->status, ['used', 'unused', 'sold', 'void'], true), fn ($query) => $query->whereHas('vouchers', fn ($voucher) => $voucher->where('status', $this->status)))
-            ->when($this->used_from || $this->used_to, fn ($query) => $query->whereHas('vouchers', fn ($voucher) => $this->applyUsedDateFilters($voucher)));
+            ->when($this->used_from || $this->used_to, fn ($query) => $query->whereHas('vouchers', fn ($voucher) => $this->applyUsedDateFilters($voucher)))
+            ->when($this->sold_from || $this->sold_to, fn ($query) => $query->whereHas('vouchers', fn ($voucher) => $this->applySoldDateFilters($voucher)));
 
         return view('livewire.admin.vouchers-index', [
             'batches' => $query->latest()->paginate(12),
@@ -261,6 +270,8 @@ class VouchersIndex extends Component
 
         $filteredQuery = (clone $query)
             ->when($this->used_from || $this->used_to, fn ($query) => $this->applyUsedDateFilters($query));
+        $soldFilteredQuery = (clone $query)
+            ->when($this->sold_from || $this->sold_to, fn ($query) => $this->applySoldDateFilters($query));
 
         return [
             'total' => (clone $query)->count(),
@@ -268,6 +279,9 @@ class VouchersIndex extends Component
             'sold' => (clone $query)->where('status', 'sold')->count(),
             'used' => (clone $query)->where('status', 'used')->count(),
             'void' => (clone $query)->where('status', 'void')->count(),
+            'sold_revenue' => (float) (clone $query)->whereNotNull('sold_at')->sum('sale_amount'),
+            'sold_revenue_in_filter' => (float) (clone $soldFilteredQuery)->whereNotNull('sold_at')->sum('sale_amount'),
+            'sold_in_filter' => (clone $soldFilteredQuery)->whereNotNull('sold_at')->count(),
             'used_this_month' => (clone $query)
                 ->where('status', 'used')
                 ->whereBetween('used_at', [now()->startOfMonth(), now()->endOfMonth()])
@@ -335,6 +349,8 @@ class VouchersIndex extends Component
             'shop' => $this->shop,
             'used_from' => $this->used_from,
             'used_to' => $this->used_to,
+            'sold_from' => $this->sold_from,
+            'sold_to' => $this->sold_to,
         ], fn ($value): bool => filled($value));
     }
 
@@ -356,10 +372,14 @@ class VouchersIndex extends Component
             'shop' => $this->shop ?: null,
             'used_from' => $this->used_from ?: null,
             'used_to' => $this->used_to ?: null,
+            'sold_from' => $this->sold_from ?: null,
+            'sold_to' => $this->sold_to ?: null,
         ], [
             'shop' => ['nullable', TenantAccess::shopExistsRule(auth()->user())],
             'used_from' => ['nullable', 'date'],
             'used_to' => ['nullable', 'date', 'after_or_equal:used_from'],
+            'sold_from' => ['nullable', 'date'],
+            'sold_to' => ['nullable', 'date', 'after_or_equal:sold_from'],
         ])->validate();
     }
 
@@ -369,5 +389,13 @@ class VouchersIndex extends Component
             ->where('status', 'used')
             ->when($this->used_from, fn ($query) => $query->where('used_at', '>=', $this->used_from.' 00:00:00'))
             ->when($this->used_to, fn ($query) => $query->where('used_at', '<=', $this->used_to.' 23:59:59'));
+    }
+
+    private function applySoldDateFilters(Builder $query): Builder
+    {
+        return $query
+            ->whereNotNull('sold_at')
+            ->when($this->sold_from, fn ($query) => $query->where('sold_at', '>=', $this->sold_from.' 00:00:00'))
+            ->when($this->sold_to, fn ($query) => $query->where('sold_at', '<=', $this->sold_to.' 23:59:59'));
     }
 }
