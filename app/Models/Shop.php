@@ -63,6 +63,16 @@ class Shop extends Model
         return $this->hasMany(PppoeSubscriber::class);
     }
 
+    public function voucherBatches(): HasMany
+    {
+        return $this->hasMany(VoucherBatch::class);
+    }
+
+    public function vouchers(): HasMany
+    {
+        return $this->hasMany(Voucher::class);
+    }
+
     public function hasCompleteFlutterwaveCredentials(): bool
     {
         return filled($this->flutterwave_client_id) && filled($this->flutterwave_client_secret);

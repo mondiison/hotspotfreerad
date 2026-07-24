@@ -12,6 +12,7 @@ use App\Models\Subscription;
 use App\Services\FlutterwaveService;
 use App\Services\HotspotPaymentConfirmationService;
 use App\Services\RadiusProvisioningService;
+use App\Services\VoucherManagementService;
 use App\Support\PaymentCommission;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\RedirectResponse;
@@ -146,6 +147,43 @@ class PortalController extends Controller
         return view('hotspot.access-granted', [
             'router' => $router,
             'package' => $package,
+            'subscription' => $subscription,
+            'macAddress' => $validated['mac'],
+            'username' => $validated['mac'],
+            'password' => self::TEST_ACCESS_PASSWORD,
+            'loginUrl' => $validated['link-login'] ?? null,
+            'originalUrl' => $validated['link-orig'] ?? null,
+        ]);
+    }
+
+    public function redeemVoucher(Request $request, VoucherManagementService $vouchers): RedirectResponse|View
+    {
+        $validated = $request->validate([
+            'mac' => ['required', 'string', 'max:64'],
+            'nasid' => ['required', 'string', 'max:255'],
+            'voucher_code' => ['required', 'string', 'max:64'],
+            'link-login' => ['nullable', 'string', 'max:2048'],
+            'link-orig' => ['nullable', 'string', 'max:2048'],
+        ]);
+
+        $router = Router::query()
+            ->with('shop.tenant')
+            ->where('nas_identifier', $validated['nasid'])
+            ->first();
+
+        if (! $router) {
+            return view('hotspot.unknown-router', [
+                'macAddress' => $validated['mac'],
+                'nasIdentifier' => $validated['nasid'],
+            ]);
+        }
+
+        $subscription = $vouchers->redeem($router, $validated['mac'], $validated['voucher_code']);
+        $subscription->loadMissing('package');
+
+        return view('hotspot.access-granted', [
+            'router' => $router,
+            'package' => $subscription->package,
             'subscription' => $subscription,
             'macAddress' => $validated['mac'],
             'username' => $validated['mac'],

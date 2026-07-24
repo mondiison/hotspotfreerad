@@ -98,6 +98,38 @@
         <section class="py-4 sm:py-8">
             <h2 class="text-lg font-semibold">Choose internet access</h2>
 
+            <section class="mt-3 rounded-lg border border-white/10 bg-white p-3 text-zinc-950 shadow-sm sm:mt-5 sm:p-5" x-data="{ redeeming: false }">
+                <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+                    <div>
+                        <h3 class="text-base font-semibold">Have a voucher?</h3>
+                        <p class="mt-1 text-sm text-zinc-500">Enter a prepaid code from this hotspot operator to connect this device.</p>
+                    </div>
+                    <span class="rounded-md bg-zinc-100 px-2 py-1 text-xs font-medium text-zinc-600">One-time code</span>
+                </div>
+
+                <form method="POST" action="{{ route('hotspot.voucher.redeem') }}" class="mt-4 grid gap-2 sm:grid-cols-[1fr_auto]" @submit="redeeming = true">
+                    @csrf
+                    <input type="hidden" name="mac" value="{{ $macAddress }}">
+                    <input type="hidden" name="nasid" value="{{ $router->nas_identifier }}">
+                    @if ($loginUrl)
+                        <input type="hidden" name="link-login" value="{{ $loginUrl }}">
+                    @endif
+                    @if ($originalUrl)
+                        <input type="hidden" name="link-orig" value="{{ $originalUrl }}">
+                    @endif
+                    <div>
+                        <input name="voucher_code" value="{{ old('voucher_code') }}" placeholder="Enter voucher code" class="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm font-medium uppercase tracking-wide" required>
+                        @error('voucher_code')
+                            <p class="mt-2 text-xs text-red-600">{{ $message }}</p>
+                        @enderror
+                    </div>
+                    <button class="flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium text-white disabled:cursor-wait disabled:opacity-75" style="background-color: var(--brand)" :disabled="redeeming">
+                        <span x-show="redeeming" class="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"></span>
+                        <span x-text="redeeming ? 'Checking...' : 'Redeem voucher'">Redeem voucher</span>
+                    </button>
+                </form>
+            </section>
+
             <div class="mt-3 grid gap-3 sm:mt-5 sm:grid-cols-2 lg:grid-cols-3" x-data="{ selectedPlan: null }">
                 @forelse ($packages as $package)
                     <article

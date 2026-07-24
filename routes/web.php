@@ -19,6 +19,7 @@ use App\Http\Controllers\Admin\SubscriptionController;
 use App\Http\Controllers\Admin\TenantBrandController;
 use App\Http\Controllers\Admin\TenantController;
 use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\Admin\VoucherController;
 use App\Http\Controllers\Auth\ForcePasswordChangeController;
 use App\Http\Controllers\Auth\ForgotPasswordController;
 use App\Http\Controllers\Auth\LoginController;
@@ -59,6 +60,7 @@ Route::post('/hotspot/payment/webhook', [PortalController::class, 'webhook'])
     ->withoutMiddleware([ValidateCsrfToken::class])
     ->name('hotspot.payment.webhook');
 Route::post('/hotspot/grant', [PortalController::class, 'grant'])->name('hotspot.grant');
+Route::post('/hotspot/voucher/redeem', [PortalController::class, 'redeemVoucher'])->name('hotspot.voucher.redeem');
 Route::post('/billing/payment/webhook', [BillingController::class, 'webhook'])
     ->withoutMiddleware([ValidateCsrfToken::class])
     ->name('billing.payment.webhook');
@@ -91,6 +93,8 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::resource('packages', PackageController::class)->except('show');
     Route::get('subscriptions-export', [SubscriptionController::class, 'export'])->name('subscriptions.export');
     Route::get('subscriptions', [SubscriptionController::class, 'index'])->name('subscriptions.index');
+    Route::get('vouchers', [VoucherController::class, 'index'])->name('vouchers.index');
+    Route::get('voucher-batches/{voucherBatch}/print', [VoucherController::class, 'print'])->name('voucher-batches.print');
     Route::get('pppoe-subscribers-export', [PppoeSubscriberController::class, 'export'])->name('pppoe-subscribers.export');
     Route::get('pppoe-subscribers', [PppoeSubscriberController::class, 'index'])->name('pppoe-subscribers.index');
     Route::get('payments-export', [PaymentController::class, 'export'])->name('payments.export');
