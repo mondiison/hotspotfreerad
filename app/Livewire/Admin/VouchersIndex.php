@@ -257,6 +257,7 @@ class VouchersIndex extends Component
             'batches' => $query->latest()->paginate(12),
             'selectedBatch' => $this->selectedBatch(),
             'summary' => $this->summary(),
+            'salesBreakdown' => $this->salesBreakdown(),
             'shops' => $this->shops(),
             'packages' => $this->packages(),
             'exportQuery' => $this->exportQuery(),
@@ -288,6 +289,45 @@ class VouchersIndex extends Component
                 ->count(),
             'used_in_filter' => (clone $filteredQuery)->where('status', 'used')->count(),
         ];
+    }
+
+    private function salesBreakdown(): array
+    {
+        $sales = TenantAccess::scopeVouchers(
+            Voucher::with(['shop.tenant', 'package', 'soldBy'])->whereNotNull('sold_at'),
+            auth()->user()
+        )
+            ->when($this->shop, fn ($query) => $query->where('shop_id', $this->shop))
+            ->when($this->sold_from || $this->sold_to, fn ($query) => $this->applySoldDateFilters($query))
+            ->latest('sold_at')
+            ->get();
+
+        return [
+            'shops' => $this->breakdownRows($sales, fn (Voucher $voucher): string => $voucher->shop?->name ?? 'Deleted shop'),
+            'packages' => $this->breakdownRows($sales, fn (Voucher $voucher): string => $voucher->package?->name ?? 'Deleted package'),
+            'staff' => $this->breakdownRows($sales, fn (Voucher $voucher): string => $voucher->soldBy?->name ?? 'Unassigned staff'),
+        ];
+    }
+
+    private function breakdownRows(Collection $sales, callable $groupBy): Collection
+    {
+        $totalAmount = max(0.01, (float) $sales->sum(fn (Voucher $voucher): float => (float) $voucher->sale_amount));
+
+        return $sales
+            ->groupBy($groupBy)
+            ->map(function (Collection $rows, string $label) use ($totalAmount): array {
+                $amount = (float) $rows->sum(fn (Voucher $voucher): float => (float) $voucher->sale_amount);
+
+                return [
+                    'label' => $label,
+                    'count' => $rows->count(),
+                    'amount' => $amount,
+                    'share' => round(($amount / $totalAmount) * 100, 1),
+                ];
+            })
+            ->sortByDesc('amount')
+            ->values()
+            ->take(8);
     }
 
     private function shops(): Collection

@@ -347,6 +347,88 @@ class AdminVoucherTest extends TestCase
             ->assertSee('Sales Value Batch');
     }
 
+    public function test_voucher_dashboard_shows_sales_breakdowns_by_shop_package_and_staff(): void
+    {
+        [$tenant, $shop, $package] = $this->fixture();
+        $otherShop = Shop::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Annex',
+        ]);
+        $otherPackage = Package::create([
+            'shop_id' => $otherShop->id,
+            'name' => 'Hourly 1GB',
+            'service_type' => 'hotspot',
+            'price' => 500,
+            'currency' => 'NGN',
+            'limit_uptime_seconds' => 3600,
+            'speed_limit_profile' => '3M/3M',
+            'is_active' => true,
+        ]);
+        $cashier = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+            'name' => 'Front Desk Cashier',
+        ]);
+        $batch = VoucherBatch::create([
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'name' => 'Breakdown Main',
+            'quantity' => 1,
+            'code_length' => 8,
+            'status' => 'active',
+        ]);
+        $otherBatch = VoucherBatch::create([
+            'shop_id' => $otherShop->id,
+            'package_id' => $otherPackage->id,
+            'name' => 'Breakdown Annex',
+            'quantity' => 1,
+            'code_length' => 8,
+            'status' => 'active',
+        ]);
+        Voucher::create([
+            'voucher_batch_id' => $batch->id,
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'sold_by_user_id' => $cashier->id,
+            'code' => 'MMS-BREAK-MAIN',
+            'status' => 'sold',
+            'sold_at' => now()->setDate(2026, 7, 12),
+            'sale_amount' => 1000,
+        ]);
+        Voucher::create([
+            'voucher_batch_id' => $otherBatch->id,
+            'shop_id' => $otherShop->id,
+            'package_id' => $otherPackage->id,
+            'sold_by_user_id' => $cashier->id,
+            'code' => 'MMS-BREAK-ANNEX',
+            'status' => 'sold',
+            'sold_at' => now()->setDate(2026, 7, 13),
+            'sale_amount' => 500,
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user);
+
+        Livewire::test(VouchersIndex::class)
+            ->set('sold_from', '2026-07-01')
+            ->set('sold_to', '2026-07-31')
+            ->assertSee('Sales by Shop')
+            ->assertSee('Park Area')
+            ->assertSee('Annex')
+            ->assertSee('Sales by Package')
+            ->assertSee('Daily 5GB')
+            ->assertSee('Hourly 1GB')
+            ->assertSee('Sales by Staff')
+            ->assertSee('Front Desk Cashier')
+            ->assertSee('NGN 1,000.00')
+            ->assertSee('NGN 500.00');
+    }
+
     public function test_voucher_export_can_filter_by_sold_date_range(): void
     {
         [$tenant, $shop, $package] = $this->fixture();

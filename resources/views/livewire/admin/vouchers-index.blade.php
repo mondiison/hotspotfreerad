@@ -142,6 +142,47 @@
 
     <div class="mt-4">{{ $batches->links() }}</div>
 
+    <section class="mt-6 grid gap-4 xl:grid-cols-3">
+        @foreach ([
+            ['title' => 'Sales by Shop', 'rows' => $salesBreakdown['shops']],
+            ['title' => 'Sales by Package', 'rows' => $salesBreakdown['packages']],
+            ['title' => 'Sales by Staff', 'rows' => $salesBreakdown['staff']],
+        ] as $panel)
+            <div class="rounded-lg border border-zinc-200 bg-white shadow-sm">
+                <div class="border-b border-zinc-100 px-4 py-3">
+                    <h2 class="text-sm font-semibold">{{ $panel['title'] }}</h2>
+                    <p class="mt-1 text-xs text-zinc-500">Based on recorded voucher sale date{{ $sold_from || $sold_to ? ' range' : 's' }}.</p>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full text-left text-sm">
+                        <thead class="bg-zinc-50 text-xs text-zinc-500">
+                            <tr>
+                                <th class="px-4 py-3 font-medium">Name</th>
+                                <th class="px-4 py-3 text-right font-medium">Sales</th>
+                                <th class="px-4 py-3 text-right font-medium">Amount</th>
+                                <th class="px-4 py-3 text-right font-medium">Share</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-zinc-100">
+                            @forelse ($panel['rows'] as $row)
+                                <tr>
+                                    <td class="px-4 py-3 font-medium">{{ $row['label'] }}</td>
+                                    <td class="px-4 py-3 text-right">{{ number_format($row['count']) }}</td>
+                                    <td class="px-4 py-3 text-right">NGN {{ number_format($row['amount'], 2) }}</td>
+                                    <td class="px-4 py-3 text-right">{{ $row['share'] }}%</td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="4" class="px-4 py-8 text-center text-sm text-zinc-500">No voucher sales in this range.</td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        @endforeach
+    </section>
+
     <flux:modal wire:model.self="showGenerateModal" class="md:w-3xl" :dismissible="true" variant="flyout">
         <form wire:submit="save" class="space-y-6">
             <div>
