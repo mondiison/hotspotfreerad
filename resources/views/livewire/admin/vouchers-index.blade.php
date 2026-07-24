@@ -18,10 +18,11 @@
         </div>
     </div>
 
-    <section class="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+    <section class="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-7">
         @foreach ([
             ['label' => 'Vouchers', 'value' => $summary['total'], 'hint' => 'All generated codes', 'status' => ''],
             ['label' => 'Unused', 'value' => $summary['unused'], 'hint' => 'Ready to sell or print', 'status' => 'unused'],
+            ['label' => 'Sold', 'value' => $summary['sold'], 'hint' => 'Sold, not yet redeemed', 'status' => 'sold'],
             ['label' => 'Used', 'value' => $summary['used'], 'hint' => 'Redeemed by devices', 'status' => 'used'],
             ['label' => 'Voided', 'value' => $summary['void'], 'hint' => 'Disabled before use', 'status' => 'void'],
             ['label' => 'Used this month', 'value' => $summary['used_this_month'], 'hint' => 'Monthly voucher activity', 'status' => 'used', 'action' => 'filterUsedThisMonth'],
@@ -55,6 +56,7 @@
             <flux:select.option value="active">Active batches</flux:select.option>
             <flux:select.option value="exhausted">Fully used</flux:select.option>
             <flux:select.option value="unused">Has unused codes</flux:select.option>
+            <flux:select.option value="sold">Sold not redeemed</flux:select.option>
             <flux:select.option value="used">Has used codes</flux:select.option>
             <flux:select.option value="void">Voided batches</flux:select.option>
         </flux:select>
@@ -74,13 +76,14 @@
     </div>
 
     <div class="overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
-        <table class="min-w-[980px] w-full text-left text-sm">
+        <table class="min-w-[1120px] w-full text-left text-sm">
             <thead class="border-b border-zinc-200 bg-zinc-50 text-zinc-500">
                 <tr>
                     <th class="px-4 py-3 font-medium">Batch</th>
                     <th class="px-4 py-3 font-medium">Shop</th>
                     <th class="px-4 py-3 font-medium">Package</th>
                     <th class="px-4 py-3 text-right font-medium">Codes</th>
+                    <th class="px-4 py-3 text-right font-medium">Sold</th>
                     <th class="px-4 py-3 text-right font-medium">Used</th>
                     <th class="px-4 py-3 text-right font-medium">Unused</th>
                     <th class="px-4 py-3 text-right font-medium">Voided</th>
@@ -103,6 +106,7 @@
                             <p class="mt-1 text-xs text-zinc-500">{{ $batch->package?->speed_limit_profile }} / {{ $batch->package?->limit_uptime_seconds ? round($batch->package->limit_uptime_seconds / 86400, 1).' days' : 'No time' }}</p>
                         </td>
                         <td class="px-4 py-3 text-right">{{ number_format($batch->vouchers_count) }}</td>
+                        <td class="px-4 py-3 text-right">{{ number_format($batch->sold_vouchers_count) }}</td>
                         <td class="px-4 py-3 text-right">{{ number_format($batch->used_vouchers_count) }}</td>
                         <td class="px-4 py-3 text-right">{{ number_format($batch->unused_vouchers_count) }}</td>
                         <td class="px-4 py-3 text-right">{{ number_format($batch->void_vouchers_count) }}</td>
@@ -122,7 +126,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="8" class="px-4 py-10 text-center">
+                        <td colspan="9" class="px-4 py-10 text-center">
                             <p class="font-medium">No voucher batches found.</p>
                             <p class="mt-1 text-sm text-zinc-500">Generate prepaid voucher codes for walk-in hotspot customers.</p>
                             <flux:button type="button" variant="primary" icon="plus" class="mt-4" wire:click="create">Generate Vouchers</flux:button>
@@ -241,6 +245,7 @@
                     @foreach ([
                         ['label' => 'Generated', 'value' => $selectedBatch->vouchers_count],
                         ['label' => 'Unused', 'value' => $selectedBatch->unused_vouchers_count],
+                        ['label' => 'Sold', 'value' => $selectedBatch->sold_vouchers_count],
                         ['label' => 'Used', 'value' => $selectedBatch->used_vouchers_count],
                         ['label' => 'Voided', 'value' => $selectedBatch->void_vouchers_count],
                         ['label' => 'Use rate', 'value' => $selectedBatch->vouchers_count > 0 ? round(($selectedBatch->used_vouchers_count / $selectedBatch->vouchers_count) * 100, 1).'%' : '0%'],
@@ -280,14 +285,16 @@
                 </section>
 
                 <div class="overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 bg-white">
-                    <table class="min-w-[920px] w-full text-left text-sm">
+                    <table class="min-w-[1180px] w-full text-left text-sm">
                         <thead class="border-b border-zinc-200 bg-zinc-50 text-zinc-500">
                             <tr>
                                 <th class="px-4 py-3 font-medium">Code</th>
                                 <th class="px-4 py-3 font-medium">Status</th>
+                                <th class="px-4 py-3 font-medium">Sale</th>
                                 <th class="px-4 py-3 font-medium">Used by device</th>
                                 <th class="px-4 py-3 font-medium">Used at</th>
                                 <th class="px-4 py-3 text-right font-medium">Access expires</th>
+                                <th class="px-4 py-3 text-right font-medium">Action</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-zinc-100">
@@ -297,9 +304,20 @@
                                         <p class="font-mono text-xs font-semibold">{{ $voucher->code }}</p>
                                     </td>
                                     <td class="px-4 py-3">
-                                        <flux:badge :color="$voucher->status === 'unused' ? 'green' : ($voucher->status === 'void' ? 'red' : 'zinc')">
+                                        <flux:badge :color="$voucher->status === 'unused' ? 'green' : ($voucher->status === 'sold' ? 'amber' : ($voucher->status === 'void' ? 'red' : 'zinc'))">
                                             {{ ucfirst($voucher->status) }}
                                         </flux:badge>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        @if ($voucher->sold_at)
+                                            <p class="font-medium">{{ $voucher->package?->currency ?? 'NGN' }} {{ number_format((float) $voucher->sale_amount, 2) }}</p>
+                                            <p class="mt-1 text-xs text-zinc-500">{{ $voucher->sold_at->format('M j, Y g:i A') }}</p>
+                                            @if ($voucher->sale_reference)
+                                                <p class="mt-1 font-mono text-xs text-zinc-500">{{ $voucher->sale_reference }}</p>
+                                            @endif
+                                        @else
+                                            <span class="text-zinc-400">Not sold</span>
+                                        @endif
                                     </td>
                                     <td class="px-4 py-3">
                                         <p class="font-mono text-xs">{{ $voucher->used_mac_address ?: '-' }}</p>
@@ -310,15 +328,65 @@
                                     <td class="px-4 py-3 text-right">
                                         {{ $voucher->subscription?->expires_at?->format('M j, Y g:i A') ?? '-' }}
                                     </td>
+                                    <td class="px-4 py-3 text-right">
+                                        @if ($voucher->status === 'unused')
+                                            <flux:button type="button" size="sm" variant="outline" icon="banknotes" wire:click="confirmSale({{ $voucher->id }})" wire:loading.attr="disabled" wire:target="confirmSale({{ $voucher->id }})">
+                                                Mark sold
+                                            </flux:button>
+                                        @else
+                                            <span class="text-xs text-zinc-400">-</span>
+                                        @endif
+                                    </td>
                                 </tr>
                             @empty
-                                <tr><td colspan="5" class="px-4 py-8 text-center text-zinc-500">No voucher codes found in this batch.</td></tr>
+                                <tr><td colspan="7" class="px-4 py-8 text-center text-zinc-500">No voucher codes found in this batch.</td></tr>
                             @endforelse
                         </tbody>
                     </table>
                 </div>
             </div>
         @endif
+    </flux:modal>
+
+    <flux:modal wire:model.self="showSaleModal" class="md:w-xl" :dismissible="true">
+        <form wire:submit="markSold" class="space-y-5">
+            <div>
+                <flux:heading size="lg">Mark Voucher Sold</flux:heading>
+                <flux:text class="mt-2 text-sm text-zinc-500">
+                    Record a front-desk or cash sale before the customer redeems the voucher.
+                </flux:text>
+            </div>
+
+            <flux:error name="sale_voucher_id" />
+
+            <div class="grid gap-4">
+                <flux:field>
+                    <flux:label>Sale amount</flux:label>
+                    <flux:input type="number" min="0" step="0.01" wire:model.blur="sale_amount" icon="banknotes" required />
+                    <flux:error name="sale_amount" />
+                </flux:field>
+
+                <flux:field>
+                    <flux:label>Reference</flux:label>
+                    <flux:input wire:model.blur="sale_reference" icon="hashtag" placeholder="Receipt number, POS ref, cashier note" />
+                    <flux:error name="sale_reference" />
+                </flux:field>
+
+                <flux:field>
+                    <flux:label>Notes</flux:label>
+                    <flux:textarea wire:model.blur="sale_notes" rows="3" placeholder="Optional sale note" />
+                    <flux:error name="sale_notes" />
+                </flux:field>
+            </div>
+
+            <div class="flex justify-end gap-3">
+                <flux:button type="button" variant="ghost" wire:click="$set('showSaleModal', false)">Cancel</flux:button>
+                <flux:button type="submit" variant="primary" icon="banknotes" wire:loading.attr="disabled" wire:target="markSold">
+                    <span wire:loading.remove wire:target="markSold">Mark sold</span>
+                    <span wire:loading wire:target="markSold">Saving...</span>
+                </flux:button>
+            </div>
+        </form>
     </flux:modal>
 
     <flux:modal wire:model.self="showVoidModal" class="md:w-lg" :dismissible="false">

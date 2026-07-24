@@ -26,7 +26,7 @@ class VoucherController extends Controller
 
         $validated = $request->validate([
             'columns' => ['nullable', 'integer', 'min:2', 'max:5'],
-            'status' => ['nullable', 'string', 'in:all,unused,used,void'],
+            'status' => ['nullable', 'string', 'in:all,unused,sold,used,void'],
         ]);
 
         $columns = (int) ($validated['columns'] ?? 3);
@@ -70,6 +70,10 @@ class VoucherController extends Controller
                 'Speed Profile',
                 'Uptime Seconds',
                 'Transfer Limit Bytes',
+                'Sale Amount',
+                'Sale Reference',
+                'Sold At',
+                'Sold By',
                 'Used MAC Address',
                 'Used At',
                 'Access Expires At',
@@ -93,7 +97,7 @@ class VoucherController extends Controller
         TenantAccess::assertVoucherBatch($voucherBatch, $request->user());
 
         $validated = $request->validate([
-            'status' => ['nullable', 'string', 'in:all,unused,used,void'],
+            'status' => ['nullable', 'string', 'in:all,unused,sold,used,void'],
         ]);
         $status = (string) ($validated['status'] ?? 'all');
         $filename = str($voucherBatch->name)->slug()->append('-vouchers-'.now()->format('Y-m-d-His').'.csv')->toString();
@@ -115,6 +119,10 @@ class VoucherController extends Controller
                 'Speed Profile',
                 'Uptime Seconds',
                 'Transfer Limit Bytes',
+                'Sale Amount',
+                'Sale Reference',
+                'Sold At',
+                'Sold By',
                 'Used MAC Address',
                 'Used At',
                 'Access Expires At',
@@ -122,7 +130,7 @@ class VoucherController extends Controller
             ]);
 
             $voucherBatch->vouchers()
-                ->with(['batch', 'shop.tenant', 'package', 'subscription'])
+                ->with(['batch', 'shop.tenant', 'package', 'subscription', 'soldBy'])
                 ->when($status !== 'all', fn ($query) => $query->where('status', $status))
                 ->orderBy('code')
                 ->chunk(300, function ($vouchers) use ($handle): void {
@@ -138,15 +146,16 @@ class VoucherController extends Controller
     private function voucherQuery(Request $request, array $filters): Builder
     {
         return TenantAccess::scopeVouchers(
-            Voucher::with(['batch', 'shop.tenant', 'package', 'subscription']),
+            Voucher::with(['batch', 'shop.tenant', 'package', 'subscription', 'soldBy']),
             $request->user()
         )
             ->when($filters['shop'], fn ($query) => $query->where('shop_id', $filters['shop']))
             ->when($filters['status'] === 'used', fn ($query) => $query->where('status', 'used'))
             ->when($filters['status'] === 'unused', fn ($query) => $query->where('status', 'unused'))
+            ->when($filters['status'] === 'sold', fn ($query) => $query->where('status', 'sold'))
             ->when($filters['status'] === 'void', fn ($query) => $query->where('status', 'void'))
             ->when($filters['status'] === 'active', fn ($query) => $query->whereHas('batch', fn ($batch) => $batch->where('status', 'active')))
-            ->when($filters['status'] === 'exhausted', fn ($query) => $query->whereHas('batch', fn ($batch) => $batch->has('vouchers')->whereDoesntHave('vouchers', fn ($voucher) => $voucher->where('status', 'unused'))))
+            ->when($filters['status'] === 'exhausted', fn ($query) => $query->whereHas('batch', fn ($batch) => $batch->has('vouchers')->whereDoesntHave('vouchers', fn ($voucher) => $voucher->whereIn('status', ['unused', 'sold']))))
             ->when($filters['used_from'] || $filters['used_to'], function ($query) use ($filters): void {
                 $query
                     ->where('status', 'used')
@@ -183,6 +192,10 @@ class VoucherController extends Controller
             $voucher->package?->speed_limit_profile,
             $voucher->package?->limit_uptime_seconds,
             $voucher->package?->data_limit_bytes,
+            $voucher->sale_amount,
+            $voucher->sale_reference,
+            $voucher->sold_at?->toDateTimeString(),
+            $voucher->soldBy?->name,
             $voucher->used_mac_address,
             $voucher->used_at?->toDateTimeString(),
             $voucher->subscription?->expires_at?->toDateTimeString(),
@@ -197,7 +210,7 @@ class VoucherController extends Controller
     {
         $validated = $request->validate([
             'search' => ['nullable', 'string', 'max:255'],
-            'status' => ['nullable', 'string', 'in:active,exhausted,used,unused,void'],
+            'status' => ['nullable', 'string', 'in:active,exhausted,used,unused,sold,void'],
             'shop' => ['nullable', TenantAccess::shopExistsRule($request->user())],
             'used_from' => ['nullable', 'date'],
             'used_to' => ['nullable', 'date', 'after_or_equal:used_from'],

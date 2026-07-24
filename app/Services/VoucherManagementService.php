@@ -94,13 +94,7 @@ class VoucherManagementService
                 ]);
             }
 
-            if ($voucher->batch?->status === 'void') {
-                throw ValidationException::withMessages([
-                    'voucher_code' => 'This voucher batch has been voided. Please contact the hotspot operator.',
-                ]);
-            }
-
-            if ($voucher->status !== 'unused') {
+            if (! in_array($voucher->status, ['unused', 'sold'], true)) {
                 throw ValidationException::withMessages([
                     'voucher_code' => 'This voucher has already been used.',
                 ]);
@@ -146,6 +140,30 @@ class VoucherManagementService
         });
     }
 
+    public function markSold(Voucher $voucher, array $data, User $user): Voucher
+    {
+        TenantAccess::assertVoucher($voucher, $user);
+
+        if ($voucher->status !== 'unused') {
+            throw ValidationException::withMessages([
+                'sale_voucher_id' => 'Only unused vouchers can be marked as sold.',
+            ]);
+        }
+
+        $voucher->loadMissing('package');
+
+        $voucher->forceFill([
+            'status' => 'sold',
+            'sold_by_user_id' => $user->id,
+            'sold_at' => now(),
+            'sale_amount' => $data['sale_amount'] ?? $voucher->package?->price,
+            'sale_reference' => filled($data['sale_reference'] ?? null) ? (string) $data['sale_reference'] : null,
+            'sale_notes' => filled($data['sale_notes'] ?? null) ? (string) $data['sale_notes'] : null,
+        ])->save();
+
+        return $voucher;
+    }
+
     public function voidUnusedBatchVouchers(VoucherBatch $batch, User $user): int
     {
         TenantAccess::assertVoucherBatch($batch, $user);
@@ -155,7 +173,11 @@ class VoucherManagementService
                 ->where('status', 'unused')
                 ->update(['status' => 'void', 'updated_at' => now()]);
 
-            $batch->forceFill(['status' => 'void'])->save();
+            $hasRedeemableVouchers = $batch->vouchers()
+                ->whereIn('status', ['unused', 'sold'])
+                ->exists();
+
+            $batch->forceFill(['status' => $hasRedeemableVouchers ? 'active' : 'void'])->save();
 
             return $voided;
         });

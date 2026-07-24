@@ -34,9 +34,19 @@ class VouchersIndex extends Component
 
     public bool $showVoidModal = false;
 
+    public bool $showSaleModal = false;
+
     public ?int $selectedBatchId = null;
 
     public ?int $voidBatchId = null;
+
+    public ?int $saleVoucherId = null;
+
+    public string $sale_amount = '';
+
+    public string $sale_reference = '';
+
+    public string $sale_notes = '';
 
     public string $shop_id = '';
 
@@ -164,6 +174,46 @@ class VouchersIndex extends Component
         $this->selectedBatchId = $batch->id;
     }
 
+    public function confirmSale(int $voucherId): void
+    {
+        $voucher = Voucher::with(['shop', 'package'])->findOrFail($voucherId);
+        TenantAccess::assertVoucher($voucher, auth()->user());
+
+        if ($voucher->status !== 'unused') {
+            $this->addError('sale_voucher_id', 'Only unused vouchers can be marked as sold.');
+            return;
+        }
+
+        $this->saleVoucherId = $voucher->id;
+        $this->sale_amount = (string) ($voucher->package?->price ?? '');
+        $this->sale_reference = '';
+        $this->sale_notes = '';
+        $this->showSaleModal = true;
+        $this->resetValidation(['sale_amount', 'sale_reference', 'sale_notes', 'sale_voucher_id']);
+    }
+
+    public function markSold(VoucherManagementService $vouchers): void
+    {
+        $validated = $this->validate([
+            'sale_amount' => ['required', 'numeric', 'min:0'],
+            'sale_reference' => ['nullable', 'string', 'max:255'],
+            'sale_notes' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        if (! $this->saleVoucherId) {
+            return;
+        }
+
+        $voucher = Voucher::findOrFail($this->saleVoucherId);
+        $vouchers->markSold($voucher, $validated, auth()->user());
+
+        $this->savedMessage = "{$voucher->code} marked as sold.";
+        $this->selectedBatchId = $voucher->voucher_batch_id;
+        $this->showSaleModal = false;
+        $this->saleVoucherId = null;
+        $this->reset(['sale_amount', 'sale_reference', 'sale_notes']);
+    }
+
     public function render()
     {
         $this->validateOnlyFilters();
@@ -173,6 +223,7 @@ class VouchersIndex extends Component
                 'vouchers',
                 'vouchers as used_vouchers_count' => fn ($query) => $query->where('status', 'used'),
                 'vouchers as unused_vouchers_count' => fn ($query) => $query->where('status', 'unused'),
+                'vouchers as sold_vouchers_count' => fn ($query) => $query->where('status', 'sold'),
                 'vouchers as void_vouchers_count' => fn ($query) => $query->where('status', 'void'),
             ]),
             auth()->user()
@@ -189,8 +240,8 @@ class VouchersIndex extends Component
             ->when($this->shop, fn ($query) => $query->where('shop_id', $this->shop))
             ->when($this->status === 'active', fn ($query) => $query->where('status', 'active'))
             ->when($this->status === 'void', fn ($query) => $query->where('status', 'void'))
-            ->when($this->status === 'exhausted', fn ($query) => $query->has('vouchers')->whereDoesntHave('vouchers', fn ($voucher) => $voucher->where('status', 'unused')))
-            ->when(in_array($this->status, ['used', 'unused', 'void'], true), fn ($query) => $query->whereHas('vouchers', fn ($voucher) => $voucher->where('status', $this->status)))
+            ->when($this->status === 'exhausted', fn ($query) => $query->has('vouchers')->whereDoesntHave('vouchers', fn ($voucher) => $voucher->whereIn('status', ['unused', 'sold'])))
+            ->when(in_array($this->status, ['used', 'unused', 'sold', 'void'], true), fn ($query) => $query->whereHas('vouchers', fn ($voucher) => $voucher->where('status', $this->status)))
             ->when($this->used_from || $this->used_to, fn ($query) => $query->whereHas('vouchers', fn ($voucher) => $this->applyUsedDateFilters($voucher)));
 
         return view('livewire.admin.vouchers-index', [
@@ -214,6 +265,7 @@ class VouchersIndex extends Component
         return [
             'total' => (clone $query)->count(),
             'unused' => (clone $query)->where('status', 'unused')->count(),
+            'sold' => (clone $query)->where('status', 'sold')->count(),
             'used' => (clone $query)->where('status', 'used')->count(),
             'void' => (clone $query)->where('status', 'void')->count(),
             'used_this_month' => (clone $query)
@@ -253,7 +305,7 @@ class VouchersIndex extends Component
             'shop.tenant',
             'package',
             'vouchers' => fn ($query) => $query
-                ->with('subscription')
+                ->with(['subscription', 'soldBy'])
                 ->orderByRaw("case when status = 'unused' then 0 else 1 end")
                 ->orderBy('code'),
         ])
@@ -261,6 +313,7 @@ class VouchersIndex extends Component
                 'vouchers',
                 'vouchers as used_vouchers_count' => fn ($query) => $query->where('status', 'used'),
                 'vouchers as unused_vouchers_count' => fn ($query) => $query->where('status', 'unused'),
+                'vouchers as sold_vouchers_count' => fn ($query) => $query->where('status', 'sold'),
                 'vouchers as void_vouchers_count' => fn ($query) => $query->where('status', 'void'),
             ])
             ->find($this->selectedBatchId);
@@ -296,7 +349,7 @@ class VouchersIndex extends Component
     private function validateOnlyFilters(): void
     {
         validator(['status' => $this->status ?: null], [
-            'status' => ['nullable', Rule::in(['active', 'exhausted', 'used', 'unused', 'void'])],
+            'status' => ['nullable', Rule::in(['active', 'exhausted', 'used', 'unused', 'sold', 'void'])],
         ])->validate();
 
         validator([

@@ -13,6 +13,8 @@ class Voucher extends Model
     {
         return [
             'used_at' => 'datetime',
+            'sold_at' => 'datetime',
+            'sale_amount' => 'decimal:2',
         ];
     }
 
@@ -34,5 +36,10 @@ class Voucher extends Model
     public function subscription(): BelongsTo
     {
         return $this->belongsTo(Subscription::class);
+    }
+
+    public function soldBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'sold_by_user_id');
     }
 }

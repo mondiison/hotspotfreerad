@@ -392,6 +392,140 @@ class AdminVoucherTest extends TestCase
         $this->assertSame('void', $batch->refresh()->status);
     }
 
+    public function test_tenant_admin_can_mark_unused_voucher_as_sold(): void
+    {
+        [$tenant, $shop, $package] = $this->fixture();
+        $batch = VoucherBatch::create([
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'name' => 'Front Desk Sales',
+            'quantity' => 1,
+            'code_length' => 8,
+            'status' => 'active',
+        ]);
+        $voucher = Voucher::create([
+            'voucher_batch_id' => $batch->id,
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'code' => 'MMS-SALE001',
+            'status' => 'unused',
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user);
+
+        Livewire::test(VouchersIndex::class)
+            ->call('inspect', $batch->id)
+            ->call('confirmSale', $voucher->id)
+            ->assertSet('showSaleModal', true)
+            ->set('sale_amount', '900')
+            ->set('sale_reference', 'CASH-001')
+            ->set('sale_notes', 'Cash paid at counter')
+            ->call('markSold')
+            ->assertSet('showSaleModal', false)
+            ->assertSee('MMS-SALE001 marked as sold.');
+
+        $voucher->refresh();
+
+        $this->assertSame('sold', $voucher->status);
+        $this->assertSame('900.00', (string) $voucher->sale_amount);
+        $this->assertSame('CASH-001', $voucher->sale_reference);
+        $this->assertSame($user->id, $voucher->sold_by_user_id);
+        $this->assertNotNull($voucher->sold_at);
+    }
+
+    public function test_voiding_unused_vouchers_keeps_sold_vouchers_redeemable(): void
+    {
+        [$tenant, $shop, $package] = $this->fixture();
+        $batch = VoucherBatch::create([
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'name' => 'Mixed Sale Batch',
+            'quantity' => 2,
+            'code_length' => 8,
+            'status' => 'active',
+        ]);
+        $unused = Voucher::create([
+            'voucher_batch_id' => $batch->id,
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'code' => 'MMS-UNSOLD1',
+            'status' => 'unused',
+        ]);
+        $sold = Voucher::create([
+            'voucher_batch_id' => $batch->id,
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'code' => 'MMS-SOLD010',
+            'status' => 'sold',
+            'sold_at' => now(),
+            'sale_amount' => 1000,
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user);
+
+        Livewire::test(VouchersIndex::class)
+            ->call('confirmVoid', $batch->id)
+            ->call('voidUnused')
+            ->assertSee('1 unused voucher(s) voided from Mixed Sale Batch.');
+
+        $this->assertSame('void', $unused->refresh()->status);
+        $this->assertSame('sold', $sold->refresh()->status);
+        $this->assertSame('active', $batch->refresh()->status);
+    }
+
+    public function test_hotspot_customer_can_redeem_sold_voucher(): void
+    {
+        [$tenant, $shop, $package] = $this->fixture();
+        $router = Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'Main Router',
+            'nas_identifier' => 'shop-router',
+            'wireguard_internal_ip' => '10.8.0.10',
+            'shared_secret' => 'radius-secret',
+        ]);
+        $batch = VoucherBatch::create([
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'name' => 'Sold Batch',
+            'quantity' => 1,
+            'code_length' => 8,
+            'status' => 'active',
+        ]);
+        $voucher = Voucher::create([
+            'voucher_batch_id' => $batch->id,
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'code' => 'MMS-SOLD01',
+            'status' => 'sold',
+            'sold_at' => now(),
+            'sale_amount' => 1000,
+        ]);
+
+        $this->post(route('hotspot.voucher.redeem'), [
+            'mac' => 'AA:BB:CC:DD:EE:FF',
+            'nasid' => $router->nas_identifier,
+            'voucher_code' => 'MMS-SOLD01',
+        ])
+            ->assertOk()
+            ->assertSee('Access provisioned');
+
+        $voucher->refresh();
+
+        $this->assertSame('used', $voucher->status);
+        $this->assertSame('1000.00', (string) $voucher->sale_amount);
+        $this->assertNotNull($voucher->subscription_id);
+    }
+
     public function test_hotspot_customer_cannot_redeem_voided_voucher(): void
     {
         [$tenant, $shop, $package] = $this->fixture();

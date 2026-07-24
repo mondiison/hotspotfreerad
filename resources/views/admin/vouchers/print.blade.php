@@ -6,8 +6,8 @@
     <title>{{ $batch->name }} Vouchers</title>
     @php
         $columns = max(2, min(5, (int) ($columns ?? 3)));
-        $printStatus = in_array(($printStatus ?? 'all'), ['all', 'unused', 'used', 'void'], true) ? $printStatus : 'all';
-        $statusLabel = ['all' => 'All codes', 'unused' => 'Unused only', 'used' => 'Used only', 'void' => 'Voided only'][$printStatus];
+        $printStatus = in_array(($printStatus ?? 'all'), ['all', 'unused', 'sold', 'used', 'void'], true) ? $printStatus : 'all';
+        $statusLabel = ['all' => 'All codes', 'unused' => 'Unused only', 'sold' => 'Sold only', 'used' => 'Used only', 'void' => 'Voided only'][$printStatus];
         $voucherMinHeight = match ($columns) {
             2 => '58mm',
             4 => '35mm',
@@ -33,6 +33,8 @@
         .foot { margin-top: 6px; font-size: 9px; color: #71717a; }
         .status-used { border-color: #a1a1aa; background: #f4f4f5; }
         .status-used .code { background: #52525b; }
+        .status-sold { border-color: #fcd34d; background: #fffbeb; }
+        .status-sold .code { background: #92400e; }
         .status-void { border-color: #fca5a5; background: #fef2f2; }
         .status-void .code { background: #991b1b; }
         @media print {
@@ -60,6 +62,7 @@
                 <select name="status" onchange="this.form.submit()">
                     <option value="all" @selected($printStatus === 'all')>All</option>
                     <option value="unused" @selected($printStatus === 'unused')>Unused</option>
+                    <option value="sold" @selected($printStatus === 'sold')>Sold</option>
                     <option value="used" @selected($printStatus === 'used')>Used</option>
                     <option value="void" @selected($printStatus === 'void')>Voided</option>
                 </select>
@@ -79,6 +82,9 @@
                         <span>{{ $batch->package->name }}</span>
                         <span>Speed: {{ $batch->package->speed_limit_profile }}</span>
                         <span>Valid: {{ round($batch->package->limit_uptime_seconds / 3600, 1) }} hours</span>
+                        @if ($voucher->sold_at)
+                            <span>Sold: {{ $voucher->sold_at?->format('M j, Y H:i') }} / {{ $batch->package->currency }} {{ number_format((float) $voucher->sale_amount, 2) }}</span>
+                        @endif
                         @if ($voucher->status === 'used')
                             <span>Used: {{ $voucher->used_at?->format('M j, Y H:i') ?? 'Yes' }}</span>
                         @endif
