@@ -44,30 +44,55 @@
         @endforeach
     </section>
 
-    <section class="mb-4 grid min-w-0 gap-3 rounded-lg border border-zinc-200 bg-white p-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_190px_190px_150px_150px_150px_150px_auto] [&>*]:min-w-0">
-        <flux:input wire:model.live.debounce.350ms="search" icon="magnifying-glass" placeholder="Search batch, shop, package, prefix" />
-        <flux:select wire:model.live="shop">
-            <flux:select.option value="">All shops</flux:select.option>
-            @foreach ($shops as $shopOption)
-                <flux:select.option value="{{ $shopOption->id }}">{{ $shopOption->name }}</flux:select.option>
-            @endforeach
-        </flux:select>
-        <flux:select wire:model.live="status">
-            <flux:select.option value="">All batches</flux:select.option>
-            <flux:select.option value="active">Active batches</flux:select.option>
-            <flux:select.option value="exhausted">Fully used</flux:select.option>
-            <flux:select.option value="unused">Has unused codes</flux:select.option>
-            <flux:select.option value="sold">Sold not redeemed</flux:select.option>
-            <flux:select.option value="used">Has used codes</flux:select.option>
-            <flux:select.option value="void">Voided batches</flux:select.option>
-        </flux:select>
-        <flux:input type="date" wire:model.live="sold_from" aria-label="Sold from date" />
-        <flux:input type="date" wire:model.live="sold_to" aria-label="Sold to date" />
-        <flux:input type="date" wire:model.live="used_from" aria-label="Used from date" />
-        <flux:input type="date" wire:model.live="used_to" aria-label="Used to date" />
-        <flux:button type="button" variant="outline" icon="x-mark" wire:click="clearFilters" wire:loading.attr="disabled" wire:target="clearFilters,search,status,shop,used_from,used_to,sold_from,sold_to">
-            Reset
-        </flux:button>
+    <section class="mb-4 rounded-lg border border-zinc-200 bg-white p-4">
+        <div class="grid min-w-0 gap-3 [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))] [&>*]:min-w-0">
+            <div class="sm:col-span-2 xl:col-span-3">
+                <flux:input wire:model.live.debounce.350ms="search" icon="magnifying-glass" placeholder="Search batch, shop, package, prefix" />
+            </div>
+
+            <flux:select wire:model.live="shop">
+                <flux:select.option value="">All shops</flux:select.option>
+                @foreach ($shops as $shopOption)
+                    <flux:select.option value="{{ $shopOption->id }}">{{ $shopOption->name }}</flux:select.option>
+                @endforeach
+            </flux:select>
+
+            <flux:select wire:model.live="status">
+                <flux:select.option value="">All batches</flux:select.option>
+                <flux:select.option value="active">Active batches</flux:select.option>
+                <flux:select.option value="exhausted">Fully used</flux:select.option>
+                <flux:select.option value="unused">Has unused codes</flux:select.option>
+                <flux:select.option value="sold">Sold not redeemed</flux:select.option>
+                <flux:select.option value="used">Has used codes</flux:select.option>
+                <flux:select.option value="void">Voided batches</flux:select.option>
+            </flux:select>
+
+            <flux:field>
+                <flux:label>Sold from</flux:label>
+                <flux:input type="date" wire:model.live="sold_from" />
+            </flux:field>
+
+            <flux:field>
+                <flux:label>Sold to</flux:label>
+                <flux:input type="date" wire:model.live="sold_to" />
+            </flux:field>
+
+            <flux:field>
+                <flux:label>Used from</flux:label>
+                <flux:input type="date" wire:model.live="used_from" />
+            </flux:field>
+
+            <flux:field>
+                <flux:label>Used to</flux:label>
+                <flux:input type="date" wire:model.live="used_to" />
+            </flux:field>
+
+            <div class="flex items-end">
+                <flux:button type="button" variant="outline" icon="x-mark" class="w-full" wire:click="clearFilters" wire:loading.attr="disabled" wire:target="clearFilters,search,status,shop,used_from,used_to,sold_from,sold_to">
+                    Reset
+                </flux:button>
+            </div>
+        </div>
     </section>
 
     <div wire:loading.flex wire:target="search,status,shop,used_from,used_to,sold_from,sold_to,clearFilters,filterBy,save" class="mb-4 hidden rounded-md border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">

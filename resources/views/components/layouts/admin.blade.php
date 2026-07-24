@@ -10,7 +10,7 @@
     <style>[x-cloak] { display: none !important; }</style>
 </head>
 <body
-    class="min-h-screen bg-zinc-100 text-zinc-950 antialiased"
+    class="min-h-screen overflow-x-hidden bg-zinc-100 text-zinc-950 antialiased"
     x-data="{
         mobileSidebarOpen: false,
         sidebarCollapsed: localStorage.getItem('adminSidebarCollapsed') === '1',
@@ -22,7 +22,7 @@
         headerAccountMenuOpen: false,
     }"
 >
-    <div class="min-h-screen lg:flex">
+    <div class="min-h-screen max-w-full overflow-x-hidden lg:flex">
         <div
             x-cloak
             x-show="mobileSidebarOpen"
@@ -172,7 +172,7 @@
             @endauth
         </aside>
 
-        <main class="min-w-0 flex-1">
+        <main class="min-w-0 max-w-full flex-1 overflow-x-hidden">
             <header class="border-b border-zinc-200 bg-white px-5 py-5 lg:px-8">
                 <div class="flex items-center justify-between gap-4">
                     <div class="flex min-w-0 items-center gap-3">
@@ -262,7 +262,7 @@
                 </div>
             </header>
 
-            <div class="px-5 py-6 lg:px-8">
+            <div class="min-w-0 max-w-full overflow-x-hidden px-5 py-6 lg:px-8">
                 @if (session('status'))
                     <div class="mb-5 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
                         {{ session('status') }}
