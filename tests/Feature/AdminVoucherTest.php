@@ -6,6 +6,7 @@ use App\Livewire\Admin\VouchersIndex;
 use App\Models\Package;
 use App\Models\Router;
 use App\Models\Shop;
+use App\Models\Subscription;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Models\Voucher;
@@ -194,6 +195,62 @@ class AdminVoucherTest extends TestCase
             ->assertSee('July Batch')
             ->assertDontSee('Annex Batch')
             ->assertSee('1');
+    }
+
+    public function test_tenant_admin_can_inspect_voucher_batch_codes(): void
+    {
+        [$tenant, $shop, $package] = $this->fixture();
+        $batch = VoucherBatch::create([
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'name' => 'Inspect Batch',
+            'quantity' => 2,
+            'code_length' => 8,
+            'status' => 'active',
+            'notes' => 'Front desk cards',
+        ]);
+        Voucher::create([
+            'voucher_batch_id' => $batch->id,
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'code' => 'MMS-UNUSED2',
+            'status' => 'unused',
+        ]);
+        $subscription = Subscription::create([
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'mac_address' => 'AA:BB:CC:DD:EE:FF',
+            'starts_at' => now(),
+            'expires_at' => now()->addDay(),
+            'is_throttled' => false,
+        ]);
+        Voucher::create([
+            'voucher_batch_id' => $batch->id,
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'subscription_id' => $subscription->id,
+            'code' => 'MMS-USED002',
+            'status' => 'used',
+            'used_mac_address' => 'AA:BB:CC:DD:EE:FF',
+            'used_at' => now(),
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user);
+
+        Livewire::test(VouchersIndex::class)
+            ->call('inspect', $batch->id)
+            ->assertSet('showInspectModal', true)
+            ->assertSee('Inspect Batch')
+            ->assertSee('Front desk cards')
+            ->assertSee('MMS-UNUSED2')
+            ->assertSee('MMS-USED002')
+            ->assertSee('AA:BB:CC:DD:EE:FF')
+            ->assertSee('Print unused');
     }
 
     public function test_hotspot_customer_can_redeem_unused_voucher(): void

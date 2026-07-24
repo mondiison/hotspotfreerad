@@ -62,6 +62,10 @@
         Updating vouchers...
     </div>
 
+    <div wire:loading.flex wire:target="inspect" class="mb-4 hidden rounded-md border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
+        Loading voucher batch...
+    </div>
+
     <div class="overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
         <table class="min-w-[980px] w-full text-left text-sm">
             <thead class="border-b border-zinc-200 bg-zinc-50 text-zinc-500">
@@ -95,6 +99,9 @@
                         <td class="px-4 py-3 text-right">{{ number_format($batch->unused_vouchers_count) }}</td>
                         <td class="px-4 py-3">
                             <div class="flex justify-end gap-2">
+                                <flux:button type="button" wire:click="inspect({{ $batch->id }})" wire:loading.attr="disabled" wire:target="inspect({{ $batch->id }})" variant="outline" size="sm" icon="magnifying-glass">
+                                    Inspect
+                                </flux:button>
                                 <flux:button href="{{ route('admin.voucher-batches.print', $batch) }}" target="_blank" variant="outline" size="sm" icon="printer">
                                     Print
                                 </flux:button>
@@ -192,5 +199,107 @@
                 </flux:button>
             </div>
         </form>
+    </flux:modal>
+
+    <flux:modal wire:model.self="showInspectModal" class="md:w-5xl" :dismissible="true" variant="flyout">
+        @if ($selectedBatch)
+            <div class="space-y-6">
+                <div class="flex flex-col justify-between gap-3 md:flex-row md:items-start">
+                    <div>
+                        <flux:heading level="2" size="lg">Voucher Batch</flux:heading>
+                        <flux:text class="mt-2 text-sm text-zinc-500">
+                            {{ $selectedBatch->name }} / {{ $selectedBatch->shop?->name ?? 'Deleted shop' }}
+                        </flux:text>
+                    </div>
+
+                    <div class="flex flex-wrap gap-2">
+                        <flux:button href="{{ route('admin.voucher-batches.print', ['voucherBatch' => $selectedBatch, 'status' => 'unused', 'columns' => 5]) }}" target="_blank" variant="outline" icon="printer">
+                            Print unused
+                        </flux:button>
+                        <flux:button type="button" variant="ghost" wire:click="closeInspect">Close</flux:button>
+                    </div>
+                </div>
+
+                <section class="grid gap-3 md:grid-cols-4">
+                    @foreach ([
+                        ['label' => 'Generated', 'value' => $selectedBatch->vouchers_count],
+                        ['label' => 'Unused', 'value' => $selectedBatch->unused_vouchers_count],
+                        ['label' => 'Used', 'value' => $selectedBatch->used_vouchers_count],
+                        ['label' => 'Use rate', 'value' => $selectedBatch->vouchers_count > 0 ? round(($selectedBatch->used_vouchers_count / $selectedBatch->vouchers_count) * 100, 1).'%' : '0%'],
+                    ] as $stat)
+                        <div class="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+                            <p class="text-xs font-medium uppercase text-zinc-500">{{ $stat['label'] }}</p>
+                            <p class="mt-2 text-xl font-semibold">{{ is_numeric($stat['value']) ? number_format($stat['value']) : $stat['value'] }}</p>
+                        </div>
+                    @endforeach
+                </section>
+
+                <section class="grid gap-3 rounded-lg border border-zinc-200 bg-white p-4 text-sm md:grid-cols-2">
+                    <div>
+                        <p class="text-xs font-medium uppercase text-zinc-500">Package</p>
+                        <p class="mt-1 font-medium">{{ $selectedBatch->package?->name ?? 'Deleted package' }}</p>
+                        <p class="mt-1 text-xs text-zinc-500">{{ $selectedBatch->package?->speed_limit_profile ?: 'No bandwidth profile' }}</p>
+                    </div>
+                    <div>
+                        <p class="text-xs font-medium uppercase text-zinc-500">Validity</p>
+                        <p class="mt-1 font-medium">{{ $selectedBatch->package?->limit_uptime_seconds ? round($selectedBatch->package->limit_uptime_seconds / 3600, 1).' hours' : 'No time limit' }}</p>
+                        <p class="mt-1 text-xs text-zinc-500">Transfer {{ $selectedBatch->package?->data_limit_bytes ? number_format($selectedBatch->package->data_limit_bytes).' bytes' : 'Unlimited' }}</p>
+                    </div>
+                    <div>
+                        <p class="text-xs font-medium uppercase text-zinc-500">Prefix</p>
+                        <p class="mt-1 font-mono text-xs">{{ $selectedBatch->prefix ? $selectedBatch->prefix.'-' : 'None' }}{{ $selectedBatch->code_length }} chars</p>
+                    </div>
+                    <div>
+                        <p class="text-xs font-medium uppercase text-zinc-500">Created</p>
+                        <p class="mt-1 font-medium">{{ $selectedBatch->created_at?->format('M j, Y g:i A') }}</p>
+                    </div>
+                    @if ($selectedBatch->notes)
+                        <div class="md:col-span-2">
+                            <p class="text-xs font-medium uppercase text-zinc-500">Notes</p>
+                            <p class="mt-1 text-zinc-700">{{ $selectedBatch->notes }}</p>
+                        </div>
+                    @endif
+                </section>
+
+                <div class="overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 bg-white">
+                    <table class="min-w-[920px] w-full text-left text-sm">
+                        <thead class="border-b border-zinc-200 bg-zinc-50 text-zinc-500">
+                            <tr>
+                                <th class="px-4 py-3 font-medium">Code</th>
+                                <th class="px-4 py-3 font-medium">Status</th>
+                                <th class="px-4 py-3 font-medium">Used by device</th>
+                                <th class="px-4 py-3 font-medium">Used at</th>
+                                <th class="px-4 py-3 text-right font-medium">Access expires</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-zinc-100">
+                            @forelse ($selectedBatch->vouchers as $voucher)
+                                <tr wire:key="voucher-detail-{{ $voucher->id }}">
+                                    <td class="px-4 py-3">
+                                        <p class="font-mono text-xs font-semibold">{{ $voucher->code }}</p>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <flux:badge :color="$voucher->status === 'unused' ? 'green' : 'zinc'">
+                                            {{ ucfirst($voucher->status) }}
+                                        </flux:badge>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <p class="font-mono text-xs">{{ $voucher->used_mac_address ?: '-' }}</p>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        {{ $voucher->used_at?->format('M j, Y g:i A') ?? '-' }}
+                                    </td>
+                                    <td class="px-4 py-3 text-right">
+                                        {{ $voucher->subscription?->expires_at?->format('M j, Y g:i A') ?? '-' }}
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr><td colspan="5" class="px-4 py-8 text-center text-zinc-500">No voucher codes found in this batch.</td></tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        @endif
     </flux:modal>
 </div>

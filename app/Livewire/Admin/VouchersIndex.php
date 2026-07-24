@@ -30,6 +30,10 @@ class VouchersIndex extends Component
 
     public bool $showGenerateModal = false;
 
+    public bool $showInspectModal = false;
+
+    public ?int $selectedBatchId = null;
+
     public string $shop_id = '';
 
     public string $package_id = '';
@@ -117,6 +121,21 @@ class VouchersIndex extends Component
         $this->resetPage();
     }
 
+    public function inspect(int $batchId): void
+    {
+        $batch = VoucherBatch::with('shop')->findOrFail($batchId);
+        TenantAccess::assertVoucherBatch($batch, auth()->user());
+
+        $this->selectedBatchId = $batch->id;
+        $this->showInspectModal = true;
+    }
+
+    public function closeInspect(): void
+    {
+        $this->showInspectModal = false;
+        $this->selectedBatchId = null;
+    }
+
     public function render()
     {
         $this->validateOnlyFilters();
@@ -146,6 +165,7 @@ class VouchersIndex extends Component
 
         return view('livewire.admin.vouchers-index', [
             'batches' => $query->latest()->paginate(12),
+            'selectedBatch' => $this->selectedBatch(),
             'summary' => $this->summary(),
             'shops' => $this->shops(),
             'packages' => $this->packages(),
@@ -189,6 +209,36 @@ class VouchersIndex extends Component
         }
 
         return $query->get();
+    }
+
+    private function selectedBatch(): ?VoucherBatch
+    {
+        if (! $this->selectedBatchId) {
+            return null;
+        }
+
+        $batch = VoucherBatch::with([
+            'shop.tenant',
+            'package',
+            'vouchers' => fn ($query) => $query
+                ->with('subscription')
+                ->orderByRaw("case when status = 'unused' then 0 else 1 end")
+                ->orderBy('code'),
+        ])
+            ->withCount([
+                'vouchers',
+                'vouchers as used_vouchers_count' => fn ($query) => $query->where('status', 'used'),
+                'vouchers as unused_vouchers_count' => fn ($query) => $query->where('status', 'unused'),
+            ])
+            ->find($this->selectedBatchId);
+
+        if (! $batch) {
+            return null;
+        }
+
+        TenantAccess::assertVoucherBatch($batch, auth()->user());
+
+        return $batch;
     }
 
     private function resetForm(): void
