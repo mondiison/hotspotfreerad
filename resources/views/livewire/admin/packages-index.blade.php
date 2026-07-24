@@ -42,8 +42,10 @@
     </section>
 
     <section class="mb-4 rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
-        <div class="grid min-w-0 gap-3 md:grid-cols-[minmax(0,1fr)_170px_210px_auto] [&>*]:min-w-0">
-            <flux:input wire:model.live.debounce.350ms="search" icon="magnifying-glass" placeholder="Search package, shop, group, or speed" />
+        <div class="grid min-w-0 gap-3 [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))] [&>*]:min-w-0">
+            <div class="sm:col-span-2 xl:col-span-3">
+                <flux:input wire:model.live.debounce.350ms="search" icon="magnifying-glass" placeholder="Search package, shop, group, or speed" />
+            </div>
             <flux:select wire:model.live="status">
                 <flux:select.option value="">All statuses</flux:select.option>
                 <flux:select.option value="active">Active</flux:select.option>
@@ -57,7 +59,7 @@
                 <flux:select.option value="pppoe">PPPoE only</flux:select.option>
                 <flux:select.option value="both">Both only</flux:select.option>
             </flux:select>
-            <flux:button type="button" variant="outline" icon="x-mark" class="w-full md:w-auto" wire:click="clearFilters" wire:loading.attr="disabled" wire:target="clearFilters,search,status,service">
+            <flux:button type="button" variant="outline" icon="x-mark" class="w-full" wire:click="clearFilters" wire:loading.attr="disabled" wire:target="clearFilters,search,status,service">
                 Reset
             </flux:button>
         </div>

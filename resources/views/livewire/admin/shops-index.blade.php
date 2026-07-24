@@ -14,8 +14,10 @@
     </div>
 
     <section class="mb-4 rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
-        <div class="grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_180px_220px_auto] [&>*]:min-w-0">
-            <flux:input wire:model.live.debounce.350ms="search" icon="magnifying-glass" placeholder="Search shop, city, or tenant" />
+        <div class="grid min-w-0 gap-3 [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))] [&>*]:min-w-0">
+            <div class="sm:col-span-2 xl:col-span-3">
+                <flux:input wire:model.live.debounce.350ms="search" icon="magnifying-glass" placeholder="Search shop, city, or tenant" />
+            </div>
             <flux:select wire:model.live="status">
                 <flux:select.option value="">All statuses</flux:select.option>
                 <flux:select.option value="active">Active</flux:select.option>
@@ -26,7 +28,7 @@
                 <flux:select.option value="configured">Payments configured</flux:select.option>
                 <flux:select.option value="unconfigured">Payments not configured</flux:select.option>
             </flux:select>
-            <flux:button type="button" variant="outline" icon="x-mark" class="w-full sm:col-span-2 lg:col-span-1 lg:w-auto" wire:click="clearFilters" wire:loading.attr="disabled" wire:target="clearFilters,search,status,payments">
+            <flux:button type="button" variant="outline" icon="x-mark" class="w-full" wire:click="clearFilters" wire:loading.attr="disabled" wire:target="clearFilters,search,status,payments">
                 Reset
             </flux:button>
         </div>

@@ -14,8 +14,10 @@
     </div>
 
     <section class="mb-4 rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
-        <div class="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_160px_160px_170px_auto] [&>*]:min-w-0">
-            <flux:input wire:model.live.debounce.350ms="search" icon="magnifying-glass" placeholder="Search category or description" />
+        <div class="grid min-w-0 gap-3 [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))] [&>*]:min-w-0">
+            <div class="sm:col-span-2 xl:col-span-3">
+                <flux:input wire:model.live.debounce.350ms="search" icon="magnifying-glass" placeholder="Search category or description" />
+            </div>
             <flux:select wire:model.live="scope">
                 <flux:select.option value="">All scopes</flux:select.option>
                 <flux:select.option value="platform">Platform</flux:select.option>
@@ -31,7 +33,7 @@
                 <flux:select.option value="budgeted">Budgeted</flux:select.option>
                 <flux:select.option value="unbudgeted">No budget</flux:select.option>
             </flux:select>
-            <flux:button type="button" variant="outline" icon="x-mark" class="w-full sm:col-span-2 xl:col-span-1 xl:w-auto" wire:click="clearFilters" wire:loading.attr="disabled" wire:target="clearFilters,search,scope,status,budget">
+            <flux:button type="button" variant="outline" icon="x-mark" class="w-full" wire:click="clearFilters" wire:loading.attr="disabled" wire:target="clearFilters,search,scope,status,budget">
                 Reset
             </flux:button>
         </div>

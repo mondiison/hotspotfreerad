@@ -26,8 +26,10 @@
     </section>
 
     <section class="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
-        <div class="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_170px_190px_150px_170px_170px_auto] [&>*]:min-w-0">
-            <flux:input wire:model.live.debounce.350ms="search" icon="magnifying-glass" placeholder="Search user, action, IP, tenant" />
+        <div class="grid min-w-0 gap-3 [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))] [&>*]:min-w-0">
+            <div class="sm:col-span-2 xl:col-span-3">
+                <flux:input wire:model.live.debounce.350ms="search" icon="magnifying-glass" placeholder="Search user, action, IP, tenant" />
+            </div>
 
             <flux:select wire:model.live="action_group">
                 <flux:select.option value="">All events</flux:select.option>
@@ -65,7 +67,7 @@
                 @endforeach
             </flux:select>
 
-            <flux:button type="button" variant="outline" icon="x-mark" class="w-full sm:col-span-2 xl:col-span-1 xl:w-auto" wire:click="clearFilters" wire:loading.attr="disabled" wire:target="clearFilters,search,action_group,action,attention,tenant_id,date_preset">
+            <flux:button type="button" variant="outline" icon="x-mark" class="w-full" wire:click="clearFilters" wire:loading.attr="disabled" wire:target="clearFilters,search,action_group,action,attention,tenant_id,date_preset">
                 Reset
             </flux:button>
         </div>

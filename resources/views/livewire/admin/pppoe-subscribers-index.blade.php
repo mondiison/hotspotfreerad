@@ -65,8 +65,10 @@
         @endforeach
     </section>
 
-    <section class="grid min-w-0 gap-3 rounded-lg border border-zinc-200 bg-white p-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_180px_auto] [&>*]:min-w-0">
-        <flux:input wire:model.live.debounce.350ms="search" icon="magnifying-glass" placeholder="Search username, name, phone, email, shop" />
+    <section class="grid min-w-0 gap-3 rounded-lg border border-zinc-200 bg-white p-4 [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))] [&>*]:min-w-0">
+        <div class="sm:col-span-2 xl:col-span-3">
+            <flux:input wire:model.live.debounce.350ms="search" icon="magnifying-glass" placeholder="Search username, name, phone, email, shop" />
+        </div>
         <flux:select wire:model.live="status">
             <flux:select.option value="">All statuses</flux:select.option>
             <flux:select.option value="active">Active</flux:select.option>
@@ -75,7 +77,7 @@
             <flux:select.option value="disabled">Disabled</flux:select.option>
             <flux:select.option value="unsynced">Unsynced to RADIUS</flux:select.option>
         </flux:select>
-        <flux:button type="button" variant="outline" icon="x-mark" class="w-full sm:col-span-2 lg:col-span-1 lg:w-auto" wire:click="clearFilters" wire:loading.attr="disabled" wire:target="clearFilters,search,status">
+        <flux:button type="button" variant="outline" icon="x-mark" class="w-full" wire:click="clearFilters" wire:loading.attr="disabled" wire:target="clearFilters,search,status">
             Reset
         </flux:button>
     </section>

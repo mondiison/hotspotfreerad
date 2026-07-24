@@ -62,7 +62,7 @@
         </section>
 
         <section class="mt-6 rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
-            <div class="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-[140px_140px_190px_190px_minmax(0,1fr)_auto] [&>*]:min-w-0">
+            <div class="grid min-w-0 gap-3 [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))] [&>*]:min-w-0">
                 <flux:input type="date" wire:model.live="from" />
                 <flux:input type="date" wire:model.live="to" />
                 <flux:select wire:model.live="category">
@@ -77,8 +77,10 @@
                     <flux:select.option value="due_soon">Due soon</flux:select.option>
                     <flux:select.option value="overdue">Overdue</flux:select.option>
                 </flux:select>
-                <flux:input wire:model.live.debounce.350ms="search" placeholder="Search title, vendor, note" />
-                <flux:button type="button" variant="outline" icon="x-mark" class="w-full sm:col-span-2 xl:col-span-1 xl:w-auto" wire:click="clearFilters" wire:loading.attr="disabled" wire:target="clearFilters,from,to,category,schedule,search">Reset</flux:button>
+                <div class="sm:col-span-2 xl:col-span-3">
+                    <flux:input wire:model.live.debounce.350ms="search" placeholder="Search title, vendor, note" />
+                </div>
+                <flux:button type="button" variant="outline" icon="x-mark" class="w-full" wire:click="clearFilters" wire:loading.attr="disabled" wire:target="clearFilters,from,to,category,schedule,search">Reset</flux:button>
             </div>
         </section>
 
