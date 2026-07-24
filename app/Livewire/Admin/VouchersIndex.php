@@ -32,7 +32,11 @@ class VouchersIndex extends Component
 
     public bool $showInspectModal = false;
 
+    public bool $showVoidModal = false;
+
     public ?int $selectedBatchId = null;
+
+    public ?int $voidBatchId = null;
 
     public string $shop_id = '';
 
@@ -136,6 +140,30 @@ class VouchersIndex extends Component
         $this->selectedBatchId = null;
     }
 
+    public function confirmVoid(int $batchId): void
+    {
+        $batch = VoucherBatch::with('shop')->findOrFail($batchId);
+        TenantAccess::assertVoucherBatch($batch, auth()->user());
+
+        $this->voidBatchId = $batch->id;
+        $this->showVoidModal = true;
+    }
+
+    public function voidUnused(VoucherManagementService $vouchers): void
+    {
+        if (! $this->voidBatchId) {
+            return;
+        }
+
+        $batch = VoucherBatch::findOrFail($this->voidBatchId);
+        $voided = $vouchers->voidUnusedBatchVouchers($batch, auth()->user());
+
+        $this->savedMessage = "{$voided} unused voucher(s) voided from {$batch->name}.";
+        $this->showVoidModal = false;
+        $this->voidBatchId = null;
+        $this->selectedBatchId = $batch->id;
+    }
+
     public function render()
     {
         $this->validateOnlyFilters();
@@ -145,6 +173,7 @@ class VouchersIndex extends Component
                 'vouchers',
                 'vouchers as used_vouchers_count' => fn ($query) => $query->where('status', 'used'),
                 'vouchers as unused_vouchers_count' => fn ($query) => $query->where('status', 'unused'),
+                'vouchers as void_vouchers_count' => fn ($query) => $query->where('status', 'void'),
             ]),
             auth()->user()
         )
@@ -159,8 +188,9 @@ class VouchersIndex extends Component
             })
             ->when($this->shop, fn ($query) => $query->where('shop_id', $this->shop))
             ->when($this->status === 'active', fn ($query) => $query->where('status', 'active'))
+            ->when($this->status === 'void', fn ($query) => $query->where('status', 'void'))
             ->when($this->status === 'exhausted', fn ($query) => $query->has('vouchers')->whereDoesntHave('vouchers', fn ($voucher) => $voucher->where('status', 'unused')))
-            ->when(in_array($this->status, ['used', 'unused'], true), fn ($query) => $query->whereHas('vouchers', fn ($voucher) => $voucher->where('status', $this->status)))
+            ->when(in_array($this->status, ['used', 'unused', 'void'], true), fn ($query) => $query->whereHas('vouchers', fn ($voucher) => $voucher->where('status', $this->status)))
             ->when($this->used_from || $this->used_to, fn ($query) => $query->whereHas('vouchers', fn ($voucher) => $this->applyUsedDateFilters($voucher)));
 
         return view('livewire.admin.vouchers-index', [
@@ -185,6 +215,7 @@ class VouchersIndex extends Component
             'total' => (clone $query)->count(),
             'unused' => (clone $query)->where('status', 'unused')->count(),
             'used' => (clone $query)->where('status', 'used')->count(),
+            'void' => (clone $query)->where('status', 'void')->count(),
             'used_this_month' => (clone $query)
                 ->where('status', 'used')
                 ->whereBetween('used_at', [now()->startOfMonth(), now()->endOfMonth()])
@@ -230,6 +261,7 @@ class VouchersIndex extends Component
                 'vouchers',
                 'vouchers as used_vouchers_count' => fn ($query) => $query->where('status', 'used'),
                 'vouchers as unused_vouchers_count' => fn ($query) => $query->where('status', 'unused'),
+                'vouchers as void_vouchers_count' => fn ($query) => $query->where('status', 'void'),
             ])
             ->find($this->selectedBatchId);
 
@@ -264,7 +296,7 @@ class VouchersIndex extends Component
     private function validateOnlyFilters(): void
     {
         validator(['status' => $this->status ?: null], [
-            'status' => ['nullable', Rule::in(['active', 'exhausted', 'used', 'unused'])],
+            'status' => ['nullable', Rule::in(['active', 'exhausted', 'used', 'unused', 'void'])],
         ])->validate();
 
         validator([

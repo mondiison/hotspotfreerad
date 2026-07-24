@@ -346,6 +346,88 @@ class AdminVoucherTest extends TestCase
         $this->assertStringNotContainsString('MMS-BATCH-USED', $csv);
     }
 
+    public function test_tenant_admin_can_void_unused_vouchers_in_batch(): void
+    {
+        [$tenant, $shop, $package] = $this->fixture();
+        $batch = VoucherBatch::create([
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'name' => 'Lost Sheet',
+            'quantity' => 2,
+            'code_length' => 8,
+            'status' => 'active',
+        ]);
+        $unused = Voucher::create([
+            'voucher_batch_id' => $batch->id,
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'code' => 'MMS-LOST001',
+            'status' => 'unused',
+        ]);
+        $used = Voucher::create([
+            'voucher_batch_id' => $batch->id,
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'code' => 'MMS-SOLD001',
+            'status' => 'used',
+            'used_at' => now(),
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user);
+
+        Livewire::test(VouchersIndex::class)
+            ->call('confirmVoid', $batch->id)
+            ->assertSet('showVoidModal', true)
+            ->call('voidUnused')
+            ->assertSet('showVoidModal', false)
+            ->assertSee('1 unused voucher(s) voided from Lost Sheet.');
+
+        $this->assertSame('void', $unused->refresh()->status);
+        $this->assertSame('used', $used->refresh()->status);
+        $this->assertSame('void', $batch->refresh()->status);
+    }
+
+    public function test_hotspot_customer_cannot_redeem_voided_voucher(): void
+    {
+        [$tenant, $shop, $package] = $this->fixture();
+        $router = Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'Main Router',
+            'nas_identifier' => 'shop-router',
+            'wireguard_internal_ip' => '10.8.0.10',
+            'shared_secret' => 'radius-secret',
+        ]);
+        $batch = VoucherBatch::create([
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'name' => 'Voided Batch',
+            'quantity' => 1,
+            'code_length' => 8,
+            'status' => 'void',
+        ]);
+        Voucher::create([
+            'voucher_batch_id' => $batch->id,
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'code' => 'MMS-VOID01',
+            'status' => 'void',
+        ]);
+
+        $this->post(route('hotspot.voucher.redeem'), [
+            'mac' => 'AA:BB:CC:DD:EE:FF',
+            'nasid' => $router->nas_identifier,
+            'voucher_code' => 'MMS-VOID01',
+        ])
+            ->assertSessionHasErrors([
+                'voucher_code' => 'This voucher has been voided. Please contact the hotspot operator.',
+            ]);
+    }
+
     public function test_hotspot_customer_can_redeem_unused_voucher(): void
     {
         [$tenant, $shop, $package] = $this->fixture();

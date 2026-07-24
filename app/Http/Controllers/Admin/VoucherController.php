@@ -26,7 +26,7 @@ class VoucherController extends Controller
 
         $validated = $request->validate([
             'columns' => ['nullable', 'integer', 'min:2', 'max:5'],
-            'status' => ['nullable', 'string', 'in:all,unused,used'],
+            'status' => ['nullable', 'string', 'in:all,unused,used,void'],
         ]);
 
         $columns = (int) ($validated['columns'] ?? 3);
@@ -93,7 +93,7 @@ class VoucherController extends Controller
         TenantAccess::assertVoucherBatch($voucherBatch, $request->user());
 
         $validated = $request->validate([
-            'status' => ['nullable', 'string', 'in:all,unused,used'],
+            'status' => ['nullable', 'string', 'in:all,unused,used,void'],
         ]);
         $status = (string) ($validated['status'] ?? 'all');
         $filename = str($voucherBatch->name)->slug()->append('-vouchers-'.now()->format('Y-m-d-His').'.csv')->toString();
@@ -144,6 +144,7 @@ class VoucherController extends Controller
             ->when($filters['shop'], fn ($query) => $query->where('shop_id', $filters['shop']))
             ->when($filters['status'] === 'used', fn ($query) => $query->where('status', 'used'))
             ->when($filters['status'] === 'unused', fn ($query) => $query->where('status', 'unused'))
+            ->when($filters['status'] === 'void', fn ($query) => $query->where('status', 'void'))
             ->when($filters['status'] === 'active', fn ($query) => $query->whereHas('batch', fn ($batch) => $batch->where('status', 'active')))
             ->when($filters['status'] === 'exhausted', fn ($query) => $query->whereHas('batch', fn ($batch) => $batch->has('vouchers')->whereDoesntHave('vouchers', fn ($voucher) => $voucher->where('status', 'unused'))))
             ->when($filters['used_from'] || $filters['used_to'], function ($query) use ($filters): void {
@@ -196,7 +197,7 @@ class VoucherController extends Controller
     {
         $validated = $request->validate([
             'search' => ['nullable', 'string', 'max:255'],
-            'status' => ['nullable', 'string', 'in:active,exhausted,used,unused'],
+            'status' => ['nullable', 'string', 'in:active,exhausted,used,unused,void'],
             'shop' => ['nullable', TenantAccess::shopExistsRule($request->user())],
             'used_from' => ['nullable', 'date'],
             'used_to' => ['nullable', 'date', 'after_or_equal:used_from'],

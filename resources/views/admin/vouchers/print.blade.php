@@ -6,8 +6,8 @@
     <title>{{ $batch->name }} Vouchers</title>
     @php
         $columns = max(2, min(5, (int) ($columns ?? 3)));
-        $printStatus = in_array(($printStatus ?? 'all'), ['all', 'unused', 'used'], true) ? $printStatus : 'all';
-        $statusLabel = ['all' => 'All codes', 'unused' => 'Unused only', 'used' => 'Used only'][$printStatus];
+        $printStatus = in_array(($printStatus ?? 'all'), ['all', 'unused', 'used', 'void'], true) ? $printStatus : 'all';
+        $statusLabel = ['all' => 'All codes', 'unused' => 'Unused only', 'used' => 'Used only', 'void' => 'Voided only'][$printStatus];
         $voucherMinHeight = match ($columns) {
             2 => '58mm',
             4 => '35mm',
@@ -33,6 +33,8 @@
         .foot { margin-top: 6px; font-size: 9px; color: #71717a; }
         .status-used { border-color: #a1a1aa; background: #f4f4f5; }
         .status-used .code { background: #52525b; }
+        .status-void { border-color: #fca5a5; background: #fef2f2; }
+        .status-void .code { background: #991b1b; }
         @media print {
             .toolbar { display: none; }
         }
@@ -59,6 +61,7 @@
                     <option value="all" @selected($printStatus === 'all')>All</option>
                     <option value="unused" @selected($printStatus === 'unused')>Unused</option>
                     <option value="used" @selected($printStatus === 'used')>Used</option>
+                    <option value="void" @selected($printStatus === 'void')>Voided</option>
                 </select>
             </label>
             <button type="button" onclick="window.print()">Print / Save PDF</button>

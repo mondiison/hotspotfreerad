@@ -18,11 +18,12 @@
         </div>
     </div>
 
-    <section class="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+    <section class="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
         @foreach ([
             ['label' => 'Vouchers', 'value' => $summary['total'], 'hint' => 'All generated codes', 'status' => ''],
             ['label' => 'Unused', 'value' => $summary['unused'], 'hint' => 'Ready to sell or print', 'status' => 'unused'],
             ['label' => 'Used', 'value' => $summary['used'], 'hint' => 'Redeemed by devices', 'status' => 'used'],
+            ['label' => 'Voided', 'value' => $summary['void'], 'hint' => 'Disabled before use', 'status' => 'void'],
             ['label' => 'Used this month', 'value' => $summary['used_this_month'], 'hint' => 'Monthly voucher activity', 'status' => 'used', 'action' => 'filterUsedThisMonth'],
             ['label' => 'Used in range', 'value' => $summary['used_in_filter'], 'hint' => 'Matches date/shop filters', 'status' => 'used'],
         ] as $stat)
@@ -55,6 +56,7 @@
             <flux:select.option value="exhausted">Fully used</flux:select.option>
             <flux:select.option value="unused">Has unused codes</flux:select.option>
             <flux:select.option value="used">Has used codes</flux:select.option>
+            <flux:select.option value="void">Voided batches</flux:select.option>
         </flux:select>
         <flux:input type="date" wire:model.live="used_from" aria-label="Used from date" />
         <flux:input type="date" wire:model.live="used_to" aria-label="Used to date" />
@@ -81,6 +83,7 @@
                     <th class="px-4 py-3 text-right font-medium">Codes</th>
                     <th class="px-4 py-3 text-right font-medium">Used</th>
                     <th class="px-4 py-3 text-right font-medium">Unused</th>
+                    <th class="px-4 py-3 text-right font-medium">Voided</th>
                     <th class="px-4 py-3 text-right font-medium">Actions</th>
                 </tr>
             </thead>
@@ -102,6 +105,7 @@
                         <td class="px-4 py-3 text-right">{{ number_format($batch->vouchers_count) }}</td>
                         <td class="px-4 py-3 text-right">{{ number_format($batch->used_vouchers_count) }}</td>
                         <td class="px-4 py-3 text-right">{{ number_format($batch->unused_vouchers_count) }}</td>
+                        <td class="px-4 py-3 text-right">{{ number_format($batch->void_vouchers_count) }}</td>
                         <td class="px-4 py-3">
                             <div class="flex justify-end gap-2">
                                 <flux:button type="button" wire:click="inspect({{ $batch->id }})" wire:loading.attr="disabled" wire:target="inspect({{ $batch->id }})" variant="outline" size="sm" icon="magnifying-glass">
@@ -118,7 +122,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="7" class="px-4 py-10 text-center">
+                        <td colspan="8" class="px-4 py-10 text-center">
                             <p class="font-medium">No voucher batches found.</p>
                             <p class="mt-1 text-sm text-zinc-500">Generate prepaid voucher codes for walk-in hotspot customers.</p>
                             <flux:button type="button" variant="primary" icon="plus" class="mt-4" wire:click="create">Generate Vouchers</flux:button>
@@ -224,6 +228,11 @@
                         <flux:button href="{{ route('admin.voucher-batches.print', ['voucherBatch' => $selectedBatch, 'status' => 'unused', 'columns' => 5]) }}" target="_blank" variant="outline" icon="printer">
                             Print unused
                         </flux:button>
+                        @if ($selectedBatch->unused_vouchers_count > 0)
+                            <flux:button type="button" variant="danger" icon="shield-exclamation" wire:click="confirmVoid({{ $selectedBatch->id }})" wire:loading.attr="disabled" wire:target="confirmVoid({{ $selectedBatch->id }})">
+                                Void unused
+                            </flux:button>
+                        @endif
                         <flux:button type="button" variant="ghost" wire:click="closeInspect">Close</flux:button>
                     </div>
                 </div>
@@ -233,6 +242,7 @@
                         ['label' => 'Generated', 'value' => $selectedBatch->vouchers_count],
                         ['label' => 'Unused', 'value' => $selectedBatch->unused_vouchers_count],
                         ['label' => 'Used', 'value' => $selectedBatch->used_vouchers_count],
+                        ['label' => 'Voided', 'value' => $selectedBatch->void_vouchers_count],
                         ['label' => 'Use rate', 'value' => $selectedBatch->vouchers_count > 0 ? round(($selectedBatch->used_vouchers_count / $selectedBatch->vouchers_count) * 100, 1).'%' : '0%'],
                     ] as $stat)
                         <div class="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
@@ -287,7 +297,7 @@
                                         <p class="font-mono text-xs font-semibold">{{ $voucher->code }}</p>
                                     </td>
                                     <td class="px-4 py-3">
-                                        <flux:badge :color="$voucher->status === 'unused' ? 'green' : 'zinc'">
+                                        <flux:badge :color="$voucher->status === 'unused' ? 'green' : ($voucher->status === 'void' ? 'red' : 'zinc')">
                                             {{ ucfirst($voucher->status) }}
                                         </flux:badge>
                                     </td>
@@ -309,5 +319,28 @@
                 </div>
             </div>
         @endif
+    </flux:modal>
+
+    <flux:modal wire:model.self="showVoidModal" class="md:w-lg" :dismissible="false">
+        <div class="space-y-5">
+            <div>
+                <flux:heading size="lg">Void Unused Vouchers?</flux:heading>
+                <flux:text class="mt-2 text-sm text-zinc-500">
+                    This disables every unused code in the selected batch. Already used vouchers and active customer access will not be changed.
+                </flux:text>
+            </div>
+
+            <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                Use this when printed vouchers are lost, stolen, duplicated, or no longer valid for sale.
+            </div>
+
+            <div class="flex justify-end gap-3">
+                <flux:button type="button" variant="ghost" wire:click="$set('showVoidModal', false)">Cancel</flux:button>
+                <flux:button type="button" variant="danger" icon="shield-exclamation" wire:click="voidUnused" wire:loading.attr="disabled" wire:target="voidUnused">
+                    <span wire:loading.remove wire:target="voidUnused">Void unused vouchers</span>
+                    <span wire:loading wire:target="voidUnused">Voiding...</span>
+                </flux:button>
+            </div>
+        </div>
     </flux:modal>
 </div>

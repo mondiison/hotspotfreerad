@@ -77,7 +77,7 @@ class VoucherManagementService
     {
         return DB::transaction(function () use ($router, $macAddress, $code): Subscription {
             $voucher = Voucher::query()
-                ->with(['package', 'shop.tenant'])
+                ->with(['batch', 'package', 'shop.tenant'])
                 ->where('code', $this->normalizeCode($code))
                 ->lockForUpdate()
                 ->first();
@@ -85,6 +85,18 @@ class VoucherManagementService
             if (! $voucher || (int) $voucher->shop_id !== (int) $router->shop_id) {
                 throw ValidationException::withMessages([
                     'voucher_code' => 'Voucher code was not found for this hotspot.',
+                ]);
+            }
+
+            if ($voucher->status === 'void') {
+                throw ValidationException::withMessages([
+                    'voucher_code' => 'This voucher has been voided. Please contact the hotspot operator.',
+                ]);
+            }
+
+            if ($voucher->batch?->status === 'void') {
+                throw ValidationException::withMessages([
+                    'voucher_code' => 'This voucher batch has been voided. Please contact the hotspot operator.',
                 ]);
             }
 
@@ -131,6 +143,21 @@ class VoucherManagementService
             $this->radius->grantSubscriptionAccess($subscription, self::ACCESS_PASSWORD);
 
             return $subscription;
+        });
+    }
+
+    public function voidUnusedBatchVouchers(VoucherBatch $batch, User $user): int
+    {
+        TenantAccess::assertVoucherBatch($batch, $user);
+
+        return DB::transaction(function () use ($batch): int {
+            $voided = $batch->vouchers()
+                ->where('status', 'unused')
+                ->update(['status' => 'void', 'updated_at' => now()]);
+
+            $batch->forceFill(['status' => 'void'])->save();
+
+            return $voided;
         });
     }
 
