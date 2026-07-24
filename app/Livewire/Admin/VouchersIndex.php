@@ -169,6 +169,7 @@ class VouchersIndex extends Component
             'summary' => $this->summary(),
             'shops' => $this->shops(),
             'packages' => $this->packages(),
+            'exportQuery' => $this->exportQuery(),
         ]);
     }
 
@@ -239,6 +240,17 @@ class VouchersIndex extends Component
         TenantAccess::assertVoucherBatch($batch, auth()->user());
 
         return $batch;
+    }
+
+    private function exportQuery(): array
+    {
+        return array_filter([
+            'search' => $this->search,
+            'status' => $this->status,
+            'shop' => $this->shop,
+            'used_from' => $this->used_from,
+            'used_to' => $this->used_to,
+        ], fn ($value): bool => filled($value));
     }
 
     private function resetForm(): void

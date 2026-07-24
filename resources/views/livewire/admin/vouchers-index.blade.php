@@ -8,9 +8,14 @@
             @endif
         </div>
 
-        <flux:button type="button" variant="primary" icon="plus" wire:click="create" wire:loading.attr="disabled" wire:target="create,save">
-            Generate Vouchers
-        </flux:button>
+        <div class="flex flex-wrap justify-end gap-2">
+            <flux:button href="{{ route('admin.vouchers.export', $exportQuery) }}" variant="outline" icon="arrow-down-tray">
+                Export CSV
+            </flux:button>
+            <flux:button type="button" variant="primary" icon="plus" wire:click="create" wire:loading.attr="disabled" wire:target="create,save">
+                Generate Vouchers
+            </flux:button>
+        </div>
     </div>
 
     <section class="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
@@ -213,6 +218,9 @@
                     </div>
 
                     <div class="flex flex-wrap gap-2">
+                        <flux:button href="{{ route('admin.voucher-batches.export', $selectedBatch) }}" target="_blank" variant="outline" icon="arrow-down-tray">
+                            Export batch
+                        </flux:button>
                         <flux:button href="{{ route('admin.voucher-batches.print', ['voucherBatch' => $selectedBatch, 'status' => 'unused', 'columns' => 5]) }}" target="_blank" variant="outline" icon="printer">
                             Print unused
                         </flux:button>

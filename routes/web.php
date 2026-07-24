@@ -93,7 +93,9 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::resource('packages', PackageController::class)->except('show');
     Route::get('subscriptions-export', [SubscriptionController::class, 'export'])->name('subscriptions.export');
     Route::get('subscriptions', [SubscriptionController::class, 'index'])->name('subscriptions.index');
+    Route::get('vouchers-export', [VoucherController::class, 'export'])->name('vouchers.export');
     Route::get('vouchers', [VoucherController::class, 'index'])->name('vouchers.index');
+    Route::get('voucher-batches/{voucherBatch}/export', [VoucherController::class, 'exportBatch'])->name('voucher-batches.export');
     Route::get('voucher-batches/{voucherBatch}/print', [VoucherController::class, 'print'])->name('voucher-batches.print');
     Route::get('pppoe-subscribers-export', [PppoeSubscriberController::class, 'export'])->name('pppoe-subscribers.export');
     Route::get('pppoe-subscribers', [PppoeSubscriberController::class, 'index'])->name('pppoe-subscribers.index');

@@ -253,6 +253,99 @@ class AdminVoucherTest extends TestCase
             ->assertSee('Print unused');
     }
 
+    public function test_tenant_admin_can_export_filtered_voucher_report(): void
+    {
+        [$tenant, $shop, $package] = $this->fixture();
+        $batch = VoucherBatch::create([
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'name' => 'Export Batch',
+            'quantity' => 2,
+            'code_length' => 8,
+            'status' => 'active',
+        ]);
+        Voucher::create([
+            'voucher_batch_id' => $batch->id,
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'code' => 'MMS-EXPORT-USED',
+            'status' => 'used',
+            'used_mac_address' => 'AA:BB:CC:DD:EE:FF',
+            'used_at' => now()->setDate(2026, 7, 12),
+        ]);
+        Voucher::create([
+            'voucher_batch_id' => $batch->id,
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'code' => 'MMS-EXPORT-UNUSED',
+            'status' => 'unused',
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $response = $this->actingAs($user)->get(route('admin.vouchers.export', [
+            'status' => 'used',
+            'used_from' => '2026-07-01',
+            'used_to' => '2026-07-31',
+        ]));
+
+        $response->assertOk();
+        $csv = $response->streamedContent();
+
+        $this->assertStringContainsString('Voucher Report', $csv);
+        $this->assertStringContainsString('MMS-EXPORT-USED', $csv);
+        $this->assertStringContainsString('AA:BB:CC:DD:EE:FF', $csv);
+        $this->assertStringNotContainsString('MMS-EXPORT-UNUSED', $csv);
+    }
+
+    public function test_tenant_admin_can_export_unused_vouchers_from_batch(): void
+    {
+        [$tenant, $shop, $package] = $this->fixture();
+        $batch = VoucherBatch::create([
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'name' => 'Batch Export',
+            'quantity' => 2,
+            'code_length' => 8,
+            'status' => 'active',
+        ]);
+        Voucher::create([
+            'voucher_batch_id' => $batch->id,
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'code' => 'MMS-BATCH-UNUSED',
+            'status' => 'unused',
+        ]);
+        Voucher::create([
+            'voucher_batch_id' => $batch->id,
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'code' => 'MMS-BATCH-USED',
+            'status' => 'used',
+            'used_at' => now(),
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $response = $this->actingAs($user)->get(route('admin.voucher-batches.export', [
+            'voucherBatch' => $batch,
+            'status' => 'unused',
+        ]));
+
+        $response->assertOk();
+        $csv = $response->streamedContent();
+
+        $this->assertStringContainsString('Voucher Batch', $csv);
+        $this->assertStringContainsString('MMS-BATCH-UNUSED', $csv);
+        $this->assertStringNotContainsString('MMS-BATCH-USED', $csv);
+    }
+
     public function test_hotspot_customer_can_redeem_unused_voucher(): void
     {
         [$tenant, $shop, $package] = $this->fixture();
