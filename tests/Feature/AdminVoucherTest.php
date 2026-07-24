@@ -97,6 +97,105 @@ class AdminVoucherTest extends TestCase
             ->assertSee('@page', false);
     }
 
+    public function test_voucher_print_page_can_filter_unused_codes_and_compress_columns(): void
+    {
+        [$tenant, $shop, $package] = $this->fixture();
+        $batch = VoucherBatch::create([
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'name' => 'Mixed Print Batch',
+            'quantity' => 2,
+            'code_length' => 8,
+            'prefix' => 'MMS',
+            'status' => 'active',
+        ]);
+        Voucher::create([
+            'voucher_batch_id' => $batch->id,
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'code' => 'MMS-UNUSED1',
+            'status' => 'unused',
+        ]);
+        Voucher::create([
+            'voucher_batch_id' => $batch->id,
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'code' => 'MMS-USED001',
+            'status' => 'used',
+            'used_at' => now(),
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('admin.voucher-batches.print', ['voucherBatch' => $batch, 'columns' => 5, 'status' => 'unused']))
+            ->assertOk()
+            ->assertSee('repeat(5', false)
+            ->assertSee('Unused only')
+            ->assertSee('MMS-UNUSED1')
+            ->assertDontSee('MMS-USED001');
+    }
+
+    public function test_voucher_dashboard_filters_used_codes_by_shop_and_date_range(): void
+    {
+        [$tenant, $shop, $package] = $this->fixture();
+        $otherShop = Shop::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Annex',
+        ]);
+        $batch = VoucherBatch::create([
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'name' => 'July Batch',
+            'quantity' => 1,
+            'code_length' => 8,
+            'status' => 'active',
+        ]);
+        Voucher::create([
+            'voucher_batch_id' => $batch->id,
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'code' => 'MMS-JULY01',
+            'status' => 'used',
+            'used_at' => now()->setDate(2026, 7, 10),
+        ]);
+        $otherBatch = VoucherBatch::create([
+            'shop_id' => $otherShop->id,
+            'package_id' => $package->id,
+            'name' => 'Annex Batch',
+            'quantity' => 1,
+            'code_length' => 8,
+            'status' => 'active',
+        ]);
+        Voucher::create([
+            'voucher_batch_id' => $otherBatch->id,
+            'shop_id' => $otherShop->id,
+            'package_id' => $package->id,
+            'code' => 'MMS-ANNEX1',
+            'status' => 'used',
+            'used_at' => now()->setDate(2026, 7, 10),
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user);
+
+        Livewire::test(VouchersIndex::class)
+            ->set('shop', (string) $shop->id)
+            ->set('status', 'used')
+            ->set('used_from', '2026-07-01')
+            ->set('used_to', '2026-07-31')
+            ->assertSee('July Batch')
+            ->assertDontSee('Annex Batch')
+            ->assertSee('1');
+    }
+
     public function test_hotspot_customer_can_redeem_unused_voucher(): void
     {
         [$tenant, $shop, $package] = $this->fixture();

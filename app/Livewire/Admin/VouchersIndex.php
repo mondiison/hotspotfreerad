@@ -4,9 +4,11 @@ namespace App\Livewire\Admin;
 
 use App\Models\Package;
 use App\Models\Shop;
+use App\Models\Voucher;
 use App\Models\VoucherBatch;
 use App\Services\VoucherManagementService;
 use App\Support\TenantAccess;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
@@ -19,6 +21,12 @@ class VouchersIndex extends Component
     public string $search = '';
 
     public string $status = '';
+
+    public string $shop = '';
+
+    public string $used_from = '';
+
+    public string $used_to = '';
 
     public bool $showGenerateModal = false;
 
@@ -41,17 +49,23 @@ class VouchersIndex extends Component
     protected $queryString = [
         'search' => ['except' => ''],
         'status' => ['except' => ''],
+        'shop' => ['except' => ''],
+        'used_from' => ['except' => ''],
+        'used_to' => ['except' => ''],
     ];
 
     public function mount(array $filters = []): void
     {
         $this->search = (string) ($filters['search'] ?? '');
         $this->status = (string) ($filters['status'] ?? '');
+        $this->shop = (string) ($filters['shop'] ?? '');
+        $this->used_from = (string) ($filters['used_from'] ?? '');
+        $this->used_to = (string) ($filters['used_to'] ?? '');
     }
 
     public function updated($property): void
     {
-        if (in_array($property, ['search', 'status'], true)) {
+        if (in_array($property, ['search', 'status', 'shop', 'used_from', 'used_to'], true)) {
             $this->resetPage();
         }
     }
@@ -88,9 +102,18 @@ class VouchersIndex extends Component
         $this->resetPage();
     }
 
+    public function filterUsedThisMonth(): void
+    {
+        $this->search = '';
+        $this->status = 'used';
+        $this->used_from = now()->startOfMonth()->toDateString();
+        $this->used_to = now()->endOfMonth()->toDateString();
+        $this->resetPage();
+    }
+
     public function clearFilters(): void
     {
-        $this->reset(['search', 'status']);
+        $this->reset(['search', 'status', 'shop', 'used_from', 'used_to']);
         $this->resetPage();
     }
 
@@ -115,8 +138,11 @@ class VouchersIndex extends Component
                         ->orWhereHas('package', fn ($package) => $package->where('name', 'like', "%{$this->search}%"));
                 });
             })
+            ->when($this->shop, fn ($query) => $query->where('shop_id', $this->shop))
             ->when($this->status === 'active', fn ($query) => $query->where('status', 'active'))
-            ->when($this->status === 'exhausted', fn ($query) => $query->has('vouchers')->whereDoesntHave('vouchers', fn ($voucher) => $voucher->where('status', 'unused')));
+            ->when($this->status === 'exhausted', fn ($query) => $query->has('vouchers')->whereDoesntHave('vouchers', fn ($voucher) => $voucher->where('status', 'unused')))
+            ->when(in_array($this->status, ['used', 'unused'], true), fn ($query) => $query->whereHas('vouchers', fn ($voucher) => $voucher->where('status', $this->status)))
+            ->when($this->used_from || $this->used_to, fn ($query) => $query->whereHas('vouchers', fn ($voucher) => $this->applyUsedDateFilters($voucher)));
 
         return view('livewire.admin.vouchers-index', [
             'batches' => $query->latest()->paginate(12),
@@ -128,7 +154,11 @@ class VouchersIndex extends Component
 
     private function summary(): array
     {
-        $query = TenantAccess::scopeVouchers(\App\Models\Voucher::query(), auth()->user());
+        $query = TenantAccess::scopeVouchers(Voucher::query(), auth()->user())
+            ->when($this->shop, fn ($query) => $query->where('shop_id', $this->shop));
+
+        $filteredQuery = (clone $query)
+            ->when($this->used_from || $this->used_to, fn ($query) => $this->applyUsedDateFilters($query));
 
         return [
             'total' => (clone $query)->count(),
@@ -138,6 +168,7 @@ class VouchersIndex extends Component
                 ->where('status', 'used')
                 ->whereBetween('used_at', [now()->startOfMonth(), now()->endOfMonth()])
                 ->count(),
+            'used_in_filter' => (clone $filteredQuery)->where('status', 'used')->count(),
         ];
     }
 
@@ -171,7 +202,25 @@ class VouchersIndex extends Component
     private function validateOnlyFilters(): void
     {
         validator(['status' => $this->status ?: null], [
-            'status' => ['nullable', Rule::in(['active', 'exhausted'])],
+            'status' => ['nullable', Rule::in(['active', 'exhausted', 'used', 'unused'])],
         ])->validate();
+
+        validator([
+            'shop' => $this->shop ?: null,
+            'used_from' => $this->used_from ?: null,
+            'used_to' => $this->used_to ?: null,
+        ], [
+            'shop' => ['nullable', TenantAccess::shopExistsRule(auth()->user())],
+            'used_from' => ['nullable', 'date'],
+            'used_to' => ['nullable', 'date', 'after_or_equal:used_from'],
+        ])->validate();
+    }
+
+    private function applyUsedDateFilters(Builder $query): Builder
+    {
+        return $query
+            ->where('status', 'used')
+            ->when($this->used_from, fn ($query) => $query->where('used_at', '>=', $this->used_from.' 00:00:00'))
+            ->when($this->used_to, fn ($query) => $query->where('used_at', '<=', $this->used_to.' 23:59:59'));
     }
 }

@@ -13,40 +13,52 @@
         </flux:button>
     </div>
 
-    <section class="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <section class="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         @foreach ([
             ['label' => 'Vouchers', 'value' => $summary['total'], 'hint' => 'All generated codes', 'status' => ''],
-            ['label' => 'Unused', 'value' => $summary['unused'], 'hint' => 'Ready to sell or print', 'status' => 'active'],
-            ['label' => 'Used', 'value' => $summary['used'], 'hint' => 'Redeemed by devices', 'status' => ''],
-            ['label' => 'Used this month', 'value' => $summary['used_this_month'], 'hint' => 'Monthly voucher activity', 'status' => ''],
+            ['label' => 'Unused', 'value' => $summary['unused'], 'hint' => 'Ready to sell or print', 'status' => 'unused'],
+            ['label' => 'Used', 'value' => $summary['used'], 'hint' => 'Redeemed by devices', 'status' => 'used'],
+            ['label' => 'Used this month', 'value' => $summary['used_this_month'], 'hint' => 'Monthly voucher activity', 'status' => 'used', 'action' => 'filterUsedThisMonth'],
+            ['label' => 'Used in range', 'value' => $summary['used_in_filter'], 'hint' => 'Matches date/shop filters', 'status' => 'used'],
         ] as $stat)
+            @php($isActiveStat = $status === $stat['status'] && (($stat['action'] ?? '') !== 'filterUsedThisMonth' || ($used_from === now()->startOfMonth()->toDateString() && $used_to === now()->endOfMonth()->toDateString())))
             <button
                 type="button"
-                wire:click="filterBy('{{ $stat['status'] }}')"
+                wire:click="{{ $stat['action'] ?? "filterBy('{$stat['status']}')" }}"
                 wire:loading.attr="disabled"
-                wire:target="filterBy"
-                class="rounded-lg border px-4 py-3 text-left shadow-sm transition hover:border-zinc-400 {{ $status === $stat['status'] ? 'border-zinc-950 bg-zinc-950 text-white' : 'border-zinc-200 bg-white text-zinc-950' }}"
+                wire:target="filterBy,filterUsedThisMonth"
+                class="rounded-lg border px-4 py-3 text-left shadow-sm transition hover:border-zinc-400 {{ $isActiveStat ? 'border-zinc-950 bg-zinc-950 text-white' : 'border-zinc-200 bg-white text-zinc-950' }}"
             >
-                <span class="block text-xs font-medium uppercase {{ $status === $stat['status'] ? 'text-zinc-300' : 'text-zinc-500' }}">{{ $stat['label'] }}</span>
+                <span class="block text-xs font-medium uppercase {{ $isActiveStat ? 'text-zinc-300' : 'text-zinc-500' }}">{{ $stat['label'] }}</span>
                 <span class="mt-2 block text-2xl font-semibold">{{ number_format($stat['value']) }}</span>
-                <span class="mt-1 block text-xs {{ $status === $stat['status'] ? 'text-zinc-300' : 'text-zinc-500' }}">{{ $stat['hint'] }}</span>
+                <span class="mt-1 block text-xs {{ $isActiveStat ? 'text-zinc-300' : 'text-zinc-500' }}">{{ $stat['hint'] }}</span>
             </button>
         @endforeach
     </section>
 
-    <section class="mb-4 grid min-w-0 gap-3 rounded-lg border border-zinc-200 bg-white p-4 sm:grid-cols-[minmax(0,1fr)_180px_auto] [&>*]:min-w-0">
+    <section class="mb-4 grid min-w-0 gap-3 rounded-lg border border-zinc-200 bg-white p-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_190px_190px_150px_150px_auto] [&>*]:min-w-0">
         <flux:input wire:model.live.debounce.350ms="search" icon="magnifying-glass" placeholder="Search batch, shop, package, prefix" />
+        <flux:select wire:model.live="shop">
+            <flux:select.option value="">All shops</flux:select.option>
+            @foreach ($shops as $shopOption)
+                <flux:select.option value="{{ $shopOption->id }}">{{ $shopOption->name }}</flux:select.option>
+            @endforeach
+        </flux:select>
         <flux:select wire:model.live="status">
             <flux:select.option value="">All batches</flux:select.option>
             <flux:select.option value="active">Active batches</flux:select.option>
             <flux:select.option value="exhausted">Fully used</flux:select.option>
+            <flux:select.option value="unused">Has unused codes</flux:select.option>
+            <flux:select.option value="used">Has used codes</flux:select.option>
         </flux:select>
-        <flux:button type="button" variant="outline" icon="x-mark" wire:click="clearFilters" wire:loading.attr="disabled" wire:target="clearFilters,search,status">
+        <flux:input type="date" wire:model.live="used_from" aria-label="Used from date" />
+        <flux:input type="date" wire:model.live="used_to" aria-label="Used to date" />
+        <flux:button type="button" variant="outline" icon="x-mark" wire:click="clearFilters" wire:loading.attr="disabled" wire:target="clearFilters,search,status,shop,used_from,used_to">
             Reset
         </flux:button>
     </section>
 
-    <div wire:loading.flex wire:target="search,status,clearFilters,filterBy,save" class="mb-4 hidden rounded-md border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
+    <div wire:loading.flex wire:target="search,status,shop,used_from,used_to,clearFilters,filterBy,save" class="mb-4 hidden rounded-md border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
         Updating vouchers...
     </div>
 
@@ -85,6 +97,9 @@
                             <div class="flex justify-end gap-2">
                                 <flux:button href="{{ route('admin.voucher-batches.print', $batch) }}" target="_blank" variant="outline" size="sm" icon="printer">
                                     Print
+                                </flux:button>
+                                <flux:button href="{{ route('admin.voucher-batches.print', ['voucherBatch' => $batch, 'columns' => 5, 'status' => 'unused']) }}" target="_blank" variant="ghost" size="sm" icon="squares-2x2">
+                                    Compact
                                 </flux:button>
                             </div>
                         </td>
