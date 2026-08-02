@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Payment;
 use App\Models\User;
+use App\Support\PaymentGatewayCatalog;
 use App\Support\TenantAccess;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -116,6 +117,11 @@ class PaymentReportService
             'failed' => 'Failed',
             default => 'All',
         };
+    }
+
+    public function providerLabel(?string $provider): string
+    {
+        return $provider ? PaymentGatewayCatalog::providerLabel($provider) : 'All';
     }
 
     public function queryParams(array $filters): array

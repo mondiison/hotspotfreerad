@@ -11,6 +11,7 @@ use App\Models\TenantBillingSubscription;
 use App\Services\BillingPlanManagementService;
 use App\Services\PlatformBillingConfirmationService;
 use App\Services\PlatformFlutterwaveService;
+use App\Support\PaymentGatewayCatalog;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -27,13 +28,22 @@ class BillingController extends Controller
         $user = $request->user();
 
         if ($user->isSuperAdmin()) {
+            $platformPayments = PlatformBillingPayment::with(['tenant', 'billingPlan'])
+                ->latest()
+                ->paginate(10, ['*'], 'payments_page');
+
             return view('admin.billing.index', [
                 'plans' => BillingPlan::orderBy('monthly_price')->get(),
                 'tenants' => Tenant::with('currentBillingSubscription.billingPlan')->orderBy('company_name')->get(),
                 'subscriptions' => TenantBillingSubscription::with(['tenant', 'billingPlan'])
                     ->latest()
                     ->paginate(15),
+                'platformPayments' => $platformPayments,
+                'platformPaymentSummary' => $this->platformPaymentSummary(),
                 'platformFlutterwaveConfigured' => app(PlatformFlutterwaveService::class)->isConfigured(),
+                'platformGateway' => PaymentGatewayCatalog::platformProvider(),
+                'platformWebhookUrl' => route('billing.payment.webhook'),
+                'platformCallbackUrl' => route('admin.billing.payments.callback'),
             ]);
         }
 
@@ -44,7 +54,15 @@ class BillingController extends Controller
             'tenant' => $tenant,
             'currentSubscription' => $tenant->currentBillingSubscription,
             'subscriptions' => $tenant->billingSubscriptions()->with('billingPlan')->latest()->paginate(15),
+            'platformPayments' => PlatformBillingPayment::with(['billingPlan'])
+                ->where('tenant_id', $tenant->id)
+                ->latest()
+                ->paginate(10, ['*'], 'payments_page'),
+            'platformPaymentSummary' => $this->platformPaymentSummary($tenant->id),
             'platformFlutterwaveConfigured' => app(PlatformFlutterwaveService::class)->isConfigured(),
+            'platformGateway' => PaymentGatewayCatalog::platformProvider(),
+            'platformWebhookUrl' => route('billing.payment.webhook'),
+            'platformCallbackUrl' => route('admin.billing.payments.callback'),
         ]);
     }
 
@@ -325,5 +343,19 @@ class BillingController extends Controller
     private function statusIsSuccessful(mixed $status): bool
     {
         return in_array(strtolower((string) $status), ['success', 'successful', 'succeeded', 'completed'], true);
+    }
+
+    private function platformPaymentSummary(?int $tenantId = null): array
+    {
+        $query = PlatformBillingPayment::query()
+            ->when($tenantId, fn ($query) => $query->where('tenant_id', $tenantId));
+
+        return [
+            'count' => (clone $query)->count(),
+            'successful' => (clone $query)->where('status', 'successful')->count(),
+            'pending' => (clone $query)->where('status', 'pending')->count(),
+            'failed' => (clone $query)->whereIn('status', ['failed', 'verification_failed'])->count(),
+            'revenue' => (clone $query)->where('status', 'successful')->sum('amount'),
+        ];
     }
 }

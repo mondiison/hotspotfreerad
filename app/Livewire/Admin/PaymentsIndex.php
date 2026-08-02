@@ -3,6 +3,7 @@
 namespace App\Livewire\Admin;
 
 use App\Services\PaymentReportService;
+use App\Support\PaymentGatewayCatalog;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -111,6 +112,7 @@ class PaymentsIndex extends Component
             'filters' => $filters,
             'presets' => $reports->presets(),
             'exportQuery' => $reports->queryParams($filters),
+            'paymentMethods' => PaymentGatewayCatalog::paymentMethods(),
         ]);
     }
 }

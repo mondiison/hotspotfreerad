@@ -6,22 +6,21 @@
     </div>
 
     <div class="flex flex-col justify-between gap-3 md:flex-row md:items-start">
-        <div>
-            <h2 class="text-base font-semibold">{{ $shop->name }}</h2>
+        <div class="min-w-0">
+            <div class="flex flex-wrap items-center gap-2">
+                <h2 class="text-base font-semibold">{{ $shop->name }}</h2>
+                <flux:badge color="{{ $shop->is_active ? 'green' : 'zinc' }}" size="sm">{{ $shop->is_active ? 'Active shop' : 'Inactive shop' }}</flux:badge>
+            </div>
             <p class="mt-1 text-sm text-zinc-500">{{ $shop->tenant->company_name }}{{ $shop->location_city ? ' - '.$shop->location_city : '' }}</p>
             <p class="mt-1 text-xs text-zinc-500">{{ number_format($shop->payments_count) }} customer payment {{ \Illuminate\Support\Str::plural('record', $shop->payments_count) }}</p>
         </div>
 
         <div class="flex flex-wrap gap-2">
-            <flux:badge :color="$shop->hasCompleteFlutterwaveCredentials() ? 'emerald' : 'amber'" size="sm">
-                {{ $shop->hasCompleteFlutterwaveCredentials() ? 'OPay/transfer ready' : 'OPay/transfer missing' }}
-            </flux:badge>
-            <flux:badge :color="$shop->hasFlutterwaveHostedCheckoutKey() ? 'emerald' : 'amber'" size="sm">
-                {{ $shop->hasFlutterwaveHostedCheckoutKey() ? 'Card checkout ready' : 'Card key missing' }}
-            </flux:badge>
-            <flux:badge :color="$shop->hasFlutterwaveWebhookSecret() ? 'emerald' : 'zinc'" size="sm">
-                {{ $shop->hasFlutterwaveWebhookSecret() ? 'Webhook ready' : 'Webhook missing' }}
-            </flux:badge>
+            @foreach ($readiness as $item)
+                <flux:badge :color="$item['ready'] ? 'emerald' : 'amber'" size="sm">
+                    {{ $item['ready'] ? $item['ready_badge'] : $item['missing_badge'] }}
+                </flux:badge>
+            @endforeach
         </div>
     </div>
 
@@ -33,7 +32,19 @@
         </div>
     @endif
 
-    <div class="mt-5 grid gap-4">
+    <div class="grid gap-3 rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-sm md:grid-cols-3">
+        @foreach ($readiness as $item)
+            <div>
+                <div class="flex items-center gap-2">
+                    <span class="h-2 w-2 rounded-full {{ $item['ready'] ? 'bg-emerald-500' : 'bg-amber-500' }}"></span>
+                    <p class="font-semibold text-zinc-950">{{ $item['label'] }}</p>
+                </div>
+                <p class="mt-1 text-xs leading-5 text-zinc-600">{{ $item['hint'] }}</p>
+            </div>
+        @endforeach
+    </div>
+
+    <div class="mt-5 grid gap-4 md:grid-cols-2">
         <flux:field>
             <flux:label>Flutterwave client ID</flux:label>
             <flux:input

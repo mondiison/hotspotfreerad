@@ -4,6 +4,7 @@ namespace App\Livewire\Admin;
 
 use App\Models\Shop;
 use App\Services\PaymentSettingsService;
+use App\Support\PaymentGatewayCatalog;
 use Livewire\Component;
 
 class PaymentSettingsCard extends Component
@@ -55,6 +56,8 @@ class PaymentSettingsCard extends Component
 
     public function render()
     {
-        return view('livewire.admin.payment-settings-card');
+        return view('livewire.admin.payment-settings-card', [
+            'readiness' => PaymentGatewayCatalog::tenantReadiness($this->shop),
+        ]);
     }
 }

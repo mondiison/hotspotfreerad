@@ -59,9 +59,10 @@
             @endforeach
         </flux:select>
         <flux:select wire:model.live="provider">
-            <flux:select.option value="">All providers</flux:select.option>
-            <flux:select.option value="flutterwave">Flutterwave</flux:select.option>
-            <flux:select.option value="voucher_cash">Voucher cash</flux:select.option>
+            <flux:select.option value="">All collection methods</flux:select.option>
+            @foreach ($paymentMethods as $methodKey => $methodLabel)
+                <flux:select.option value="{{ $methodKey }}">{{ $methodLabel }}</flux:select.option>
+            @endforeach
         </flux:select>
         <flux:button type="button" variant="outline" icon="x-mark" class="w-full" wire:click="clearFilters" wire:loading.attr="disabled" wire:target="clearFilters,from,to,search,status,provider">
             Reset
@@ -73,13 +74,14 @@
     </div>
 
     <div class="mt-6 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 bg-white">
-        <table class="min-w-[980px] w-full text-left text-sm">
+        <table class="min-w-[1100px] w-full text-left text-sm">
             <thead class="border-b border-zinc-200 bg-zinc-50 text-zinc-500">
                 <tr>
                     <th class="px-4 py-3 font-medium">Transaction</th>
                     <th class="px-4 py-3 font-medium">Customer</th>
                     <th class="px-4 py-3 font-medium">Plan</th>
                     <th class="px-4 py-3 font-medium">Shop</th>
+                    <th class="px-4 py-3 font-medium">Method</th>
                     <th class="px-4 py-3 font-medium">Status</th>
                     <th class="px-4 py-3 text-right font-medium">Gross</th>
                     <th class="px-4 py-3 text-right font-medium">Commission</th>
@@ -108,6 +110,10 @@
                             <p class="mt-1 text-xs text-zinc-500">{{ $payment->shop?->tenant?->company_name }}</p>
                         </td>
                         <td class="px-4 py-3">
+                            <p class="font-medium">{{ $paymentMethods[$payment->provider] ?? str($payment->provider)->replace('_', ' ')->headline() }}</p>
+                            <p class="mt-1 text-xs text-zinc-500">{{ data_get($payment->payload, 'payment_channel') ?: ($payment->provider === 'flutterwave' ? 'Online checkout' : 'Offline sale') }}</p>
+                        </td>
+                        <td class="px-4 py-3">
                             <flux:badge :color="$payment->status === 'successful' ? 'green' : ($payment->status === 'pending' ? 'amber' : 'red')">
                                 {{ str_replace('_', ' ', $payment->status) }}
                             </flux:badge>
@@ -127,7 +133,7 @@
                         <td class="px-4 py-3 text-right font-medium">{{ $payment->currency }} {{ number_format($payment->tenant_net_amount ?: ($payment->gross_amount ?: $payment->amount), 2) }}</td>
                     </tr>
                 @empty
-                    <tr><td colspan="8" class="px-4 py-8 text-center text-zinc-500">No payments found.</td></tr>
+                    <tr><td colspan="9" class="px-4 py-8 text-center text-zinc-500">No payments found.</td></tr>
                 @endforelse
             </tbody>
         </table>

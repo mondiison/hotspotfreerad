@@ -38,7 +38,7 @@ class PaymentController extends Controller
             fputcsv($handle, ['From', $filters['from']]);
             fputcsv($handle, ['To', $filters['to']]);
             fputcsv($handle, ['Status', $reports->statusLabel($filters['status'])]);
-            fputcsv($handle, ['Provider', $filters['provider'] ? str($filters['provider'])->replace('_', ' ')->title() : 'All']);
+            fputcsv($handle, ['Provider', $reports->providerLabel($filters['provider'])]);
             fputcsv($handle, ['Search', $filters['search'] ?: '']);
             fputcsv($handle, []);
             fputcsv($handle, [
