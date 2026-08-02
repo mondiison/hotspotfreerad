@@ -82,6 +82,7 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::delete('billing/plans/{billingPlan}', [BillingController::class, 'destroyPlan'])->name('billing.plans.destroy');
     Route::post('billing/subscriptions', [BillingController::class, 'storeSubscription'])->name('billing.subscriptions.store');
     Route::post('billing/payments', [BillingController::class, 'checkout'])->name('billing.payments.checkout');
+    Route::post('billing/payments/{payment}/verify', [BillingController::class, 'verify'])->name('billing.payments.verify');
     Route::get('billing/payments/callback', [BillingController::class, 'callback'])->name('billing.payments.callback');
     Route::get('brand', [TenantBrandController::class, 'edit'])->name('brand.edit');
     Route::put('brand', [TenantBrandController::class, 'update'])->name('brand.update');

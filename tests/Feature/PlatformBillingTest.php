@@ -550,6 +550,130 @@ class PlatformBillingTest extends TestCase
         ]);
     }
 
+    public function test_admin_can_manually_verify_pending_platform_payment(): void
+    {
+        $this->configurePlatformFlutterwave();
+        $tenant = Tenant::create([
+            'company_name' => 'Tenant One',
+            'owner_email' => 'one@example.com',
+        ]);
+        $plan = BillingPlan::where('slug', 'starter')->firstOrFail();
+        $payment = PlatformBillingPayment::create([
+            'tenant_id' => $tenant->id,
+            'billing_plan_id' => $plan->id,
+            'provider' => 'flutterwave',
+            'tx_ref' => 'PBF-MANUAL-123',
+            'provider_reference' => 'ord_manual_123',
+            'amount' => $plan->monthly_price,
+            'currency' => $plan->currency,
+            'status' => 'pending',
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+        Http::fake([
+            'idp.flutterwave.com/*' => Http::response([
+                'access_token' => 'PLATFORM_TOKEN',
+                'expires_in' => 600,
+            ]),
+            'developersandbox-api.flutterwave.com/orders/ord_manual_123' => Http::response([
+                'status' => 'success',
+                'data' => [
+                    'id' => 'ord_manual_123',
+                    'status' => 'succeeded',
+                    'reference' => $payment->tx_ref,
+                    'amount' => 15000,
+                    'currency' => 'NGN',
+                ],
+            ]),
+        ]);
+
+        $this->actingAs($user)
+            ->post(route('admin.billing.payments.verify', $payment))
+            ->assertRedirect(route('admin.billing.index'));
+
+        $this->assertDatabaseHas('platform_billing_payments', [
+            'id' => $payment->id,
+            'status' => 'successful',
+            'provider_reference' => 'ord_manual_123',
+        ]);
+        $this->assertDatabaseHas('tenant_billing_subscriptions', [
+            'tenant_id' => $tenant->id,
+            'billing_plan_id' => $plan->id,
+            'status' => 'active',
+            'provider_reference' => 'ord_manual_123',
+        ]);
+    }
+
+    public function test_tenant_admin_cannot_verify_another_tenants_platform_payment(): void
+    {
+        $tenant = Tenant::create([
+            'company_name' => 'Tenant One',
+            'owner_email' => 'one@example.com',
+        ]);
+        $otherTenant = Tenant::create([
+            'company_name' => 'Tenant Two',
+            'owner_email' => 'two@example.com',
+        ]);
+        $plan = BillingPlan::where('slug', 'starter')->firstOrFail();
+        $payment = PlatformBillingPayment::create([
+            'tenant_id' => $otherTenant->id,
+            'billing_plan_id' => $plan->id,
+            'provider' => 'flutterwave',
+            'tx_ref' => 'PBF-BLOCKED-123',
+            'provider_reference' => 'ord_blocked_123',
+            'amount' => $plan->monthly_price,
+            'currency' => $plan->currency,
+            'status' => 'pending',
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->post(route('admin.billing.payments.verify', $payment))
+            ->assertForbidden();
+
+        $this->assertSame('pending', $payment->refresh()->status);
+    }
+
+    public function test_manual_platform_payment_verify_requires_provider_reference(): void
+    {
+        $tenant = Tenant::create([
+            'company_name' => 'Tenant One',
+            'owner_email' => 'one@example.com',
+        ]);
+        $plan = BillingPlan::where('slug', 'starter')->firstOrFail();
+        $payment = PlatformBillingPayment::create([
+            'tenant_id' => $tenant->id,
+            'billing_plan_id' => $plan->id,
+            'provider' => 'flutterwave',
+            'tx_ref' => 'PBF-NOREF-123',
+            'amount' => $plan->monthly_price,
+            'currency' => $plan->currency,
+            'status' => 'pending',
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->post(route('admin.billing.payments.verify', $payment))
+            ->assertRedirect(route('admin.billing.index'))
+            ->assertSessionHasErrors('billing');
+
+        $payment->refresh();
+
+        $this->assertSame('verification_failed', $payment->status);
+        $this->assertSame('Provider reference is missing.', data_get($payment->payload, 'manual_verification_error'));
+    }
+
     public function test_successful_platform_subscription_webhook_activates_billing_subscription_once(): void
     {
         $this->configurePlatformFlutterwave();

@@ -197,6 +197,7 @@
                             <th class="px-4 py-3 font-medium">Status</th>
                             <th class="px-4 py-3 text-right font-medium">Amount</th>
                             <th class="px-4 py-3 text-right font-medium">Paid</th>
+                            <th class="px-4 py-3 text-right font-medium">Action</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-zinc-100">
@@ -215,9 +216,22 @@
                                 </td>
                                 <td class="px-4 py-3 text-right font-medium">{{ $payment->currency }} {{ number_format($payment->amount, 2) }}</td>
                                 <td class="px-4 py-3 text-right text-zinc-500">{{ $payment->paid_at?->format('M j, Y g:i A') ?? '-' }}</td>
+                                <td class="px-4 py-3 text-right">
+                                    @if ($payment->status !== 'successful')
+                                        <form method="POST" action="{{ route('admin.billing.payments.verify', $payment) }}" x-data="{ verifying: false }" @submit="verifying = true">
+                                            @csrf
+                                            <flux:button type="submit" size="sm" variant="outline" icon="arrow-path" ::disabled="verifying">
+                                                <span x-show="!verifying">Verify</span>
+                                                <span x-show="verifying" x-cloak>Checking...</span>
+                                            </flux:button>
+                                        </form>
+                                    @else
+                                        <span class="text-xs text-zinc-400">Confirmed</span>
+                                    @endif
+                                </td>
                             </tr>
                         @empty
-                            <tr><td colspan="6" class="px-4 py-8 text-center text-zinc-500">No platform billing payments yet.</td></tr>
+                            <tr><td colspan="7" class="px-4 py-8 text-center text-zinc-500">No platform billing payments yet.</td></tr>
                         @endforelse
                     </tbody>
                 </table>
@@ -339,6 +353,7 @@
                             <th class="px-4 py-3 font-medium">Status</th>
                             <th class="px-4 py-3 text-right font-medium">Amount</th>
                             <th class="px-4 py-3 text-right font-medium">Paid</th>
+                            <th class="px-4 py-3 text-right font-medium">Action</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-zinc-100">
@@ -356,9 +371,22 @@
                                 </td>
                                 <td class="px-4 py-3 text-right font-medium">{{ $payment->currency }} {{ number_format($payment->amount, 2) }}</td>
                                 <td class="px-4 py-3 text-right text-zinc-500">{{ $payment->paid_at?->format('M j, Y g:i A') ?? '-' }}</td>
+                                <td class="px-4 py-3 text-right">
+                                    @if ($payment->status !== 'successful')
+                                        <form method="POST" action="{{ route('admin.billing.payments.verify', $payment) }}" x-data="{ verifying: false }" @submit="verifying = true">
+                                            @csrf
+                                            <flux:button type="submit" size="sm" variant="outline" icon="arrow-path" ::disabled="verifying">
+                                                <span x-show="!verifying">Verify</span>
+                                                <span x-show="verifying" x-cloak>Checking...</span>
+                                            </flux:button>
+                                        </form>
+                                    @else
+                                        <span class="text-xs text-zinc-400">Confirmed</span>
+                                    @endif
+                                </td>
                             </tr>
                         @empty
-                            <tr><td colspan="5" class="px-4 py-8 text-center text-zinc-500">No platform billing payments yet.</td></tr>
+                            <tr><td colspan="6" class="px-4 py-8 text-center text-zinc-500">No platform billing payments yet.</td></tr>
                         @endforelse
                     </tbody>
                 </table>

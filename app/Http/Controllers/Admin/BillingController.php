@@ -267,6 +267,60 @@ class BillingController extends Controller
         return redirect()->route('admin.billing.index')->with('status', 'Platform subscription payment confirmed.');
     }
 
+    public function verify(Request $request, PlatformBillingPayment $payment, PlatformBillingConfirmationService $billing): RedirectResponse
+    {
+        $payment->loadMissing(['tenant', 'billingPlan']);
+
+        abort_unless($request->user()->isSuperAdmin() || $request->user()->tenant_id === $payment->tenant_id, 403);
+
+        if ($payment->status === 'successful' && $payment->tenant_billing_subscription_id) {
+            return redirect()->route('admin.billing.index')->with('status', 'Platform payment is already confirmed.');
+        }
+
+        if (blank($payment->provider_reference)) {
+            $payment->update([
+                'status' => 'verification_failed',
+                'payload' => array_merge($payment->payload ?? [], [
+                    'manual_verification_error' => 'Provider reference is missing.',
+                    'manual_verified_at' => now()->toDateTimeString(),
+                    'manual_verified_by' => $request->user()->email,
+                ]),
+            ]);
+
+            return redirect()->route('admin.billing.index')->withErrors(['billing' => 'This billing payment has no provider reference to verify. Ask the tenant to retry checkout if money was not debited.']);
+        }
+
+        try {
+            $confirmed = $billing->verifyAndActivate(
+                $payment,
+                (string) $payment->provider_reference,
+                $this->paymentResourceType((string) $payment->provider_reference, data_get($payment->payload, 'flutterwave_resource_type'))
+            );
+        } catch (\Throwable $exception) {
+            $payment->update([
+                'payload' => array_merge($payment->payload ?? [], [
+                    'manual_verification_error' => $exception->getMessage(),
+                    'manual_verified_at' => now()->toDateTimeString(),
+                    'manual_verified_by' => $request->user()->email,
+                ]),
+            ]);
+
+            Log::warning('Platform billing manual verification failed', [
+                'payment_id' => $payment->id,
+                'tx_ref' => $payment->tx_ref,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return redirect()->route('admin.billing.index')->withErrors(['billing' => 'Could not verify this platform payment. Check the platform Flutterwave credentials and try again.']);
+        }
+
+        if (! $confirmed) {
+            return redirect()->route('admin.billing.index')->withErrors(['billing' => 'Flutterwave did not confirm this platform payment yet.']);
+        }
+
+        return redirect()->route('admin.billing.index')->with('status', 'Platform payment verified and subscription activated.');
+    }
+
     public function webhook(Request $request, PlatformFlutterwaveService $flutterwave): Response
     {
         if (! $flutterwave->webhookIsValid($request->getContent(), $request->header('flutterwave-signature') ?: $request->header('verif-hash'))) {
