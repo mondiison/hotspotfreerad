@@ -10,6 +10,8 @@ use Illuminate\Support\Str;
 
 class PlatformFlutterwaveService
 {
+    public function __construct(private readonly PlatformPaymentSettingsService $settings) {}
+
     /**
      * @throws RequestException
      */
@@ -83,13 +85,13 @@ class PlatformFlutterwaveService
 
     public function isConfigured(): bool
     {
-        return filled(config('services.flutterwave.client_id'))
-            && filled(config('services.flutterwave.client_secret'));
+        return filled($this->settings->clientId())
+            && filled($this->settings->clientSecret());
     }
 
     public function webhookIsValid(string $rawBody, ?string $signature): bool
     {
-        $secretHash = config('services.flutterwave.webhook_secret_hash');
+        $secretHash = $this->settings->webhookSecretHash();
 
         if (blank($secretHash) || blank($signature)) {
             return false;
@@ -136,8 +138,8 @@ class PlatformFlutterwaveService
 
     private function accessToken(): string
     {
-        $clientId = (string) config('services.flutterwave.client_id');
-        $clientSecret = (string) config('services.flutterwave.client_secret');
+        $clientId = (string) $this->settings->clientId();
+        $clientSecret = (string) $this->settings->clientSecret();
         $cacheKey = 'flutterwave:v4:platform-token:'.sha1($clientId.'|'.$clientSecret);
 
         return Cache::remember($cacheKey, now()->addMinutes(8), function () use ($clientId, $clientSecret): string {
@@ -162,8 +164,6 @@ class PlatformFlutterwaveService
 
     private function paymentMethodType(): string
     {
-        return filled(config('services.flutterwave.default_payment_method'))
-            ? (string) config('services.flutterwave.default_payment_method')
-            : 'opay';
+        return $this->settings->defaultPaymentMethod();
     }
 }

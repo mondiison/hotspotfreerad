@@ -78,6 +78,10 @@
             <livewire:admin.billing-plans-manager />
         </div>
 
+        <section class="mt-6">
+            <livewire:admin.platform-payment-settings-card />
+        </section>
+
         <section class="mt-6 rounded-lg border border-zinc-200 bg-white p-5">
             <h2 class="font-semibold">Assign Tenant Subscription</h2>
             <p class="mt-1 text-sm text-zinc-500">Use this for manual billing status while platform Flutterwave subscription checkout is being added.</p>

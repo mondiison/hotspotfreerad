@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Jobs\VerifyPlatformBillingWebhook;
 use App\Livewire\Admin\BillingPlansManager;
+use App\Livewire\Admin\PlatformPaymentSettingsCard;
 use App\Models\BillingPlan;
 use App\Models\PlatformBillingPayment;
 use App\Models\Tenant;
@@ -265,6 +266,122 @@ class PlatformBillingTest extends TestCase
         $this->assertDatabaseHas('billing_plans', [
             'id' => $plan->id,
         ]);
+    }
+
+    public function test_super_admin_can_update_platform_payment_settings(): void
+    {
+        config([
+            'services.flutterwave.client_id' => null,
+            'services.flutterwave.client_secret' => null,
+            'services.flutterwave.webhook_secret_hash' => null,
+        ]);
+        $user = User::factory()->create([
+            'role' => 'super_admin',
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(PlatformPaymentSettingsCard::class)
+            ->set('client_id', 'db-platform-client-id')
+            ->set('client_secret', 'db-platform-client-secret')
+            ->set('webhook_secret_hash', 'db-platform-webhook-secret')
+            ->set('default_payment_method', 'bank_transfer')
+            ->call('save')
+            ->assertHasNoErrors()
+            ->assertSee('Platform payment settings updated.')
+            ->assertSee('Checkout ready')
+            ->assertSee('Webhook ready');
+
+        $this->assertDatabaseHas('platform_settings', [
+            'key' => 'payments.platform.flutterwave',
+        ]);
+
+        $service = app(\App\Services\PlatformPaymentSettingsService::class);
+        $this->assertSame('db-platform-client-id', $service->clientId());
+        $this->assertSame('db-platform-client-secret', $service->clientSecret());
+        $this->assertSame('db-platform-webhook-secret', $service->webhookSecretHash());
+        $this->assertSame('bank_transfer', $service->defaultPaymentMethod());
+    }
+
+    public function test_tenant_admin_cannot_update_platform_payment_settings(): void
+    {
+        $tenant = Tenant::create([
+            'company_name' => 'Tenant One',
+            'owner_email' => 'one@example.com',
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(PlatformPaymentSettingsCard::class)
+            ->assertForbidden();
+    }
+
+    public function test_platform_checkout_uses_database_payment_settings_before_env(): void
+    {
+        config([
+            'services.flutterwave.client_id' => 'env-platform-client-id',
+            'services.flutterwave.client_secret' => 'env-platform-client-secret',
+            'services.flutterwave.default_payment_method' => 'opay',
+            'services.flutterwave.webhook_secret_hash' => null,
+        ]);
+
+        $superAdmin = User::factory()->create([
+            'role' => 'super_admin',
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs($superAdmin)
+            ->test(PlatformPaymentSettingsCard::class)
+            ->set('client_id', 'db-platform-client-id')
+            ->set('client_secret', 'db-platform-client-secret')
+            ->set('default_payment_method', 'bank_transfer')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        Http::fake([
+            'idp.flutterwave.com/*' => Http::response([
+                'access_token' => 'DATABASE_PLATFORM_TOKEN',
+                'expires_in' => 600,
+            ]),
+            'developersandbox-api.flutterwave.com/orchestration/direct-charges' => Http::response([
+                'status' => 'success',
+                'data' => [
+                    'id' => 'chg_platform_db_123',
+                    'next_action' => [
+                        'redirect_url' => [
+                            'url' => 'https://developer-sandbox-ui-sit.flutterwave.cloud/redirects/bank-transfer/platform-subscription',
+                        ],
+                    ],
+                ],
+            ]),
+        ]);
+
+        $tenant = Tenant::create([
+            'company_name' => 'Tenant One',
+            'owner_email' => 'one@example.com',
+        ]);
+        $plan = BillingPlan::where('slug', 'growth')->firstOrFail();
+        $tenantAdmin = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($tenantAdmin)
+            ->post(route('admin.billing.payments.checkout'), [
+                'billing_plan_id' => $plan->id,
+            ])
+            ->assertRedirect('https://developer-sandbox-ui-sit.flutterwave.cloud/redirects/bank-transfer/platform-subscription');
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'idp.flutterwave.com')
+            && $request['client_id'] === 'db-platform-client-id'
+            && $request['client_secret'] === 'db-platform-client-secret');
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/orchestration/direct-charges')
+            && data_get($request->data(), 'payment_method.type') === 'bank_transfer');
     }
 
     public function test_tenant_admin_can_view_own_billing_status(): void

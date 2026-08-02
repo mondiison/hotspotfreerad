@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Models\Shop;
+use App\Services\PlatformPaymentSettingsService;
 
 class PaymentGatewayCatalog
 {
@@ -35,6 +36,8 @@ class PaymentGatewayCatalog
 
     public static function platformProvider(): array
     {
+        $settings = app(PlatformPaymentSettingsService::class);
+
         return [
             'key' => 'flutterwave',
             'name' => 'Flutterwave',
@@ -45,13 +48,13 @@ class PaymentGatewayCatalog
                     'label' => 'Platform checkout',
                     'requires' => 'Platform Client ID + Client Secret',
                     'description' => 'Used when tenants pay or renew their SaaS subscription.',
-                    'ready' => filled(config('services.flutterwave.client_id')) && filled(config('services.flutterwave.client_secret')),
+                    'ready' => filled($settings->clientId()) && filled($settings->clientSecret()),
                 ],
                 'webhook' => [
                     'label' => 'Platform webhook',
                     'requires' => 'Platform webhook secret hash',
                     'description' => 'Keeps platform billing active even when callback redirects are interrupted.',
-                    'ready' => filled(config('services.flutterwave.webhook_secret_hash')),
+                    'ready' => filled($settings->webhookSecretHash()),
                 ],
             ],
         ];
