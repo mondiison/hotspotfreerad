@@ -1,0 +1,155 @@
+# HotspotFreeRAD Handover
+
+Last updated: 2026-08-03
+
+## Project
+
+HotspotFreeRAD / MMS Radius is a Laravel 12, Livewire 4, Flux Pro SaaS for MikroTik + FreeRADIUS hotspot, voucher, PPPoE, POS-device, tenant billing, payments, and reporting.
+
+Local path:
+
+```text
+C:\xampp\htdocs\HotspotFreeRAD
+```
+
+GitHub:
+
+```text
+https://github.com/mondiison/hotspotfreerad.git
+```
+
+Production/Pi path:
+
+```text
+/var/www/hotspotfreerad
+```
+
+Public domain:
+
+```text
+https://mmsradius.com
+```
+
+## Stack
+
+- Laravel 12
+- Livewire 4
+- Flux + Flux Pro
+- MySQL/MariaDB
+- FreeRADIUS 3
+- MikroTik RouterOS
+- Flutterwave v4 for OPay/transfer and v3 secret key for card checkout
+- Cloudflare Tunnel for public access from the Raspberry Pi
+
+## Local Development
+
+Use port `8001` for this project because other local projects may use `8000`.
+
+```bash
+cd C:\xampp\htdocs\HotspotFreeRAD
+npm run dev
+php artisan serve --host=127.0.0.1 --port=8001
+```
+
+Open:
+
+```text
+http://127.0.0.1:8001/login
+```
+
+If the browser keeps loading forever, check MySQL first. On 2026-08-03, local XAMPP MariaDB was hanging because the internal `mysql.db` table crashed. It was repaired with `aria_chk`, then MySQL was restarted.
+
+Useful recovery commands:
+
+```bash
+php artisan optimize:clear
+php artisan migrate
+npm run build
+```
+
+## Deployment To Pi
+
+After pushing changes locally:
+
+```bash
+cd /var/www/hotspotfreerad
+git pull origin main
+php artisan migrate
+npm run build
+php artisan optimize:clear
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
+```
+
+Use `php artisan migrate` whenever new migrations are added.
+
+## Current Features
+
+- Multi-tenant admin and super-admin structure
+- Tenant public slug/site and branding
+- Tenant payment settings with Flutterwave
+- Platform billing plans and platform payment settings
+- Commission-based tenant billing support
+- Captive portal package purchase flow
+- Voucher generation, sale tracking, printable vouchers, voucher payment tracking
+- Packages with uptime, bandwidth, total data, and FUP fields
+- Router onboarding and MikroTik script generation
+- Flexible router provisioning settings:
+  - WAN 1 / WAN 2
+  - AP/switch trunk
+  - VLAN IDs
+  - hotspot/staff/POS/PPPoE networks
+  - Starlink-friendly PCQ limits
+  - realtime voice/video QoS
+  - optional second WAN
+- PPPoE subscribers with RADIUS sync, renewal, expiry cleanup, and reporting
+- POS device registry:
+  - MAC address registration
+  - package/renewal
+  - RADIUS MAC-auth provisioning
+  - expiry cleanup
+  - dashboard POS Access Desk
+- Security/profile:
+  - 2FA
+  - QR setup
+  - passkeys
+  - avatar upload/camera support
+  - security activity reporting
+- Sales, payments, expenses, budget watch, recurring expenses, and dashboard summaries
+
+## Network Design Direction
+
+Primary target setup:
+
+```text
+Starlink -> MikroTik RB5009 -> managed PoE switch/APs
+```
+
+Recommended VLANs:
+
+```text
+VLAN 10 - Management
+VLAN 20 - Open hotspot/captive portal
+VLAN 30 - Staff/admin Wi-Fi
+VLAN 40 - PPPoE/CPE
+VLAN 50 - POS devices
+```
+
+POS devices should use a password-protected POS SSID, usually VLAN 50, and be registered in HotspotFreeRAD by MAC address for renewal and expiry.
+
+## Important Operational Notes
+
+- Do not expose tenant/admin passwords. Tenant creation should send temporary password/reset flow.
+- For Flux Pro composer auth, use the Flux license key, not the account password.
+- Vite build may show an existing Flux CSS warning about `[snap="mandatory" &]`; build still succeeds.
+- `APP_URL` must match the access domain/protocol. For public HTTPS, Livewire must generate HTTPS URLs to avoid mixed-content errors.
+- Local `.env` currently expects `APP_URL=http://127.0.0.1:8001`.
+
+## Next Good Work
+
+- Add POS accounting/inspect modal similar to PPPoE.
+- Add POS payment tracking when tenant sells/renews POS access.
+- Improve router script generator with selectable AP vendor notes: MikroTik, Ruijie/Reyee, TP-Link Omada, Wavlink.
+- Add second Starlink load-balancing/failover script profile.
+- Add public MMS Radius homepage/pricing after core feature set stabilizes.
