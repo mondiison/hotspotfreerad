@@ -68,6 +68,24 @@
             </section>
 
             <section class="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+                <h2 class="text-base font-semibold">Infrastructure Profiles</h2>
+                <div class="mt-4 space-y-3">
+                    @foreach ($infrastructureProfiles as $key => $profile)
+                        <div class="rounded-md border border-zinc-200 p-3">
+                            <div class="flex items-start justify-between gap-3">
+                                <p class="text-sm font-medium">{{ $profile['name'] }}</p>
+                                @if ($key === 'starlink_plaza')
+                                    <flux:badge color="blue">Default</flux:badge>
+                                @endif
+                            </div>
+                            <p class="mt-1 text-xs leading-5 text-zinc-500">{{ $profile['summary'] }}</p>
+                            <p class="mt-2 text-xs font-medium text-zinc-600">{{ $profile['capacity'] }}</p>
+                        </div>
+                    @endforeach
+                </div>
+            </section>
+
+            <section class="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
                 <h2 class="text-base font-semibold">PPPoE Notes</h2>
                 <ul class="mt-4 space-y-3 text-sm text-zinc-600">
                     <li>Use PPPoE for fixed subscribers with username/password credentials.</li>
@@ -79,6 +97,27 @@
         </aside>
 
         <div class="space-y-6">
+            <section class="rounded-lg border border-zinc-200 bg-white shadow-sm">
+                <div class="border-b border-zinc-200 px-5 py-4">
+                    <div class="flex flex-col justify-between gap-3 md:flex-row md:items-start">
+                        <div>
+                            <h2 class="text-base font-semibold">Fresh MikroTik Infrastructure Script</h2>
+                            <p class="mt-1 text-sm text-zinc-500">Use this for new/no-default-config routers. It prepares VLANs, Starlink-friendly PCQ queues, POS access, PPPoE, hotspot, WireGuard, and RADIUS.</p>
+                        </div>
+                        <flux:badge color="amber">Review variables first</flux:badge>
+                    </div>
+                </div>
+                <pre class="overflow-x-auto p-5 text-sm leading-6 text-zinc-900"><code>{{ $freshInfrastructureScript }}</code></pre>
+            </section>
+
+            <section class="rounded-lg border border-zinc-200 bg-white shadow-sm">
+                <div class="border-b border-zinc-200 px-5 py-4">
+                    <h2 class="text-base font-semibold">AP / SSID / VLAN Guide</h2>
+                    <p class="mt-1 text-sm text-zinc-500">Use this when configuring Ruijie, Omada, Wavlink, or any tenant access point that supports multiple SSIDs.</p>
+                </div>
+                <pre class="overflow-x-auto p-5 text-sm leading-6 text-zinc-900"><code>{{ $accessPointGuide }}</code></pre>
+            </section>
+
             <section class="rounded-lg border border-zinc-200 bg-white shadow-sm">
                 <div class="border-b border-zinc-200 px-5 py-4">
                     <h2 class="text-base font-semibold">RouterOS Script</h2>

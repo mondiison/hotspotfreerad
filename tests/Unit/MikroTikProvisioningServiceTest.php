@@ -65,4 +65,45 @@ class MikroTikProvisioningServiceTest extends TestCase
         $this->assertStringNotContainsString('rate-limit=', $script);
         $this->assertStringContainsString('/interface pppoe-server server add interface=bridge1 service-name=mms-radius', $script);
     }
+
+    public function test_it_generates_a_fresh_infrastructure_script_for_starlink_plaza_networks(): void
+    {
+        config([
+            'app.url' => 'https://mmsradius.com',
+            'services.radius.server_ip' => '10.8.0.1',
+            'services.radius.auth_port' => 1812,
+            'services.radius.acct_port' => 1813,
+            'services.wireguard.endpoint_host' => 'vpn.example.com',
+            'services.wireguard.endpoint_port' => 13231,
+            'services.wireguard.public_key' => 'server-public-key',
+            'services.mikrotik.hotspot_dns_name' => 'hotspot.local',
+        ]);
+
+        $router = new Router([
+            'nas_identifier' => 'plaza-core-01',
+            'wireguard_internal_ip' => '10.8.0.10',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        $script = app(MikroTikProvisioningService::class)->generateFreshInfrastructureScript($router);
+
+        $this->assertStringContainsString('Profile: Starlink plaza / high concurrency', $script);
+        $this->assertStringContainsString('/interface vlan add interface=$lanBridge name=vlan-hotspot vlan-id=$hotspotVlan', $script);
+        $this->assertStringContainsString('/interface vlan add interface=$lanBridge name=vlan-pos vlan-id=$posVlan', $script);
+        $this->assertStringContainsString('/ip hotspot add name=mms-hotspot interface=vlan-hotspot', $script);
+        $this->assertStringContainsString('/radius add address=10.8.0.1 secret="radius-secret" service=hotspot,ppp', $script);
+        $this->assertStringContainsString('/queue type add name=pcq-hotspot-down kind=pcq', $script);
+        $this->assertStringContainsString('Realtime voice/video small UDP upload', $script);
+        $this->assertStringContainsString('MMS POS = WPA2/WPA3 SSID tagged VLAN 50', $script);
+        $this->assertStringContainsString('/system scheduler add name=mms-refresh-bandwidth interval=10m', $script);
+    }
+
+    public function test_it_lists_flexible_infrastructure_profiles(): void
+    {
+        $profiles = app(MikroTikProvisioningService::class)->infrastructureProfiles();
+
+        $this->assertArrayHasKey('starlink_plaza', $profiles);
+        $this->assertArrayHasKey('small_hotspot', $profiles);
+        $this->assertArrayHasKey('pppoe_isp', $profiles);
+    }
 }
