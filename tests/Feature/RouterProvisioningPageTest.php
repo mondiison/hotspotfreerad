@@ -67,4 +67,74 @@ class RouterProvisioningPageTest extends TestCase
             ->assertSee('/ip hotspot active remove', false)
             ->assertSee('sudo freeradius -X');
     }
+
+    public function test_router_provisioning_settings_are_saved_and_used_on_script_page(): void
+    {
+        config([
+            'app.url' => 'https://portal.example.com',
+            'services.radius.server_ip' => '10.8.0.1',
+            'services.wireguard.endpoint_host' => 'vpn.example.com',
+            'services.wireguard.public_key' => 'server-public-key',
+        ]);
+
+        $tenant = Tenant::create([
+            'company_name' => 'Demo ISP',
+            'owner_email' => 'owner@example.com',
+        ]);
+
+        $shop = Shop::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Demo Shop',
+        ]);
+
+        $user = User::factory()->create([
+            'role' => 'super_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->post(route('admin.routers.store'), [
+                'shop_id' => $shop->id,
+                'name' => 'Custom Core',
+                'nas_identifier' => 'custom-core',
+                'wireguard_internal_ip' => '10.8.0.44',
+                'shared_secret' => 'radius-secret',
+                'provisioning_settings' => [
+                    'profile' => 'small_hotspot',
+                    'wan1' => 'ether5',
+                    'wan2' => 'ether6',
+                    'trunk_port' => 'sfp-sfpplus1',
+                    'download_limit' => '70M',
+                    'upload_limit' => '12M',
+                    'mgmt_vlan' => 11,
+                    'hotspot_vlan' => 120,
+                    'staff_vlan' => 130,
+                    'pppoe_vlan' => 140,
+                    'pos_vlan' => 150,
+                    'hotspot_gateway' => '10.20.0.1/22',
+                    'hotspot_network' => '10.20.0.0/22',
+                    'hotspot_pool' => '10.20.0.10-10.20.3.250',
+                    'enable_pos' => false,
+                    'enable_pppoe' => false,
+                    'enable_realtime_qos' => false,
+                    'enable_second_wan' => true,
+                ],
+            ])
+            ->assertRedirect(route('admin.routers.index'));
+
+        $router = Router::where('nas_identifier', 'custom-core')->firstOrFail();
+
+        $this->assertSame('small_hotspot', $router->provisioning_settings['profile']);
+        $this->assertSame('sfp-sfpplus1', $router->provisioning_settings['trunk_port']);
+        $this->assertFalse($router->provisioning_settings['enable_pos']);
+
+        $this->actingAs($user)
+            ->get(route('admin.routers.show', $router))
+            ->assertOk()
+            ->assertSee(':local wan1 &quot;ether5&quot;', false)
+            ->assertSee(':local hotspotVlan &quot;120&quot;', false)
+            ->assertSee('vlan-ids=11,120,130')
+            ->assertSee('POS VLAN is disabled')
+            ->assertSee('Realtime QoS and PCQ are disabled');
+    }
 }

@@ -17,6 +17,7 @@ class Router extends Model
     {
         return [
             'shared_secret' => 'encrypted',
+            'provisioning_settings' => 'array',
             'is_online' => 'boolean',
             'last_seen_at' => 'datetime',
         ];

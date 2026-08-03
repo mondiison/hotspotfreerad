@@ -98,6 +98,53 @@ class MikroTikProvisioningServiceTest extends TestCase
         $this->assertStringContainsString('/system scheduler add name=mms-refresh-bandwidth interval=10m', $script);
     }
 
+    public function test_fresh_infrastructure_script_uses_router_specific_settings(): void
+    {
+        config([
+            'app.url' => 'https://mmsradius.com',
+            'services.radius.server_ip' => '10.8.0.1',
+            'services.radius.auth_port' => 1812,
+            'services.radius.acct_port' => 1813,
+            'services.wireguard.endpoint_host' => 'vpn.example.com',
+            'services.wireguard.endpoint_port' => 13231,
+            'services.wireguard.public_key' => 'server-public-key',
+            'services.mikrotik.hotspot_dns_name' => 'hotspot.local',
+        ]);
+
+        $router = new Router([
+            'nas_identifier' => 'custom-router',
+            'wireguard_internal_ip' => '10.8.0.20',
+            'shared_secret' => 'radius-secret',
+            'provisioning_settings' => [
+                'profile' => 'small_hotspot',
+                'wan1' => 'ether5',
+                'trunk_port' => 'sfp-sfpplus1',
+                'hotspot_vlan' => 120,
+                'hotspot_gateway' => '10.20.0.1/22',
+                'hotspot_network' => '10.20.0.0/22',
+                'hotspot_pool' => '10.20.0.10-10.20.3.250',
+                'download_limit' => '60M',
+                'upload_limit' => '8M',
+                'enable_pos' => false,
+                'enable_pppoe' => false,
+                'enable_realtime_qos' => false,
+            ],
+        ]);
+
+        $script = app(MikroTikProvisioningService::class)->generateFreshInfrastructureScript($router);
+
+        $this->assertStringContainsString(':local wan1 "ether5"', $script);
+        $this->assertStringContainsString(':local trunkPort "sfp-sfpplus1"', $script);
+        $this->assertStringContainsString(':local hotspotVlan "120"', $script);
+        $this->assertStringContainsString(':local hotspotGateway "10.20.0.1/22"', $script);
+        $this->assertStringContainsString(':local hotspotPool "10.20.0.10-10.20.3.250"', $script);
+        $this->assertStringContainsString('vlan-ids=10,120,30', $script);
+        $this->assertStringContainsString('POS VLAN is disabled', $script);
+        $this->assertStringContainsString('PPPoE is disabled', $script);
+        $this->assertStringContainsString('Realtime QoS and PCQ are disabled', $script);
+        $this->assertStringNotContainsString('/queue type add name=pcq-hotspot-down kind=pcq', $script);
+    }
+
     public function test_it_lists_flexible_infrastructure_profiles(): void
     {
         $profiles = app(MikroTikProvisioningService::class)->infrastructureProfiles();

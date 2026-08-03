@@ -42,10 +42,14 @@ class RouterController extends Controller
     public function create(): View
     {
         $user = request()->user();
+        $routerManagement = app(RouterManagementService::class);
+        $mikroTik = app(MikroTikProvisioningService::class);
 
         return view('admin.routers.form', [
             'router' => new Router,
             'shops' => TenantAccess::scopeShops(Shop::with('tenant'), $user)->orderBy('name')->get(),
+            'provisioningSettings' => old('provisioning_settings', $routerManagement->defaultProvisioningSettings()),
+            'infrastructureProfiles' => $mikroTik->infrastructureProfiles(),
             'billingUsage' => BillingPlanLimits::usageSummary($user, 'routers'),
         ]);
     }
@@ -84,10 +88,18 @@ class RouterController extends Controller
     {
         TenantAccess::assertRouter($router, request()->user());
         $user = request()->user();
+        $routerManagement = app(RouterManagementService::class);
+        $mikroTik = app(MikroTikProvisioningService::class);
+        $provisioningSettings = array_replace(
+            $routerManagement->defaultProvisioningSettings($router->provisioning_settings['profile'] ?? null),
+            (array) $router->provisioning_settings
+        );
 
         return view('admin.routers.form', [
             'router' => $router,
             'shops' => TenantAccess::scopeShops(Shop::with('tenant'), $user)->orderBy('name')->get(),
+            'provisioningSettings' => old('provisioning_settings', $provisioningSettings),
+            'infrastructureProfiles' => $mikroTik->infrastructureProfiles(),
             'billingUsage' => null,
         ]);
     }

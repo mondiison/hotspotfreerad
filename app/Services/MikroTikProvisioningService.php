@@ -85,7 +85,8 @@ SCRIPT;
     {
         $router->loadMissing('shop.tenant');
 
-        $profile = array_key_exists($profile, $this->infrastructureProfiles()) ? $profile : 'starlink_plaza';
+        $settings = $this->provisioningSettings($router, $profile);
+        $profile = $settings['profile'];
         $routerIdentity = $this->quote($router->nas_identifier);
         $sharedSecret = $this->quote($router->shared_secret);
         $radiusIp = config('services.radius.server_ip');
@@ -98,45 +99,110 @@ SCRIPT;
         $portalHost = parse_url($portalUrl, PHP_URL_HOST) ?: config('services.mikrotik.hotspot_dns_name');
         $hotspotDnsName = config('services.mikrotik.hotspot_dns_name');
 
-        $defaults = $this->profileDefaults($profile);
+        $taggedVlans = implode(',', array_filter([
+            $settings['mgmt_vlan'],
+            $settings['hotspot_vlan'],
+            $settings['staff_vlan'],
+            $settings['enable_pppoe'] ? $settings['pppoe_vlan'] : null,
+            $settings['enable_pos'] ? $settings['pos_vlan'] : null,
+        ]));
 
-        return implode("\n", [
+        $secondWanMember = $settings['enable_second_wan']
+            ? '/interface list member add list=WAN interface=$wan2'
+            : '# Add this when second Starlink is connected: /interface list member add list=WAN interface=$wan2';
+
+        $secondWanNat = $settings['enable_second_wan']
+            ? '/ip firewall nat add chain=srcnat out-interface=$wan2 action=masquerade'
+            : '# Add this when second Starlink is connected: /ip firewall nat add chain=srcnat out-interface=$wan2 action=masquerade';
+
+        $posLines = $settings['enable_pos'] ? [
+            '',
+            '/ip address add address=$posGateway interface=vlan-pos comment="POS SSID VLAN, registered devices, no shared customer password"',
+            '/ip pool add name=pool-pos ranges=$posPool',
+            '/ip dhcp-server add name=dhcp-pos interface=vlan-pos address-pool=pool-pos lease-time=12h disabled=no',
+            '/ip dhcp-server network add address=$posNetwork gateway='.str($settings['pos_gateway'])->before('/').' dns-server='.str($settings['pos_gateway'])->before('/'),
+            '# Optional POS MAC-auth hotspot. Enable when POS devices are registered in MMS Radius by MAC address.',
+            '# /ip hotspot profile add name=mms-pos-profile use-radius=yes login-by=mac radius-accounting=yes',
+            '# /ip hotspot add name=mms-pos interface=vlan-pos address-pool=pool-pos profile=mms-pos-profile disabled=no',
+        ] : [
+            '',
+            '# POS VLAN is disabled for this router profile. Enable it when POS terminals need password Wi-Fi and app-managed renewal.',
+        ];
+
+        $pppoeLines = $settings['enable_pppoe'] ? [
+            '',
+            '/ip address add address=$pppoeGateway interface=vlan-pppoe comment="Optional PPPoE/CPE VLAN"',
+            '/ppp aaa set use-radius=yes accounting=yes interim-update=5m',
+            '/ppp profile add name=mms-pppoe-profile use-radius=yes only-one=yes change-tcp-mss=yes',
+            '/interface pppoe-server server add interface=vlan-pppoe service-name=mms-radius default-profile=mms-pppoe-profile authentication=pap,chap,mschap1,mschap2 disabled=no',
+        ] : [
+            '',
+            '# PPPoE is disabled for this router profile. Enable it for CPE/subscriber deployments.',
+        ];
+
+        $qosLines = $settings['enable_realtime_qos'] ? [
+            '',
+            '/queue type add name=pcq-hotspot-down kind=pcq pcq-classifier=dst-address pcq-rate=0 pcq-limit=50KiB pcq-total-limit=4000KiB',
+            '/queue type add name=pcq-hotspot-up kind=pcq pcq-classifier=src-address pcq-rate=0 pcq-limit=50KiB pcq-total-limit=4000KiB',
+            '/ip firewall mangle add chain=prerouting src-address=$hotspotNetwork protocol=udp packet-size=0-600 action=mark-packet new-packet-mark=realtime-up passthrough=yes comment="Realtime voice/video small UDP upload"',
+            '/ip firewall mangle add chain=postrouting dst-address=$hotspotNetwork protocol=udp packet-size=0-600 action=mark-packet new-packet-mark=realtime-down passthrough=yes comment="Realtime voice/video small UDP download"',
+            '/ip firewall mangle add chain=prerouting src-address=$hotspotNetwork packet-mark=no-mark action=mark-packet new-packet-mark=hotspot-up passthrough=yes',
+            '/ip firewall mangle add chain=postrouting dst-address=$hotspotNetwork packet-mark=no-mark action=mark-packet new-packet-mark=hotspot-down passthrough=yes',
+            '/queue tree add name=mms-upload parent=$wan1 max-limit=$uploadLimit',
+            '/queue tree add name=mms-download parent=vlan-hotspot max-limit=$downloadLimit',
+            '/queue tree add name=realtime-upload parent=mms-upload packet-mark=realtime-up priority=1 limit-at=2M max-limit=$uploadLimit',
+            '/queue tree add name=realtime-download parent=mms-download packet-mark=realtime-down priority=1 limit-at=5M max-limit=$downloadLimit',
+            '/queue tree add name=hotspot-upload parent=mms-upload packet-mark=hotspot-up queue=pcq-hotspot-up priority=5 max-limit=$uploadLimit',
+            '/queue tree add name=hotspot-download parent=mms-download packet-mark=hotspot-down queue=pcq-hotspot-down priority=5 max-limit=$downloadLimit',
+            '# Disable FastTrack for hotspot traffic if a default firewall later adds it; FastTrack can bypass queues.',
+            '',
+            '/system script add name=mms-starlink-bandwidth-policy source=":local downNormal \"'.$settings['download_limit'].'\"; :local upNormal \"'.$settings['upload_limit'].'\"; /queue tree set [find name=mms-download] max-limit=\\$downNormal; /queue tree set [find name=mms-upload] max-limit=\\$upNormal;"',
+            '/system scheduler add name=mms-refresh-bandwidth interval=10m on-event=mms-starlink-bandwidth-policy comment="Adjust parent PCQ limits here as Starlink capacity changes"',
+        ] : [
+            '',
+            '# Realtime QoS and PCQ are disabled for this router profile.',
+        ];
+
+        return implode("\n", array_merge([
             '# MMS Radius flexible MikroTik infrastructure script',
             '# Profile: '.$this->infrastructureProfiles()[$profile]['name'],
             '# Use on a fresh/no-default-config router, or review each section before pasting on an existing router.',
             '# Edit these local values first to match the tenant hardware and cabling.',
-            ':local wan1 "'.$defaults['wan1'].'"',
-            ':local wan2 "'.$defaults['wan2'].'"',
+            ':local wan1 "'.$settings['wan1'].'"',
+            ':local wan2 "'.$settings['wan2'].'"',
             ':local lanBridge "bridge-lan"',
-            ':local trunkPort "'.$defaults['trunk_port'].'"',
-            ':local mgmtVlan "10"',
-            ':local hotspotVlan "20"',
-            ':local staffVlan "30"',
-            ':local pppoeVlan "40"',
-            ':local posVlan "50"',
-            ':local hotspotGateway "10.5.50.1/23"',
-            ':local hotspotPool "10.5.50.10-10.5.51.250"',
-            ':local staffGateway "192.168.30.1/24"',
-            ':local staffPool "192.168.30.10-192.168.30.250"',
-            ':local posGateway "192.168.50.1/24"',
-            ':local posPool "192.168.50.10-192.168.50.250"',
-            ':local pppoeGateway "172.16.40.1/24"',
-            ':local downloadLimit "'.$defaults['download_limit'].'"',
-            ':local uploadLimit "'.$defaults['upload_limit'].'"',
+            ':local trunkPort "'.$settings['trunk_port'].'"',
+            ':local mgmtVlan "'.$settings['mgmt_vlan'].'"',
+            ':local hotspotVlan "'.$settings['hotspot_vlan'].'"',
+            ':local staffVlan "'.$settings['staff_vlan'].'"',
+            ':local pppoeVlan "'.$settings['pppoe_vlan'].'"',
+            ':local posVlan "'.$settings['pos_vlan'].'"',
+            ':local hotspotGateway "'.$settings['hotspot_gateway'].'"',
+            ':local hotspotNetwork "'.$settings['hotspot_network'].'"',
+            ':local hotspotPool "'.$settings['hotspot_pool'].'"',
+            ':local staffGateway "'.$settings['staff_gateway'].'"',
+            ':local staffNetwork "'.$settings['staff_network'].'"',
+            ':local staffPool "'.$settings['staff_pool'].'"',
+            ':local posGateway "'.$settings['pos_gateway'].'"',
+            ':local posNetwork "'.$settings['pos_network'].'"',
+            ':local posPool "'.$settings['pos_pool'].'"',
+            ':local pppoeGateway "'.$settings['pppoe_gateway'].'"',
+            ':local downloadLimit "'.$settings['download_limit'].'"',
+            ':local uploadLimit "'.$settings['upload_limit'].'"',
             '',
             '/system identity set name="'.$routerIdentity.'"',
             '/ip dns set allow-remote-requests=yes servers=1.1.1.1,8.8.8.8',
             '/interface list add name=WAN comment="Internet uplinks such as Starlink"',
             '/interface list member add list=WAN interface=$wan1',
-            '# Add this when second Starlink is connected: /interface list member add list=WAN interface=$wan2',
+            $secondWanMember,
             '/interface bridge add name=$lanBridge protocol-mode=rstp vlan-filtering=no comment="MMS Radius LAN bridge"',
-            '/interface bridge port add bridge=$lanBridge interface=$trunkPort comment="AP/switch trunk carrying VLAN 10,20,30,40,50"',
+            '/interface bridge port add bridge=$lanBridge interface=$trunkPort comment="AP/switch trunk carrying MMS Radius VLANs"',
             '/interface vlan add interface=$lanBridge name=vlan-mgmt vlan-id=$mgmtVlan',
             '/interface vlan add interface=$lanBridge name=vlan-hotspot vlan-id=$hotspotVlan',
             '/interface vlan add interface=$lanBridge name=vlan-staff vlan-id=$staffVlan',
-            '/interface vlan add interface=$lanBridge name=vlan-pppoe vlan-id=$pppoeVlan',
-            '/interface vlan add interface=$lanBridge name=vlan-pos vlan-id=$posVlan',
-            '/interface bridge vlan add bridge=$lanBridge tagged=$lanBridge,$trunkPort vlan-ids=10,20,30,40,50',
+            $settings['enable_pppoe'] ? '/interface vlan add interface=$lanBridge name=vlan-pppoe vlan-id=$pppoeVlan' : '# PPPoE VLAN interface disabled',
+            $settings['enable_pos'] ? '/interface vlan add interface=$lanBridge name=vlan-pos vlan-id=$posVlan' : '# POS VLAN interface disabled',
+            '/interface bridge vlan add bridge=$lanBridge tagged=$lanBridge,$trunkPort vlan-ids='.$taggedVlans,
             '/interface bridge set $lanBridge vlan-filtering=yes',
             '',
             '/interface wireguard add name=wg-saas listen-port=13231 mtu=1420',
@@ -147,7 +213,7 @@ SCRIPT;
             '/ip address add address=$hotspotGateway interface=vlan-hotspot comment="Open customer hotspot VLAN"',
             '/ip pool add name=pool-hotspot ranges=$hotspotPool',
             '/ip dhcp-server add name=dhcp-hotspot interface=vlan-hotspot address-pool=pool-hotspot lease-time=30m disabled=no',
-            '/ip dhcp-server network add address=10.5.50.0/23 gateway=10.5.50.1 dns-server=10.5.50.1',
+            '/ip dhcp-server network add address=$hotspotNetwork gateway='.str($settings['hotspot_gateway'])->before('/').' dns-server='.str($settings['hotspot_gateway'])->before('/'),
             '/ip hotspot profile add name=mms-hotspot-profile use-radius=yes login-by=http-chap,cookie,mac-cookie html-directory=flash/hotspot dns-name='.$hotspotDnsName.' radius-accounting=yes',
             '/ip hotspot add name=mms-hotspot interface=vlan-hotspot address-pool=pool-hotspot profile=mms-hotspot-profile disabled=no',
             '/ip hotspot walled-garden add dst-host='.$portalHost.' action=allow',
@@ -157,23 +223,11 @@ SCRIPT;
             '/ip address add address=$staffGateway interface=vlan-staff comment="Password staff/admin SSID VLAN"',
             '/ip pool add name=pool-staff ranges=$staffPool',
             '/ip dhcp-server add name=dhcp-staff interface=vlan-staff address-pool=pool-staff lease-time=8h disabled=no',
-            '/ip dhcp-server network add address=192.168.30.0/24 gateway=192.168.30.1 dns-server=192.168.30.1',
+            '/ip dhcp-server network add address=$staffNetwork gateway='.str($settings['staff_gateway'])->before('/').' dns-server='.str($settings['staff_gateway'])->before('/'),
+        ], $posLines, $pppoeLines, [
             '',
-            '/ip address add address=$posGateway interface=vlan-pos comment="POS SSID VLAN, registered devices, no shared customer password"',
-            '/ip pool add name=pool-pos ranges=$posPool',
-            '/ip dhcp-server add name=dhcp-pos interface=vlan-pos address-pool=pool-pos lease-time=12h disabled=no',
-            '/ip dhcp-server network add address=192.168.50.0/24 gateway=192.168.50.1 dns-server=192.168.50.1',
-            '# Optional POS MAC-auth hotspot. Enable when POS devices are registered in MMS Radius by MAC address.',
-            '# /ip hotspot profile add name=mms-pos-profile use-radius=yes login-by=mac radius-accounting=yes',
-            '# /ip hotspot add name=mms-pos interface=vlan-pos address-pool=pool-pos profile=mms-pos-profile disabled=no',
-            '',
-            '/ip address add address=$pppoeGateway interface=vlan-pppoe comment="Optional PPPoE/CPE VLAN"',
-            '/ppp aaa set use-radius=yes accounting=yes interim-update=5m',
-            '/ppp profile add name=mms-pppoe-profile use-radius=yes only-one=yes change-tcp-mss=yes',
-            '/interface pppoe-server server add interface=vlan-pppoe service-name=mms-radius default-profile=mms-pppoe-profile authentication=pap,chap,mschap1,mschap2 disabled=no',
-            '',
-            '/ip firewall address-list add list=mms-hotspot-subnets address=10.5.50.0/23',
-            '/ip firewall address-list add list=mms-pos-subnets address=192.168.50.0/24',
+            '/ip firewall address-list add list=mms-hotspot-subnets address=$hotspotNetwork',
+            $settings['enable_pos'] ? '/ip firewall address-list add list=mms-pos-subnets address=$posNetwork' : '# POS firewall list disabled',
             '/ip firewall filter add chain=input connection-state=established,related action=accept',
             '/ip firewall filter add chain=input connection-state=invalid action=drop',
             '/ip firewall filter add chain=input in-interface=wg-saas action=accept comment="Allow MMS Radius tunnel"',
@@ -184,34 +238,18 @@ SCRIPT;
             '/ip firewall filter add chain=input in-interface-list=!WAN action=drop comment="Drop other router access from clients"',
             '/ip firewall filter add chain=forward connection-state=established,related action=accept',
             '/ip firewall filter add chain=forward connection-state=invalid action=drop',
-            '/ip firewall filter add chain=forward src-address=192.168.50.0/24 dst-address=10.0.0.0/8 action=drop comment="POS cannot reach private client/management networks"',
-            '/ip firewall filter add chain=forward src-address=10.5.50.0/23 dst-address=192.168.0.0/16 action=drop comment="Hotspot clients cannot reach LAN/private networks"',
+            $settings['enable_pos'] ? '/ip firewall filter add chain=forward src-address=$posNetwork dst-address=10.0.0.0/8 action=drop comment="POS cannot reach private client/management networks"' : '# POS isolation disabled',
+            '/ip firewall filter add chain=forward src-address=$hotspotNetwork dst-address=192.168.0.0/16 action=drop comment="Hotspot clients cannot reach LAN/private networks"',
             '/ip firewall nat add chain=srcnat out-interface=$wan1 action=masquerade',
-            '# Add this when second Starlink is connected: /ip firewall nat add chain=srcnat out-interface=$wan2 action=masquerade',
-            '',
-            '/queue type add name=pcq-hotspot-down kind=pcq pcq-classifier=dst-address pcq-rate=0 pcq-limit=50KiB pcq-total-limit=4000KiB',
-            '/queue type add name=pcq-hotspot-up kind=pcq pcq-classifier=src-address pcq-rate=0 pcq-limit=50KiB pcq-total-limit=4000KiB',
-            '/ip firewall mangle add chain=prerouting src-address=10.5.50.0/23 protocol=udp packet-size=0-600 action=mark-packet new-packet-mark=realtime-up passthrough=yes comment="Realtime voice/video small UDP upload"',
-            '/ip firewall mangle add chain=postrouting dst-address=10.5.50.0/23 protocol=udp packet-size=0-600 action=mark-packet new-packet-mark=realtime-down passthrough=yes comment="Realtime voice/video small UDP download"',
-            '/ip firewall mangle add chain=prerouting src-address=10.5.50.0/23 packet-mark=no-mark action=mark-packet new-packet-mark=hotspot-up passthrough=yes',
-            '/ip firewall mangle add chain=postrouting dst-address=10.5.50.0/23 packet-mark=no-mark action=mark-packet new-packet-mark=hotspot-down passthrough=yes',
-            '/queue tree add name=mms-upload parent=$wan1 max-limit=$uploadLimit',
-            '/queue tree add name=mms-download parent=vlan-hotspot max-limit=$downloadLimit',
-            '/queue tree add name=realtime-upload parent=mms-upload packet-mark=realtime-up priority=1 limit-at=2M max-limit=$uploadLimit',
-            '/queue tree add name=realtime-download parent=mms-download packet-mark=realtime-down priority=1 limit-at=5M max-limit=$downloadLimit',
-            '/queue tree add name=hotspot-upload parent=mms-upload packet-mark=hotspot-up queue=pcq-hotspot-up priority=5 max-limit=$uploadLimit',
-            '/queue tree add name=hotspot-download parent=mms-download packet-mark=hotspot-down queue=pcq-hotspot-down priority=5 max-limit=$downloadLimit',
-            '# Disable FastTrack for hotspot traffic if a default firewall later adds it; FastTrack can bypass queues.',
-            '',
-            '/system script add name=mms-starlink-bandwidth-policy source=":local downNormal \"'.$defaults['download_limit'].'\"; :local upNormal \"'.$defaults['upload_limit'].'\"; /queue tree set [find name=mms-download] max-limit=\\$downNormal; /queue tree set [find name=mms-upload] max-limit=\\$upNormal;"',
-            '/system scheduler add name=mms-refresh-bandwidth interval=10m on-event=mms-starlink-bandwidth-policy comment="Adjust parent PCQ limits here as Starlink capacity changes"',
+            $secondWanNat,
+        ], $qosLines, [
             '',
             '# AP SSID mapping recommended by MMS Radius:',
-            '# MMS Hotspot = open SSID tagged VLAN 20, captive portal',
-            '# MMS Staff = WPA2/WPA3 SSID tagged VLAN 30',
-            '# MMS POS = WPA2/WPA3 SSID tagged VLAN 50, hidden optional, registered devices',
-            '# MMS Mgmt = wired or restricted SSID tagged VLAN 10',
-        ]);
+            '# MMS Hotspot = open SSID tagged VLAN '.$settings['hotspot_vlan'].', captive portal',
+            '# MMS Staff = WPA2/WPA3 SSID tagged VLAN '.$settings['staff_vlan'],
+            '# MMS POS = WPA2/WPA3 SSID tagged VLAN '.$settings['pos_vlan'].', hidden optional, registered devices',
+            '# MMS Mgmt = wired or restricted SSID tagged VLAN '.$settings['mgmt_vlan'],
+        ]));
     }
 
     public function generateAccessPointGuide(): string
@@ -301,6 +339,45 @@ HTML;
                 'upload_limit' => '20M',
             ],
         };
+    }
+
+    private function provisioningSettings(Router $router, string $profile): array
+    {
+        $settings = array_filter(
+            (array) $router->provisioning_settings,
+            fn ($value): bool => $value !== null && $value !== ''
+        );
+        $profile = (string) ($settings['profile'] ?? $profile);
+
+        $defaults = [
+            'profile' => array_key_exists($profile, $this->infrastructureProfiles()) ? $profile : 'starlink_plaza',
+            'wan1' => 'ether1',
+            'wan2' => 'ether8',
+            'trunk_port' => 'ether2',
+            'download_limit' => $this->profileDefaults($profile)['download_limit'],
+            'upload_limit' => $this->profileDefaults($profile)['upload_limit'],
+            'mgmt_vlan' => 10,
+            'hotspot_vlan' => 20,
+            'staff_vlan' => 30,
+            'pppoe_vlan' => 40,
+            'pos_vlan' => 50,
+            'hotspot_gateway' => '10.5.50.1/23',
+            'hotspot_network' => '10.5.50.0/23',
+            'hotspot_pool' => '10.5.50.10-10.5.51.250',
+            'staff_gateway' => '192.168.30.1/24',
+            'staff_network' => '192.168.30.0/24',
+            'staff_pool' => '192.168.30.10-192.168.30.250',
+            'pos_gateway' => '192.168.50.1/24',
+            'pos_network' => '192.168.50.0/24',
+            'pos_pool' => '192.168.50.10-192.168.50.250',
+            'pppoe_gateway' => '172.16.40.1/24',
+            'enable_pos' => true,
+            'enable_pppoe' => $profile !== 'small_hotspot',
+            'enable_realtime_qos' => true,
+            'enable_second_wan' => false,
+        ];
+
+        return array_replace($defaults, $settings);
     }
 
     private function quote(?string $value): string

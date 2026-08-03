@@ -4,6 +4,7 @@ namespace App\Livewire\Admin;
 
 use App\Models\Router;
 use App\Models\Shop;
+use App\Services\MikroTikProvisioningService;
 use App\Services\RouterManagementService;
 use App\Support\BillingPlanLimits;
 use App\Support\RadiusAccountingStats;
@@ -41,6 +42,8 @@ class RoutersIndex extends Component
 
     public bool $is_online = false;
 
+    public array $provisioning_settings = [];
+
     public ?string $savedMessage = null;
 
     protected $queryString = [
@@ -61,6 +64,14 @@ class RoutersIndex extends Component
         }
     }
 
+    public function updatedProvisioningSettingsProfile(string $profile): void
+    {
+        $this->provisioning_settings = array_replace(
+            $this->provisioning_settings,
+            app(RouterManagementService::class)->defaultProvisioningSettings($profile)
+        );
+    }
+
     public function create(): void
     {
         $this->resetForm();
@@ -78,6 +89,7 @@ class RoutersIndex extends Component
         $this->nas_identifier = (string) $router->nas_identifier;
         $this->wireguard_internal_ip = (string) $router->wireguard_internal_ip;
         $this->is_online = (bool) $router->is_online;
+        $this->provisioning_settings = $this->routerProvisioningSettings($router);
         $this->shared_secret = '';
         $this->savedMessage = null;
         $this->showFormModal = true;
@@ -142,7 +154,7 @@ class RoutersIndex extends Component
         $this->resetPage();
     }
 
-    public function render(RadiusAccountingStats $radiusStats)
+    public function render(RadiusAccountingStats $radiusStats, MikroTikProvisioningService $mikroTik)
     {
         $this->validateOnlyFilters();
 
@@ -167,6 +179,7 @@ class RoutersIndex extends Component
         return view('livewire.admin.routers-index', [
             'routers' => $routers,
             'shops' => $this->shops(),
+            'infrastructureProfiles' => $mikroTik->infrastructureProfiles(),
             'billingUsage' => $this->editingRouterId ? null : BillingPlanLimits::usageSummary($user, 'routers'),
             'deletingRouter' => $this->deletingRouterId ? Router::find($this->deletingRouterId) : null,
         ]);
@@ -188,9 +201,19 @@ class RoutersIndex extends Component
             'nas_identifier',
             'wireguard_internal_ip',
             'shared_secret',
+            'provisioning_settings',
         ]);
         $this->is_online = false;
+        $this->provisioning_settings = app(RouterManagementService::class)->defaultProvisioningSettings();
         $this->resetValidation();
+    }
+
+    private function routerProvisioningSettings(Router $router): array
+    {
+        return array_replace(
+            app(RouterManagementService::class)->defaultProvisioningSettings($router->provisioning_settings['profile'] ?? null),
+            (array) $router->provisioning_settings
+        );
     }
 
     private function validateOnlyFilters(): void

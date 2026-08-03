@@ -136,6 +136,123 @@
                     <flux:checkbox wire:model.live="is_online" label="Online" />
                 </div>
 
+                <section class="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+                    <div class="flex flex-col justify-between gap-3 md:flex-row md:items-start">
+                        <div>
+                            <p class="text-sm font-semibold text-zinc-950">Infrastructure script profile</p>
+                            <p class="mt-1 text-sm text-zinc-600">These values drive the fresh MikroTik script for VLANs, AP trunks, POS, PPPoE, and Starlink-friendly PCQ.</p>
+                        </div>
+                        <flux:badge color="blue">Flexible</flux:badge>
+                    </div>
+
+                    <div class="mt-4 grid gap-4 md:grid-cols-3">
+                        <flux:field class="md:col-span-3">
+                            <flux:label>Profile</flux:label>
+                            <flux:select wire:model.live="provisioning_settings.profile">
+                                @foreach ($infrastructureProfiles as $key => $profile)
+                                    <flux:select.option value="{{ $key }}">{{ $profile['name'] }} - {{ $profile['capacity'] }}</flux:select.option>
+                                @endforeach
+                            </flux:select>
+                            <flux:description>Changing the profile loads sensible defaults. You can still edit the details below.</flux:description>
+                            <flux:error name="provisioning_settings.profile" />
+                        </flux:field>
+
+                        <flux:field>
+                            <flux:label>WAN 1</flux:label>
+                            <flux:input wire:model.blur="provisioning_settings.wan1" placeholder="ether1" />
+                            <flux:description>Main Starlink or internet uplink.</flux:description>
+                            <flux:error name="provisioning_settings.wan1" />
+                        </flux:field>
+
+                        <flux:field>
+                            <flux:label>WAN 2</flux:label>
+                            <flux:input wire:model.blur="provisioning_settings.wan2" placeholder="ether8" />
+                            <flux:description>Second Starlink/failover port.</flux:description>
+                            <flux:error name="provisioning_settings.wan2" />
+                        </flux:field>
+
+                        <flux:field>
+                            <flux:label>AP/switch trunk</flux:label>
+                            <flux:input wire:model.blur="provisioning_settings.trunk_port" placeholder="ether2" />
+                            <flux:description>Port going to APs or managed PoE switch.</flux:description>
+                            <flux:error name="provisioning_settings.trunk_port" />
+                        </flux:field>
+
+                        <flux:field>
+                            <flux:label>Download limit</flux:label>
+                            <flux:input wire:model.blur="provisioning_settings.download_limit" placeholder="120M" />
+                            <flux:description>Parent PCQ limit. Example: <code>120M</code>.</flux:description>
+                            <flux:error name="provisioning_settings.download_limit" />
+                        </flux:field>
+
+                        <flux:field>
+                            <flux:label>Upload limit</flux:label>
+                            <flux:input wire:model.blur="provisioning_settings.upload_limit" placeholder="20M" />
+                            <flux:description>Parent upload limit. Example: <code>20M</code>.</flux:description>
+                            <flux:error name="provisioning_settings.upload_limit" />
+                        </flux:field>
+
+                        <div class="grid gap-3 rounded-md border border-zinc-200 bg-white p-3 text-sm">
+                            <flux:checkbox wire:model.live="provisioning_settings.enable_realtime_qos" label="Realtime voice/video QoS" />
+                            <flux:checkbox wire:model.live="provisioning_settings.enable_pos" label="POS VLAN/SSID" />
+                            <flux:checkbox wire:model.live="provisioning_settings.enable_pppoe" label="PPPoE/CPE VLAN" />
+                            <flux:checkbox wire:model.live="provisioning_settings.enable_second_wan" label="Second Starlink/WAN" />
+                        </div>
+                    </div>
+
+                    <div class="mt-4 grid gap-4 md:grid-cols-5">
+                        <flux:field>
+                            <flux:label>Mgmt VLAN</flux:label>
+                            <flux:input type="number" wire:model.blur="provisioning_settings.mgmt_vlan" placeholder="10" />
+                            <flux:error name="provisioning_settings.mgmt_vlan" />
+                        </flux:field>
+
+                        <flux:field>
+                            <flux:label>Hotspot VLAN</flux:label>
+                            <flux:input type="number" wire:model.blur="provisioning_settings.hotspot_vlan" placeholder="20" />
+                            <flux:error name="provisioning_settings.hotspot_vlan" />
+                        </flux:field>
+
+                        <flux:field>
+                            <flux:label>Staff VLAN</flux:label>
+                            <flux:input type="number" wire:model.blur="provisioning_settings.staff_vlan" placeholder="30" />
+                            <flux:error name="provisioning_settings.staff_vlan" />
+                        </flux:field>
+
+                        <flux:field>
+                            <flux:label>PPPoE VLAN</flux:label>
+                            <flux:input type="number" wire:model.blur="provisioning_settings.pppoe_vlan" placeholder="40" />
+                            <flux:error name="provisioning_settings.pppoe_vlan" />
+                        </flux:field>
+
+                        <flux:field>
+                            <flux:label>POS VLAN</flux:label>
+                            <flux:input type="number" wire:model.blur="provisioning_settings.pos_vlan" placeholder="50" />
+                            <flux:error name="provisioning_settings.pos_vlan" />
+                        </flux:field>
+                    </div>
+
+                    <div class="mt-4 grid gap-4 md:grid-cols-3">
+                        <flux:field>
+                            <flux:label>Hotspot gateway</flux:label>
+                            <flux:input wire:model.blur="provisioning_settings.hotspot_gateway" placeholder="10.5.50.1/23" />
+                            <flux:error name="provisioning_settings.hotspot_gateway" />
+                        </flux:field>
+
+                        <flux:field>
+                            <flux:label>Hotspot network</flux:label>
+                            <flux:input wire:model.blur="provisioning_settings.hotspot_network" placeholder="10.5.50.0/23" />
+                            <flux:error name="provisioning_settings.hotspot_network" />
+                        </flux:field>
+
+                        <flux:field>
+                            <flux:label>Hotspot DHCP pool</flux:label>
+                            <flux:input wire:model.blur="provisioning_settings.hotspot_pool" placeholder="10.5.50.10-10.5.51.250" />
+                            <flux:error name="provisioning_settings.hotspot_pool" />
+                        </flux:field>
+                    </div>
+                </section>
+
                 <section class="rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-600">
                     <p><strong class="text-zinc-900">NAS identifier:</strong> the MikroTik system identity. Example: <code>lagos-shop-01</code>.</p>
                     <p class="mt-2"><strong class="text-zinc-900">Shared secret:</strong> generate a strong value with <code>openssl rand -base64 24</code>.</p>
