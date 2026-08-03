@@ -90,7 +90,7 @@ class SetupCenterController extends Controller
             [
                 'phase' => 'Automation',
                 'label' => 'Enable Laravel scheduler',
-                'description' => 'Runs expiry cleanup, hotspot revocation, PPPoE revocation, and recurring maintenance every minute from cron.',
+                'description' => 'Runs expiry cleanup, hotspot revocation, POS revocation, PPPoE revocation, and recurring maintenance every minute from cron.',
                 'complete' => $scheduler['is_healthy'],
                 'route' => 'admin.setup.index',
                 'action' => $scheduler['is_healthy'] ? 'Scheduler healthy' : 'Review cron command',
@@ -131,6 +131,17 @@ class SetupCenterController extends Controller
                 'action_route' => 'admin.pppoe-subscribers.index',
                 'action_parameters' => [],
                 'action' => 'Manage PPPoE customers',
+            ],
+            [
+                'label' => 'POS Terminal Access',
+                'status' => 'Live',
+                'description' => 'Best for shop POS terminals that need password Wi-Fi, reliable renewal, and no captive portal interruption.',
+                'customer_identity' => 'POS MAC address registered in MMS Radius',
+                'router_work' => 'POS SSID on VLAN 50, optional MAC-auth hotspot profile, RADIUS hotspot service, POS isolation firewall.',
+                'billing_work' => 'Tenant renews the POS package from MMS Radius; expired MAC access is revoked by scheduler.',
+                'action_route' => 'admin.pos-devices.index',
+                'action_parameters' => [],
+                'action' => 'Manage POS devices',
             ],
             [
                 'label' => 'MikroTik CPE / Client Router',

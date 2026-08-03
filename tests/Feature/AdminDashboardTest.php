@@ -7,6 +7,7 @@ use App\Models\Expense;
 use App\Models\ExpenseCategory;
 use App\Models\Package;
 use App\Models\Payment;
+use App\Models\PosDevice;
 use App\Models\PppoeSubscriber;
 use App\Models\Router;
 use App\Models\Shop;
@@ -269,6 +270,104 @@ class AdminDashboardTest extends TestCase
             ->assertSee(route('admin.pppoe-subscribers.index', ['status' => 'unsynced']), false)
             ->assertDontSee('other-user')
             ->assertDontSee('Other Estate');
+    }
+
+    public function test_dashboard_shows_pos_access_desk_summary(): void
+    {
+        $tenant = Tenant::create([
+            'company_name' => 'POS Tenant',
+            'owner_email' => 'pos@example.com',
+        ]);
+        $otherTenant = Tenant::create([
+            'company_name' => 'Other Tenant',
+            'owner_email' => 'other@example.com',
+        ]);
+        $shop = Shop::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Plaza POS Zone',
+        ]);
+        $otherShop = Shop::create([
+            'tenant_id' => $otherTenant->id,
+            'name' => 'Other POS Zone',
+        ]);
+        $package = Package::create([
+            'shop_id' => $shop->id,
+            'name' => 'POS Monthly',
+            'service_type' => 'hotspot',
+            'price' => 1500,
+            'currency' => 'NGN',
+            'limit_uptime_seconds' => 2592000,
+            'speed_limit_profile' => '1M/1M',
+            'is_active' => true,
+        ]);
+        $otherPackage = Package::create([
+            'shop_id' => $otherShop->id,
+            'name' => 'Other POS Monthly',
+            'service_type' => 'hotspot',
+            'price' => 1500,
+            'currency' => 'NGN',
+            'limit_uptime_seconds' => 2592000,
+            'speed_limit_profile' => '1M/1M',
+            'is_active' => true,
+        ]);
+        PosDevice::create([
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'device_name' => 'Shop 12 POS',
+            'mac_address' => 'AA:BB:CC:DD:EE:88',
+            'owner_name' => 'Shop 12',
+            'expires_at' => now()->addDays(3),
+            'last_provisioned_at' => now(),
+            'is_active' => true,
+        ]);
+        PosDevice::create([
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'device_name' => 'Unsynced POS',
+            'mac_address' => 'AA:BB:CC:DD:EE:89',
+            'expires_at' => now()->addDays(20),
+            'is_active' => true,
+        ]);
+        PosDevice::create([
+            'shop_id' => $otherShop->id,
+            'package_id' => $otherPackage->id,
+            'device_name' => 'Other POS',
+            'mac_address' => 'AA:BB:CC:DD:EE:90',
+            'expires_at' => now()->addDays(3),
+            'last_provisioned_at' => now(),
+            'is_active' => true,
+        ]);
+        DB::table('radacct')->insert([
+            'acctsessionid' => 'pos-session',
+            'acctuniqueid' => 'pos-unique-session',
+            'username' => 'AA:BB:CC:DD:EE:88',
+            'nasipaddress' => '10.8.0.10',
+            'acctstarttime' => now()->subMinutes(10),
+            'acctupdatetime' => now(),
+            'acctstoptime' => null,
+            'acctinputoctets' => 1000,
+            'acctoutputoctets' => 2000,
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('admin.dashboard'))
+            ->assertOk()
+            ->assertSee('POS Access Desk')
+            ->assertSee('2 POS terminals')
+            ->assertSee('POS Plans')
+            ->assertSee(route('admin.packages.index', ['service' => 'hotspot_capable']), false)
+            ->assertSee(route('admin.pos-devices.index', ['status' => 'expiring_soon']), false)
+            ->assertSee(route('admin.pos-devices.index', ['status' => 'unsynced']), false)
+            ->assertSee('Shop 12 POS')
+            ->assertSee('AA:BB:CC:DD:EE:88')
+            ->assertSee('Plaza POS Zone')
+            ->assertDontSee('Other POS')
+            ->assertDontSee('AA:BB:CC:DD:EE:90');
     }
 
     public function test_tenant_admin_dashboard_shows_enforced_two_factor_status(): void

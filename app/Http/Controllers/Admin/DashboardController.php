@@ -8,6 +8,7 @@ use App\Models\Expense;
 use App\Models\ExpenseCategory;
 use App\Models\Package;
 use App\Models\Payment;
+use App\Models\PosDevice;
 use App\Models\PppoeSubscriber;
 use App\Models\Router;
 use App\Models\Shop;
@@ -154,6 +155,7 @@ class DashboardController extends Controller
             'todayUsageBytes' => $radiusSummary['today_bytes'],
             'radiusAccountingReady' => $radiusSummary['ready'],
             'activeSubscriptionCount' => $activeSubscriptionCount,
+            'posSummary' => $this->posSummary($shopIds),
             'pppoeSummary' => $this->pppoeSummary($shopIds),
             'schedulerHealth' => $schedulerHealth->summary(),
             'paidRevenue' => $paidRevenue,
@@ -258,6 +260,49 @@ class DashboardController extends Controller
             $onlineCount = DB::table('radacct')
                 ->whereNull('acctstoptime')
                 ->whereIn('username', $pppoeUsernames)
+                ->distinct('username')
+                ->count('username');
+        }
+
+        return [
+            'total' => (clone $query)->count(),
+            'active' => (clone $query)
+                ->where('is_active', true)
+                ->where(fn ($query) => $query->whereNull('expires_at')->orWhere('expires_at', '>', now()))
+                ->count(),
+            'due_soon' => $dueSoonQuery()->count(),
+            'expired' => (clone $query)
+                ->whereNotNull('expires_at')
+                ->where('expires_at', '<=', now())
+                ->count(),
+            'disabled' => (clone $query)->where('is_active', false)->count(),
+            'unsynced' => (clone $query)->whereNull('last_provisioned_at')->count(),
+            'online' => $onlineCount,
+            'accounting_ready' => Schema::hasTable('radacct'),
+            'renewal_queue' => $dueSoonQuery()
+                ->with(['shop.tenant', 'package'])
+                ->orderBy('expires_at')
+                ->take(5)
+                ->get(),
+        ];
+    }
+
+    private function posSummary($shopIds): array
+    {
+        $query = PosDevice::query()
+            ->with(['shop.tenant', 'package'])
+            ->whereIn('shop_id', $shopIds);
+        $dueSoonQuery = fn () => PosDevice::query()
+            ->whereIn('shop_id', $shopIds)
+            ->where('is_active', true)
+            ->whereBetween('expires_at', [now(), now()->addDays(7)]);
+        $macAddresses = (clone $query)->pluck('mac_address')->filter()->values();
+        $onlineCount = null;
+
+        if (Schema::hasTable('radacct') && $macAddresses->isNotEmpty()) {
+            $onlineCount = DB::table('radacct')
+                ->whereNull('acctstoptime')
+                ->whereIn('username', $macAddresses)
                 ->distinct('username')
                 ->count('username');
         }
