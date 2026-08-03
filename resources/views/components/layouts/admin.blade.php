@@ -81,6 +81,7 @@
                         ['label' => 'Packages', 'route' => 'admin.packages.index', 'icon' => 'radio'],
                         ['label' => 'Access', 'route' => 'admin.subscriptions.index', 'icon' => 'key'],
                         ['label' => 'Vouchers', 'route' => 'admin.vouchers.index', 'icon' => 'ticket'],
+                        ['label' => 'POS Devices', 'route' => 'admin.pos-devices.index', 'icon' => 'device-phone-mobile'],
                         ['label' => 'PPPoE', 'route' => 'admin.pppoe-subscribers.index', 'icon' => 'wifi'],
                         ['label' => 'Payments', 'route' => 'admin.payments.index', 'icon' => 'banknotes'],
                         ['label' => 'Expenses', 'route' => 'admin.expenses.index', 'icon' => 'receipt-percent'],

@@ -1,6 +1,7 @@
 <?php
 
 use App\Mail\HotspotTestMail;
+use App\Models\PosDevice;
 use App\Models\PppoeSubscriber;
 use App\Models\SecurityActivity;
 use App\Models\Subscription;
@@ -8,6 +9,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Models\Voucher;
 use App\Services\PppoeSubscriberManagementService;
+use App\Services\PosDeviceManagementService;
 use App\Services\RadiusProvisioningService;
 use App\Services\VoucherManagementService;
 use App\Support\SchedulerHealth;
@@ -223,6 +225,36 @@ Artisan::command('hotspot:sync-expired-hotspot {--dry-run}', function (RadiusPro
     return Command::SUCCESS;
 })->purpose('Revoke expired hotspot MAC access from FreeRADIUS');
 
+Artisan::command('hotspot:sync-expired-pos {--dry-run}', function (PosDeviceManagementService $devices): int {
+    $query = PosDevice::query()
+        ->with('package')
+        ->where(function ($query): void {
+            $query
+                ->where('is_active', false)
+                ->orWhere(fn ($query) => $query->whereNotNull('expires_at')->where('expires_at', '<=', now()));
+        });
+    $count = (clone $query)->count();
+
+    if ($this->option('dry-run')) {
+        $this->info("{$count} inactive or expired POS device(s) would be revoked from RADIUS.");
+
+        return Command::SUCCESS;
+    }
+
+    $revoked = 0;
+
+    $query->chunkById(100, function ($chunk) use ($devices, &$revoked): void {
+        foreach ($chunk as $device) {
+            $devices->syncSystem($device);
+            $revoked++;
+        }
+    });
+
+    $this->info("Revoked {$revoked} inactive or expired POS device(s) from RADIUS.");
+
+    return Command::SUCCESS;
+})->purpose('Revoke expired or disabled POS devices from FreeRADIUS');
+
 Schedule::command('hotspot:prune-security-activity')
     ->dailyAt('02:15')
     ->withoutOverlapping();
@@ -236,5 +268,9 @@ Schedule::command('hotspot:sync-expired-pppoe')
     ->withoutOverlapping();
 
 Schedule::command('hotspot:sync-expired-hotspot')
+    ->everyFiveMinutes()
+    ->withoutOverlapping();
+
+Schedule::command('hotspot:sync-expired-pos')
     ->everyFiveMinutes()
     ->withoutOverlapping();

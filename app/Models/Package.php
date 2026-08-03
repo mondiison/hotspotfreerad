@@ -50,6 +50,11 @@ class Package extends Model
         return $this->hasMany(PppoeSubscriber::class);
     }
 
+    public function posDevices(): HasMany
+    {
+        return $this->hasMany(PosDevice::class);
+    }
+
     public function voucherBatches(): HasMany
     {
         return $this->hasMany(VoucherBatch::class);

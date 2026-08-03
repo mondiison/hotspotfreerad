@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Models\Expense;
 use App\Models\Package;
+use App\Models\PosDevice;
 use App\Models\PppoeSubscriber;
 use App\Models\Router;
 use App\Models\Shop;
@@ -76,6 +77,13 @@ class TenantAccess
             : $query->whereHas('shop', fn (Builder $shop) => $shop->where('tenant_id', $user->tenant_id));
     }
 
+    public static function scopePosDevices(Builder $query, User $user): Builder
+    {
+        return $user->isSuperAdmin()
+            ? $query
+            : $query->whereHas('shop', fn (Builder $shop) => $shop->where('tenant_id', $user->tenant_id));
+    }
+
     public static function scopeVoucherBatches(Builder $query, User $user): Builder
     {
         return $user->isSuperAdmin()
@@ -126,6 +134,13 @@ class TenantAccess
         $subscriber->loadMissing('shop');
 
         self::assertShop($subscriber->shop, $user);
+    }
+
+    public static function assertPosDevice(PosDevice $device, User $user): void
+    {
+        $device->loadMissing('shop');
+
+        self::assertShop($device->shop, $user);
     }
 
     public static function assertVoucherBatch(VoucherBatch $batch, User $user): void

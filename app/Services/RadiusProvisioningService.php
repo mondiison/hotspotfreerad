@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Package;
+use App\Models\PosDevice;
 use App\Models\PppoeSubscriber;
 use App\Models\Router;
 use App\Models\Subscription;
@@ -86,6 +87,54 @@ class RadiusProvisioningService
         DB::table('radusergroup')->where('username', $macAddress)->delete();
     }
 
+    public function provisionPosDevice(PosDevice $device): void
+    {
+        $device->loadMissing('package');
+
+        $groupName = $this->syncPackageProfile($device->package);
+        $macAddress = $this->normalizeMacAddress($device->mac_address);
+
+        DB::table('radcheck')->updateOrInsert(
+            [
+                'username' => $macAddress,
+                'attribute' => 'Cleartext-Password',
+            ],
+            [
+                'op' => ':=',
+                'value' => $macAddress,
+            ]
+        );
+
+        DB::table('radcheck')->updateOrInsert(
+            [
+                'username' => $macAddress,
+                'attribute' => 'Calling-Station-Id',
+            ],
+            [
+                'op' => ':=',
+                'value' => $macAddress,
+            ]
+        );
+
+        DB::table('radusergroup')->updateOrInsert(
+            ['username' => $macAddress],
+            [
+                'groupname' => $groupName,
+                'priority' => 1,
+            ]
+        );
+
+        $device->forceFill([
+            'mac_address' => $macAddress,
+            'last_provisioned_at' => now(),
+        ])->save();
+    }
+
+    public function revokePosDevice(PosDevice $device): void
+    {
+        $this->revokeMacAccess($this->normalizeMacAddress($device->mac_address));
+    }
+
     public function provisionPppoeSubscriber(PppoeSubscriber $subscriber): void
     {
         $subscriber->loadMissing('package');
@@ -155,5 +204,15 @@ class RadiusProvisioningService
             $bytes % $gigaword,
             intdiv($bytes, $gigaword),
         ];
+    }
+
+    private function normalizeMacAddress(string $macAddress): string
+    {
+        $hex = Str::of($macAddress)
+            ->upper()
+            ->replaceMatches('/[^A-F0-9]/', '')
+            ->toString();
+
+        return collect(str_split($hex, 2))->take(6)->implode(':');
     }
 }
