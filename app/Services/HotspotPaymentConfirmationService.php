@@ -14,6 +14,7 @@ class HotspotPaymentConfirmationService
 
     public function __construct(
         private readonly FlutterwaveService $flutterwave,
+        private readonly MonnifyService $monnify,
         private readonly PaystackService $paystack,
         private readonly RadiusProvisioningService $radius,
     ) {}
@@ -58,7 +59,10 @@ class HotspotPaymentConfirmationService
 
             $payment->update([
                 'status' => 'successful',
-                'provider_reference' => (string) (data_get($verification, 'data.id') ?: data_get($verification, 'data.reference') ?: $payment->provider_reference),
+                'provider_reference' => (string) (data_get($verification, 'data.id')
+                    ?: data_get($verification, 'data.reference')
+                    ?: data_get($verification, 'responseBody.transactionReference')
+                    ?: $payment->provider_reference),
                 'paid_at' => now(),
                 'payload' => array_merge($payment->payload ?? [], ['verification' => $verification]),
             ]);
@@ -89,6 +93,10 @@ class HotspotPaymentConfirmationService
             return $this->paystackVerificationMatchesPayment($verification, $payment);
         }
 
+        if ($payment->provider === PaymentGatewayCatalog::MONNIFY) {
+            return $this->monnifyVerificationMatchesPayment($verification, $payment);
+        }
+
         return in_array(strtolower((string) data_get($verification, 'status')), ['success', 'successful', 'succeeded'], true)
             && $this->statusIsSuccessful(data_get($verification, 'data.status'))
             && (data_get($verification, 'data.reference') === $payment->tx_ref || data_get($verification, 'data.tx_ref') === $payment->tx_ref)
@@ -100,6 +108,10 @@ class HotspotPaymentConfirmationService
     {
         if ($payment->provider === PaymentGatewayCatalog::PAYSTACK) {
             return $this->paystack->verifyPayment($payment, $providerReference);
+        }
+
+        if ($payment->provider === PaymentGatewayCatalog::MONNIFY) {
+            return $this->monnify->verifyPayment($payment, $providerReference);
         }
 
         return $this->flutterwave->verifyPayment($payment, $providerReference, $resourceType);
@@ -114,8 +126,17 @@ class HotspotPaymentConfirmationService
             && ((float) data_get($verification, 'data.amount') / 100) >= (float) $payment->amount;
     }
 
+    private function monnifyVerificationMatchesPayment(array $verification, Payment $payment): bool
+    {
+        return data_get($verification, 'requestSuccessful') === true
+            && $this->statusIsSuccessful(data_get($verification, 'responseBody.paymentStatus'))
+            && data_get($verification, 'responseBody.paymentReference') === $payment->tx_ref
+            && strtoupper((string) data_get($verification, 'responseBody.currency')) === strtoupper($payment->currency)
+            && (float) data_get($verification, 'responseBody.amountPaid') >= (float) $payment->amount;
+    }
+
     private function statusIsSuccessful(mixed $status): bool
     {
-        return in_array(strtolower((string) $status), ['success', 'successful', 'succeeded', 'completed'], true);
+        return in_array(strtolower((string) $status), ['success', 'successful', 'succeeded', 'completed', 'paid'], true);
     }
 }

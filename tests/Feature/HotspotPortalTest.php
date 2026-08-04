@@ -1303,6 +1303,255 @@ class HotspotPortalTest extends TestCase
         Queue::assertPushed(VerifyHotspotPaymentWebhook::class);
     }
 
+    public function test_monnify_checkout_redirects_to_checkout_url(): void
+    {
+        config(['services.monnify.base_url' => 'https://sandbox.monnify.com']);
+        Http::fake([
+            'sandbox.monnify.com/api/v1/auth/login' => Http::response([
+                'requestSuccessful' => true,
+                'responseMessage' => 'success',
+                'responseCode' => '0',
+                'responseBody' => [
+                    'accessToken' => 'MONNIFY_TOKEN',
+                ],
+            ]),
+            'sandbox.monnify.com/api/v1/merchant/transactions/init-transaction' => Http::response([
+                'requestSuccessful' => true,
+                'responseMessage' => 'success',
+                'responseCode' => '0',
+                'responseBody' => [
+                    'transactionReference' => 'MNFY|20260804180000|000001',
+                    'paymentReference' => 'pending',
+                    'checkoutUrl' => 'https://sandbox.sdk.monnify.com/checkout/MNFY-demo',
+                ],
+            ]),
+        ]);
+
+        [$router, $package] = $this->routerWithPackage([
+            'payment_gateway_settings' => [
+                'monnify' => [
+                    'public_key' => 'MK_TEST_DEMO',
+                    'secret_key' => 'MSK_TEST_DEMO',
+                    'contract_code' => '1234567890',
+                ],
+            ],
+        ]);
+        $router->shop->update(['payment_gateway' => 'monnify']);
+
+        $this->post(route('hotspot.pay'), [
+            'mac' => 'AA:BB:CC:DD:EE:FF',
+            'nasid' => $router->nas_identifier,
+            'package_id' => $package->id,
+            'email' => 'customer@example.com',
+            'phone' => '08000000000',
+            'payment_method' => 'card',
+        ])
+            ->assertRedirect('https://sandbox.sdk.monnify.com/checkout/MNFY-demo');
+
+        $payment = Payment::firstOrFail();
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/api/v1/auth/login')
+            && $request->hasHeader('Authorization', 'Basic '.base64_encode('MK_TEST_DEMO:MSK_TEST_DEMO')));
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/api/v1/merchant/transactions/init-transaction')
+            && $request->hasHeader('Authorization', 'Bearer MONNIFY_TOKEN')
+            && $request['paymentReference'] === $payment->tx_ref
+            && $request['amount'] === 500.0
+            && $request['currencyCode'] === 'NGN'
+            && $request['contractCode'] === '1234567890'
+            && $request['customerEmail'] === 'customer@example.com'
+            && $request['redirectUrl'] === route('hotspot.payment.callback', ['paymentReference' => $payment->tx_ref])
+            && $request['metadata']['tenant_name'] === 'Demo ISP'
+            && $request['metadata']['shop_name'] === 'Demo Shop'
+            && $request['metadata']['device_mac'] === 'AA:BB:CC:DD:EE:FF');
+
+        $this->assertSame('monnify', $payment->provider);
+        $this->assertSame('MNFY|20260804180000|000001', $payment->provider_reference);
+        $this->assertSame('https://sandbox.sdk.monnify.com/checkout/MNFY-demo', data_get($payment->payload, 'checkout_url'));
+    }
+
+    public function test_monnify_manual_verification_provisions_radius_access(): void
+    {
+        config(['services.monnify.base_url' => 'https://sandbox.monnify.com']);
+        [$router, $package] = $this->routerWithPackage([
+            'payment_gateway_settings' => [
+                'monnify' => [
+                    'public_key' => 'MK_TEST_DEMO',
+                    'secret_key' => 'MSK_TEST_DEMO',
+                    'contract_code' => '1234567890',
+                ],
+            ],
+        ]);
+
+        $payment = Payment::create([
+            'shop_id' => $router->shop_id,
+            'package_id' => $package->id,
+            'provider' => 'monnify',
+            'tx_ref' => 'HSF-MONNIFY-VERIFY',
+            'provider_reference' => 'MNFY|20260804180000|000002',
+            'amount' => 500,
+            'gross_amount' => 500,
+            'platform_fee_amount' => 0,
+            'tenant_net_amount' => 500,
+            'currency' => 'NGN',
+            'status' => 'pending',
+            'payload' => [
+                'mac' => 'AA:BB:CC:DD:EE:FF',
+                'nasid' => $router->nas_identifier,
+                'link_login' => 'http://10.5.50.1/login',
+                'link_orig' => 'http://example.com',
+            ],
+        ]);
+
+        Http::fake([
+            'sandbox.monnify.com/api/v1/auth/login' => Http::response([
+                'requestSuccessful' => true,
+                'responseBody' => [
+                    'accessToken' => 'MONNIFY_TOKEN',
+                ],
+            ]),
+            'sandbox.monnify.com/api/v2/transactions/*' => Http::response([
+                'requestSuccessful' => true,
+                'responseMessage' => 'success',
+                'responseCode' => '0',
+                'responseBody' => [
+                    'transactionReference' => 'MNFY|20260804180000|000002',
+                    'paymentReference' => $payment->tx_ref,
+                    'paymentStatus' => 'PAID',
+                    'amountPaid' => '500.00',
+                    'currency' => 'NGN',
+                ],
+            ]),
+        ]);
+
+        $this->post(route('hotspot.payment.verify'), [
+            'tx_ref' => $payment->tx_ref,
+        ])
+            ->assertOk()
+            ->assertSee('Access provisioned')
+            ->assertSee('Connecting this device...');
+
+        $this->assertDatabaseHas('payments', [
+            'id' => $payment->id,
+            'status' => 'successful',
+            'provider_reference' => 'MNFY|20260804180000|000002',
+        ]);
+        $this->assertDatabaseHas('subscriptions', [
+            'payment_id' => $payment->id,
+            'mac_address' => 'AA:BB:CC:DD:EE:FF',
+        ]);
+    }
+
+    public function test_monnify_callback_uses_payment_reference_and_provisions_access(): void
+    {
+        config(['services.monnify.base_url' => 'https://sandbox.monnify.com']);
+        [$router, $package] = $this->routerWithPackage([
+            'payment_gateway_settings' => [
+                'monnify' => [
+                    'public_key' => 'MK_TEST_DEMO',
+                    'secret_key' => 'MSK_TEST_DEMO',
+                    'contract_code' => '1234567890',
+                ],
+            ],
+        ]);
+
+        $payment = Payment::create([
+            'shop_id' => $router->shop_id,
+            'package_id' => $package->id,
+            'provider' => 'monnify',
+            'tx_ref' => 'HSF-MONNIFY-CALLBACK',
+            'provider_reference' => 'MNFY|20260804180000|000003',
+            'amount' => 500,
+            'gross_amount' => 500,
+            'platform_fee_amount' => 0,
+            'tenant_net_amount' => 500,
+            'currency' => 'NGN',
+            'status' => 'pending',
+            'payload' => [
+                'mac' => 'AA:BB:CC:DD:EE:FF',
+                'nasid' => $router->nas_identifier,
+            ],
+        ]);
+
+        Http::fake([
+            'sandbox.monnify.com/api/v1/auth/login' => Http::response([
+                'requestSuccessful' => true,
+                'responseBody' => [
+                    'accessToken' => 'MONNIFY_TOKEN',
+                ],
+            ]),
+            'sandbox.monnify.com/api/v2/merchant/transactions/query?paymentReference=HSF-MONNIFY-CALLBACK' => Http::response([
+                'requestSuccessful' => true,
+                'responseBody' => [
+                    'transactionReference' => 'MNFY|20260804180000|000003',
+                    'paymentReference' => $payment->tx_ref,
+                    'paymentStatus' => 'PAID',
+                    'amountPaid' => '500.00',
+                    'currency' => 'NGN',
+                ],
+            ]),
+        ]);
+
+        $this->get(route('hotspot.payment.callback', [
+            'paymentReference' => $payment->tx_ref,
+        ]))
+            ->assertOk()
+            ->assertSee('Access provisioned');
+
+        $this->assertDatabaseHas('payments', [
+            'id' => $payment->id,
+            'status' => 'successful',
+        ]);
+    }
+
+    public function test_monnify_webhook_validates_signature_and_dispatches_verification(): void
+    {
+        Queue::fake();
+        [$router, $package] = $this->routerWithPackage([
+            'payment_gateway_settings' => [
+                'monnify' => [
+                    'public_key' => 'MK_TEST_DEMO',
+                    'secret_key' => 'MSK_TEST_DEMO',
+                    'contract_code' => '1234567890',
+                ],
+            ],
+        ]);
+
+        Payment::create([
+            'shop_id' => $router->shop_id,
+            'package_id' => $package->id,
+            'provider' => 'monnify',
+            'tx_ref' => 'HSF-MONNIFY-WEBHOOK',
+            'provider_reference' => 'MNFY|20260804180000|000004',
+            'amount' => 500,
+            'gross_amount' => 500,
+            'platform_fee_amount' => 0,
+            'tenant_net_amount' => 500,
+            'currency' => 'NGN',
+            'status' => 'pending',
+            'payload' => [
+                'mac' => 'AA:BB:CC:DD:EE:FF',
+                'nasid' => $router->nas_identifier,
+            ],
+        ]);
+        $payload = [
+            'eventType' => 'SUCCESSFUL_TRANSACTION',
+            'eventData' => [
+                'transactionReference' => 'MNFY|20260804180000|000004',
+                'paymentReference' => 'HSF-MONNIFY-WEBHOOK',
+                'paymentStatus' => 'PAID',
+            ],
+        ];
+        $rawPayload = json_encode($payload);
+
+        $this->postJson(route('hotspot.payment.webhook'), $payload, [
+            'monnify-signature' => hash('sha512', 'MSK_TEST_DEMO'.$rawPayload),
+        ])
+            ->assertOk()
+            ->assertSee('ok');
+
+        Queue::assertPushed(VerifyHotspotPaymentWebhook::class);
+    }
+
     private function routerWithPackage(array $tenantOverrides = []): array
     {
         $tenant = Tenant::create(array_merge([

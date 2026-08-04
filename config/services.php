@@ -67,4 +67,8 @@ return [
         'base_url' => env('PAYSTACK_BASE_URL', 'https://api.paystack.co'),
     ],
 
+    'monnify' => [
+        'base_url' => env('MONNIFY_BASE_URL', 'https://sandbox.monnify.com'),
+    ],
+
 ];

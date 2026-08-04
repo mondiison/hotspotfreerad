@@ -9,6 +9,7 @@ class PaymentGatewayCatalog
 {
     public const FLUTTERWAVE = 'flutterwave';
     public const PAYSTACK = 'paystack';
+    public const MONNIFY = 'monnify';
 
     public static function onlineGateways(): array
     {
@@ -49,19 +50,19 @@ class PaymentGatewayCatalog
                 ],
                 'secret_fields' => ['secret_key'],
             ],
-            'monnify' => [
-                'key' => 'monnify',
+            self::MONNIFY => [
+                'key' => self::MONNIFY,
                 'name' => 'Monnify',
                 'brand_color' => '#2f2f8f',
                 'logo_path' => 'images/payment-gateways/monnify.svg',
                 'region' => 'Nigeria',
                 'currencies' => ['NGN'],
-                'status' => 'planned',
-                'summary' => 'Vendor-ready for reserved accounts, transfer collection, USSD, and card checkout in Nigeria.',
+                'status' => 'live',
+                'summary' => 'Live adapter for hosted checkout with card, account transfer, USSD, and phone-number payment in Nigeria.',
                 'webhook_header' => 'monnify-signature',
                 'webhook_note' => 'Set this endpoint in Monnify webhook settings for transaction completion events.',
                 'fields' => [
-                    'public_key' => 'Public Key',
+                    'public_key' => 'API Key',
                     'secret_key' => 'Secret Key',
                     'contract_code' => 'Contract Code',
                 ],
@@ -158,7 +159,7 @@ class PaymentGatewayCatalog
 
     public static function implementedGatewayKeys(): array
     {
-        return [self::FLUTTERWAVE, self::PAYSTACK];
+        return [self::FLUTTERWAVE, self::PAYSTACK, self::MONNIFY];
     }
 
     public static function tenantProvider(?string $gatewayKey = null): array
@@ -194,6 +195,21 @@ class PaymentGatewayCatalog
                     'label' => 'Webhook confirmation',
                     'requires' => 'x-paystack-signature validation with Secret Key',
                     'description' => 'Allows Paystack to confirm completed payments even if the customer closes the browser.',
+                ],
+            ];
+        }
+
+        if ($gatewayKey === self::MONNIFY) {
+            $channels = [
+                'checkout' => [
+                    'label' => 'Hosted checkout',
+                    'requires' => 'Monnify API Key + Secret Key + Contract Code',
+                    'description' => 'Used to redirect hotspot customers to Monnify checkout for card, account transfer, USSD, and phone-number payment.',
+                ],
+                'webhook' => [
+                    'label' => 'Webhook confirmation',
+                    'requires' => 'monnify-signature validation with Secret Key',
+                    'description' => 'Allows Monnify to confirm completed payments even if the customer closes the browser.',
                 ],
             ];
         }
