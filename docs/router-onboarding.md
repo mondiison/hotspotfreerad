@@ -145,6 +145,32 @@ HotspotFreeRAD stores the secret encrypted in the application table, and syncs i
 sudo freeradius -X
 ```
 
+## MikroTik L009UiGS Built-In Wi-Fi Testing
+
+The `L009 built-in Wi-Fi test router` infrastructure profile is useful when you want to test MMS Radius without external APs first.
+
+Recommended quick-fill values:
+
+| Setting | Value |
+| --- | --- |
+| WAN 1 | `ether1` |
+| WAN 2 | `ether7` |
+| AP/switch trunk | `ether2` |
+| Built-in Wi-Fi | `wifi1` |
+| Hotspot gateway | `10.5.50.1/24` |
+| Hotspot network | `10.5.50.0/24` |
+| Hotspot pool | `10.5.50.10-10.5.50.250` |
+
+In the router form, use the `L009 lab Wi-Fi` quick-fill button to populate these values automatically. The generated script will:
+
+- create the normal WireGuard and RADIUS setup;
+- create VLANs on the LAN bridge;
+- configure `wifi1` as an open `MMS Hotspot` SSID;
+- place `wifi1` into the hotspot VLAN as an untagged access interface;
+- keep `ether2` as a tagged AP/switch trunk for later expansion.
+
+For production plaza coverage, still prefer external business APs with VLAN-per-SSID support. The L009 built-in Wi-Fi is best for lab testing, office testing, or a very small pilot zone.
+
 ## Phone Login Test
 
 The first successful milestone is a phone authenticating through:

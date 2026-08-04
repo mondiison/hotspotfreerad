@@ -101,6 +101,13 @@
                     </flux:field>
 
                     <flux:field>
+                        <flux:label>Built-in Wi-Fi</flux:label>
+                        <flux:input name="provisioning_settings[builtin_wifi_interface]" value="{{ $settings['builtin_wifi_interface'] ?? 'wifi1' }}" placeholder="wifi1" />
+                        <flux:description>For L009UiGS testing, use <code>wifi1</code> as the open hotspot SSID.</flux:description>
+                        <flux:error name="provisioning_settings.builtin_wifi_interface" />
+                    </flux:field>
+
+                    <flux:field>
                         <flux:label>Download limit</flux:label>
                         <flux:input name="provisioning_settings[download_limit]" value="{{ $settings['download_limit'] ?? '120M' }}" placeholder="120M" />
                         <flux:error name="provisioning_settings.download_limit" />
@@ -113,6 +120,8 @@
                     </flux:field>
 
                     <div class="grid gap-3 rounded-md border border-zinc-200 bg-white p-3 text-sm">
+                        <input type="hidden" name="provisioning_settings[enable_builtin_wifi]" value="0">
+                        <label class="flex items-center gap-2"><input type="checkbox" name="provisioning_settings[enable_builtin_wifi]" value="1" @checked($settings['enable_builtin_wifi'] ?? false)> L009 built-in Wi-Fi hotspot</label>
                         <input type="hidden" name="provisioning_settings[enable_realtime_qos]" value="0">
                         <label class="flex items-center gap-2"><input type="checkbox" name="provisioning_settings[enable_realtime_qos]" value="1" @checked($settings['enable_realtime_qos'] ?? true)> Realtime voice/video QoS</label>
                         <input type="hidden" name="provisioning_settings[enable_pos]" value="0">
@@ -121,6 +130,28 @@
                         <label class="flex items-center gap-2"><input type="checkbox" name="provisioning_settings[enable_pppoe]" value="1" @checked($settings['enable_pppoe'] ?? true)> PPPoE/CPE VLAN</label>
                         <input type="hidden" name="provisioning_settings[enable_second_wan]" value="0">
                         <label class="flex items-center gap-2"><input type="checkbox" name="provisioning_settings[enable_second_wan]" value="1" @checked($settings['enable_second_wan'] ?? false)> Second Starlink/WAN</label>
+                    </div>
+                </div>
+
+                <div class="mt-4 rounded-md border border-zinc-200 bg-white p-3">
+                    <p class="text-sm font-medium text-zinc-900">Quick-fill router layout</p>
+                    <p class="mt-1 text-xs leading-5 text-zinc-500">Use a preset, then adjust any value before saving.</p>
+                    <div class="mt-3 flex flex-wrap gap-2">
+                        <flux:button
+                            type="button"
+                            size="xs"
+                            data-set-fields='{"provisioning_settings[profile]":"l009_builtin_wifi","provisioning_settings[wan1]":"ether1","provisioning_settings[wan2]":"ether7","provisioning_settings[trunk_port]":"ether2","provisioning_settings[builtin_wifi_interface]":"wifi1","provisioning_settings[download_limit]":"80M","provisioning_settings[upload_limit]":"15M","provisioning_settings[hotspot_gateway]":"10.5.50.1/24","provisioning_settings[hotspot_network]":"10.5.50.0/24","provisioning_settings[hotspot_pool]":"10.5.50.10-10.5.50.250","provisioning_settings[enable_builtin_wifi]":"1","provisioning_settings[enable_pos]":"0","provisioning_settings[enable_pppoe]":"0","provisioning_settings[enable_realtime_qos]":"1","provisioning_settings[enable_second_wan]":"0"}'
+                        >L009 lab Wi-Fi</flux:button>
+                        <flux:button
+                            type="button"
+                            size="xs"
+                            data-set-fields='{"provisioning_settings[profile]":"starlink_plaza","provisioning_settings[wan1]":"ether1","provisioning_settings[wan2]":"ether8","provisioning_settings[trunk_port]":"ether2","provisioning_settings[builtin_wifi_interface]":"wifi1","provisioning_settings[download_limit]":"120M","provisioning_settings[upload_limit]":"20M","provisioning_settings[hotspot_gateway]":"10.5.50.1/23","provisioning_settings[hotspot_network]":"10.5.50.0/23","provisioning_settings[hotspot_pool]":"10.5.50.10-10.5.51.250","provisioning_settings[enable_builtin_wifi]":"0","provisioning_settings[enable_pos]":"1","provisioning_settings[enable_pppoe]":"1","provisioning_settings[enable_realtime_qos]":"1"}'
+                        >Plaza VLAN /23</flux:button>
+                        <flux:button
+                            type="button"
+                            size="xs"
+                            data-set-fields='{"provisioning_settings[profile]":"small_hotspot","provisioning_settings[wan1]":"ether1","provisioning_settings[wan2]":"ether8","provisioning_settings[trunk_port]":"ether2","provisioning_settings[download_limit]":"80M","provisioning_settings[upload_limit]":"15M","provisioning_settings[hotspot_gateway]":"10.5.50.1/24","provisioning_settings[hotspot_network]":"10.5.50.0/24","provisioning_settings[hotspot_pool]":"10.5.50.10-10.5.50.250","provisioning_settings[enable_builtin_wifi]":"0","provisioning_settings[enable_pos]":"1","provisioning_settings[enable_pppoe]":"0","provisioning_settings[enable_realtime_qos]":"1"}'
+                        >Small AP /24</flux:button>
                     </div>
                 </div>
 
@@ -152,6 +183,37 @@
                             <flux:error name="provisioning_settings.{{ $field }}" />
                         </flux:field>
                     @endforeach
+
+                    <div class="md:col-span-3">
+                        <div class="mt-1 flex flex-wrap gap-2">
+                            <flux:button
+                                type="button"
+                                size="xs"
+                                data-set-fields='{"provisioning_settings[hotspot_gateway]":"10.5.48.1/22","provisioning_settings[hotspot_network]":"10.5.48.0/22","provisioning_settings[hotspot_pool]":"10.5.48.10-10.5.51.250"}'
+                            >/22, about 1,000 clients</flux:button>
+                            <flux:button
+                                type="button"
+                                size="xs"
+                                data-set-fields='{"provisioning_settings[hotspot_gateway]":"10.5.50.1/23","provisioning_settings[hotspot_network]":"10.5.50.0/23","provisioning_settings[hotspot_pool]":"10.5.50.10-10.5.51.250"}'
+                            >/23, about 500 clients</flux:button>
+                            <flux:button
+                                type="button"
+                                size="xs"
+                                data-set-fields='{"provisioning_settings[hotspot_gateway]":"10.5.50.1/24","provisioning_settings[hotspot_network]":"10.5.50.0/24","provisioning_settings[hotspot_pool]":"10.5.50.10-10.5.50.250"}'
+                            >/24, about 250 clients</flux:button>
+                        </div>
+                        <p class="mt-2 text-xs leading-5 text-zinc-500">Quick-fill the customer hotspot gateway, network, and DHCP pool.</p>
+                    </div>
+                </div>
+
+                <div class="mt-4 rounded-md border border-zinc-200 bg-white p-3">
+                    <p class="text-sm font-medium text-zinc-900">Hotspot IP examples</p>
+                    <p class="mt-1 text-xs leading-5 text-zinc-500">Choose based on expected concurrent users. You can still edit the values manually after clicking.</p>
+                    <div class="mt-3 grid gap-2 text-xs text-zinc-600 sm:grid-cols-3">
+                        <div><span class="font-medium text-zinc-900">/24:</span> one small zone, about 250 usable addresses.</div>
+                        <div><span class="font-medium text-zinc-900">/23:</span> plaza starter, about 500 usable addresses.</div>
+                        <div><span class="font-medium text-zinc-900">/22:</span> larger rollout, about 1,000 usable addresses.</div>
+                    </div>
                 </div>
             </section>
 
@@ -185,6 +247,27 @@
                 if (field) {
                     field.value = button.dataset.setValue;
                 }
+            });
+        });
+
+        document.querySelectorAll('[data-set-fields]').forEach((button) => {
+            button.addEventListener('click', () => {
+                Object.entries(JSON.parse(button.dataset.setFields)).forEach(([name, value]) => {
+                    const fields = Array.from(document.getElementsByName(name));
+                    const hasCheckbox = fields.some((field) => field.type === 'checkbox');
+
+                    fields.forEach((field) => {
+                        if (field.type === 'checkbox') {
+                            field.checked = value === '1';
+                        } else if (field.type === 'hidden' && hasCheckbox) {
+                            field.value = '0';
+                        } else {
+                            field.value = value;
+                        }
+
+                        field.dispatchEvent(new Event('change', { bubbles: true }));
+                    });
+                });
             });
         });
     </script>

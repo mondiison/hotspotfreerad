@@ -145,12 +145,51 @@ class MikroTikProvisioningServiceTest extends TestCase
         $this->assertStringNotContainsString('/queue type add name=pcq-hotspot-down kind=pcq', $script);
     }
 
+    public function test_it_generates_l009_builtin_wifi_hotspot_script(): void
+    {
+        config([
+            'app.url' => 'https://mmsradius.com',
+            'services.radius.server_ip' => '10.8.0.1',
+            'services.radius.auth_port' => 1812,
+            'services.radius.acct_port' => 1813,
+            'services.wireguard.endpoint_host' => 'vpn.example.com',
+            'services.wireguard.endpoint_port' => 13231,
+            'services.wireguard.public_key' => 'server-public-key',
+            'services.mikrotik.hotspot_dns_name' => 'hotspot.local',
+        ]);
+
+        $router = new Router([
+            'nas_identifier' => 'l009-test-router',
+            'wireguard_internal_ip' => '10.8.0.30',
+            'shared_secret' => 'radius-secret',
+            'provisioning_settings' => [
+                'profile' => 'l009_builtin_wifi',
+                'hotspot_gateway' => '10.5.50.1/24',
+                'hotspot_network' => '10.5.50.0/24',
+                'hotspot_pool' => '10.5.50.10-10.5.50.250',
+            ],
+        ]);
+
+        $script = app(MikroTikProvisioningService::class)->generateFreshInfrastructureScript($router);
+
+        $this->assertStringContainsString('Profile: L009 built-in Wi-Fi test router', $script);
+        $this->assertStringContainsString(':local wan2 "ether7"', $script);
+        $this->assertStringContainsString(':local builtinWifiInterface "wifi1"', $script);
+        $this->assertStringContainsString('/interface wifi configuration add name=mms-open-hotspot-cfg mode=ap ssid="MMS Hotspot"', $script);
+        $this->assertStringContainsString('/interface bridge port add bridge=$lanBridge interface=$builtinWifiInterface pvid=$hotspotVlan', $script);
+        $this->assertStringContainsString('untagged=$builtinWifiInterface vlan-ids=$hotspotVlan', $script);
+        $this->assertStringContainsString('vlan-ids=10,30', $script);
+        $this->assertStringContainsString('POS VLAN is disabled', $script);
+        $this->assertStringContainsString('PPPoE is disabled', $script);
+    }
+
     public function test_it_lists_flexible_infrastructure_profiles(): void
     {
         $profiles = app(MikroTikProvisioningService::class)->infrastructureProfiles();
 
         $this->assertArrayHasKey('starlink_plaza', $profiles);
         $this->assertArrayHasKey('small_hotspot', $profiles);
+        $this->assertArrayHasKey('l009_builtin_wifi', $profiles);
         $this->assertArrayHasKey('pppoe_isp', $profiles);
     }
 }

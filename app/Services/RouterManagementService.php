@@ -22,10 +22,11 @@ class RouterManagementService
             'wireguard_internal_ip' => ['required', 'ip', Rule::unique('routers')->ignore($router)],
             'shared_secret' => [$router ? 'nullable' : 'required', 'string', 'max:255'],
             'provisioning_settings' => ['nullable', 'array'],
-            'provisioning_settings.profile' => ['nullable', Rule::in(['starlink_plaza', 'small_hotspot', 'pppoe_isp'])],
+            'provisioning_settings.profile' => ['nullable', Rule::in(['starlink_plaza', 'small_hotspot', 'l009_builtin_wifi', 'pppoe_isp'])],
             'provisioning_settings.wan1' => ['nullable', 'string', 'max:40'],
             'provisioning_settings.wan2' => ['nullable', 'string', 'max:40'],
             'provisioning_settings.trunk_port' => ['nullable', 'string', 'max:40'],
+            'provisioning_settings.builtin_wifi_interface' => ['nullable', 'string', 'max:40'],
             'provisioning_settings.download_limit' => ['nullable', 'string', 'max:20'],
             'provisioning_settings.upload_limit' => ['nullable', 'string', 'max:20'],
             'provisioning_settings.mgmt_vlan' => ['nullable', 'integer', 'min:1', 'max:4094'],
@@ -43,6 +44,7 @@ class RouterManagementService
             'provisioning_settings.pos_network' => ['nullable', 'string', 'max:32'],
             'provisioning_settings.pos_pool' => ['nullable', 'string', 'max:64'],
             'provisioning_settings.pppoe_gateway' => ['nullable', 'string', 'max:32'],
+            'provisioning_settings.enable_builtin_wifi' => ['nullable', 'boolean'],
             'provisioning_settings.enable_pos' => ['nullable', 'boolean'],
             'provisioning_settings.enable_pppoe' => ['nullable', 'boolean'],
             'provisioning_settings.enable_realtime_qos' => ['nullable', 'boolean'],
@@ -100,21 +102,24 @@ class RouterManagementService
 
     public function defaultProvisioningSettings(?string $profile = null): array
     {
-        $profile = in_array($profile, ['starlink_plaza', 'small_hotspot', 'pppoe_isp'], true)
+        $profile = in_array($profile, ['starlink_plaza', 'small_hotspot', 'l009_builtin_wifi', 'pppoe_isp'], true)
             ? $profile
             : 'starlink_plaza';
 
         return [
             'profile' => $profile,
             'wan1' => 'ether1',
-            'wan2' => 'ether8',
+            'wan2' => $profile === 'l009_builtin_wifi' ? 'ether7' : 'ether8',
             'trunk_port' => 'ether2',
+            'builtin_wifi_interface' => 'wifi1',
             'download_limit' => match ($profile) {
+                'l009_builtin_wifi' => '80M',
                 'small_hotspot' => '80M',
                 'pppoe_isp' => '150M',
                 default => '120M',
             },
             'upload_limit' => match ($profile) {
+                'l009_builtin_wifi' => '15M',
                 'small_hotspot' => '15M',
                 'pppoe_isp' => '25M',
                 default => '20M',
@@ -134,8 +139,9 @@ class RouterManagementService
             'pos_network' => '192.168.50.0/24',
             'pos_pool' => '192.168.50.10-192.168.50.250',
             'pppoe_gateway' => '172.16.40.1/24',
-            'enable_pos' => true,
-            'enable_pppoe' => $profile !== 'small_hotspot',
+            'enable_builtin_wifi' => $profile === 'l009_builtin_wifi',
+            'enable_pos' => $profile !== 'l009_builtin_wifi',
+            'enable_pppoe' => ! in_array($profile, ['small_hotspot', 'l009_builtin_wifi'], true),
             'enable_realtime_qos' => true,
             'enable_second_wan' => false,
         ];
@@ -147,7 +153,7 @@ class RouterManagementService
         $settings = $settings + ['profile' => 'starlink_plaza'];
         $settings = array_replace($this->defaultProvisioningSettings((string) $settings['profile']), $settings);
 
-        foreach (['enable_pos', 'enable_pppoe', 'enable_realtime_qos', 'enable_second_wan'] as $field) {
+        foreach (['enable_builtin_wifi', 'enable_pos', 'enable_pppoe', 'enable_realtime_qos', 'enable_second_wan'] as $field) {
             $settings[$field] = (bool) ($settings[$field] ?? false);
         }
 

@@ -19,6 +19,11 @@ class MikroTikProvisioningService
                 'summary' => 'Simpler VLAN hotspot layout for cafes, small offices, and single-shop deployments.',
                 'capacity' => '20-100 users',
             ],
+            'l009_builtin_wifi' => [
+                'name' => 'L009 built-in Wi-Fi test router',
+                'summary' => 'MikroTik L009 profile using wifi1 as the open hotspot SSID while ether2 remains available as an AP/switch trunk.',
+                'capacity' => 'Lab/testing or small pilot before adding external APs',
+            ],
             'pppoe_isp' => [
                 'name' => 'PPPoE ISP access',
                 'summary' => 'Subscriber VLAN and PPPoE server foundation for CPE-based customers.',
@@ -98,14 +103,29 @@ SCRIPT;
         $portalUrl = rtrim(config('app.url'), '/') . '/hotspot/portal';
         $portalHost = parse_url($portalUrl, PHP_URL_HOST) ?: config('services.mikrotik.hotspot_dns_name');
         $hotspotDnsName = config('services.mikrotik.hotspot_dns_name');
+        $enableBuiltinWifi = (bool) $settings['enable_builtin_wifi'];
+        $builtinWifiInterface = $settings['builtin_wifi_interface'];
 
-        $taggedVlans = implode(',', array_filter([
+        $allVlans = array_filter([
             $settings['mgmt_vlan'],
             $settings['hotspot_vlan'],
             $settings['staff_vlan'],
             $settings['enable_pppoe'] ? $settings['pppoe_vlan'] : null,
             $settings['enable_pos'] ? $settings['pos_vlan'] : null,
-        ]));
+        ]);
+
+        $taggedVlans = implode(',', $allVlans);
+        $nonHotspotTaggedVlans = implode(',', array_filter(
+            $allVlans,
+            fn ($vlan): bool => (string) $vlan !== (string) $settings['hotspot_vlan']
+        ));
+
+        $bridgeVlanLines = $enableBuiltinWifi
+            ? array_filter([
+                '/interface bridge vlan add bridge=$lanBridge tagged=$lanBridge,$trunkPort untagged=$builtinWifiInterface vlan-ids=$hotspotVlan',
+                $nonHotspotTaggedVlans !== '' ? '/interface bridge vlan add bridge=$lanBridge tagged=$lanBridge,$trunkPort vlan-ids='.$nonHotspotTaggedVlans : null,
+            ])
+            : ['/interface bridge vlan add bridge=$lanBridge tagged=$lanBridge,$trunkPort vlan-ids='.$taggedVlans];
 
         $secondWanMember = $settings['enable_second_wan']
             ? '/interface list member add list=WAN interface=$wan2'
@@ -163,6 +183,18 @@ SCRIPT;
             '# Realtime QoS and PCQ are disabled for this router profile.',
         ];
 
+        $builtinWifiLines = $enableBuiltinWifi ? [
+            '',
+            '# MikroTik L009 built-in Wi-Fi test SSID. RouterOS v7 WiFi package uses wifi1 on L009UiGS-2HaxD.',
+            '/interface wifi security add name=mms-open-hotspot-sec authentication-types=""',
+            '/interface wifi configuration add name=mms-open-hotspot-cfg mode=ap ssid="MMS Hotspot" security=mms-open-hotspot-sec country=Nigeria',
+            '/interface wifi set [find default-name=$builtinWifiInterface] configuration=mms-open-hotspot-cfg disabled=no',
+            '/interface bridge port add bridge=$lanBridge interface=$builtinWifiInterface pvid=$hotspotVlan comment="L009 built-in open hotspot Wi-Fi"',
+        ] : [
+            '',
+            '# Built-in MikroTik Wi-Fi is disabled for this profile. Use the AP/switch trunk for external APs.',
+        ];
+
         return implode("\n", array_merge([
             '# MMS Radius flexible MikroTik infrastructure script',
             '# Profile: '.$this->infrastructureProfiles()[$profile]['name'],
@@ -172,6 +204,7 @@ SCRIPT;
             ':local wan2 "'.$settings['wan2'].'"',
             ':local lanBridge "bridge-lan"',
             ':local trunkPort "'.$settings['trunk_port'].'"',
+            ':local builtinWifiInterface "'.$builtinWifiInterface.'"',
             ':local mgmtVlan "'.$settings['mgmt_vlan'].'"',
             ':local hotspotVlan "'.$settings['hotspot_vlan'].'"',
             ':local staffVlan "'.$settings['staff_vlan'].'"',
@@ -202,7 +235,7 @@ SCRIPT;
             '/interface vlan add interface=$lanBridge name=vlan-staff vlan-id=$staffVlan',
             $settings['enable_pppoe'] ? '/interface vlan add interface=$lanBridge name=vlan-pppoe vlan-id=$pppoeVlan' : '# PPPoE VLAN interface disabled',
             $settings['enable_pos'] ? '/interface vlan add interface=$lanBridge name=vlan-pos vlan-id=$posVlan' : '# POS VLAN interface disabled',
-            '/interface bridge vlan add bridge=$lanBridge tagged=$lanBridge,$trunkPort vlan-ids='.$taggedVlans,
+        ], $builtinWifiLines, $bridgeVlanLines, [
             '/interface bridge set $lanBridge vlan-filtering=yes',
             '',
             '/interface wireguard add name=wg-saas listen-port=13231 mtu=1420',
@@ -317,6 +350,13 @@ HTML;
     private function profileDefaults(string $profile): array
     {
         return match ($profile) {
+            'l009_builtin_wifi' => [
+                'wan1' => 'ether1',
+                'wan2' => 'ether7',
+                'trunk_port' => 'ether2',
+                'download_limit' => '80M',
+                'upload_limit' => '15M',
+            ],
             'small_hotspot' => [
                 'wan1' => 'ether1',
                 'wan2' => 'ether8',
@@ -351,9 +391,10 @@ HTML;
 
         $defaults = [
             'profile' => array_key_exists($profile, $this->infrastructureProfiles()) ? $profile : 'starlink_plaza',
-            'wan1' => 'ether1',
-            'wan2' => 'ether8',
-            'trunk_port' => 'ether2',
+            'wan1' => $this->profileDefaults($profile)['wan1'],
+            'wan2' => $this->profileDefaults($profile)['wan2'],
+            'trunk_port' => $this->profileDefaults($profile)['trunk_port'],
+            'builtin_wifi_interface' => 'wifi1',
             'download_limit' => $this->profileDefaults($profile)['download_limit'],
             'upload_limit' => $this->profileDefaults($profile)['upload_limit'],
             'mgmt_vlan' => 10,
@@ -371,8 +412,9 @@ HTML;
             'pos_network' => '192.168.50.0/24',
             'pos_pool' => '192.168.50.10-192.168.50.250',
             'pppoe_gateway' => '172.16.40.1/24',
-            'enable_pos' => true,
-            'enable_pppoe' => $profile !== 'small_hotspot',
+            'enable_builtin_wifi' => $profile === 'l009_builtin_wifi',
+            'enable_pos' => $profile !== 'l009_builtin_wifi',
+            'enable_pppoe' => ! in_array($profile, ['small_hotspot', 'l009_builtin_wifi'], true),
             'enable_realtime_qos' => true,
             'enable_second_wan' => false,
         ];
