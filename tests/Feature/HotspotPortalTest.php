@@ -1081,6 +1081,228 @@ class HotspotPortalTest extends TestCase
         ]);
     }
 
+    public function test_paystack_checkout_redirects_to_authorization_url(): void
+    {
+        config(['services.paystack.base_url' => 'https://api.paystack.co']);
+        Http::fake([
+            'api.paystack.co/transaction/initialize' => fn ($request) => Http::response([
+                'status' => true,
+                'message' => 'Authorization URL created',
+                'data' => [
+                    'authorization_url' => 'https://checkout.paystack.com/pay/demo-access-code',
+                    'access_code' => 'demo-access-code',
+                    'reference' => $request['reference'],
+                ],
+            ]),
+        ]);
+
+        [$router, $package] = $this->routerWithPackage([
+            'payment_gateway_settings' => [
+                'paystack' => [
+                    'public_key' => 'pk_test_demo',
+                    'secret_key' => 'sk_test_demo',
+                ],
+            ],
+        ]);
+        $router->shop->update(['payment_gateway' => 'paystack']);
+
+        $this->post(route('hotspot.pay'), [
+            'mac' => 'AA:BB:CC:DD:EE:FF',
+            'nasid' => $router->nas_identifier,
+            'package_id' => $package->id,
+            'email' => 'customer@example.com',
+            'phone' => '08000000000',
+            'payment_method' => 'card',
+        ])
+            ->assertRedirect('https://checkout.paystack.com/pay/demo-access-code');
+
+        $payment = Payment::firstOrFail();
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/transaction/initialize')
+            && $request->hasHeader('Authorization', 'Bearer sk_test_demo')
+            && $request['reference'] === $payment->tx_ref
+            && $request['amount'] === 50000
+            && $request['currency'] === 'NGN'
+            && $request['email'] === 'customer@example.com'
+            && $request['callback_url'] === route('hotspot.payment.callback')
+            && $request['metadata']['tenant_name'] === 'Demo ISP'
+            && $request['metadata']['shop_name'] === 'Demo Shop'
+            && $request['metadata']['device_mac'] === 'AA:BB:CC:DD:EE:FF');
+
+        $this->assertSame('paystack', $payment->provider);
+        $this->assertSame($payment->tx_ref, $payment->provider_reference);
+        $this->assertSame('https://checkout.paystack.com/pay/demo-access-code', data_get($payment->payload, 'checkout_url'));
+    }
+
+    public function test_paystack_manual_verification_provisions_radius_access(): void
+    {
+        config(['services.paystack.base_url' => 'https://api.paystack.co']);
+        [$router, $package] = $this->routerWithPackage([
+            'payment_gateway_settings' => [
+                'paystack' => [
+                    'public_key' => 'pk_test_demo',
+                    'secret_key' => 'sk_test_demo',
+                ],
+            ],
+        ]);
+
+        $payment = Payment::create([
+            'shop_id' => $router->shop_id,
+            'package_id' => $package->id,
+            'provider' => 'paystack',
+            'tx_ref' => 'HSF-PAYSTACK-VERIFY',
+            'provider_reference' => 'HSF-PAYSTACK-VERIFY',
+            'amount' => 500,
+            'gross_amount' => 500,
+            'platform_fee_amount' => 0,
+            'tenant_net_amount' => 500,
+            'currency' => 'NGN',
+            'status' => 'pending',
+            'payload' => [
+                'mac' => 'AA:BB:CC:DD:EE:FF',
+                'nasid' => $router->nas_identifier,
+                'link_login' => 'http://10.5.50.1/login',
+                'link_orig' => 'http://example.com',
+            ],
+        ]);
+
+        Http::fake([
+            'api.paystack.co/transaction/verify/HSF-PAYSTACK-VERIFY' => Http::response([
+                'status' => true,
+                'message' => 'Verification successful',
+                'data' => [
+                    'id' => 123456789,
+                    'status' => 'success',
+                    'reference' => $payment->tx_ref,
+                    'amount' => 50000,
+                    'currency' => 'NGN',
+                ],
+            ]),
+        ]);
+
+        $this->post(route('hotspot.payment.verify'), [
+            'tx_ref' => $payment->tx_ref,
+        ])
+            ->assertOk()
+            ->assertSee('Access provisioned')
+            ->assertSee('Connecting this device...');
+
+        $this->assertDatabaseHas('payments', [
+            'id' => $payment->id,
+            'status' => 'successful',
+            'provider_reference' => '123456789',
+        ]);
+        $this->assertDatabaseHas('subscriptions', [
+            'payment_id' => $payment->id,
+            'mac_address' => 'AA:BB:CC:DD:EE:FF',
+        ]);
+    }
+
+    public function test_paystack_callback_uses_reference_and_provisions_access(): void
+    {
+        config(['services.paystack.base_url' => 'https://api.paystack.co']);
+        [$router, $package] = $this->routerWithPackage([
+            'payment_gateway_settings' => [
+                'paystack' => [
+                    'public_key' => 'pk_test_demo',
+                    'secret_key' => 'sk_test_demo',
+                ],
+            ],
+        ]);
+
+        $payment = Payment::create([
+            'shop_id' => $router->shop_id,
+            'package_id' => $package->id,
+            'provider' => 'paystack',
+            'tx_ref' => 'HSF-PAYSTACK-CALLBACK',
+            'provider_reference' => 'HSF-PAYSTACK-CALLBACK',
+            'amount' => 500,
+            'gross_amount' => 500,
+            'platform_fee_amount' => 0,
+            'tenant_net_amount' => 500,
+            'currency' => 'NGN',
+            'status' => 'pending',
+            'payload' => [
+                'mac' => 'AA:BB:CC:DD:EE:FF',
+                'nasid' => $router->nas_identifier,
+            ],
+        ]);
+
+        Http::fake([
+            'api.paystack.co/transaction/verify/HSF-PAYSTACK-CALLBACK' => Http::response([
+                'status' => true,
+                'message' => 'Verification successful',
+                'data' => [
+                    'id' => 987654321,
+                    'status' => 'success',
+                    'reference' => $payment->tx_ref,
+                    'amount' => 50000,
+                    'currency' => 'NGN',
+                ],
+            ]),
+        ]);
+
+        $this->get(route('hotspot.payment.callback', [
+            'reference' => $payment->tx_ref,
+        ]))
+            ->assertOk()
+            ->assertSee('Access provisioned');
+
+        $this->assertDatabaseHas('payments', [
+            'id' => $payment->id,
+            'status' => 'successful',
+            'provider_reference' => '987654321',
+        ]);
+    }
+
+    public function test_paystack_webhook_validates_signature_and_dispatches_verification(): void
+    {
+        Queue::fake();
+        [$router, $package] = $this->routerWithPackage([
+            'payment_gateway_settings' => [
+                'paystack' => [
+                    'public_key' => 'pk_test_demo',
+                    'secret_key' => 'sk_test_demo',
+                ],
+            ],
+        ]);
+
+        Payment::create([
+            'shop_id' => $router->shop_id,
+            'package_id' => $package->id,
+            'provider' => 'paystack',
+            'tx_ref' => 'HSF-PAYSTACK-WEBHOOK',
+            'provider_reference' => 'HSF-PAYSTACK-WEBHOOK',
+            'amount' => 500,
+            'gross_amount' => 500,
+            'platform_fee_amount' => 0,
+            'tenant_net_amount' => 500,
+            'currency' => 'NGN',
+            'status' => 'pending',
+            'payload' => [
+                'mac' => 'AA:BB:CC:DD:EE:FF',
+                'nasid' => $router->nas_identifier,
+            ],
+        ]);
+        $payload = [
+            'event' => 'charge.success',
+            'data' => [
+                'id' => 123456789,
+                'reference' => 'HSF-PAYSTACK-WEBHOOK',
+                'status' => 'success',
+            ],
+        ];
+        $rawPayload = json_encode($payload);
+
+        $this->postJson(route('hotspot.payment.webhook'), $payload, [
+            'x-paystack-signature' => hash_hmac('sha512', $rawPayload, 'sk_test_demo'),
+        ])
+            ->assertOk()
+            ->assertSee('ok');
+
+        Queue::assertPushed(VerifyHotspotPaymentWebhook::class);
+    }
+
     private function routerWithPackage(array $tenantOverrides = []): array
     {
         $tenant = Tenant::create(array_merge([

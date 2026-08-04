@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Payment;
 use App\Models\Subscription;
+use App\Support\PaymentGatewayCatalog;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -13,6 +14,7 @@ class HotspotPaymentConfirmationService
 
     public function __construct(
         private readonly FlutterwaveService $flutterwave,
+        private readonly PaystackService $paystack,
         private readonly RadiusProvisioningService $radius,
     ) {}
 
@@ -24,7 +26,7 @@ class HotspotPaymentConfirmationService
             return $payment->subscription;
         }
 
-        $verification = $this->flutterwave->verifyPayment($payment, $providerReference, $resourceType);
+        $verification = $this->verifyProviderPayment($payment, $providerReference, $resourceType);
 
         if (! $this->verificationMatchesPayment($verification, $payment)) {
             $payment->update([
@@ -32,9 +34,10 @@ class HotspotPaymentConfirmationService
                 'payload' => array_merge($payment->payload ?? [], ['verification' => $verification]),
             ]);
 
-            Log::warning('Flutterwave verification did not match hotspot payment', [
+            Log::warning('Payment gateway verification did not match hotspot payment', [
                 'payment_id' => $payment->id,
                 'tx_ref' => $payment->tx_ref,
+                'provider' => $payment->provider,
             ]);
 
             return null;
@@ -55,7 +58,7 @@ class HotspotPaymentConfirmationService
 
             $payment->update([
                 'status' => 'successful',
-                'provider_reference' => (string) (data_get($verification, 'data.id') ?: $payment->provider_reference),
+                'provider_reference' => (string) (data_get($verification, 'data.id') ?: data_get($verification, 'data.reference') ?: $payment->provider_reference),
                 'paid_at' => now(),
                 'payload' => array_merge($payment->payload ?? [], ['verification' => $verification]),
             ]);
@@ -82,11 +85,33 @@ class HotspotPaymentConfirmationService
 
     public function verificationMatchesPayment(array $verification, Payment $payment): bool
     {
+        if ($payment->provider === PaymentGatewayCatalog::PAYSTACK) {
+            return $this->paystackVerificationMatchesPayment($verification, $payment);
+        }
+
         return in_array(strtolower((string) data_get($verification, 'status')), ['success', 'successful', 'succeeded'], true)
             && $this->statusIsSuccessful(data_get($verification, 'data.status'))
             && (data_get($verification, 'data.reference') === $payment->tx_ref || data_get($verification, 'data.tx_ref') === $payment->tx_ref)
             && strtoupper((string) data_get($verification, 'data.currency')) === strtoupper($payment->currency)
             && (float) data_get($verification, 'data.amount') >= (float) $payment->amount;
+    }
+
+    private function verifyProviderPayment(Payment $payment, string $providerReference, string $resourceType): array
+    {
+        if ($payment->provider === PaymentGatewayCatalog::PAYSTACK) {
+            return $this->paystack->verifyPayment($payment, $providerReference);
+        }
+
+        return $this->flutterwave->verifyPayment($payment, $providerReference, $resourceType);
+    }
+
+    private function paystackVerificationMatchesPayment(array $verification, Payment $payment): bool
+    {
+        return data_get($verification, 'status') === true
+            && $this->statusIsSuccessful(data_get($verification, 'data.status'))
+            && data_get($verification, 'data.reference') === $payment->tx_ref
+            && strtoupper((string) data_get($verification, 'data.currency')) === strtoupper($payment->currency)
+            && ((float) data_get($verification, 'data.amount') / 100) >= (float) $payment->amount;
     }
 
     private function statusIsSuccessful(mixed $status): bool

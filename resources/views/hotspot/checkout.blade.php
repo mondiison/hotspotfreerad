@@ -65,6 +65,8 @@
             <div class="mt-6 rounded-md bg-amber-50 p-4 text-sm leading-6 text-amber-800">
                 @if (($checkoutUnavailableReason ?? null) === 'missing_credentials')
                     This shop has no complete gateway client ID and client secret saved for hotspot customer payments. Check Payment Setup for {{ $shop->name }}.
+                @elseif (($checkoutUnavailableReason ?? null) === 'missing_gateway_secret_key')
+                    {{ $shop->paymentGatewayName() }} checkout needs the tenant gateway secret key. Ask the hotspot operator to add it under Payment Setup for {{ $shop->name }}.
                 @elseif (($checkoutUnavailableReason ?? null) === 'gateway_not_live')
                     {{ $shop->paymentGatewayName() }} has been selected for this shop, but its checkout adapter is not live yet. Ask the hotspot operator to switch this shop to a live gateway.
                 @elseif (($checkoutUnavailableReason ?? null) === 'missing_checkout_url')
@@ -73,6 +75,8 @@
                     Card checkout needs the tenant gateway secret key. Ask the hotspot operator to add it under Payment Setup for {{ $shop->name }}.
                 @elseif (($checkoutUnavailableReason ?? null) === 'invalid_card_secret_key')
                     The payment gateway rejected the saved card checkout secret key. Check Payment Setup for {{ $shop->name }} and paste the hosted checkout Secret Key, not the client secret.
+                @elseif (($checkoutUnavailableReason ?? null) === 'invalid_gateway_secret_key')
+                    {{ $shop->paymentGatewayName() }} rejected the saved secret key. Check Payment Setup for {{ $shop->name }} and paste the correct secret key for this gateway.
                 @else
                     Gateway checkout could not start even though credentials were found for {{ $credentialSource['label'] ?? $shop->name }}. Check the saved client ID/secret, payment method, and Laravel logs.
                 @endif

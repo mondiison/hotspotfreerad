@@ -11,6 +11,7 @@ use App\Models\Router;
 use App\Models\Subscription;
 use App\Services\FlutterwaveService;
 use App\Services\HotspotPaymentConfirmationService;
+use App\Services\PaystackService;
 use App\Services\RadiusProvisioningService;
 use App\Services\VoucherManagementService;
 use App\Support\PaymentCommission;
@@ -194,7 +195,7 @@ class PortalController extends Controller
         ]);
     }
 
-    public function pay(Request $request, FlutterwaveService $flutterwave): RedirectResponse|View
+    public function pay(Request $request, FlutterwaveService $flutterwave, PaystackService $paystack): RedirectResponse|View
     {
         $validated = $request->validate([
             'mac' => ['required', 'string', 'max:64'],
@@ -265,6 +266,57 @@ class PortalController extends Controller
 
         if (! in_array($payment->provider, PaymentGatewayCatalog::implementedGatewayKeys(), true)) {
             $checkoutUnavailableReason = 'gateway_not_live';
+        } elseif ($payment->provider === PaymentGatewayCatalog::PAYSTACK) {
+            $credentialSource = $paystack->credentialSource($payment);
+
+            if (! $paystack->isConfiguredFor($payment)) {
+                $checkoutUnavailableReason = 'missing_gateway_secret_key';
+            } else {
+                try {
+                    $checkout = $paystack->initializeCheckout(
+                        $payment,
+                        [
+                            'email' => $validated['email'] ?? null,
+                            'phone' => $validated['phone'] ?? null,
+                            'name' => 'Hotspot Customer',
+                        ],
+                        route('hotspot.payment.callback')
+                    );
+
+                    $payment->update([
+                        'provider_reference' => $checkout['provider_reference'],
+                        'payload' => array_merge($payment->payload ?? [], [
+                            'checkout_url' => $checkout['checkout_url'],
+                            'paystack_account' => $credentialSource,
+                            'paystack_init_response' => $checkout['response'],
+                        ]),
+                    ]);
+
+                    if (filled($checkout['checkout_url'])) {
+                        return redirect()->away($checkout['checkout_url']);
+                    }
+
+                    Log::warning('Paystack checkout response missing authorization URL', [
+                        'payment_id' => $payment->id,
+                        'tx_ref' => $payment->tx_ref,
+                        'payment_method' => $paymentMethod,
+                        'response_body' => $checkout['response'] ?? null,
+                    ]);
+
+                    $checkoutUnavailableReason = 'missing_checkout_url';
+                } catch (Throwable $exception) {
+                    $checkoutUnavailableReason = $this->paystackCheckoutFailureReason($exception);
+
+                    Log::warning('Paystack checkout initialization failed', [
+                        'payment_id' => $payment->id,
+                        'tx_ref' => $payment->tx_ref,
+                        'message' => $exception->getMessage(),
+                        'response_body' => $exception instanceof RequestException
+                            ? $exception->response->json() ?: $exception->response->body()
+                            : null,
+                    ]);
+                }
+            }
         } elseif ($paymentMethod === 'card') {
             $credentialSource = $flutterwave->hostedCheckoutCredentialSource($payment);
 
@@ -486,7 +538,7 @@ class PortalController extends Controller
         if (blank($providerReference)) {
             return view('hotspot.payment-failed', [
                 'payment' => $payment,
-                'statusMessage' => 'Flutterwave has not returned a provider reference for this payment yet. Please wait a moment and try again.',
+                'statusMessage' => PaymentGatewayCatalog::gatewayName($payment->provider).' has not returned a provider reference for this payment yet. Please wait a moment and try again.',
             ]);
         }
 
@@ -497,22 +549,23 @@ class PortalController extends Controller
                 $this->paymentResourceType((string) $providerReference)
             );
         } catch (Throwable $exception) {
-            Log::warning('Flutterwave manual verification failed', [
+            Log::warning('Manual payment verification failed', [
                 'payment_id' => $payment->id,
                 'tx_ref' => $payment->tx_ref,
+                'provider' => $payment->provider,
                 'message' => $exception->getMessage(),
             ]);
 
             return view('hotspot.payment-failed', [
                 'payment' => $payment->fresh(['shop.tenant', 'package']),
-                'statusMessage' => 'We checked Flutterwave again, but this payment is still not confirmed.',
+                'statusMessage' => 'We checked '.PaymentGatewayCatalog::gatewayName($payment->provider).' again, but this payment is still not confirmed.',
             ]);
         }
 
         if (! $subscription) {
             return view('hotspot.payment-failed', [
                 'payment' => $payment->fresh(['shop.tenant', 'package']),
-                'statusMessage' => 'We checked Flutterwave again, but this payment is still not confirmed.',
+                'statusMessage' => 'We checked '.PaymentGatewayCatalog::gatewayName($payment->provider).' again, but this payment is still not confirmed.',
             ]);
         }
 
@@ -550,7 +603,7 @@ class PortalController extends Controller
             ]);
         }
 
-        if (! $this->statusIsSuccessful($request->query('status'))) {
+        if ($payment->provider !== PaymentGatewayCatalog::PAYSTACK && ! $this->statusIsSuccessful($request->query('status'))) {
             $payment->update(['status' => $request->query('status', 'failed')]);
 
             return view('hotspot.payment-failed', compact('payment'));
@@ -571,9 +624,10 @@ class PortalController extends Controller
                 $this->paymentResourceType((string) $providerReference, $request->query('type'))
             );
         } catch (Throwable $exception) {
-            Log::warning('Flutterwave callback verification failed', [
+            Log::warning('Payment callback verification failed', [
                 'payment_id' => $payment->id,
                 'tx_ref' => $payment->tx_ref,
+                'provider' => $payment->provider,
                 'message' => $exception->getMessage(),
             ]);
 
@@ -598,7 +652,7 @@ class PortalController extends Controller
         ]);
     }
 
-    public function webhook(Request $request, FlutterwaveService $flutterwave): Response
+    public function webhook(Request $request, FlutterwaveService $flutterwave, PaystackService $paystack): Response
     {
         $payload = $request->all();
         $txRef = data_get($payload, 'data.reference') ?: data_get($payload, 'data.tx_ref');
@@ -613,14 +667,19 @@ class PortalController extends Controller
             return response('ignored', 200);
         }
 
-        if (! $flutterwave->webhookIsValid($request->header('verif-hash'), $payment)) {
+        if ($payment->provider === PaymentGatewayCatalog::PAYSTACK) {
+            if (! $paystack->webhookIsValid($request->getContent(), $request->header('x-paystack-signature'), $payment)) {
+                abort(401);
+            }
+        } elseif (! $flutterwave->webhookIsValid($request->header('verif-hash'), $payment)) {
             abort(401);
         }
 
         $providerReference = data_get($payload, 'data.id')
             ?: data_get($payload, 'data.order.id')
             ?: data_get($payload, 'data.order_id')
-            ?: $payment->provider_reference;
+            ?: $payment->provider_reference
+            ?: $txRef;
 
         if (blank($providerReference)) {
             return response('ignored', 200);
@@ -637,7 +696,7 @@ class PortalController extends Controller
 
     private function providerReferenceFromRequest(Request $request): ?string
     {
-        foreach (['id', 'order_id', 'charge_id', 'transaction_id'] as $key) {
+        foreach (['reference', 'id', 'order_id', 'charge_id', 'transaction_id'] as $key) {
             if (filled($request->query($key))) {
                 return (string) $request->query($key);
             }
@@ -654,6 +713,19 @@ class PortalController extends Controller
 
             if ($status === 401 || str_contains($message, 'invalid authorization key')) {
                 return 'invalid_card_secret_key';
+            }
+        }
+
+        return 'initialization_failed';
+    }
+
+    private function paystackCheckoutFailureReason(Throwable $exception): string
+    {
+        if ($exception instanceof RequestException) {
+            $status = $exception->response->status();
+
+            if ($status === 401) {
+                return 'invalid_gateway_secret_key';
             }
         }
 

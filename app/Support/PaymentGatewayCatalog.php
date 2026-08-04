@@ -8,6 +8,7 @@ use App\Services\PlatformPaymentSettingsService;
 class PaymentGatewayCatalog
 {
     public const FLUTTERWAVE = 'flutterwave';
+    public const PAYSTACK = 'paystack';
 
     public static function onlineGateways(): array
     {
@@ -31,15 +32,15 @@ class PaymentGatewayCatalog
                 ],
                 'secret_fields' => ['client_secret', 'secret_key', 'webhook_secret'],
             ],
-            'paystack' => [
-                'key' => 'paystack',
+            self::PAYSTACK => [
+                'key' => self::PAYSTACK,
                 'name' => 'Paystack',
                 'brand_color' => '#09a5db',
                 'logo_path' => 'images/payment-gateways/paystack.svg',
                 'region' => 'Africa',
                 'currencies' => ['NGN', 'GHS', 'ZAR', 'KES', 'USD'],
-                'status' => 'planned',
-                'summary' => 'Vendor-ready for card, transfer, USSD, and mobile-money checkout where Paystack is available.',
+                'status' => 'live',
+                'summary' => 'Live adapter for hosted card, transfer, USSD, and mobile-money checkout where Paystack is available.',
                 'webhook_header' => 'x-paystack-signature',
                 'webhook_note' => 'Set this endpoint in Paystack webhooks and listen for charge.success events.',
                 'fields' => [
@@ -157,13 +158,45 @@ class PaymentGatewayCatalog
 
     public static function implementedGatewayKeys(): array
     {
-        return [self::FLUTTERWAVE];
+        return [self::FLUTTERWAVE, self::PAYSTACK];
     }
 
     public static function tenantProvider(?string $gatewayKey = null): array
     {
         $gatewayKey = $gatewayKey ?: self::FLUTTERWAVE;
         $gateway = self::onlineGateways()[$gatewayKey] ?? self::onlineGateways()[self::FLUTTERWAVE];
+        $channels = [
+            'opay_transfer' => [
+                'label' => 'OPay and transfer',
+                'requires' => 'v4 Client ID + Client Secret',
+                'description' => 'Used by the live gateway adapter for direct charge, OPay, and bank transfer collection from the captive portal.',
+            ],
+            'card' => [
+                'label' => 'Card checkout',
+                'requires' => 'v3 Secret Key',
+                'description' => 'Used when the customer chooses card checkout from the hosted payment page.',
+            ],
+            'webhook' => [
+                'label' => 'Webhook confirmation',
+                'requires' => 'Webhook secret hash',
+                'description' => 'Allows the selected gateway to confirm payments even if the customer closes the browser.',
+            ],
+        ];
+
+        if ($gatewayKey === self::PAYSTACK) {
+            $channels = [
+                'checkout' => [
+                    'label' => 'Hosted checkout',
+                    'requires' => 'Paystack Secret Key',
+                    'description' => 'Used to redirect hotspot customers to Paystack checkout for card, transfer, USSD, and supported local channels.',
+                ],
+                'webhook' => [
+                    'label' => 'Webhook confirmation',
+                    'requires' => 'x-paystack-signature validation with Secret Key',
+                    'description' => 'Allows Paystack to confirm completed payments even if the customer closes the browser.',
+                ],
+            ];
+        }
 
         return [
             'key' => $gateway['key'],
@@ -173,23 +206,7 @@ class PaymentGatewayCatalog
             'label' => 'Default tenant gateway',
             'summary' => 'Customer hotspot payments settle into the payment account configured for each tenant shop.',
             'status' => $gateway['status'],
-            'channels' => [
-                'opay_transfer' => [
-                    'label' => 'OPay and transfer',
-                    'requires' => 'v4 Client ID + Client Secret',
-                    'description' => 'Used by the live gateway adapter for direct charge, OPay, and bank transfer collection from the captive portal.',
-                ],
-                'card' => [
-                    'label' => 'Card checkout',
-                    'requires' => 'v3 Secret Key',
-                    'description' => 'Used when the customer chooses card checkout from the hosted payment page.',
-                ],
-                'webhook' => [
-                    'label' => 'Webhook confirmation',
-                    'requires' => 'Webhook secret hash',
-                    'description' => 'Allows the selected gateway to confirm payments even if the customer closes the browser.',
-                ],
-            ],
+            'channels' => $channels,
         ];
     }
 
