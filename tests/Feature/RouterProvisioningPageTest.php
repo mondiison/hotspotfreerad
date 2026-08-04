@@ -131,8 +131,8 @@ class RouterProvisioningPageTest extends TestCase
         $this->actingAs($user)
             ->get(route('admin.routers.show', $router))
             ->assertOk()
-            ->assertSee(':local wan1 &quot;ether5&quot;', false)
-            ->assertSee(':local hotspotVlan &quot;120&quot;', false)
+            ->assertSee(':global wan1 &quot;ether5&quot;', false)
+            ->assertSee(':global hotspotVlan &quot;120&quot;', false)
             ->assertSee('vlan-ids=11,120,130')
             ->assertSee('POS VLAN is disabled')
             ->assertSee('Realtime QoS and PCQ are disabled');

@@ -133,11 +133,11 @@ class MikroTikProvisioningServiceTest extends TestCase
 
         $script = app(MikroTikProvisioningService::class)->generateFreshInfrastructureScript($router);
 
-        $this->assertStringContainsString(':local wan1 "ether5"', $script);
-        $this->assertStringContainsString(':local trunkPort "sfp-sfpplus1"', $script);
-        $this->assertStringContainsString(':local hotspotVlan "120"', $script);
-        $this->assertStringContainsString(':local hotspotGateway "10.20.0.1/22"', $script);
-        $this->assertStringContainsString(':local hotspotPool "10.20.0.10-10.20.3.250"', $script);
+        $this->assertStringContainsString(':global wan1 "ether5"', $script);
+        $this->assertStringContainsString(':global trunkPort "sfp-sfpplus1"', $script);
+        $this->assertStringContainsString(':global hotspotVlan "120"', $script);
+        $this->assertStringContainsString(':global hotspotGateway "10.20.0.1/22"', $script);
+        $this->assertStringContainsString(':global hotspotPool "10.20.0.10-10.20.3.250"', $script);
         $this->assertStringContainsString('vlan-ids=10,120,30', $script);
         $this->assertStringContainsString('POS VLAN is disabled', $script);
         $this->assertStringContainsString('PPPoE is disabled', $script);
@@ -173,8 +173,8 @@ class MikroTikProvisioningServiceTest extends TestCase
         $script = app(MikroTikProvisioningService::class)->generateFreshInfrastructureScript($router);
 
         $this->assertStringContainsString('Profile: L009 built-in Wi-Fi test router', $script);
-        $this->assertStringContainsString(':local wan2 "ether7"', $script);
-        $this->assertStringContainsString(':local builtinWifiInterface "wifi1"', $script);
+        $this->assertStringContainsString(':global wan2 "ether7"', $script);
+        $this->assertStringContainsString(':global builtinWifiInterface "wifi1"', $script);
         $this->assertStringContainsString('/interface wifi configuration add name=mms-open-hotspot-cfg mode=ap ssid="MMS Hotspot"', $script);
         $this->assertStringContainsString('/interface bridge port add bridge=$lanBridge interface=$builtinWifiInterface pvid=$hotspotVlan', $script);
         $this->assertStringContainsString('untagged=$builtinWifiInterface vlan-ids=$hotspotVlan', $script);
