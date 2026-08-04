@@ -11,6 +11,7 @@ class PaymentGatewayCatalog
     public const PAYSTACK = 'paystack';
     public const MONNIFY = 'monnify';
     public const SQUAD = 'squad';
+    public const STRIPE = 'stripe';
     public const MANUAL_BANK = 'manual_bank';
 
     public static function onlineGateways(): array
@@ -87,6 +88,24 @@ class PaymentGatewayCatalog
                 ],
                 'secret_fields' => ['secret_key'],
             ],
+            self::STRIPE => [
+                'key' => self::STRIPE,
+                'name' => 'Stripe',
+                'brand_color' => '#635bff',
+                'logo_path' => 'images/payment-gateways/stripe.svg',
+                'region' => 'Global',
+                'currencies' => ['NGN', 'USD', 'GBP', 'EUR', 'CAD', 'AUD'],
+                'status' => 'live',
+                'summary' => 'Live adapter for Stripe hosted Checkout with cards, wallets, and supported local methods.',
+                'webhook_header' => 'stripe-signature',
+                'webhook_note' => 'Use the Stripe signing secret that starts with whsec_ for this webhook endpoint.',
+                'fields' => [
+                    'publishable_key' => 'Publishable Key',
+                    'secret_key' => 'Secret Key',
+                    'webhook_secret' => 'Webhook Signing Secret',
+                ],
+                'secret_fields' => ['secret_key', 'webhook_secret'],
+            ],
             self::MANUAL_BANK => [
                 'key' => self::MANUAL_BANK,
                 'name' => 'Manual bank transfer',
@@ -162,7 +181,7 @@ class PaymentGatewayCatalog
 
     public static function implementedGatewayKeys(): array
     {
-        return [self::FLUTTERWAVE, self::PAYSTACK, self::MONNIFY, self::SQUAD, self::MANUAL_BANK];
+        return [self::FLUTTERWAVE, self::PAYSTACK, self::MONNIFY, self::SQUAD, self::STRIPE, self::MANUAL_BANK];
     }
 
     public static function tenantProvider(?string $gatewayKey = null): array
@@ -228,6 +247,21 @@ class PaymentGatewayCatalog
                     'label' => 'Webhook confirmation',
                     'requires' => 'x-squad-encrypted-body validation with Secret Key',
                     'description' => 'Allows Squad to confirm completed payments even if the customer closes the browser.',
+                ],
+            ];
+        }
+
+        if ($gatewayKey === self::STRIPE) {
+            $channels = [
+                'checkout' => [
+                    'label' => 'Hosted Checkout',
+                    'requires' => 'Stripe Secret Key',
+                    'description' => 'Used to redirect hotspot customers to Stripe Checkout for card, wallet, and supported local payment methods.',
+                ],
+                'webhook' => [
+                    'label' => 'Webhook confirmation',
+                    'requires' => 'stripe-signature validation with webhook signing secret',
+                    'description' => 'Allows Stripe to confirm completed payments even if the customer closes the browser.',
                 ],
             ];
         }
@@ -348,6 +382,7 @@ class PaymentGatewayCatalog
             self::PAYSTACK => 'Paystack',
             self::MONNIFY => 'Monnify',
             self::SQUAD => 'Squad',
+            self::STRIPE => 'Stripe',
             self::MANUAL_BANK => 'Manual bank transfer',
             'voucher_cash' => 'Voucher cash',
         ];

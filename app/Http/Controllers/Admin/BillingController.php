@@ -12,6 +12,7 @@ use App\Services\BillingPlanManagementService;
 use App\Services\PlatformBillingConfirmationService;
 use App\Services\PlatformFlutterwaveService;
 use App\Services\PlatformPaymentSettingsService;
+use App\Services\PlatformStripeService;
 use App\Support\PaymentGatewayCatalog;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\RedirectResponse;
@@ -41,7 +42,7 @@ class BillingController extends Controller
                     ->paginate(15),
                 'platformPayments' => $platformPayments,
                 'platformPaymentSummary' => $this->platformPaymentSummary(),
-                'platformFlutterwaveConfigured' => app(PlatformPaymentSettingsService::class)->activeGatewayIsImplemented() && app(PlatformFlutterwaveService::class)->isConfigured(),
+                'platformFlutterwaveConfigured' => $this->platformGatewayIsConfigured(),
                 'platformGateway' => PaymentGatewayCatalog::platformProvider(),
                 'platformWebhookUrl' => route('billing.payment.webhook'),
                 'platformCallbackUrl' => route('admin.billing.payments.callback'),
@@ -60,7 +61,7 @@ class BillingController extends Controller
                 ->latest()
                 ->paginate(10, ['*'], 'payments_page'),
             'platformPaymentSummary' => $this->platformPaymentSummary($tenant->id),
-            'platformFlutterwaveConfigured' => app(PlatformPaymentSettingsService::class)->activeGatewayIsImplemented() && app(PlatformFlutterwaveService::class)->isConfigured(),
+            'platformFlutterwaveConfigured' => $this->platformGatewayIsConfigured(),
             'platformGateway' => PaymentGatewayCatalog::platformProvider(),
             'platformWebhookUrl' => route('billing.payment.webhook'),
             'platformCallbackUrl' => route('admin.billing.payments.callback'),
@@ -145,7 +146,7 @@ class BillingController extends Controller
         return redirect()->route('admin.billing.index')->with('status', 'Billing plan deleted.');
     }
 
-    public function checkout(Request $request, PlatformFlutterwaveService $flutterwave): RedirectResponse
+    public function checkout(Request $request, PlatformFlutterwaveService $flutterwave, PlatformStripeService $stripe): RedirectResponse
     {
         $platformSettings = app(PlatformPaymentSettingsService::class);
         $data = $request->validate([
@@ -167,7 +168,10 @@ class BillingController extends Controller
                 ->withErrors(['billing' => $platformSettings->activeGatewayName().' checkout adapter is not live yet. Choose a live platform gateway before starting checkout.']);
         }
 
-        if (! $flutterwave->isConfigured()) {
+        $gateway = $platformSettings->activeGateway();
+        $gatewayService = $gateway === PaymentGatewayCatalog::STRIPE ? $stripe : $flutterwave;
+
+        if (! $gatewayService->isConfigured()) {
             return redirect()
                 ->route('admin.billing.index')
                 ->withErrors(['billing' => 'Default platform gateway credentials are not configured yet.']);
@@ -190,7 +194,7 @@ class BillingController extends Controller
         ]);
 
         try {
-            $checkout = $flutterwave->initializeCheckout(
+            $checkout = $gatewayService->initializeCheckout(
                 $payment->load(['tenant', 'billingPlan']),
                 route('admin.billing.payments.callback', ['tx_ref' => $payment->tx_ref])
             );
@@ -200,7 +204,7 @@ class BillingController extends Controller
                 'payload' => array_merge($payment->payload ?? [], [
                     'checkout_url' => $checkout['checkout_url'],
                     'gateway_init_response' => $checkout['response'],
-                    'flutterwave_init_response' => $checkout['response'],
+                    $payment->provider.'_init_response' => $checkout['response'],
                 ]),
             ]);
 
@@ -241,7 +245,7 @@ class BillingController extends Controller
 
         abort_unless($request->user()->isSuperAdmin() || $request->user()->tenant_id === $payment->tenant_id, 403);
 
-        if (! $this->statusIsSuccessful($request->query('status'))) {
+        if ($payment->provider !== PaymentGatewayCatalog::STRIPE && ! $this->statusIsSuccessful($request->query('status'))) {
             $payment->update(['status' => $request->query('status', 'failed')]);
 
             return redirect()->route('admin.billing.index')->withErrors(['billing' => 'Platform billing payment was not successful.']);
@@ -332,14 +336,13 @@ class BillingController extends Controller
         return redirect()->route('admin.billing.index')->with('status', 'Platform payment verified and subscription activated.');
     }
 
-    public function webhook(Request $request, PlatformFlutterwaveService $flutterwave): Response
+    public function webhook(Request $request, PlatformFlutterwaveService $flutterwave, PlatformStripeService $stripe): Response
     {
-        if (! $flutterwave->webhookIsValid($request->getContent(), $request->header('flutterwave-signature') ?: $request->header('verif-hash'))) {
-            abort(401);
-        }
-
         $payload = $request->all();
-        $txRef = data_get($payload, 'data.reference') ?: data_get($payload, 'data.tx_ref');
+        $txRef = data_get($payload, 'data.reference')
+            ?: data_get($payload, 'data.tx_ref')
+            ?: data_get($payload, 'data.object.client_reference_id')
+            ?: data_get($payload, 'data.object.metadata.payment_reference');
 
         if (blank($txRef)) {
             return response('ignored', 200);
@@ -350,7 +353,15 @@ class BillingController extends Controller
             ->first();
 
         if (! $payment) {
+            if (! $this->platformWebhookSignatureIsValid($request, $flutterwave, $stripe, app(PlatformPaymentSettingsService::class)->activeGateway())) {
+                abort(401);
+            }
+
             return response('ignored', 200);
+        }
+
+        if (! $this->platformWebhookSignatureIsValid($request, $flutterwave, $stripe, $payment->provider)) {
+            abort(401);
         }
 
         if ($payment->status === 'successful' && $payment->tenant_billing_subscription_id) {
@@ -360,6 +371,7 @@ class BillingController extends Controller
         $providerReference = data_get($payload, 'data.id')
             ?: data_get($payload, 'data.order.id')
             ?: data_get($payload, 'data.order_id')
+            ?: data_get($payload, 'data.object.id')
             ?: $payment->provider_reference;
 
         if (blank($providerReference)) {
@@ -377,7 +389,7 @@ class BillingController extends Controller
 
     private function providerReferenceFromRequest(Request $request): ?string
     {
-        foreach (['id', 'order_id', 'charge_id', 'transaction_id'] as $key) {
+        foreach (['session_id', 'id', 'order_id', 'charge_id', 'transaction_id'] as $key) {
             if (filled($request->query($key))) {
                 return (string) $request->query($key);
             }
@@ -422,5 +434,27 @@ class BillingController extends Controller
             'failed' => (clone $query)->whereIn('status', ['failed', 'verification_failed'])->count(),
             'revenue' => (clone $query)->where('status', 'successful')->sum('amount'),
         ];
+    }
+
+    private function platformGatewayIsConfigured(): bool
+    {
+        $settings = app(PlatformPaymentSettingsService::class);
+
+        if (! $settings->activeGatewayIsImplemented()) {
+            return false;
+        }
+
+        return $settings->activeGateway() === PaymentGatewayCatalog::STRIPE
+            ? app(PlatformStripeService::class)->isConfigured()
+            : app(PlatformFlutterwaveService::class)->isConfigured();
+    }
+
+    private function platformWebhookSignatureIsValid(Request $request, PlatformFlutterwaveService $flutterwave, PlatformStripeService $stripe, string $gateway): bool
+    {
+        if ($gateway === PaymentGatewayCatalog::STRIPE) {
+            return $stripe->webhookIsValid($request->getContent(), $request->header('stripe-signature'));
+        }
+
+        return $flutterwave->webhookIsValid($request->getContent(), $request->header('flutterwave-signature') ?: $request->header('verif-hash'));
     }
 }

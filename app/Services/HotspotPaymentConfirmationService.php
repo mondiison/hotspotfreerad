@@ -18,6 +18,7 @@ class HotspotPaymentConfirmationService
         private readonly PaystackService $paystack,
         private readonly RadiusProvisioningService $radius,
         private readonly SquadService $squad,
+        private readonly StripeService $stripe,
     ) {}
 
     public function verifyAndGrant(Payment $payment, string $providerReference, string $resourceType = 'order'): ?Subscription
@@ -103,6 +104,10 @@ class HotspotPaymentConfirmationService
             return $this->squadVerificationMatchesPayment($verification, $payment);
         }
 
+        if ($payment->provider === PaymentGatewayCatalog::STRIPE) {
+            return $this->stripeVerificationMatchesPayment($verification, $payment);
+        }
+
         return in_array(strtolower((string) data_get($verification, 'status')), ['success', 'successful', 'succeeded'], true)
             && $this->statusIsSuccessful(data_get($verification, 'data.status'))
             && (data_get($verification, 'data.reference') === $payment->tx_ref || data_get($verification, 'data.tx_ref') === $payment->tx_ref)
@@ -122,6 +127,10 @@ class HotspotPaymentConfirmationService
 
         if ($payment->provider === PaymentGatewayCatalog::SQUAD) {
             return $this->squad->verifyPayment($payment, $providerReference);
+        }
+
+        if ($payment->provider === PaymentGatewayCatalog::STRIPE) {
+            return $this->stripe->verifyPayment($payment, $providerReference);
         }
 
         return $this->flutterwave->verifyPayment($payment, $providerReference, $resourceType);
@@ -154,6 +163,16 @@ class HotspotPaymentConfirmationService
             && data_get($verification, 'data.transaction_ref') === $payment->tx_ref
             && (blank($currency) || strtoupper((string) $currency) === strtoupper($payment->currency))
             && ((float) data_get($verification, 'data.transaction_amount') / 100) >= (float) $payment->amount;
+    }
+
+    private function stripeVerificationMatchesPayment(array $verification, Payment $payment): bool
+    {
+        return data_get($verification, 'object') === 'checkout.session'
+            && $this->statusIsSuccessful(data_get($verification, 'payment_status'))
+            && (data_get($verification, 'client_reference_id') === $payment->tx_ref
+                || data_get($verification, 'metadata.payment_reference') === $payment->tx_ref)
+            && strtoupper((string) data_get($verification, 'currency')) === strtoupper($payment->currency)
+            && ((float) data_get($verification, 'amount_total') / 100) >= (float) $payment->amount;
     }
 
     private function statusIsSuccessful(mixed $status): bool

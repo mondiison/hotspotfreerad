@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\PlatformBillingPayment;
 use App\Models\TenantBillingSubscription;
+use App\Support\PaymentGatewayCatalog;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -11,6 +12,7 @@ class PlatformBillingConfirmationService
 {
     public function __construct(
         private readonly PlatformFlutterwaveService $flutterwave,
+        private readonly PlatformStripeService $stripe,
     ) {}
 
     public function verifyAndActivate(PlatformBillingPayment $payment, string $providerReference, string $resourceType = 'order'): bool
@@ -21,7 +23,9 @@ class PlatformBillingConfirmationService
             return true;
         }
 
-        $verification = $this->flutterwave->verifyPayment($providerReference, $resourceType);
+        $verification = $payment->provider === PaymentGatewayCatalog::STRIPE
+            ? $this->stripe->verifyPayment($providerReference)
+            : $this->flutterwave->verifyPayment($providerReference, $resourceType);
 
         if (! $this->verificationMatchesPayment($verification, $payment)) {
             $payment->update([
@@ -29,9 +33,10 @@ class PlatformBillingConfirmationService
                 'payload' => array_merge($payment->payload ?? [], ['verification' => $verification]),
             ]);
 
-            Log::warning('Flutterwave verification did not match platform billing payment', [
+            Log::warning('Platform billing gateway verification did not match payment', [
                 'payment_id' => $payment->id,
                 'tx_ref' => $payment->tx_ref,
+                'provider' => $payment->provider,
             ]);
 
             return false;
@@ -60,7 +65,7 @@ class PlatformBillingConfirmationService
                 'current_period_starts_at' => now(),
                 'current_period_ends_at' => now()->addMonth(),
                 'provider' => $payment->provider,
-                'provider_reference' => (string) (data_get($verification, 'data.id') ?: $payment->provider_reference),
+                'provider_reference' => (string) (data_get($verification, 'data.id') ?: data_get($verification, 'id') ?: $payment->provider_reference),
                 'payload' => [
                     'payment_id' => $payment->id,
                     'payment_reference' => $payment->tx_ref,
@@ -70,7 +75,7 @@ class PlatformBillingConfirmationService
             $payment->update([
                 'tenant_billing_subscription_id' => $subscription->id,
                 'status' => 'successful',
-                'provider_reference' => (string) (data_get($verification, 'data.id') ?: $payment->provider_reference),
+                'provider_reference' => (string) (data_get($verification, 'data.id') ?: data_get($verification, 'id') ?: $payment->provider_reference),
                 'paid_at' => now(),
                 'payload' => array_merge($payment->payload ?? [], ['verification' => $verification]),
             ]);
@@ -79,6 +84,15 @@ class PlatformBillingConfirmationService
 
     public function verificationMatchesPayment(array $verification, PlatformBillingPayment $payment): bool
     {
+        if ($payment->provider === PaymentGatewayCatalog::STRIPE) {
+            return data_get($verification, 'object') === 'checkout.session'
+                && $this->statusIsSuccessful(data_get($verification, 'payment_status'))
+                && (data_get($verification, 'client_reference_id') === $payment->tx_ref
+                    || data_get($verification, 'metadata.payment_reference') === $payment->tx_ref)
+                && strtoupper((string) data_get($verification, 'currency')) === strtoupper($payment->currency)
+                && ((float) data_get($verification, 'amount_total') / 100) >= (float) $payment->amount;
+        }
+
         return in_array(strtolower((string) data_get($verification, 'status')), ['success', 'successful', 'succeeded'], true)
             && $this->statusIsSuccessful(data_get($verification, 'data.status'))
             && (data_get($verification, 'data.reference') === $payment->tx_ref || data_get($verification, 'data.tx_ref') === $payment->tx_ref)
@@ -88,6 +102,6 @@ class PlatformBillingConfirmationService
 
     private function statusIsSuccessful(mixed $status): bool
     {
-        return in_array(strtolower((string) $status), ['success', 'successful', 'succeeded', 'completed'], true);
+        return in_array(strtolower((string) $status), ['success', 'successful', 'succeeded', 'completed', 'paid'], true);
     }
 }

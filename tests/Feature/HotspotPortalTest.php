@@ -1775,6 +1775,232 @@ class HotspotPortalTest extends TestCase
         Queue::assertPushed(VerifyHotspotPaymentWebhook::class);
     }
 
+    public function test_stripe_checkout_redirects_to_checkout_url(): void
+    {
+        config(['services.stripe.base_url' => 'https://api.stripe.com/v1']);
+        Http::fake([
+            'api.stripe.com/v1/checkout/sessions' => fn ($request) => Http::response([
+                'id' => 'cs_test_demo',
+                'object' => 'checkout.session',
+                'url' => 'https://checkout.stripe.com/c/pay/cs_test_demo',
+                'client_reference_id' => $request['client_reference_id'],
+            ]),
+        ]);
+
+        [$router, $package] = $this->routerWithPackage([
+            'payment_gateway_settings' => [
+                'stripe' => [
+                    'publishable_key' => 'pk_test_demo',
+                    'secret_key' => 'sk_test_demo',
+                    'webhook_secret' => 'whsec_demo',
+                ],
+            ],
+        ]);
+        $router->shop->update(['payment_gateway' => 'stripe']);
+
+        $this->post(route('hotspot.pay'), [
+            'mac' => 'AA:BB:CC:DD:EE:FF',
+            'nasid' => $router->nas_identifier,
+            'package_id' => $package->id,
+            'email' => 'customer@example.com',
+            'phone' => '08000000000',
+            'payment_method' => 'card',
+        ])
+            ->assertRedirect('https://checkout.stripe.com/c/pay/cs_test_demo');
+
+        $payment = Payment::firstOrFail();
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/checkout/sessions')
+            && $request->hasHeader('Authorization', 'Bearer sk_test_demo')
+            && $request['client_reference_id'] === $payment->tx_ref
+            && $request['customer_email'] === 'customer@example.com'
+            && $request['success_url'] === route('hotspot.payment.callback', ['tx_ref' => $payment->tx_ref]).'&session_id={CHECKOUT_SESSION_ID}'
+            && $request['line_items'][0]['price_data']['unit_amount'] === 50000
+            && $request['metadata']['tenant_name'] === 'Demo ISP'
+            && $request['metadata']['shop_name'] === 'Demo Shop'
+            && $request['metadata']['device_mac'] === 'AA:BB:CC:DD:EE:FF');
+
+        $this->assertSame('stripe', $payment->provider);
+        $this->assertSame('cs_test_demo', $payment->provider_reference);
+        $this->assertSame('https://checkout.stripe.com/c/pay/cs_test_demo', data_get($payment->payload, 'checkout_url'));
+    }
+
+    public function test_stripe_manual_verification_provisions_radius_access(): void
+    {
+        config(['services.stripe.base_url' => 'https://api.stripe.com/v1']);
+        [$router, $package] = $this->routerWithPackage([
+            'payment_gateway_settings' => [
+                'stripe' => [
+                    'publishable_key' => 'pk_test_demo',
+                    'secret_key' => 'sk_test_demo',
+                    'webhook_secret' => 'whsec_demo',
+                ],
+            ],
+        ]);
+
+        $payment = Payment::create([
+            'shop_id' => $router->shop_id,
+            'package_id' => $package->id,
+            'provider' => 'stripe',
+            'tx_ref' => 'HSF-STRIPE-VERIFY',
+            'provider_reference' => 'cs_test_verify',
+            'amount' => 500,
+            'gross_amount' => 500,
+            'platform_fee_amount' => 0,
+            'tenant_net_amount' => 500,
+            'currency' => 'NGN',
+            'status' => 'pending',
+            'payload' => [
+                'mac' => 'AA:BB:CC:DD:EE:FF',
+                'nasid' => $router->nas_identifier,
+                'link_login' => 'http://10.5.50.1/login',
+                'link_orig' => 'http://example.com',
+            ],
+        ]);
+
+        Http::fake([
+            'api.stripe.com/v1/checkout/sessions/cs_test_verify' => Http::response([
+                'id' => 'cs_test_verify',
+                'object' => 'checkout.session',
+                'payment_status' => 'paid',
+                'client_reference_id' => $payment->tx_ref,
+                'amount_total' => 50000,
+                'currency' => 'ngn',
+                'metadata' => [
+                    'payment_reference' => $payment->tx_ref,
+                ],
+            ]),
+        ]);
+
+        $this->post(route('hotspot.payment.verify'), [
+            'tx_ref' => $payment->tx_ref,
+        ])
+            ->assertOk()
+            ->assertSee('Access provisioned')
+            ->assertSee('Connecting this device...');
+
+        $this->assertDatabaseHas('payments', [
+            'id' => $payment->id,
+            'status' => 'successful',
+            'provider_reference' => 'cs_test_verify',
+        ]);
+        $this->assertDatabaseHas('subscriptions', [
+            'payment_id' => $payment->id,
+            'mac_address' => 'AA:BB:CC:DD:EE:FF',
+        ]);
+    }
+
+    public function test_stripe_callback_uses_session_id_and_provisions_access(): void
+    {
+        config(['services.stripe.base_url' => 'https://api.stripe.com/v1']);
+        [$router, $package] = $this->routerWithPackage([
+            'payment_gateway_settings' => [
+                'stripe' => [
+                    'publishable_key' => 'pk_test_demo',
+                    'secret_key' => 'sk_test_demo',
+                ],
+            ],
+        ]);
+
+        $payment = Payment::create([
+            'shop_id' => $router->shop_id,
+            'package_id' => $package->id,
+            'provider' => 'stripe',
+            'tx_ref' => 'HSF-STRIPE-CALLBACK',
+            'provider_reference' => 'cs_test_callback',
+            'amount' => 500,
+            'gross_amount' => 500,
+            'platform_fee_amount' => 0,
+            'tenant_net_amount' => 500,
+            'currency' => 'NGN',
+            'status' => 'pending',
+            'payload' => [
+                'mac' => 'AA:BB:CC:DD:EE:FF',
+                'nasid' => $router->nas_identifier,
+            ],
+        ]);
+
+        Http::fake([
+            'api.stripe.com/v1/checkout/sessions/cs_test_callback' => Http::response([
+                'id' => 'cs_test_callback',
+                'object' => 'checkout.session',
+                'payment_status' => 'paid',
+                'client_reference_id' => $payment->tx_ref,
+                'amount_total' => 50000,
+                'currency' => 'ngn',
+            ]),
+        ]);
+
+        $this->get(route('hotspot.payment.callback', [
+            'tx_ref' => $payment->tx_ref,
+            'session_id' => 'cs_test_callback',
+        ]))
+            ->assertOk()
+            ->assertSee('Access provisioned');
+
+        $this->assertDatabaseHas('payments', [
+            'id' => $payment->id,
+            'status' => 'successful',
+        ]);
+    }
+
+    public function test_stripe_webhook_validates_signature_and_dispatches_verification(): void
+    {
+        Queue::fake();
+        [$router, $package] = $this->routerWithPackage([
+            'payment_gateway_settings' => [
+                'stripe' => [
+                    'publishable_key' => 'pk_test_demo',
+                    'secret_key' => 'sk_test_demo',
+                    'webhook_secret' => 'whsec_demo',
+                ],
+            ],
+        ]);
+
+        Payment::create([
+            'shop_id' => $router->shop_id,
+            'package_id' => $package->id,
+            'provider' => 'stripe',
+            'tx_ref' => 'HSF-STRIPE-WEBHOOK',
+            'provider_reference' => 'cs_test_webhook',
+            'amount' => 500,
+            'gross_amount' => 500,
+            'platform_fee_amount' => 0,
+            'tenant_net_amount' => 500,
+            'currency' => 'NGN',
+            'status' => 'pending',
+            'payload' => [
+                'mac' => 'AA:BB:CC:DD:EE:FF',
+                'nasid' => $router->nas_identifier,
+            ],
+        ]);
+        $payload = [
+            'id' => 'evt_test_webhook',
+            'type' => 'checkout.session.completed',
+            'data' => [
+                'object' => [
+                    'id' => 'cs_test_webhook',
+                    'object' => 'checkout.session',
+                    'client_reference_id' => 'HSF-STRIPE-WEBHOOK',
+                    'payment_status' => 'paid',
+                    'metadata' => [
+                        'payment_reference' => 'HSF-STRIPE-WEBHOOK',
+                    ],
+                ],
+            ],
+        ];
+        $rawPayload = json_encode($payload);
+        $timestamp = '1785859200';
+
+        $this->postJson(route('hotspot.payment.webhook'), $payload, [
+            'stripe-signature' => 't='.$timestamp.',v1='.hash_hmac('sha256', $timestamp.'.'.$rawPayload, 'whsec_demo'),
+        ])
+            ->assertOk()
+            ->assertSee('ok');
+
+        Queue::assertPushed(VerifyHotspotPaymentWebhook::class);
+    }
+
     public function test_manual_bank_transfer_shows_tenant_bank_details(): void
     {
         [$router, $package] = $this->routerWithPackage([

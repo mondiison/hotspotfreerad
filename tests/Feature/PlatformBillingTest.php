@@ -7,9 +7,12 @@ use App\Livewire\Admin\BillingPlansManager;
 use App\Livewire\Admin\PlatformPaymentSettingsCard;
 use App\Models\BillingPlan;
 use App\Models\PlatformBillingPayment;
+use App\Models\PlatformSetting;
 use App\Models\Tenant;
 use App\Models\TenantBillingSubscription;
 use App\Models\User;
+use App\Services\PlatformPaymentSettingsService;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -489,6 +492,52 @@ class PlatformBillingTest extends TestCase
         $this->assertSame('chg_platform_123', $payment->provider_reference);
     }
 
+    public function test_tenant_admin_can_start_platform_stripe_subscription_checkout(): void
+    {
+        $this->configurePlatformStripe();
+        config(['services.stripe.base_url' => 'https://api.stripe.com/v1']);
+        Http::fake([
+            'api.stripe.com/v1/checkout/sessions' => fn ($request) => Http::response([
+                'id' => 'cs_platform_123',
+                'object' => 'checkout.session',
+                'url' => 'https://checkout.stripe.com/c/pay/cs_platform_123',
+                'client_reference_id' => $request['client_reference_id'],
+            ]),
+        ]);
+        $tenant = Tenant::create([
+            'company_name' => 'Tenant One',
+            'owner_email' => 'one@example.com',
+        ]);
+        $plan = BillingPlan::where('slug', 'growth')->firstOrFail();
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->post(route('admin.billing.payments.checkout'), [
+                'billing_plan_id' => $plan->id,
+            ])
+            ->assertRedirect('https://checkout.stripe.com/c/pay/cs_platform_123');
+
+        $payment = PlatformBillingPayment::firstOrFail();
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/checkout/sessions')
+            && $request->hasHeader('Authorization', 'Bearer sk_test_platform')
+            && $request['client_reference_id'] === $payment->tx_ref
+            && $request['customer_email'] === 'one@example.com'
+            && $request['line_items'][0]['price_data']['unit_amount'] === 3500000
+            && $request['metadata']['payment_type'] === 'platform_subscription'
+            && $request['metadata']['tenant_name'] === 'Tenant One'
+            && str_contains($request['success_url'], route('admin.billing.payments.callback'))
+            && str_contains($request['success_url'], 'session_id={CHECKOUT_SESSION_ID}'));
+
+        $this->assertSame('stripe', $payment->provider);
+        $this->assertSame('pending', $payment->status);
+        $this->assertSame('cs_platform_123', $payment->provider_reference);
+    }
+
     public function test_successful_platform_subscription_callback_activates_billing_subscription(): void
     {
         $this->configurePlatformFlutterwave();
@@ -549,6 +598,63 @@ class PlatformBillingTest extends TestCase
             'amount' => 15000,
             'currency' => 'NGN',
             'provider_reference' => 'ord_platform_123',
+        ]);
+    }
+
+    public function test_successful_platform_stripe_callback_activates_billing_subscription(): void
+    {
+        $this->configurePlatformStripe();
+        config(['services.stripe.base_url' => 'https://api.stripe.com/v1']);
+        $tenant = Tenant::create([
+            'company_name' => 'Tenant One',
+            'owner_email' => 'one@example.com',
+        ]);
+        $plan = BillingPlan::where('slug', 'starter')->firstOrFail();
+        $payment = PlatformBillingPayment::create([
+            'tenant_id' => $tenant->id,
+            'billing_plan_id' => $plan->id,
+            'provider' => 'stripe',
+            'tx_ref' => 'PBF-STRIPE-TEST-123',
+            'provider_reference' => 'cs_platform_callback',
+            'amount' => $plan->monthly_price,
+            'currency' => $plan->currency,
+            'status' => 'pending',
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+        Http::fake([
+            'api.stripe.com/v1/checkout/sessions/cs_platform_callback' => Http::response([
+                'id' => 'cs_platform_callback',
+                'object' => 'checkout.session',
+                'payment_status' => 'paid',
+                'client_reference_id' => $payment->tx_ref,
+                'amount_total' => 1500000,
+                'currency' => 'ngn',
+            ]),
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('admin.billing.payments.callback', [
+                'tx_ref' => $payment->tx_ref,
+                'session_id' => 'cs_platform_callback',
+            ]))
+            ->assertRedirect(route('admin.billing.index'));
+
+        $this->assertDatabaseHas('platform_billing_payments', [
+            'id' => $payment->id,
+            'status' => 'successful',
+            'provider_reference' => 'cs_platform_callback',
+        ]);
+        $this->assertDatabaseHas('tenant_billing_subscriptions', [
+            'tenant_id' => $tenant->id,
+            'billing_plan_id' => $plan->id,
+            'status' => 'active',
+            'amount' => 15000,
+            'currency' => 'NGN',
+            'provider_reference' => 'cs_platform_callback',
         ]);
     }
 
@@ -864,5 +970,21 @@ class PlatformBillingTest extends TestCase
             'services.flutterwave.default_payment_method' => 'opay',
             'services.flutterwave.webhook_secret_hash' => null,
         ]);
+    }
+
+    private function configurePlatformStripe(): void
+    {
+        PlatformSetting::query()->updateOrCreate(
+            ['key' => PlatformPaymentSettingsService::FLUTTERWAVE],
+            ['value' => [
+                'active_gateway' => 'stripe',
+                'client_id' => Crypt::encryptString('pk_test_platform'),
+                'client_secret' => Crypt::encryptString('sk_test_platform'),
+                'webhook_secret_hash' => Crypt::encryptString('whsec_platform'),
+                'default_payment_method' => 'card',
+            ]]
+        );
+
+        Cache::flush();
     }
 }

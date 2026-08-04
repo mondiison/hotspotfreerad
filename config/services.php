@@ -75,4 +75,8 @@ return [
         'base_url' => env('SQUAD_BASE_URL', 'https://sandbox-api-d.squadco.com'),
     ],
 
+    'stripe' => [
+        'base_url' => env('STRIPE_BASE_URL', 'https://api.stripe.com/v1'),
+    ],
+
 ];

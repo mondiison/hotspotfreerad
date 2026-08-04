@@ -17,6 +17,7 @@ use App\Services\PaystackService;
 use App\Services\Payments\HotspotHostedCheckoutManager;
 use App\Services\RadiusProvisioningService;
 use App\Services\SquadService;
+use App\Services\StripeService;
 use App\Services\VoucherManagementService;
 use App\Support\PaymentCommission;
 use App\Support\PaymentGatewayCatalog;
@@ -605,7 +606,7 @@ class PortalController extends Controller
             ]);
         }
 
-        if (! in_array($payment->provider, [PaymentGatewayCatalog::PAYSTACK, PaymentGatewayCatalog::MONNIFY, PaymentGatewayCatalog::SQUAD], true)
+        if (! in_array($payment->provider, [PaymentGatewayCatalog::PAYSTACK, PaymentGatewayCatalog::MONNIFY, PaymentGatewayCatalog::SQUAD, PaymentGatewayCatalog::STRIPE], true)
             && ! $this->statusIsSuccessful($request->query('status'))) {
             $payment->update(['status' => $request->query('status', 'failed')]);
 
@@ -655,13 +656,15 @@ class PortalController extends Controller
         ]);
     }
 
-    public function webhook(Request $request, FlutterwaveService $flutterwave, MonnifyService $monnify, PaystackService $paystack, SquadService $squad): Response
+    public function webhook(Request $request, FlutterwaveService $flutterwave, MonnifyService $monnify, PaystackService $paystack, SquadService $squad, StripeService $stripe): Response
     {
         $payload = $request->all();
         $txRef = data_get($payload, 'data.reference')
             ?: data_get($payload, 'data.tx_ref')
             ?: data_get($payload, 'data.transaction_ref')
-            ?: data_get($payload, 'eventData.paymentReference');
+            ?: data_get($payload, 'eventData.paymentReference')
+            ?: data_get($payload, 'data.object.client_reference_id')
+            ?: data_get($payload, 'data.object.metadata.payment_reference');
 
         if (blank($txRef)) {
             return response('ignored', 200);
@@ -685,6 +688,10 @@ class PortalController extends Controller
             if (! $squad->webhookIsValid($request->getContent(), $request->header('x-squad-encrypted-body'), $payment)) {
                 abort(401);
             }
+        } elseif ($payment->provider === PaymentGatewayCatalog::STRIPE) {
+            if (! $stripe->webhookIsValid($request->getContent(), $request->header('stripe-signature'), $payment)) {
+                abort(401);
+            }
         } elseif (! $flutterwave->webhookIsValid($request->header('verif-hash'), $payment)) {
             abort(401);
         }
@@ -694,6 +701,7 @@ class PortalController extends Controller
             ?: data_get($payload, 'data.order_id')
             ?: data_get($payload, 'data.transaction_ref')
             ?: data_get($payload, 'eventData.transactionReference')
+            ?: data_get($payload, 'data.object.id')
             ?: $payment->provider_reference
             ?: $txRef;
 
@@ -712,7 +720,7 @@ class PortalController extends Controller
 
     private function providerReferenceFromRequest(Request $request): ?string
     {
-        foreach (['paymentReference', 'transactionReference', 'transaction_ref', 'reference', 'id', 'order_id', 'charge_id', 'transaction_id'] as $key) {
+        foreach (['paymentReference', 'transactionReference', 'transaction_ref', 'reference', 'session_id', 'id', 'order_id', 'charge_id', 'transaction_id'] as $key) {
             if (filled($request->query($key))) {
                 return (string) $request->query($key);
             }

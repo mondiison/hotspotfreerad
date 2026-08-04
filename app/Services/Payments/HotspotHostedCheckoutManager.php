@@ -7,6 +7,7 @@ use App\Services\MonnifyService;
 use App\Services\PaystackService;
 use App\Services\Payments\Contracts\HotspotHostedGateway;
 use App\Services\SquadService;
+use App\Services\StripeService;
 use App\Support\PaymentGatewayCatalog;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Log;
@@ -18,6 +19,7 @@ class HotspotHostedCheckoutManager
         private readonly MonnifyService $monnify,
         private readonly PaystackService $paystack,
         private readonly SquadService $squad,
+        private readonly StripeService $stripe,
     ) {}
 
     public function supports(Payment $payment): bool
@@ -26,6 +28,7 @@ class HotspotHostedCheckoutManager
             PaymentGatewayCatalog::MONNIFY,
             PaymentGatewayCatalog::PAYSTACK,
             PaymentGatewayCatalog::SQUAD,
+            PaymentGatewayCatalog::STRIPE,
         ], true);
     }
 
@@ -90,6 +93,7 @@ class HotspotHostedCheckoutManager
         return match ($payment->provider) {
             PaymentGatewayCatalog::MONNIFY => $this->monnify,
             PaymentGatewayCatalog::SQUAD => $this->squad,
+            PaymentGatewayCatalog::STRIPE => $this->stripe,
             default => $this->paystack,
         };
     }
@@ -99,6 +103,7 @@ class HotspotHostedCheckoutManager
         return match ($payment->provider) {
             PaymentGatewayCatalog::MONNIFY => route('hotspot.payment.callback', ['paymentReference' => $payment->tx_ref]),
             PaymentGatewayCatalog::SQUAD => route('hotspot.payment.callback', ['transaction_ref' => $payment->tx_ref]),
+            PaymentGatewayCatalog::STRIPE => route('hotspot.payment.callback', ['tx_ref' => $payment->tx_ref]),
             default => route('hotspot.payment.callback'),
         };
     }
