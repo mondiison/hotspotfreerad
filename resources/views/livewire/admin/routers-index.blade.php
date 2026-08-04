@@ -177,6 +177,13 @@
                         </flux:field>
 
                         <flux:field>
+                            <flux:label>Pi/management port</flux:label>
+                            <flux:input wire:model.blur="provisioning_settings.pi_port" placeholder="ether3" />
+                            <flux:description>Untagged management VLAN access for the Raspberry Pi.</flux:description>
+                            <flux:error name="provisioning_settings.pi_port" />
+                        </flux:field>
+
+                        <flux:field>
                             <flux:label>Built-in Wi-Fi</flux:label>
                             <flux:input wire:model.blur="provisioning_settings.builtin_wifi_interface" placeholder="wifi1" />
                             <flux:description>For L009UiGS testing, use <code>wifi1</code> as the open hotspot SSID.</flux:description>
@@ -249,6 +256,24 @@
                     </div>
 
                     <div class="mt-4 grid gap-4 md:grid-cols-3">
+                        <flux:field>
+                            <flux:label>Management gateway</flux:label>
+                            <flux:input wire:model.blur="provisioning_settings.mgmt_gateway" placeholder="192.168.10.1/24" />
+                            <flux:error name="provisioning_settings.mgmt_gateway" />
+                        </flux:field>
+
+                        <flux:field>
+                            <flux:label>Management network</flux:label>
+                            <flux:input wire:model.blur="provisioning_settings.mgmt_network" placeholder="192.168.10.0/24" />
+                            <flux:error name="provisioning_settings.mgmt_network" />
+                        </flux:field>
+
+                        <flux:field>
+                            <flux:label>Management DHCP pool</flux:label>
+                            <flux:input wire:model.blur="provisioning_settings.mgmt_pool" placeholder="192.168.10.10-192.168.10.250" />
+                            <flux:error name="provisioning_settings.mgmt_pool" />
+                        </flux:field>
+
                         <flux:field>
                             <flux:label>Hotspot gateway</flux:label>
                             <flux:input wire:model.blur="provisioning_settings.hotspot_gateway" placeholder="10.5.50.1/23" />

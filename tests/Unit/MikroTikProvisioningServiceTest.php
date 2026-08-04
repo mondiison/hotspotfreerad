@@ -90,6 +90,10 @@ class MikroTikProvisioningServiceTest extends TestCase
         $this->assertStringContainsString('Profile: Starlink plaza / high concurrency', $script);
         $this->assertStringContainsString('/interface vlan add interface=$lanBridge name=vlan-hotspot vlan-id=$hotspotVlan', $script);
         $this->assertStringContainsString('/interface vlan add interface=$lanBridge name=vlan-pos vlan-id=$posVlan', $script);
+        $this->assertStringContainsString(':global piPort "ether3"', $script);
+        $this->assertStringContainsString('/interface bridge port add bridge=$lanBridge interface=$piPort pvid=$mgmtVlan', $script);
+        $this->assertStringContainsString('/interface bridge vlan add bridge=bridge-lan tagged=bridge-lan,ether2 untagged=ether3 vlan-ids=10', $script);
+        $this->assertStringContainsString('/ip dhcp-server add name=dhcp-mgmt interface=vlan-mgmt', $script);
         $this->assertStringContainsString('/ip dhcp-client add interface=$wan1 add-default-route=yes use-peer-dns=no disabled=no', $script);
         $this->assertStringContainsString('/ip dhcp-server add name=dhcp-hotspot interface=vlan-hotspot', $script);
         $this->assertStringContainsString('/ip hotspot add name=mms-hotspot interface=vlan-hotspot', $script);
@@ -121,7 +125,11 @@ class MikroTikProvisioningServiceTest extends TestCase
                 'profile' => 'small_hotspot',
                 'wan1' => 'ether5',
                 'trunk_port' => 'sfp-sfpplus1',
+                'pi_port' => 'ether6',
                 'hotspot_vlan' => 120,
+                'mgmt_gateway' => '192.168.88.1/24',
+                'mgmt_network' => '192.168.88.0/24',
+                'mgmt_pool' => '192.168.88.10-192.168.88.100',
                 'hotspot_gateway' => '10.20.0.1/22',
                 'hotspot_network' => '10.20.0.0/22',
                 'hotspot_pool' => '10.20.0.10-10.20.3.250',
@@ -137,10 +145,14 @@ class MikroTikProvisioningServiceTest extends TestCase
 
         $this->assertStringContainsString(':global wan1 "ether5"', $script);
         $this->assertStringContainsString(':global trunkPort "sfp-sfpplus1"', $script);
+        $this->assertStringContainsString(':global piPort "ether6"', $script);
         $this->assertStringContainsString(':global hotspotVlan "120"', $script);
+        $this->assertStringContainsString(':global mgmtGateway "192.168.88.1/24"', $script);
+        $this->assertStringContainsString(':global mgmtPool "192.168.88.10-192.168.88.100"', $script);
         $this->assertStringContainsString(':global hotspotGateway "10.20.0.1/22"', $script);
         $this->assertStringContainsString(':global hotspotPool "10.20.0.10-10.20.3.250"', $script);
-        $this->assertStringContainsString('vlan-ids=10,120,30', $script);
+        $this->assertStringContainsString('untagged=ether6 vlan-ids=10', $script);
+        $this->assertStringContainsString('vlan-ids=120,30', $script);
         $this->assertStringContainsString('POS VLAN is disabled', $script);
         $this->assertStringContainsString('PPPoE is disabled', $script);
         $this->assertStringContainsString('Realtime QoS and PCQ are disabled', $script);
@@ -179,10 +191,13 @@ class MikroTikProvisioningServiceTest extends TestCase
         $this->assertStringContainsString(':global builtinWifiInterface "wifi1"', $script);
         $this->assertStringContainsString('/interface wifi configuration add name=mms-open-hotspot-cfg mode=ap ssid="MMS Hotspot"', $script);
         $this->assertStringContainsString('/interface bridge port add bridge=$lanBridge interface=$builtinWifiInterface pvid=$hotspotVlan', $script);
+        $this->assertStringContainsString('/interface bridge port add bridge=$lanBridge interface=$piPort pvid=$mgmtVlan', $script);
+        $this->assertStringContainsString('/interface bridge vlan add bridge=bridge-lan tagged=bridge-lan,ether2 untagged=ether3 vlan-ids=10', $script);
         $this->assertStringContainsString('/interface bridge vlan add bridge=bridge-lan tagged=bridge-lan,ether2 untagged=wifi1 vlan-ids=20', $script);
+        $this->assertStringContainsString('/ip address add address=$mgmtGateway interface=vlan-mgmt', $script);
         $this->assertStringContainsString('/ip dhcp-server add name=dhcp-hotspot interface=vlan-hotspot', $script);
         $this->assertStringContainsString('Do not attach hotspot DHCP directly to wifi1/ether ports', $script);
-        $this->assertStringContainsString('vlan-ids=10,30', $script);
+        $this->assertStringContainsString('vlan-ids=30', $script);
         $this->assertStringContainsString('POS VLAN is disabled', $script);
         $this->assertStringContainsString('PPPoE is disabled', $script);
     }

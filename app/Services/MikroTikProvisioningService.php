@@ -114,20 +114,27 @@ SCRIPT;
             $settings['enable_pos'] ? $settings['pos_vlan'] : null,
         ]);
 
-        $taggedVlans = implode(',', $allVlans);
+        $taggedVlans = implode(',', array_filter(
+            $allVlans,
+            fn ($vlan): bool => (string) $vlan !== (string) $settings['mgmt_vlan']
+        ));
         $nonHotspotTaggedVlans = implode(',', array_filter(
             $allVlans,
-            fn ($vlan): bool => (string) $vlan !== (string) $settings['hotspot_vlan']
+            fn ($vlan): bool => ! in_array((string) $vlan, [(string) $settings['mgmt_vlan'], (string) $settings['hotspot_vlan']], true)
         ));
         $lanBridgeName = 'bridge-lan';
         $taggedPorts = $lanBridgeName.','.$settings['trunk_port'];
 
         $bridgeVlanLines = $enableBuiltinWifi
             ? array_filter([
+                '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' untagged='.$settings['pi_port'].' vlan-ids='.$settings['mgmt_vlan'],
                 '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' untagged='.$builtinWifiInterface.' vlan-ids='.$settings['hotspot_vlan'],
                 $nonHotspotTaggedVlans !== '' ? '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' vlan-ids='.$nonHotspotTaggedVlans : null,
             ])
-            : ['/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' vlan-ids='.$taggedVlans];
+            : array_filter([
+                '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' untagged='.$settings['pi_port'].' vlan-ids='.$settings['mgmt_vlan'],
+                $taggedVlans !== '' ? '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' vlan-ids='.$taggedVlans : null,
+            ]);
 
         $secondWanMember = $settings['enable_second_wan']
             ? '/interface list member add list=WAN interface=$wan2'
@@ -207,12 +214,16 @@ SCRIPT;
             ':global wan2 "'.$settings['wan2'].'"',
             ':global lanBridge "bridge-lan"',
             ':global trunkPort "'.$settings['trunk_port'].'"',
+            ':global piPort "'.$settings['pi_port'].'"',
             ':global builtinWifiInterface "'.$builtinWifiInterface.'"',
             ':global mgmtVlan "'.$settings['mgmt_vlan'].'"',
             ':global hotspotVlan "'.$settings['hotspot_vlan'].'"',
             ':global staffVlan "'.$settings['staff_vlan'].'"',
             ':global pppoeVlan "'.$settings['pppoe_vlan'].'"',
             ':global posVlan "'.$settings['pos_vlan'].'"',
+            ':global mgmtGateway "'.$settings['mgmt_gateway'].'"',
+            ':global mgmtNetwork "'.$settings['mgmt_network'].'"',
+            ':global mgmtPool "'.$settings['mgmt_pool'].'"',
             ':global hotspotGateway "'.$settings['hotspot_gateway'].'"',
             ':global hotspotNetwork "'.$settings['hotspot_network'].'"',
             ':global hotspotPool "'.$settings['hotspot_pool'].'"',
@@ -235,6 +246,7 @@ SCRIPT;
             '/ip dhcp-client add interface=$wan1 add-default-route=yes use-peer-dns=no disabled=no comment="Get WAN IP/default route from Starlink or ISP router"',
             '/interface bridge add name=$lanBridge protocol-mode=rstp vlan-filtering=no comment="MMS Radius LAN bridge"',
             '/interface bridge port add bridge=$lanBridge interface=$trunkPort comment="AP/switch trunk carrying MMS Radius VLANs"',
+            '/interface bridge port add bridge=$lanBridge interface=$piPort pvid=$mgmtVlan comment="Pi/management access port, untagged VLAN 10 by default"',
             '/interface vlan add interface=$lanBridge name=vlan-mgmt vlan-id=$mgmtVlan',
             '/interface vlan add interface=$lanBridge name=vlan-hotspot vlan-id=$hotspotVlan',
             '/interface vlan add interface=$lanBridge name=vlan-staff vlan-id=$staffVlan',
@@ -247,6 +259,12 @@ SCRIPT;
             '/interface wireguard peers add interface=wg-saas public-key="'.$wgPublicKey.'" endpoint-address='.$wgEndpointHost.' endpoint-port='.$wgEndpointPort.' allowed-address=10.8.0.1/32 persistent-keepalive=25s',
             '/ip address add address='.$router->wireguard_internal_ip.'/24 interface=wg-saas comment="MMS Radius WireGuard IP"',
             '/radius add address='.$radiusIp.' secret="'.$sharedSecret.'" service=hotspot,ppp authentication-port='.$authPort.' accounting-port='.$acctPort.' timeout=1000ms',
+            '',
+            '/ip address add address=$mgmtGateway interface=vlan-mgmt comment="Management VLAN for Pi, router, AP, and switch administration"',
+            '/ip pool add name=pool-mgmt ranges=$mgmtPool',
+            '/ip dhcp-server add name=dhcp-mgmt interface=vlan-mgmt address-pool=pool-mgmt lease-time=8h disabled=no',
+            '/ip dhcp-server network add address=$mgmtNetwork gateway='.str($settings['mgmt_gateway'])->before('/').' dns-server='.str($settings['mgmt_gateway'])->before('/'),
+            '# Connect the Raspberry Pi to $piPort. It should receive an address from $mgmtPool.',
             '',
             '/ip address add address=$hotspotGateway interface=vlan-hotspot comment="Open customer hotspot VLAN"',
             '/ip pool add name=pool-hotspot ranges=$hotspotPool',
@@ -401,6 +419,7 @@ HTML;
             'wan2' => $this->profileDefaults($profile)['wan2'],
             'trunk_port' => $this->profileDefaults($profile)['trunk_port'],
             'builtin_wifi_interface' => 'wifi1',
+            'pi_port' => 'ether3',
             'download_limit' => $this->profileDefaults($profile)['download_limit'],
             'upload_limit' => $this->profileDefaults($profile)['upload_limit'],
             'mgmt_vlan' => 10,
@@ -408,6 +427,9 @@ HTML;
             'staff_vlan' => 30,
             'pppoe_vlan' => 40,
             'pos_vlan' => 50,
+            'mgmt_gateway' => '192.168.10.1/24',
+            'mgmt_network' => '192.168.10.0/24',
+            'mgmt_pool' => '192.168.10.10-192.168.10.250',
             'hotspot_gateway' => '10.5.50.1/23',
             'hotspot_network' => '10.5.50.0/23',
             'hotspot_pool' => '10.5.50.10-10.5.51.250',

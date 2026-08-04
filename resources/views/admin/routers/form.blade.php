@@ -99,6 +99,13 @@
                     </flux:field>
 
                     <flux:field>
+                        <flux:label>Pi/management port</flux:label>
+                        <flux:input name="provisioning_settings[pi_port]" value="{{ $settings['pi_port'] ?? 'ether3' }}" placeholder="ether3" />
+                        <flux:description>Untagged management VLAN access for the Raspberry Pi.</flux:description>
+                        <flux:error name="provisioning_settings.pi_port" />
+                    </flux:field>
+
+                    <flux:field>
                         <flux:label>Built-in Wi-Fi</flux:label>
                         <flux:input name="provisioning_settings[builtin_wifi_interface]" value="{{ $settings['builtin_wifi_interface'] ?? 'wifi1' }}" placeholder="wifi1" />
                         <flux:description>For L009UiGS testing, use <code>wifi1</code> as the open hotspot SSID.</flux:description>
@@ -138,17 +145,17 @@
                         <flux:button
                             type="button"
                             size="xs"
-                            data-set-fields='{"provisioning_settings[profile]":"l009_builtin_wifi","provisioning_settings[wan1]":"ether1","provisioning_settings[wan2]":"ether7","provisioning_settings[trunk_port]":"ether2","provisioning_settings[builtin_wifi_interface]":"wifi1","provisioning_settings[download_limit]":"80M","provisioning_settings[upload_limit]":"15M","provisioning_settings[hotspot_gateway]":"10.5.50.1/24","provisioning_settings[hotspot_network]":"10.5.50.0/24","provisioning_settings[hotspot_pool]":"10.5.50.10-10.5.50.250","provisioning_settings[enable_builtin_wifi]":"1","provisioning_settings[enable_pos]":"0","provisioning_settings[enable_pppoe]":"0","provisioning_settings[enable_realtime_qos]":"1","provisioning_settings[enable_second_wan]":"0"}'
+                            data-set-fields='{"provisioning_settings[profile]":"l009_builtin_wifi","provisioning_settings[wan1]":"ether1","provisioning_settings[wan2]":"ether7","provisioning_settings[trunk_port]":"ether2","provisioning_settings[pi_port]":"ether3","provisioning_settings[builtin_wifi_interface]":"wifi1","provisioning_settings[download_limit]":"80M","provisioning_settings[upload_limit]":"15M","provisioning_settings[hotspot_gateway]":"10.5.50.1/24","provisioning_settings[hotspot_network]":"10.5.50.0/24","provisioning_settings[hotspot_pool]":"10.5.50.10-10.5.50.250","provisioning_settings[enable_builtin_wifi]":"1","provisioning_settings[enable_pos]":"0","provisioning_settings[enable_pppoe]":"0","provisioning_settings[enable_realtime_qos]":"1","provisioning_settings[enable_second_wan]":"0"}'
                         >L009 lab Wi-Fi</flux:button>
                         <flux:button
                             type="button"
                             size="xs"
-                            data-set-fields='{"provisioning_settings[profile]":"starlink_plaza","provisioning_settings[wan1]":"ether1","provisioning_settings[wan2]":"ether8","provisioning_settings[trunk_port]":"ether2","provisioning_settings[builtin_wifi_interface]":"wifi1","provisioning_settings[download_limit]":"120M","provisioning_settings[upload_limit]":"20M","provisioning_settings[hotspot_gateway]":"10.5.50.1/23","provisioning_settings[hotspot_network]":"10.5.50.0/23","provisioning_settings[hotspot_pool]":"10.5.50.10-10.5.51.250","provisioning_settings[enable_builtin_wifi]":"0","provisioning_settings[enable_pos]":"1","provisioning_settings[enable_pppoe]":"1","provisioning_settings[enable_realtime_qos]":"1"}'
+                            data-set-fields='{"provisioning_settings[profile]":"starlink_plaza","provisioning_settings[wan1]":"ether1","provisioning_settings[wan2]":"ether8","provisioning_settings[trunk_port]":"ether2","provisioning_settings[pi_port]":"ether3","provisioning_settings[builtin_wifi_interface]":"wifi1","provisioning_settings[download_limit]":"120M","provisioning_settings[upload_limit]":"20M","provisioning_settings[hotspot_gateway]":"10.5.50.1/23","provisioning_settings[hotspot_network]":"10.5.50.0/23","provisioning_settings[hotspot_pool]":"10.5.50.10-10.5.51.250","provisioning_settings[enable_builtin_wifi]":"0","provisioning_settings[enable_pos]":"1","provisioning_settings[enable_pppoe]":"1","provisioning_settings[enable_realtime_qos]":"1"}'
                         >Plaza VLAN /23</flux:button>
                         <flux:button
                             type="button"
                             size="xs"
-                            data-set-fields='{"provisioning_settings[profile]":"small_hotspot","provisioning_settings[wan1]":"ether1","provisioning_settings[wan2]":"ether8","provisioning_settings[trunk_port]":"ether2","provisioning_settings[download_limit]":"80M","provisioning_settings[upload_limit]":"15M","provisioning_settings[hotspot_gateway]":"10.5.50.1/24","provisioning_settings[hotspot_network]":"10.5.50.0/24","provisioning_settings[hotspot_pool]":"10.5.50.10-10.5.50.250","provisioning_settings[enable_builtin_wifi]":"0","provisioning_settings[enable_pos]":"1","provisioning_settings[enable_pppoe]":"0","provisioning_settings[enable_realtime_qos]":"1"}'
+                            data-set-fields='{"provisioning_settings[profile]":"small_hotspot","provisioning_settings[wan1]":"ether1","provisioning_settings[wan2]":"ether8","provisioning_settings[trunk_port]":"ether2","provisioning_settings[pi_port]":"ether3","provisioning_settings[download_limit]":"80M","provisioning_settings[upload_limit]":"15M","provisioning_settings[hotspot_gateway]":"10.5.50.1/24","provisioning_settings[hotspot_network]":"10.5.50.0/24","provisioning_settings[hotspot_pool]":"10.5.50.10-10.5.50.250","provisioning_settings[enable_builtin_wifi]":"0","provisioning_settings[enable_pos]":"1","provisioning_settings[enable_pppoe]":"0","provisioning_settings[enable_realtime_qos]":"1"}'
                         >Small AP /24</flux:button>
                     </div>
                 </div>
@@ -171,6 +178,9 @@
 
                 <div class="mt-4 grid gap-4 md:grid-cols-3">
                     @foreach ([
+                        'mgmt_gateway' => ['Management gateway', '192.168.10.1/24'],
+                        'mgmt_network' => ['Management network', '192.168.10.0/24'],
+                        'mgmt_pool' => ['Management DHCP pool', '192.168.10.10-192.168.10.250'],
                         'hotspot_gateway' => ['Hotspot gateway', '10.5.50.1/23'],
                         'hotspot_network' => ['Hotspot network', '10.5.50.0/23'],
                         'hotspot_pool' => ['Hotspot DHCP pool', '10.5.50.10-10.5.51.250'],
