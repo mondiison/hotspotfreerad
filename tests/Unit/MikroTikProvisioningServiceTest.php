@@ -102,6 +102,8 @@ class MikroTikProvisioningServiceTest extends TestCase
         $this->assertStringContainsString('Realtime voice/video small UDP upload', $script);
         $this->assertStringContainsString('MMS POS = WPA2/WPA3 SSID tagged VLAN 50', $script);
         $this->assertStringContainsString('/system scheduler add name=mms-refresh-bandwidth interval=10m', $script);
+        $this->assertStringNotContainsString('/interface wifi add name=$staffWifiInterface', $script);
+        $this->assertStringNotContainsString('ssid="MMS Staff"', $script);
     }
 
     public function test_fresh_infrastructure_script_uses_router_specific_settings(): void
@@ -189,16 +191,29 @@ class MikroTikProvisioningServiceTest extends TestCase
         $this->assertStringContainsString('Profile: L009 built-in Wi-Fi test router', $script);
         $this->assertStringContainsString(':global wan2 "ether7"', $script);
         $this->assertStringContainsString(':global builtinWifiInterface "wifi1"', $script);
+        $this->assertStringContainsString(':global staffWifiInterface "wifi-staff"', $script);
+        $this->assertStringContainsString(':global posWifiInterface "wifi-pos"', $script);
+        $this->assertStringContainsString(':global mgmtWifiInterface "wifi-mgmt"', $script);
         $this->assertStringContainsString('/interface wifi configuration add name=mms-open-hotspot-cfg mode=ap ssid="MMS Hotspot"', $script);
+        $this->assertStringContainsString('/interface wifi configuration add name=mms-staff-cfg mode=ap ssid="MMS Staff"', $script);
+        $this->assertStringContainsString('/interface wifi configuration add name=mms-pos-cfg mode=ap ssid="MMS POS"', $script);
+        $this->assertStringContainsString('/interface wifi configuration add name=mms-mgmt-cfg mode=ap ssid="MMS Mgmt"', $script);
+        $this->assertStringContainsString('/interface wifi add name=$staffWifiInterface master-interface=$builtinWifiInterface configuration=mms-staff-cfg disabled=no', $script);
+        $this->assertStringContainsString('/interface wifi add name=$posWifiInterface master-interface=$builtinWifiInterface configuration=mms-pos-cfg disabled=no', $script);
+        $this->assertStringContainsString('/interface wifi add name=$mgmtWifiInterface master-interface=$builtinWifiInterface configuration=mms-mgmt-cfg disabled=no', $script);
         $this->assertStringContainsString('/interface bridge port add bridge=$lanBridge interface=$builtinWifiInterface pvid=$hotspotVlan', $script);
+        $this->assertStringContainsString('/interface bridge port add bridge=$lanBridge interface=$staffWifiInterface pvid=$staffVlan', $script);
+        $this->assertStringContainsString('/interface bridge port add bridge=$lanBridge interface=$posWifiInterface pvid=$posVlan', $script);
+        $this->assertStringContainsString('/interface bridge port add bridge=$lanBridge interface=$mgmtWifiInterface pvid=$mgmtVlan', $script);
         $this->assertStringContainsString('/interface bridge port add bridge=$lanBridge interface=$piPort pvid=$mgmtVlan', $script);
-        $this->assertStringContainsString('/interface bridge vlan add bridge=bridge-lan tagged=bridge-lan,ether2 untagged=ether3 vlan-ids=10', $script);
+        $this->assertStringContainsString('/interface bridge vlan add bridge=bridge-lan tagged=bridge-lan,ether2 untagged=ether3,wifi-mgmt vlan-ids=10', $script);
         $this->assertStringContainsString('/interface bridge vlan add bridge=bridge-lan tagged=bridge-lan,ether2 untagged=wifi1 vlan-ids=20', $script);
+        $this->assertStringContainsString('/interface bridge vlan add bridge=bridge-lan tagged=bridge-lan,ether2 untagged=wifi-staff vlan-ids=30', $script);
+        $this->assertStringContainsString('/interface bridge vlan add bridge=bridge-lan tagged=bridge-lan,ether2 untagged=wifi-pos vlan-ids=50', $script);
         $this->assertStringContainsString('/ip address add address=$mgmtGateway interface=vlan-mgmt', $script);
         $this->assertStringContainsString('/ip dhcp-server add name=dhcp-hotspot interface=vlan-hotspot', $script);
         $this->assertStringContainsString('Do not attach hotspot DHCP directly to wifi1/ether ports', $script);
-        $this->assertStringContainsString('vlan-ids=30', $script);
-        $this->assertStringContainsString('POS VLAN is disabled', $script);
+        $this->assertStringContainsString('/ip dhcp-server add name=dhcp-pos interface=vlan-pos', $script);
         $this->assertStringContainsString('PPPoE is disabled', $script);
     }
 

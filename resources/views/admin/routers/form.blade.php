@@ -113,6 +113,27 @@
                     </flux:field>
 
                     <flux:field>
+                        <flux:label>Staff Wi-Fi password</flux:label>
+                        <flux:input name="provisioning_settings[staff_wifi_password]" value="{{ $settings['staff_wifi_password'] ?? 'MmsStaff2026!' }}" placeholder="MmsStaff2026!" viewable />
+                        <flux:description>Used only when built-in Wi-Fi SSIDs are generated.</flux:description>
+                        <flux:error name="provisioning_settings.staff_wifi_password" />
+                    </flux:field>
+
+                    <flux:field>
+                        <flux:label>POS Wi-Fi password</flux:label>
+                        <flux:input name="provisioning_settings[pos_wifi_password]" value="{{ $settings['pos_wifi_password'] ?? 'MmsPos2026!' }}" placeholder="MmsPos2026!" viewable />
+                        <flux:description>Use for POS SSID testing before external AP rollout.</flux:description>
+                        <flux:error name="provisioning_settings.pos_wifi_password" />
+                    </flux:field>
+
+                    <flux:field>
+                        <flux:label>Mgmt Wi-Fi password</flux:label>
+                        <flux:input name="provisioning_settings[mgmt_wifi_password]" value="{{ $settings['mgmt_wifi_password'] ?? 'MmsMgmt2026!' }}" placeholder="MmsMgmt2026!" viewable />
+                        <flux:description>For lab access to the management VLAN.</flux:description>
+                        <flux:error name="provisioning_settings.mgmt_wifi_password" />
+                    </flux:field>
+
+                    <flux:field>
                         <flux:label>Download limit</flux:label>
                         <flux:input name="provisioning_settings[download_limit]" value="{{ $settings['download_limit'] ?? '120M' }}" placeholder="120M" />
                         <flux:error name="provisioning_settings.download_limit" />
@@ -145,7 +166,7 @@
                         <flux:button
                             type="button"
                             size="xs"
-                            data-set-fields='{"provisioning_settings[profile]":"l009_builtin_wifi","provisioning_settings[wan1]":"ether1","provisioning_settings[wan2]":"ether7","provisioning_settings[trunk_port]":"ether2","provisioning_settings[pi_port]":"ether3","provisioning_settings[builtin_wifi_interface]":"wifi1","provisioning_settings[download_limit]":"80M","provisioning_settings[upload_limit]":"15M","provisioning_settings[hotspot_gateway]":"10.5.50.1/24","provisioning_settings[hotspot_network]":"10.5.50.0/24","provisioning_settings[hotspot_pool]":"10.5.50.10-10.5.50.250","provisioning_settings[enable_builtin_wifi]":"1","provisioning_settings[enable_pos]":"0","provisioning_settings[enable_pppoe]":"0","provisioning_settings[enable_realtime_qos]":"1","provisioning_settings[enable_second_wan]":"0"}'
+                            data-set-fields='{"provisioning_settings[profile]":"l009_builtin_wifi","provisioning_settings[wan1]":"ether1","provisioning_settings[wan2]":"ether7","provisioning_settings[trunk_port]":"ether2","provisioning_settings[pi_port]":"ether3","provisioning_settings[builtin_wifi_interface]":"wifi1","provisioning_settings[staff_wifi_password]":"MmsStaff2026!","provisioning_settings[pos_wifi_password]":"MmsPos2026!","provisioning_settings[mgmt_wifi_password]":"MmsMgmt2026!","provisioning_settings[download_limit]":"80M","provisioning_settings[upload_limit]":"15M","provisioning_settings[hotspot_gateway]":"10.5.50.1/24","provisioning_settings[hotspot_network]":"10.5.50.0/24","provisioning_settings[hotspot_pool]":"10.5.50.10-10.5.50.250","provisioning_settings[enable_builtin_wifi]":"1","provisioning_settings[enable_pos]":"1","provisioning_settings[enable_pppoe]":"0","provisioning_settings[enable_realtime_qos]":"1","provisioning_settings[enable_second_wan]":"0"}'
                         >L009 lab Wi-Fi</flux:button>
                         <flux:button
                             type="button"

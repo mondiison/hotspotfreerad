@@ -105,6 +105,9 @@ SCRIPT;
         $hotspotDnsName = config('services.mikrotik.hotspot_dns_name');
         $enableBuiltinWifi = (bool) $settings['enable_builtin_wifi'];
         $builtinWifiInterface = $settings['builtin_wifi_interface'];
+        $staffWifiInterface = 'wifi-staff';
+        $posWifiInterface = 'wifi-pos';
+        $mgmtWifiInterface = 'wifi-mgmt';
 
         $allVlans = array_filter([
             $settings['mgmt_vlan'],
@@ -118,19 +121,11 @@ SCRIPT;
             $allVlans,
             fn ($vlan): bool => (string) $vlan !== (string) $settings['mgmt_vlan']
         ));
-        $nonHotspotTaggedVlans = implode(',', array_filter(
-            $allVlans,
-            fn ($vlan): bool => ! in_array((string) $vlan, [(string) $settings['mgmt_vlan'], (string) $settings['hotspot_vlan']], true)
-        ));
         $lanBridgeName = 'bridge-lan';
         $taggedPorts = $lanBridgeName.','.$settings['trunk_port'];
 
         $bridgeVlanLines = $enableBuiltinWifi
-            ? array_filter([
-                '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' untagged='.$settings['pi_port'].' vlan-ids='.$settings['mgmt_vlan'],
-                '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' untagged='.$builtinWifiInterface.' vlan-ids='.$settings['hotspot_vlan'],
-                $nonHotspotTaggedVlans !== '' ? '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' vlan-ids='.$nonHotspotTaggedVlans : null,
-            ])
+            ? $this->builtinWifiBridgeVlanLines($settings, $lanBridgeName, $taggedPorts, $builtinWifiInterface, $staffWifiInterface, $posWifiInterface, $mgmtWifiInterface)
             : array_filter([
                 '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' untagged='.$settings['pi_port'].' vlan-ids='.$settings['mgmt_vlan'],
                 $taggedVlans !== '' ? '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' vlan-ids='.$taggedVlans : null,
@@ -197,8 +192,20 @@ SCRIPT;
             '# MikroTik L009 built-in Wi-Fi test SSID. RouterOS v7 WiFi package uses wifi1 on L009UiGS-2HaxD.',
             '/interface wifi security add name=mms-open-hotspot-sec authentication-types=""',
             '/interface wifi configuration add name=mms-open-hotspot-cfg mode=ap ssid="MMS Hotspot" security=mms-open-hotspot-sec country=Nigeria',
+            '/interface wifi security add name=mms-staff-sec authentication-types=wpa2-psk,wpa3-psk passphrase="'.$this->quote($settings['staff_wifi_password']).'"',
+            '/interface wifi security add name=mms-pos-sec authentication-types=wpa2-psk,wpa3-psk passphrase="'.$this->quote($settings['pos_wifi_password']).'"',
+            '/interface wifi security add name=mms-mgmt-sec authentication-types=wpa2-psk,wpa3-psk passphrase="'.$this->quote($settings['mgmt_wifi_password']).'"',
+            '/interface wifi configuration add name=mms-staff-cfg mode=ap ssid="MMS Staff" security=mms-staff-sec country=Nigeria',
+            '/interface wifi configuration add name=mms-pos-cfg mode=ap ssid="MMS POS" security=mms-pos-sec country=Nigeria',
+            '/interface wifi configuration add name=mms-mgmt-cfg mode=ap ssid="MMS Mgmt" security=mms-mgmt-sec country=Nigeria',
             '/interface wifi set [find default-name=$builtinWifiInterface] configuration=mms-open-hotspot-cfg disabled=no',
+            '/interface wifi add name=$staffWifiInterface master-interface=$builtinWifiInterface configuration=mms-staff-cfg disabled=no',
+            $settings['enable_pos'] ? '/interface wifi add name=$posWifiInterface master-interface=$builtinWifiInterface configuration=mms-pos-cfg disabled=no' : '# POS virtual Wi-Fi is disabled because POS VLAN is disabled.',
+            '/interface wifi add name=$mgmtWifiInterface master-interface=$builtinWifiInterface configuration=mms-mgmt-cfg disabled=no',
             '/interface bridge port add bridge=$lanBridge interface=$builtinWifiInterface pvid=$hotspotVlan comment="L009 built-in open hotspot Wi-Fi"',
+            '/interface bridge port add bridge=$lanBridge interface=$staffWifiInterface pvid=$staffVlan comment="Virtual staff/admin Wi-Fi"',
+            $settings['enable_pos'] ? '/interface bridge port add bridge=$lanBridge interface=$posWifiInterface pvid=$posVlan comment="Virtual POS Wi-Fi for terminal testing"' : '# POS virtual bridge port disabled.',
+            '/interface bridge port add bridge=$lanBridge interface=$mgmtWifiInterface pvid=$mgmtVlan comment="Virtual management Wi-Fi for lab testing"',
         ] : [
             '',
             '# Built-in MikroTik Wi-Fi is disabled for this profile. Use the AP/switch trunk for external APs.',
@@ -216,6 +223,9 @@ SCRIPT;
             ':global trunkPort "'.$settings['trunk_port'].'"',
             ':global piPort "'.$settings['pi_port'].'"',
             ':global builtinWifiInterface "'.$builtinWifiInterface.'"',
+            ':global staffWifiInterface "'.$staffWifiInterface.'"',
+            ':global posWifiInterface "'.$posWifiInterface.'"',
+            ':global mgmtWifiInterface "'.$mgmtWifiInterface.'"',
             ':global mgmtVlan "'.$settings['mgmt_vlan'].'"',
             ':global hotspotVlan "'.$settings['hotspot_vlan'].'"',
             ':global staffVlan "'.$settings['staff_vlan'].'"',
@@ -430,6 +440,9 @@ HTML;
             'trunk_port' => $this->profileDefaults($profile)['trunk_port'],
             'builtin_wifi_interface' => 'wifi1',
             'pi_port' => 'ether3',
+            'staff_wifi_password' => 'MmsStaff2026!',
+            'pos_wifi_password' => 'MmsPos2026!',
+            'mgmt_wifi_password' => 'MmsMgmt2026!',
             'download_limit' => $this->profileDefaults($profile)['download_limit'],
             'upload_limit' => $this->profileDefaults($profile)['upload_limit'],
             'mgmt_vlan' => 10,
@@ -451,13 +464,35 @@ HTML;
             'pos_pool' => '192.168.50.10-192.168.50.250',
             'pppoe_gateway' => '172.16.40.1/24',
             'enable_builtin_wifi' => $profile === 'l009_builtin_wifi',
-            'enable_pos' => $profile !== 'l009_builtin_wifi',
+            'enable_pos' => true,
             'enable_pppoe' => ! in_array($profile, ['small_hotspot', 'l009_builtin_wifi'], true),
             'enable_realtime_qos' => true,
             'enable_second_wan' => false,
         ];
 
         return array_replace($defaults, $settings);
+    }
+
+    private function builtinWifiBridgeVlanLines(array $settings, string $lanBridgeName, string $taggedPorts, string $hotspotWifiInterface, string $staffWifiInterface, string $posWifiInterface, string $mgmtWifiInterface): array
+    {
+        $mgmtUntagged = implode(',', array_filter([$settings['pi_port'], $mgmtWifiInterface]));
+        $pppoeTaggedOnly = $settings['enable_pppoe']
+            ? $this->taggedVlanLine($lanBridgeName, $taggedPorts, $settings['pppoe_vlan'])
+            : null;
+
+        return array_filter([
+            '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' untagged='.$mgmtUntagged.' vlan-ids='.$settings['mgmt_vlan'],
+            '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' untagged='.$hotspotWifiInterface.' vlan-ids='.$settings['hotspot_vlan'],
+            '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' untagged='.$staffWifiInterface.' vlan-ids='.$settings['staff_vlan'],
+            $settings['enable_pos'] ? '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' untagged='.$posWifiInterface.' vlan-ids='.$settings['pos_vlan'] : null,
+            $settings['enable_pppoe'] ? $pppoeTaggedOnly : null,
+            '# If your AP/switch also needs tagged Staff/PPPoE/POS VLANs, keep the tagged ports above and use these virtual SSIDs only for MikroTik built-in Wi-Fi testing.',
+        ]);
+    }
+
+    private function taggedVlanLine(string $lanBridgeName, string $taggedPorts, int|string $vlan): string
+    {
+        return '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' vlan-ids='.$vlan;
     }
 
     private function quote(?string $value): string

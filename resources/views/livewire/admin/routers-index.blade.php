@@ -191,6 +191,27 @@
                         </flux:field>
 
                         <flux:field>
+                            <flux:label>Staff Wi-Fi password</flux:label>
+                            <flux:input wire:model.blur="provisioning_settings.staff_wifi_password" placeholder="MmsStaff2026!" viewable />
+                            <flux:description>Used only when built-in Wi-Fi SSIDs are generated.</flux:description>
+                            <flux:error name="provisioning_settings.staff_wifi_password" />
+                        </flux:field>
+
+                        <flux:field>
+                            <flux:label>POS Wi-Fi password</flux:label>
+                            <flux:input wire:model.blur="provisioning_settings.pos_wifi_password" placeholder="MmsPos2026!" viewable />
+                            <flux:description>Use for POS SSID testing before external AP rollout.</flux:description>
+                            <flux:error name="provisioning_settings.pos_wifi_password" />
+                        </flux:field>
+
+                        <flux:field>
+                            <flux:label>Mgmt Wi-Fi password</flux:label>
+                            <flux:input wire:model.blur="provisioning_settings.mgmt_wifi_password" placeholder="MmsMgmt2026!" viewable />
+                            <flux:description>For lab access to the management VLAN.</flux:description>
+                            <flux:error name="provisioning_settings.mgmt_wifi_password" />
+                        </flux:field>
+
+                        <flux:field>
                             <flux:label>Download limit</flux:label>
                             <flux:input wire:model.blur="provisioning_settings.download_limit" placeholder="120M" />
                             <flux:description>Parent PCQ limit. Example: <code>120M</code>.</flux:description>
