@@ -159,6 +159,36 @@ class AdminPaymentSettingsTest extends TestCase
         $this->assertSame('livewire-webhook-secret', $shop->flutterwave_webhook_secret);
     }
 
+    public function test_livewire_payment_settings_card_saves_branded_gateway_settings(): void
+    {
+        [$tenant] = $this->tenants();
+        $shop = $this->shop($tenant, 'Monnify Shop', false)->load('tenant');
+        $shop->payments_count = 0;
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user);
+
+        Livewire::test(PaymentSettingsCard::class, ['shop' => $shop])
+            ->set('payment_gateway', 'monnify')
+            ->set('gateway_settings.public_key', 'MK_TEST_PUBLIC')
+            ->set('gateway_settings.secret_key', 'MK_TEST_SECRET')
+            ->set('gateway_settings.contract_code', '1234567890')
+            ->call('save')
+            ->assertHasNoErrors()
+            ->assertSee('Monnify');
+
+        $shop->refresh();
+
+        $this->assertSame('monnify', $shop->payment_gateway);
+        $this->assertSame('MK_TEST_PUBLIC', $shop->payment_gateway_settings['monnify']['public_key']);
+        $this->assertSame('MK_TEST_SECRET', $shop->payment_gateway_settings['monnify']['secret_key']);
+        $this->assertSame('1234567890', $shop->payment_gateway_settings['monnify']['contract_code']);
+    }
+
     public function test_livewire_payment_settings_card_validates_credentials_together(): void
     {
         [$tenant] = $this->tenants();

@@ -37,6 +37,30 @@
         </div>
     @endif
 
+    <div class="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        @foreach ($gatewayCards as $key => $gateway)
+            <button
+                type="button"
+                wire:click="$set('active_gateway', '{{ $key }}')"
+                class="min-w-0 rounded-lg border p-4 text-left transition hover:border-zinc-400 hover:bg-zinc-50 {{ $active_gateway === $key ? 'border-zinc-950 bg-zinc-50 ring-2 ring-zinc-950/10' : 'border-zinc-200 bg-white' }}"
+            >
+                <div class="flex items-center justify-between gap-3">
+                    <span class="flex h-10 w-28 items-center justify-start">
+                        @if ($gateway['logo_url'])
+                            <img src="{{ $gateway['logo_url'] }}" alt="{{ $gateway['name'] }} logo" class="max-h-8 max-w-28 object-contain">
+                        @else
+                            <span class="rounded-md px-2 py-1 text-xs font-semibold text-white" style="background-color: {{ $gateway['brand_color'] }}">{{ $gateway['name'] }}</span>
+                        @endif
+                    </span>
+                    <flux:badge color="{{ $gateway['status'] === 'live' ? 'green' : 'amber' }}" size="sm">{{ $gateway['status_label'] }}</flux:badge>
+                </div>
+                <p class="mt-3 text-sm font-semibold text-zinc-950">{{ $gateway['name'] }}</p>
+                <p class="mt-1 text-xs leading-5 text-zinc-500">{{ $gateway['region'] }} · {{ $gateway['currency_label'] }}</p>
+                <p class="mt-2 line-clamp-2 text-xs leading-5 text-zinc-600">{{ $gateway['summary'] }}</p>
+            </button>
+        @endforeach
+    </div>
+
     <div class="mt-5 grid gap-4 md:grid-cols-2">
         <flux:field>
             <flux:label>Active platform gateway</flux:label>
@@ -48,6 +72,21 @@
             <flux:description>Only live adapters can process checkout. Coming-soon gateways can be selected for planning, but checkout stays disabled until their adapter is added.</flux:description>
             <flux:error name="active_gateway" />
         </flux:field>
+
+        <div class="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+            <div class="flex items-center gap-3">
+                @if ($snapshot['active_gateway_logo_url'])
+                    <img src="{{ $snapshot['active_gateway_logo_url'] }}" alt="{{ $snapshot['active_gateway_name'] }} logo" class="max-h-8 max-w-28 object-contain">
+                @else
+                    <span class="rounded-md px-2 py-1 text-xs font-semibold text-white" style="background-color: {{ $activeGateway['brand_color'] }}">{{ $activeGateway['name'] }}</span>
+                @endif
+                <flux:badge color="{{ $snapshot['active_gateway_implemented'] ? 'green' : 'amber' }}" size="sm">
+                    {{ $snapshot['active_gateway_implemented'] ? 'Live adapter' : 'Adapter pending' }}
+                </flux:badge>
+            </div>
+            <p class="mt-3 text-sm leading-6 text-zinc-600">{{ $activeGateway['summary'] }}</p>
+            <p class="mt-2 text-xs leading-5 text-zinc-500">{{ $activeGateway['webhook_note'] }}</p>
+        </div>
 
         <flux:field>
             <flux:label>{{ $snapshot['active_gateway_name'] }} client ID</flux:label>

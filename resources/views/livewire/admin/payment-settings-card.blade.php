@@ -45,6 +45,30 @@
         @endforeach
     </div>
 
+    <div class="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        @foreach ($gatewayCards as $key => $gateway)
+            <button
+                type="button"
+                wire:click="$set('payment_gateway', '{{ $key }}')"
+                class="min-w-0 rounded-lg border p-4 text-left transition hover:border-zinc-400 hover:bg-zinc-50 {{ $payment_gateway === $key ? 'border-zinc-950 bg-zinc-50 ring-2 ring-zinc-950/10' : 'border-zinc-200 bg-white' }}"
+            >
+                <div class="flex items-center justify-between gap-3">
+                    <span class="flex h-10 w-28 items-center justify-start">
+                        @if ($gateway['logo_url'])
+                            <img src="{{ $gateway['logo_url'] }}" alt="{{ $gateway['name'] }} logo" class="max-h-8 max-w-28 object-contain">
+                        @else
+                            <span class="rounded-md px-2 py-1 text-xs font-semibold text-white" style="background-color: {{ $gateway['brand_color'] }}">{{ $gateway['name'] }}</span>
+                        @endif
+                    </span>
+                    <flux:badge color="{{ $gateway['status'] === 'live' ? 'green' : 'amber' }}" size="sm">{{ $gateway['status_label'] }}</flux:badge>
+                </div>
+                <p class="mt-3 text-sm font-semibold text-zinc-950">{{ $gateway['name'] }}</p>
+                <p class="mt-1 text-xs leading-5 text-zinc-500">{{ $gateway['region'] }} · {{ $gateway['currency_label'] }}</p>
+                <p class="mt-2 line-clamp-2 text-xs leading-5 text-zinc-600">{{ $gateway['summary'] }}</p>
+            </button>
+        @endforeach
+    </div>
+
     <div class="mt-5 grid gap-4 md:grid-cols-2">
         <flux:field>
             <flux:label>Default tenant gateway</flux:label>
@@ -57,51 +81,31 @@
             <flux:error name="payment_gateway" />
         </flux:field>
 
-        <flux:field>
-            <flux:label>{{ $shop->paymentGatewayName() }} client ID</flux:label>
-            <flux:input
-                wire:model.blur="flutterwave_client_id"
-                icon="identification"
-                placeholder="{{ $shop->hasCompleteFlutterwaveCredentials() ? 'Leave blank to keep saved client ID' : 'Paste tenant gateway client ID' }}"
-            />
-            <flux:error name="flutterwave_client_id" />
-        </flux:field>
+        <div class="rounded-lg border border-zinc-200 bg-zinc-50 p-4 md:col-span-1">
+            <div class="flex items-center gap-3">
+                @if ($activeGateway['logo_path'] && \Illuminate\Support\Facades\File::exists(public_path($activeGateway['logo_path'])))
+                    <img src="{{ asset($activeGateway['logo_path']) }}" alt="{{ $activeGateway['name'] }} logo" class="max-h-8 max-w-28 object-contain">
+                @else
+                    <span class="rounded-md px-2 py-1 text-xs font-semibold text-white" style="background-color: {{ $activeGateway['brand_color'] }}">{{ $activeGateway['name'] }}</span>
+                @endif
+                <flux:badge color="{{ $activeGateway['status'] === 'live' ? 'green' : 'amber' }}" size="sm">{{ $activeGateway['status'] === 'live' ? 'Live adapter' : 'Adapter pending' }}</flux:badge>
+            </div>
+            <p class="mt-3 text-sm leading-6 text-zinc-600">{{ $activeGateway['summary'] }}</p>
+            <p class="mt-2 text-xs leading-5 text-zinc-500">{{ $activeGateway['webhook_note'] }}</p>
+        </div>
 
-        <flux:field>
-            <flux:label>{{ $shop->paymentGatewayName() }} client secret</flux:label>
-            <flux:input
-                wire:model.blur="flutterwave_client_secret"
-                icon="key"
-                placeholder="{{ $shop->hasCompleteFlutterwaveCredentials() ? 'Leave blank to keep saved client secret' : 'Paste tenant Flutterwave v4 client secret' }}"
-                viewable
-            />
-            <flux:description>Client ID and secret must be saved together before online customer payment is enabled.</flux:description>
-            <flux:error name="flutterwave_client_secret" />
-        </flux:field>
-
-        <flux:field>
-            <flux:label>{{ $shop->paymentGatewayName() }} hosted checkout secret key</flux:label>
-            <flux:input
-                wire:model.blur="flutterwave_secret_key"
-                icon="lock-closed"
-                placeholder="{{ $shop->hasFlutterwaveHostedCheckoutKey() ? 'Leave blank to keep saved secret key' : 'Example: FLWSECK_TEST-... or FLWSECK-...' }}"
-                viewable
-            />
-            <flux:description>Needed for card hosted checkout on the active live gateway. Keep Client ID/secret for OPay and transfer.</flux:description>
-            <flux:error name="flutterwave_secret_key" />
-        </flux:field>
-
-        <flux:field>
-            <flux:label>Webhook secret hash</flux:label>
-            <flux:input
-                wire:model.blur="flutterwave_webhook_secret"
-                icon="shield-check"
-                placeholder="{{ $shop->hasFlutterwaveWebhookSecret() ? 'Leave blank to keep saved webhook secret' : 'Paste gateway webhook secret' }}"
-                viewable
-            />
-            <flux:description>Needed for automatic webhook confirmation. Payment callbacks can still verify successful payments after customer redirect.</flux:description>
-            <flux:error name="flutterwave_webhook_secret" />
-        </flux:field>
+        @foreach ($credentialFields as $field => $label)
+            <flux:field>
+                <flux:label>{{ $label }}</flux:label>
+                <flux:input
+                    wire:model.blur="gateway_settings.{{ $field }}"
+                    icon="{{ in_array($field, $secretFieldKeys, true) ? 'key' : 'identification' }}"
+                    placeholder="Leave blank to keep saved {{ strtolower($label) }}"
+                    :viewable="in_array($field, $secretFieldKeys, true)"
+                />
+                <flux:error name="gateway_settings.{{ $field }}" />
+            </flux:field>
+        @endforeach
     </div>
 
     <div class="mt-4 grid gap-3 md:grid-cols-2">

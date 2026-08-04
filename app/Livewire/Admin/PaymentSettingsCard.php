@@ -13,6 +13,8 @@ class PaymentSettingsCard extends Component
 
     public string $payment_gateway = 'flutterwave';
 
+    public array $gateway_settings = [];
+
     public string $flutterwave_client_id = '';
 
     public string $flutterwave_client_secret = '';
@@ -33,6 +35,7 @@ class PaymentSettingsCard extends Component
     {
         $this->shop = $shop;
         $this->payment_gateway = $shop->paymentGateway();
+        $this->gateway_settings = [];
     }
 
     public function save(PaymentSettingsService $settings): void
@@ -47,11 +50,13 @@ class PaymentSettingsCard extends Component
             'flutterwave_client_secret',
             'flutterwave_secret_key',
             'flutterwave_webhook_secret',
+            'gateway_settings',
             'clear_flutterwave_credentials',
             'clear_flutterwave_secret_key',
             'clear_flutterwave_webhook_secret',
         ]);
         $this->payment_gateway = $this->shop->paymentGateway();
+        $this->gateway_settings = [];
 
         $this->savedMessage = 'Payment settings updated for '.$this->shop->name.'.';
 
@@ -63,6 +68,10 @@ class PaymentSettingsCard extends Component
         return view('livewire.admin.payment-settings-card', [
             'readiness' => PaymentGatewayCatalog::tenantReadiness($this->shop),
             'gatewayOptions' => PaymentGatewayCatalog::gatewayOptions(),
+            'gatewayCards' => PaymentGatewayCatalog::gatewayCards(),
+            'activeGateway' => PaymentGatewayCatalog::gateway($this->payment_gateway),
+            'credentialFields' => PaymentGatewayCatalog::credentialFields($this->payment_gateway),
+            'secretFieldKeys' => PaymentGatewayCatalog::secretFieldKeys($this->payment_gateway),
         ]);
     }
 }

@@ -4,6 +4,7 @@ namespace App\Livewire\Admin;
 
 use App\Services\PlatformPaymentSettingsService;
 use App\Services\SecurityActivityService;
+use App\Support\PaymentGatewayCatalog;
 use Livewire\Component;
 
 class PlatformPaymentSettingsCard extends Component
@@ -62,6 +63,8 @@ class PlatformPaymentSettingsCard extends Component
     {
         return view('livewire.admin.platform-payment-settings-card', [
             'snapshot' => $settings->snapshot(),
+            'gatewayCards' => PaymentGatewayCatalog::gatewayCards(),
+            'activeGateway' => PaymentGatewayCatalog::gateway($this->active_gateway),
         ]);
     }
 }

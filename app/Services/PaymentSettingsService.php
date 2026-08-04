@@ -15,6 +15,8 @@ class PaymentSettingsService
     {
         return [
             'payment_gateway' => ['nullable', 'string', Rule::in(array_keys(PaymentGatewayCatalog::onlineGateways()))],
+            'gateway_settings' => ['nullable', 'array'],
+            'gateway_settings.*' => ['nullable', 'string', 'max:1000'],
             'flutterwave_client_id' => ['nullable', 'string', 'required_with:flutterwave_client_secret'],
             'flutterwave_client_secret' => ['nullable', 'string', 'required_with:flutterwave_client_id'],
             'flutterwave_secret_key' => ['nullable', 'string'],
@@ -34,7 +36,7 @@ class PaymentSettingsService
     {
         TenantAccess::assertShop($shop, $user);
 
-        $updates = $this->updates($data);
+        $updates = $this->updates($shop, $data);
 
         if ($updates === []) {
             return false;
@@ -43,11 +45,27 @@ class PaymentSettingsService
         return $shop->update($updates);
     }
 
-    private function updates(array $data): array
+    private function updates(Shop $shop, array $data): array
     {
+        $gateway = $data['payment_gateway'] ?? PaymentGatewayCatalog::FLUTTERWAVE;
+        $gatewaySettings = $this->cleanGatewaySettings($gateway, (array) ($data['gateway_settings'] ?? []));
+
         $updates = [
-            'payment_gateway' => $data['payment_gateway'] ?? PaymentGatewayCatalog::FLUTTERWAVE,
+            'payment_gateway' => $gateway,
         ];
+
+        if ($gatewaySettings !== []) {
+            $allSettings = (array) ($shop->payment_gateway_settings ?? []);
+            $allSettings[$gateway] = $gatewaySettings;
+            $updates['payment_gateway_settings'] = $allSettings;
+        }
+
+        if ($gateway === PaymentGatewayCatalog::FLUTTERWAVE) {
+            $data['flutterwave_client_id'] = $data['flutterwave_client_id'] ?? ($gatewaySettings['client_id'] ?? null);
+            $data['flutterwave_client_secret'] = $data['flutterwave_client_secret'] ?? ($gatewaySettings['client_secret'] ?? null);
+            $data['flutterwave_secret_key'] = $data['flutterwave_secret_key'] ?? ($gatewaySettings['secret_key'] ?? null);
+            $data['flutterwave_webhook_secret'] = $data['flutterwave_webhook_secret'] ?? ($gatewaySettings['webhook_secret'] ?? null);
+        }
 
         if ((bool) ($data['clear_flutterwave_credentials'] ?? false)) {
             $updates['flutterwave_client_id'] = null;
@@ -70,5 +88,16 @@ class PaymentSettingsService
         }
 
         return $updates;
+    }
+
+    private function cleanGatewaySettings(string $gateway, array $settings): array
+    {
+        $allowedFields = array_keys(PaymentGatewayCatalog::credentialFields($gateway));
+
+        return collect($settings)
+            ->only($allowedFields)
+            ->filter(fn (mixed $value): bool => filled($value))
+            ->map(fn (mixed $value): string => trim((string) $value))
+            ->all();
     }
 }

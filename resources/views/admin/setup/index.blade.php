@@ -169,17 +169,17 @@
             <div class="flex items-start justify-between gap-4">
                 <div>
                     <p class="text-sm font-medium text-zinc-500">Payment Readiness</p>
-                    <h2 class="mt-2 text-xl font-semibold">Flutterwave channels</h2>
-                    <p class="mt-2 text-sm leading-6 text-zinc-600">Customer money should go through tenant shop credentials. Each payment channel needs a different credential.</p>
+                    <h2 class="mt-2 text-xl font-semibold">Default gateway channels</h2>
+                    <p class="mt-2 text-sm leading-6 text-zinc-600">Customer money should go through tenant shop credentials. Each gateway can have its own keys, webhook secret, and settlement account.</p>
                 </div>
                 <flux:button href="{{ route('admin.payment-settings.index') }}" wire:navigate variant="outline" size="sm" icon="credit-card">Setup</flux:button>
             </div>
 
             <div class="mt-5 space-y-3">
                 @foreach ([
-                    ['label' => 'OPay and bank transfer', 'value' => $paymentReady['opay_transfer'], 'hint' => 'Needs v4 Client ID and Client Secret.'],
-                    ['label' => 'Card checkout', 'value' => $paymentReady['card'], 'hint' => 'Needs v3 Secret Key, for example FLWSECK_TEST-...'],
-                    ['label' => 'Automatic webhook confirmation', 'value' => $paymentReady['webhook'], 'hint' => 'Needs Flutterwave secret hash/verif-hash.'],
+                    ['label' => 'Online transfer or wallet', 'value' => $paymentReady['opay_transfer'], 'hint' => 'For Flutterwave this needs v4 Client ID and Client Secret. Other gateways keep their own saved keys.'],
+                    ['label' => 'Card checkout', 'value' => $paymentReady['card'], 'hint' => 'For Flutterwave this needs a v3 Secret Key, for example FLWSECK_TEST-...'],
+                    ['label' => 'Automatic webhook confirmation', 'value' => $paymentReady['webhook'], 'hint' => 'Needs the selected gateway webhook secret/header value.'],
                 ] as $channel)
                     <div class="rounded-lg border border-zinc-200 p-4">
                         <div class="flex items-center justify-between gap-3">
@@ -208,7 +208,7 @@
                 @foreach ([
                     'Phone receives an IP address from the hotspot DHCP pool.',
                     'Phone opens the package selection page instead of a 404 page.',
-                    'Selected package starts Flutterwave checkout for the enabled channel.',
+                    'Selected package starts checkout through the shop default gateway.',
                     'After payment, the access granted page connects the device automatically.',
                     'FreeRADIUS accounting starts showing the online session.',
                     'Dashboard Users Online and router status update after accounting traffic.',

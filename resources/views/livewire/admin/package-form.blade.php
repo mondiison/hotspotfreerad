@@ -50,7 +50,7 @@
                     <flux:field>
                         <flux:label>Price</flux:label>
                         <flux:input type="number" step="0.01" min="1" wire:model.blur="price" icon="banknotes" placeholder="500" required />
-                        <flux:description>Amount customers pay for this plan. Flutterwave requires at least 1.00.</flux:description>
+                        <flux:description>Amount customers pay for this plan. Online gateways usually require at least 1.00.</flux:description>
                         <flux:error name="price" />
                     </flux:field>
 
