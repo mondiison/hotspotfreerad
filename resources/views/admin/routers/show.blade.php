@@ -7,8 +7,8 @@
         <a href="{{ route('admin.routers.edit', $router) }}" wire:navigate class="rounded-md border border-zinc-200 px-4 py-2 text-sm">Edit Router</a>
     </x-slot:action>
 
-    <div class="grid gap-6 xl:grid-cols-[340px_1fr]">
-        <aside class="space-y-4">
+    <div class="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,340px)_minmax(0,1fr)]">
+        <aside class="min-w-0 space-y-4">
             <section class="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
                 <h2 class="text-base font-semibold">Router Details</h2>
                 <dl class="mt-4 space-y-3 text-sm">
@@ -96,8 +96,8 @@
             </section>
         </aside>
 
-        <div class="space-y-6">
-            <section class="rounded-lg border border-zinc-200 bg-white shadow-sm">
+        <div class="min-w-0 space-y-6">
+            <section class="min-w-0 overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
                 <div class="border-b border-zinc-200 px-5 py-4">
                     <div class="flex flex-col justify-between gap-3 md:flex-row md:items-start">
                         <div>
@@ -107,34 +107,34 @@
                         <flux:badge color="amber">Review variables first</flux:badge>
                     </div>
                 </div>
-                <pre class="overflow-x-auto p-5 text-sm leading-6 text-zinc-900"><code>{{ $freshInfrastructureScript }}</code></pre>
+                <pre class="block max-w-full overflow-x-auto p-5 text-sm leading-6 text-zinc-900"><code class="block min-w-max">{{ $freshInfrastructureScript }}</code></pre>
             </section>
 
-            <section class="rounded-lg border border-zinc-200 bg-white shadow-sm">
+            <section class="min-w-0 overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
                 <div class="border-b border-zinc-200 px-5 py-4">
                     <h2 class="text-base font-semibold">AP / SSID / VLAN Guide</h2>
                     <p class="mt-1 text-sm text-zinc-500">Use this when configuring Ruijie, Omada, Wavlink, or any tenant access point that supports multiple SSIDs.</p>
                 </div>
-                <pre class="overflow-x-auto p-5 text-sm leading-6 text-zinc-900"><code>{{ $accessPointGuide }}</code></pre>
+                <pre class="block max-w-full overflow-x-auto p-5 text-sm leading-6 text-zinc-900"><code class="block min-w-max">{{ $accessPointGuide }}</code></pre>
             </section>
 
-            <section class="rounded-lg border border-zinc-200 bg-white shadow-sm">
+            <section class="min-w-0 overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
                 <div class="border-b border-zinc-200 px-5 py-4">
                     <h2 class="text-base font-semibold">RouterOS Script</h2>
                     <p class="mt-1 text-sm text-zinc-500">Paste this into MikroTik RouterOS terminal after confirming the config values.</p>
                 </div>
-                <pre class="overflow-x-auto p-5 text-sm leading-6 text-zinc-900"><code>{{ $script }}</code></pre>
+                <pre class="block max-w-full overflow-x-auto p-5 text-sm leading-6 text-zinc-900"><code class="block min-w-max">{{ $script }}</code></pre>
             </section>
 
-            <section class="rounded-lg border border-zinc-200 bg-white shadow-sm">
+            <section class="min-w-0 overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
                 <div class="border-b border-zinc-200 px-5 py-4">
                     <h2 class="text-base font-semibold">RouterOS PPPoE Script</h2>
                     <p class="mt-1 text-sm text-zinc-500">Use this when this router will serve PPPoE subscribers instead of, or alongside, hotspot users. Package bandwidth is applied by RADIUS, so the router profile should remain generic.</p>
                 </div>
-                <pre class="overflow-x-auto p-5 text-sm leading-6 text-zinc-900"><code>{{ $pppoeScript }}</code></pre>
+                <pre class="block max-w-full overflow-x-auto p-5 text-sm leading-6 text-zinc-900"><code class="block min-w-max">{{ $pppoeScript }}</code></pre>
             </section>
 
-            <section class="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+            <section class="min-w-0 overflow-hidden rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
                 <div class="flex flex-col justify-between gap-3 md:flex-row md:items-start">
                     <div>
                         <h2 class="text-base font-semibold">PPPoE Bandwidth Check</h2>
@@ -143,39 +143,39 @@
                     <flux:badge color="blue">Mikrotik-Rate-Limit</flux:badge>
                 </div>
 
-                <div class="mt-4 grid gap-4 md:grid-cols-2">
-                    <div class="rounded-md bg-zinc-50 p-4">
+                <div class="mt-4 grid min-w-0 gap-4 md:grid-cols-2">
+                    <div class="min-w-0 rounded-md bg-zinc-50 p-4">
                         <p class="text-sm font-medium">Active PPPoE user</p>
-                        <pre class="mt-2 overflow-x-auto text-xs leading-5 text-zinc-800"><code>/ppp active print detail where name="customer001"</code></pre>
+                        <pre class="mt-2 block max-w-full overflow-x-auto text-xs leading-5 text-zinc-800"><code class="block min-w-max">/ppp active print detail where name="customer001"</code></pre>
                         <p class="mt-2 text-xs leading-5 text-zinc-500">Look for the customer username, caller ID, uptime, and assigned address.</p>
                     </div>
-                    <div class="rounded-md bg-zinc-50 p-4">
+                    <div class="min-w-0 rounded-md bg-zinc-50 p-4">
                         <p class="text-sm font-medium">Dynamic bandwidth queue</p>
-                        <pre class="mt-2 overflow-x-auto text-xs leading-5 text-zinc-800"><code>/queue simple print where dynamic=yes</code></pre>
+                        <pre class="mt-2 block max-w-full overflow-x-auto text-xs leading-5 text-zinc-800"><code class="block min-w-max">/queue simple print where dynamic=yes</code></pre>
                         <p class="mt-2 text-xs leading-5 text-zinc-500">The dynamic queue should reflect the selected package bandwidth, for example 5M/10M.</p>
                     </div>
                 </div>
             </section>
 
-            <section class="rounded-lg border border-zinc-200 bg-white shadow-sm">
+            <section class="min-w-0 overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
                 <div class="border-b border-zinc-200 px-5 py-4">
                     <h2 class="text-base font-semibold">MikroTik login.html</h2>
                     <p class="mt-1 text-sm text-zinc-500">Upload this file to the MikroTik hotspot folder so phones redirect to the package picker.</p>
                 </div>
-                <pre class="overflow-x-auto p-5 text-sm leading-6 text-zinc-900"><code>{{ $loginTemplate }}</code></pre>
+                <pre class="block max-w-full overflow-x-auto p-5 text-sm leading-6 text-zinc-900"><code class="block min-w-max">{{ $loginTemplate }}</code></pre>
             </section>
 
-            <section class="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+            <section class="min-w-0 overflow-hidden rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
                 <h2 class="text-base font-semibold">Retest Commands</h2>
-                <div class="mt-4 grid gap-4 md:grid-cols-2">
-                    <div class="rounded-md bg-zinc-50 p-4">
+                <div class="mt-4 grid min-w-0 gap-4 md:grid-cols-2">
+                    <div class="min-w-0 rounded-md bg-zinc-50 p-4">
                         <p class="text-sm font-medium">MikroTik</p>
-                        <pre class="mt-2 overflow-x-auto text-xs leading-5 text-zinc-800"><code>/ip hotspot active remove [find mac-address="AA:BB:CC:DD:EE:FF"]
+                        <pre class="mt-2 block max-w-full overflow-x-auto text-xs leading-5 text-zinc-800"><code class="block min-w-max">/ip hotspot active remove [find mac-address="AA:BB:CC:DD:EE:FF"]
 /ip hotspot host remove [find mac-address="AA:BB:CC:DD:EE:FF"]</code></pre>
                     </div>
-                    <div class="rounded-md bg-zinc-50 p-4">
+                    <div class="min-w-0 rounded-md bg-zinc-50 p-4">
                         <p class="text-sm font-medium">Pi</p>
-                        <pre class="mt-2 overflow-x-auto text-xs leading-5 text-zinc-800"><code>sudo systemctl stop freeradius
+                        <pre class="mt-2 block max-w-full overflow-x-auto text-xs leading-5 text-zinc-800"><code class="block min-w-max">sudo systemctl stop freeradius
 sudo freeradius -X</code></pre>
                     </div>
                 </div>
