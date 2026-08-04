@@ -13,6 +13,7 @@ use App\Services\FlutterwaveService;
 use App\Services\HotspotPaymentConfirmationService;
 use App\Services\MonnifyService;
 use App\Services\PaystackService;
+use App\Services\Payments\HotspotHostedCheckoutManager;
 use App\Services\RadiusProvisioningService;
 use App\Services\SquadService;
 use App\Services\VoucherManagementService;
@@ -197,7 +198,7 @@ class PortalController extends Controller
         ]);
     }
 
-    public function pay(Request $request, FlutterwaveService $flutterwave, MonnifyService $monnify, PaystackService $paystack, SquadService $squad): RedirectResponse|View
+    public function pay(Request $request, FlutterwaveService $flutterwave, HotspotHostedCheckoutManager $hostedGateways): RedirectResponse|View
     {
         $validated = $request->validate([
             'mac' => ['required', 'string', 'max:64'],
@@ -268,158 +269,17 @@ class PortalController extends Controller
 
         if (! in_array($payment->provider, PaymentGatewayCatalog::implementedGatewayKeys(), true)) {
             $checkoutUnavailableReason = 'gateway_not_live';
-        } elseif ($payment->provider === PaymentGatewayCatalog::SQUAD) {
-            $credentialSource = $squad->credentialSource($payment);
+        } elseif ($hostedGateways->supports($payment)) {
+            $attempt = $hostedGateways->start($payment, [
+                'email' => $validated['email'] ?? null,
+                'phone' => $validated['phone'] ?? null,
+                'name' => 'Hotspot Customer',
+            ]);
+            $credentialSource = $attempt['credential_source'];
+            $checkoutUnavailableReason = $attempt['unavailable_reason'] ?? $checkoutUnavailableReason;
 
-            if (! $squad->isConfiguredFor($payment)) {
-                $checkoutUnavailableReason = 'missing_gateway_secret_key';
-            } else {
-                try {
-                    $checkout = $squad->initializeCheckout(
-                        $payment,
-                        [
-                            'email' => $validated['email'] ?? null,
-                            'phone' => $validated['phone'] ?? null,
-                            'name' => 'Hotspot Customer',
-                        ],
-                        route('hotspot.payment.callback', ['transaction_ref' => $payment->tx_ref])
-                    );
-
-                    $payment->update([
-                        'provider_reference' => $checkout['provider_reference'],
-                        'payload' => array_merge($payment->payload ?? [], [
-                            'checkout_url' => $checkout['checkout_url'],
-                            'squad_account' => $credentialSource,
-                            'squad_init_response' => $checkout['response'],
-                        ]),
-                    ]);
-
-                    if (filled($checkout['checkout_url'])) {
-                        return redirect()->away($checkout['checkout_url']);
-                    }
-
-                    Log::warning('Squad checkout response missing checkout URL', [
-                        'payment_id' => $payment->id,
-                        'tx_ref' => $payment->tx_ref,
-                        'payment_method' => $paymentMethod,
-                        'response_body' => $checkout['response'] ?? null,
-                    ]);
-
-                    $checkoutUnavailableReason = 'missing_checkout_url';
-                } catch (Throwable $exception) {
-                    $checkoutUnavailableReason = $this->squadCheckoutFailureReason($exception);
-
-                    Log::warning('Squad checkout initialization failed', [
-                        'payment_id' => $payment->id,
-                        'tx_ref' => $payment->tx_ref,
-                        'message' => $exception->getMessage(),
-                        'response_body' => $exception instanceof RequestException
-                            ? $exception->response->json() ?: $exception->response->body()
-                            : null,
-                    ]);
-                }
-            }
-        } elseif ($payment->provider === PaymentGatewayCatalog::MONNIFY) {
-            $credentialSource = $monnify->credentialSource($payment);
-
-            if (! $monnify->isConfiguredFor($payment)) {
-                $checkoutUnavailableReason = 'missing_gateway_secret_key';
-            } else {
-                try {
-                    $checkout = $monnify->initializeCheckout(
-                        $payment,
-                        [
-                            'email' => $validated['email'] ?? null,
-                            'phone' => $validated['phone'] ?? null,
-                            'name' => 'Hotspot Customer',
-                        ],
-                        route('hotspot.payment.callback', ['paymentReference' => $payment->tx_ref])
-                    );
-
-                    $payment->update([
-                        'provider_reference' => $checkout['provider_reference'],
-                        'payload' => array_merge($payment->payload ?? [], [
-                            'checkout_url' => $checkout['checkout_url'],
-                            'monnify_account' => $credentialSource,
-                            'monnify_init_response' => $checkout['response'],
-                        ]),
-                    ]);
-
-                    if (filled($checkout['checkout_url'])) {
-                        return redirect()->away($checkout['checkout_url']);
-                    }
-
-                    Log::warning('Monnify checkout response missing checkout URL', [
-                        'payment_id' => $payment->id,
-                        'tx_ref' => $payment->tx_ref,
-                        'payment_method' => $paymentMethod,
-                        'response_body' => $checkout['response'] ?? null,
-                    ]);
-
-                    $checkoutUnavailableReason = 'missing_checkout_url';
-                } catch (Throwable $exception) {
-                    $checkoutUnavailableReason = $this->monnifyCheckoutFailureReason($exception);
-
-                    Log::warning('Monnify checkout initialization failed', [
-                        'payment_id' => $payment->id,
-                        'tx_ref' => $payment->tx_ref,
-                        'message' => $exception->getMessage(),
-                        'response_body' => $exception instanceof RequestException
-                            ? $exception->response->json() ?: $exception->response->body()
-                            : null,
-                    ]);
-                }
-            }
-        } elseif ($payment->provider === PaymentGatewayCatalog::PAYSTACK) {
-            $credentialSource = $paystack->credentialSource($payment);
-
-            if (! $paystack->isConfiguredFor($payment)) {
-                $checkoutUnavailableReason = 'missing_gateway_secret_key';
-            } else {
-                try {
-                    $checkout = $paystack->initializeCheckout(
-                        $payment,
-                        [
-                            'email' => $validated['email'] ?? null,
-                            'phone' => $validated['phone'] ?? null,
-                            'name' => 'Hotspot Customer',
-                        ],
-                        route('hotspot.payment.callback')
-                    );
-
-                    $payment->update([
-                        'provider_reference' => $checkout['provider_reference'],
-                        'payload' => array_merge($payment->payload ?? [], [
-                            'checkout_url' => $checkout['checkout_url'],
-                            'paystack_account' => $credentialSource,
-                            'paystack_init_response' => $checkout['response'],
-                        ]),
-                    ]);
-
-                    if (filled($checkout['checkout_url'])) {
-                        return redirect()->away($checkout['checkout_url']);
-                    }
-
-                    Log::warning('Paystack checkout response missing authorization URL', [
-                        'payment_id' => $payment->id,
-                        'tx_ref' => $payment->tx_ref,
-                        'payment_method' => $paymentMethod,
-                        'response_body' => $checkout['response'] ?? null,
-                    ]);
-
-                    $checkoutUnavailableReason = 'missing_checkout_url';
-                } catch (Throwable $exception) {
-                    $checkoutUnavailableReason = $this->paystackCheckoutFailureReason($exception);
-
-                    Log::warning('Paystack checkout initialization failed', [
-                        'payment_id' => $payment->id,
-                        'tx_ref' => $payment->tx_ref,
-                        'message' => $exception->getMessage(),
-                        'response_body' => $exception instanceof RequestException
-                            ? $exception->response->json() ?: $exception->response->body()
-                            : null,
-                    ]);
-                }
+            if (filled($attempt['checkout_url'] ?? null)) {
+                return redirect()->away($attempt['checkout_url']);
             }
         } elseif ($paymentMethod === 'card') {
             $credentialSource = $flutterwave->hostedCheckoutCredentialSource($payment);
@@ -832,37 +692,6 @@ class PortalController extends Controller
             if ($status === 401 || str_contains($message, 'invalid authorization key')) {
                 return 'invalid_card_secret_key';
             }
-        }
-
-        return 'initialization_failed';
-    }
-
-    private function paystackCheckoutFailureReason(Throwable $exception): string
-    {
-        if ($exception instanceof RequestException) {
-            $status = $exception->response->status();
-
-            if ($status === 401) {
-                return 'invalid_gateway_secret_key';
-            }
-        }
-
-        return 'initialization_failed';
-    }
-
-    private function monnifyCheckoutFailureReason(Throwable $exception): string
-    {
-        if ($exception instanceof RequestException && $exception->response->status() === 401) {
-            return 'invalid_gateway_secret_key';
-        }
-
-        return 'initialization_failed';
-    }
-
-    private function squadCheckoutFailureReason(Throwable $exception): string
-    {
-        if ($exception instanceof RequestException && $exception->response->status() === 401) {
-            return 'invalid_gateway_secret_key';
         }
 
         return 'initialization_failed';

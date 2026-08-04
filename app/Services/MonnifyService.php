@@ -3,12 +3,13 @@
 namespace App\Services;
 
 use App\Models\Payment;
+use App\Services\Payments\Contracts\HotspotHostedGateway;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 
-class MonnifyService
+class MonnifyService implements HotspotHostedGateway
 {
     /**
      * @throws RequestException
