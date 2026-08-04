@@ -90,6 +90,8 @@ class MikroTikProvisioningServiceTest extends TestCase
         $this->assertStringContainsString('Profile: Starlink plaza / high concurrency', $script);
         $this->assertStringContainsString('/interface vlan add interface=$lanBridge name=vlan-hotspot vlan-id=$hotspotVlan', $script);
         $this->assertStringContainsString('/interface vlan add interface=$lanBridge name=vlan-pos vlan-id=$posVlan', $script);
+        $this->assertStringContainsString('/ip dhcp-client add interface=$wan1 add-default-route=yes use-peer-dns=no disabled=no', $script);
+        $this->assertStringContainsString('/ip dhcp-server add name=dhcp-hotspot interface=vlan-hotspot', $script);
         $this->assertStringContainsString('/ip hotspot add name=mms-hotspot interface=vlan-hotspot', $script);
         $this->assertStringContainsString('/radius add address=10.8.0.1 secret="radius-secret" service=hotspot,ppp', $script);
         $this->assertStringContainsString('/queue type add name=pcq-hotspot-down kind=pcq', $script);
@@ -178,6 +180,8 @@ class MikroTikProvisioningServiceTest extends TestCase
         $this->assertStringContainsString('/interface wifi configuration add name=mms-open-hotspot-cfg mode=ap ssid="MMS Hotspot"', $script);
         $this->assertStringContainsString('/interface bridge port add bridge=$lanBridge interface=$builtinWifiInterface pvid=$hotspotVlan', $script);
         $this->assertStringContainsString('/interface bridge vlan add bridge=bridge-lan tagged=bridge-lan,ether2 untagged=wifi1 vlan-ids=20', $script);
+        $this->assertStringContainsString('/ip dhcp-server add name=dhcp-hotspot interface=vlan-hotspot', $script);
+        $this->assertStringContainsString('Do not attach hotspot DHCP directly to wifi1/ether ports', $script);
         $this->assertStringContainsString('vlan-ids=10,30', $script);
         $this->assertStringContainsString('POS VLAN is disabled', $script);
         $this->assertStringContainsString('PPPoE is disabled', $script);
