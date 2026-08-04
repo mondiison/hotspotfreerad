@@ -10,6 +10,7 @@
             <div class="flex flex-wrap items-center gap-2">
                 <h2 class="text-base font-semibold">{{ $shop->name }}</h2>
                 <flux:badge color="{{ $shop->is_active ? 'green' : 'zinc' }}" size="sm">{{ $shop->is_active ? 'Active shop' : 'Inactive shop' }}</flux:badge>
+                <flux:badge color="{{ $shop->paymentGatewayIsImplemented() ? 'emerald' : 'amber' }}" size="sm">{{ $shop->paymentGatewayName() }}</flux:badge>
             </div>
             <p class="mt-1 text-sm text-zinc-500">{{ $shop->tenant->company_name }}{{ $shop->location_city ? ' - '.$shop->location_city : '' }}</p>
             <p class="mt-1 text-xs text-zinc-500">{{ number_format($shop->payments_count) }} customer payment {{ \Illuminate\Support\Str::plural('record', $shop->payments_count) }}</p>
@@ -46,17 +47,28 @@
 
     <div class="mt-5 grid gap-4 md:grid-cols-2">
         <flux:field>
-            <flux:label>Flutterwave client ID</flux:label>
+            <flux:label>Default tenant gateway</flux:label>
+            <flux:select wire:model.live="payment_gateway">
+                @foreach ($gatewayOptions as $key => $label)
+                    <flux:select.option value="{{ $key }}">{{ $label }}</flux:select.option>
+                @endforeach
+            </flux:select>
+            <flux:description>Customer hotspot payments for this shop use this gateway. Only live adapters can process online checkout.</flux:description>
+            <flux:error name="payment_gateway" />
+        </flux:field>
+
+        <flux:field>
+            <flux:label>{{ $shop->paymentGatewayName() }} client ID</flux:label>
             <flux:input
                 wire:model.blur="flutterwave_client_id"
                 icon="identification"
-                placeholder="{{ $shop->hasCompleteFlutterwaveCredentials() ? 'Leave blank to keep saved client ID' : 'Paste tenant Flutterwave v4 client ID' }}"
+                placeholder="{{ $shop->hasCompleteFlutterwaveCredentials() ? 'Leave blank to keep saved client ID' : 'Paste tenant gateway client ID' }}"
             />
             <flux:error name="flutterwave_client_id" />
         </flux:field>
 
         <flux:field>
-            <flux:label>Flutterwave client secret</flux:label>
+            <flux:label>{{ $shop->paymentGatewayName() }} client secret</flux:label>
             <flux:input
                 wire:model.blur="flutterwave_client_secret"
                 icon="key"
@@ -68,14 +80,14 @@
         </flux:field>
 
         <flux:field>
-            <flux:label>Flutterwave secret key</flux:label>
+            <flux:label>{{ $shop->paymentGatewayName() }} hosted checkout secret key</flux:label>
             <flux:input
                 wire:model.blur="flutterwave_secret_key"
                 icon="lock-closed"
                 placeholder="{{ $shop->hasFlutterwaveHostedCheckoutKey() ? 'Leave blank to keep saved secret key' : 'Example: FLWSECK_TEST-... or FLWSECK-...' }}"
                 viewable
             />
-            <flux:description>Needed for Card hosted checkout. Get it from Flutterwave Dashboard > Settings > API Keys. Keep Client ID/secret for OPay and transfer.</flux:description>
+            <flux:description>Needed for card hosted checkout on the active live gateway. Keep Client ID/secret for OPay and transfer.</flux:description>
             <flux:error name="flutterwave_secret_key" />
         </flux:field>
 
@@ -84,7 +96,7 @@
             <flux:input
                 wire:model.blur="flutterwave_webhook_secret"
                 icon="shield-check"
-                placeholder="{{ $shop->hasFlutterwaveWebhookSecret() ? 'Leave blank to keep saved webhook secret' : 'Paste Flutterwave webhook verif-hash' }}"
+                placeholder="{{ $shop->hasFlutterwaveWebhookSecret() ? 'Leave blank to keep saved webhook secret' : 'Paste gateway webhook secret' }}"
                 viewable
             />
             <flux:description>Needed for automatic webhook confirmation. Payment callbacks can still verify successful payments after customer redirect.</flux:description>

@@ -85,7 +85,7 @@
                         <div class="rounded-lg border border-white/10 bg-white/[0.03] p-5">
                             <p class="text-sm text-zinc-400">Today revenue</p>
                             <p class="mt-3 text-3xl font-semibold text-white">NGN 0</p>
-                            <p class="mt-2 text-xs text-zinc-500">Flutterwave flow coming next</p>
+                            <p class="mt-2 text-xs text-zinc-500">Gateway checkout flow coming next</p>
                         </div>
                     </div>
 
@@ -101,7 +101,7 @@
                                     ['done' => true, 'label' => 'Livewire and Flux installed', 'detail' => 'Flux Pro can be activated with your license key.'],
                                     ['done' => true, 'label' => 'Core SaaS schema drafted', 'detail' => 'Tenants, shops, routers, packages, customers, payments, and subscriptions.'],
                                     ['done' => false, 'label' => 'Authentication and tenant dashboard', 'detail' => 'Next slice: login, tenant shell, and shop setup forms.'],
-                                    ['done' => false, 'label' => 'Captive portal payment flow', 'detail' => 'Flutterwave checkout and webhook provisioning.'],
+                                    ['done' => false, 'label' => 'Captive portal payment flow', 'detail' => 'Default gateway checkout and webhook provisioning.'],
                                 ] as $item)
                                     <div class="flex gap-4 px-5 py-4">
                                         <div class="mt-0.5 grid size-7 shrink-0 place-items-center rounded-full {{ $item['done'] ? 'bg-emerald-400 text-zinc-950' : 'bg-white/10 text-zinc-500' }}">

@@ -24,7 +24,7 @@
 
         <div class="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
             <h2 class="text-base font-semibold">Global URLs</h2>
-            <p class="mt-1 text-sm leading-6 text-zinc-500">Use these once in Flutterwave. They do not change per tenant.</p>
+            <p class="mt-1 text-sm leading-6 text-zinc-500">Use these once in the active payment gateway dashboard. They do not change per tenant.</p>
 
             @foreach ([['label' => 'Payment webhook', 'url' => $webhookUrl], ['label' => 'Payment callback', 'url' => $callbackUrl]] as $endpoint)
                 <div class="mt-4">
@@ -62,7 +62,7 @@
     </section>
 
     <section class="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-5 text-sm leading-6 text-amber-950">
-        Customer money only goes through a configured tenant shop account. Platform Flutterwave is reserved for tenant subscription billing, so tenants must connect their shop credentials before online customer checkout is offered.
+        Customer money only goes through the configured tenant shop gateway. Platform billing is reserved for tenant subscription payments, so tenants must connect their own shop gateway before online customer checkout is offered.
     </section>
 
     <div class="mt-6 grid min-w-0 gap-5 xl:grid-cols-2">

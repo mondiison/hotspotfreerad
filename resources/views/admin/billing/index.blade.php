@@ -35,7 +35,7 @@
 
         <div class="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
             <h2 class="text-base font-semibold">Platform URLs</h2>
-            <p class="mt-1 text-sm leading-6 text-zinc-500">Use these only on the MMS Radius platform Flutterwave account.</p>
+            <p class="mt-1 text-sm leading-6 text-zinc-500">Use these only on the MMS Radius platform gateway account.</p>
 
             @foreach ([['label' => 'Billing webhook', 'url' => $platformWebhookUrl], ['label' => 'Billing callback', 'url' => $platformCallbackUrl]] as $endpoint)
                 <div class="mt-4">
@@ -84,7 +84,7 @@
 
         <section class="mt-6 rounded-lg border border-zinc-200 bg-white p-5">
             <h2 class="font-semibold">Assign Tenant Subscription</h2>
-            <p class="mt-1 text-sm text-zinc-500">Use this for manual billing status while platform Flutterwave subscription checkout is being added.</p>
+            <p class="mt-1 text-sm text-zinc-500">Use this for manual billing status when a tenant is trialing, paid offline, or gateway checkout needs admin correction.</p>
 
             <form method="POST" action="{{ route('admin.billing.subscriptions.store') }}" class="mt-5 grid gap-4 md:grid-cols-3">
                 @csrf
@@ -246,7 +246,7 @@
                 {{ $currentSubscription?->billingPlan?->name ?? 'No platform plan assigned' }}
             </h2>
             <p class="mt-2 max-w-2xl text-sm leading-6 text-zinc-600">
-                This is your SaaS subscription to the hotspot platform. It is separate from your hotspot customer payments, which settle into the Flutterwave account configured on each shop.
+                This is your SaaS subscription to the hotspot platform. It is separate from your hotspot customer payments, which settle into the gateway account configured on each shop.
             </p>
 
             <dl class="mt-6 grid gap-4 md:grid-cols-3">
@@ -269,10 +269,10 @@
             <div class="flex flex-col justify-between gap-3 md:flex-row md:items-start">
                 <div>
                     <h2 class="font-semibold">Choose Platform Plan</h2>
-                    <p class="mt-1 text-sm text-zinc-500">Pay the platform subscription from here. Hotspot customer collections remain on your shop Flutterwave account.</p>
+                    <p class="mt-1 text-sm text-zinc-500">Pay the platform subscription from here. Hotspot customer collections remain on your shop's selected tenant gateway.</p>
                 </div>
                 @unless ($platformFlutterwaveConfigured)
-                    <flux:badge color="amber">Platform checkout not configured</flux:badge>
+                    <flux:badge color="amber">Platform gateway not ready</flux:badge>
                 @endunless
             </div>
 

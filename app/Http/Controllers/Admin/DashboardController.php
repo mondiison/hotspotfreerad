@@ -616,8 +616,8 @@ class DashboardController extends Controller
             [
                 'label' => 'Connect payment account',
                 'detail' => $shops->isEmpty()
-                    ? 'Create a shop first, then add Flutterwave credentials.'
-                    : 'At least one shop should have complete Flutterwave credentials.',
+                    ? 'Create a shop first, then add gateway credentials.'
+                    : 'At least one shop should have complete default gateway credentials.',
                 'complete' => $paymentReadyShopCount > 0,
                 'route' => $shops->isEmpty() ? 'admin.shops.create' : 'admin.payment-settings.index',
                 'action' => $shops->isEmpty() ? 'Add shop' : 'Payment setup',

@@ -282,6 +282,7 @@ class PlatformBillingTest extends TestCase
 
         Livewire::actingAs($user)
             ->test(PlatformPaymentSettingsCard::class)
+            ->set('active_gateway', 'flutterwave')
             ->set('client_id', 'db-platform-client-id')
             ->set('client_secret', 'db-platform-client-secret')
             ->set('webhook_secret_hash', 'db-platform-webhook-secret')
@@ -298,6 +299,7 @@ class PlatformBillingTest extends TestCase
 
         $service = app(\App\Services\PlatformPaymentSettingsService::class);
         $this->assertSame('db-platform-client-id', $service->clientId());
+        $this->assertSame('flutterwave', $service->activeGateway());
         $this->assertSame('db-platform-client-secret', $service->clientSecret());
         $this->assertSame('db-platform-webhook-secret', $service->webhookSecretHash());
         $this->assertSame('bank_transfer', $service->defaultPaymentMethod());

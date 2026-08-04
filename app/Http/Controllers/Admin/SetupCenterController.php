@@ -80,8 +80,8 @@ class SetupCenterController extends Controller
             ],
             [
                 'phase' => 'Payments',
-                'label' => 'Connect tenant Flutterwave account',
-                'description' => 'Save v4 Client ID/Secret for OPay and transfer, v3 Secret Key for card, and webhook hash for automatic confirmation.',
+                'label' => 'Connect tenant payment gateway',
+                'description' => 'Choose the tenant default gateway, then save the required checkout keys and webhook hash for automatic confirmation.',
                 'complete' => $paymentReady['opay_transfer'] > 0 && $paymentReady['card'] > 0 && $paymentReady['webhook'] > 0,
                 'route' => $shops->isEmpty() ? 'admin.shops.create' : 'admin.payment-settings.index',
                 'action' => $shops->isEmpty() ? 'Add shop first' : 'Open payment setup',

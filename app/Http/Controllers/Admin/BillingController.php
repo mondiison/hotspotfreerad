@@ -11,6 +11,7 @@ use App\Models\TenantBillingSubscription;
 use App\Services\BillingPlanManagementService;
 use App\Services\PlatformBillingConfirmationService;
 use App\Services\PlatformFlutterwaveService;
+use App\Services\PlatformPaymentSettingsService;
 use App\Support\PaymentGatewayCatalog;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\RedirectResponse;
@@ -40,7 +41,7 @@ class BillingController extends Controller
                     ->paginate(15),
                 'platformPayments' => $platformPayments,
                 'platformPaymentSummary' => $this->platformPaymentSummary(),
-                'platformFlutterwaveConfigured' => app(PlatformFlutterwaveService::class)->isConfigured(),
+                'platformFlutterwaveConfigured' => app(PlatformPaymentSettingsService::class)->activeGatewayIsImplemented() && app(PlatformFlutterwaveService::class)->isConfigured(),
                 'platformGateway' => PaymentGatewayCatalog::platformProvider(),
                 'platformWebhookUrl' => route('billing.payment.webhook'),
                 'platformCallbackUrl' => route('admin.billing.payments.callback'),
@@ -59,7 +60,7 @@ class BillingController extends Controller
                 ->latest()
                 ->paginate(10, ['*'], 'payments_page'),
             'platformPaymentSummary' => $this->platformPaymentSummary($tenant->id),
-            'platformFlutterwaveConfigured' => app(PlatformFlutterwaveService::class)->isConfigured(),
+            'platformFlutterwaveConfigured' => app(PlatformPaymentSettingsService::class)->activeGatewayIsImplemented() && app(PlatformFlutterwaveService::class)->isConfigured(),
             'platformGateway' => PaymentGatewayCatalog::platformProvider(),
             'platformWebhookUrl' => route('billing.payment.webhook'),
             'platformCallbackUrl' => route('admin.billing.payments.callback'),
@@ -146,6 +147,7 @@ class BillingController extends Controller
 
     public function checkout(Request $request, PlatformFlutterwaveService $flutterwave): RedirectResponse
     {
+        $platformSettings = app(PlatformPaymentSettingsService::class);
         $data = $request->validate([
             'billing_plan_id' => ['required', 'exists:billing_plans,id'],
             'tenant_id' => ['nullable', 'exists:tenants,id'],
@@ -159,16 +161,22 @@ class BillingController extends Controller
             ->where('is_active', true)
             ->findOrFail($data['billing_plan_id']);
 
+        if (! $platformSettings->activeGatewayIsImplemented()) {
+            return redirect()
+                ->route('admin.billing.index')
+                ->withErrors(['billing' => $platformSettings->activeGatewayName().' checkout adapter is not live yet. Choose a live platform gateway before starting checkout.']);
+        }
+
         if (! $flutterwave->isConfigured()) {
             return redirect()
                 ->route('admin.billing.index')
-                ->withErrors(['billing' => 'Platform Flutterwave credentials are not configured yet.']);
+                ->withErrors(['billing' => 'Default platform gateway credentials are not configured yet.']);
         }
 
         $payment = PlatformBillingPayment::create([
             'tenant_id' => $tenant->id,
             'billing_plan_id' => $plan->id,
-            'provider' => 'flutterwave',
+            'provider' => $platformSettings->activeGateway(),
             'tx_ref' => 'PBF-'.now()->format('YmdHis').'-'.str()->upper(str()->random(8)),
             'amount' => $plan->monthly_price,
             'currency' => $plan->currency,
@@ -176,6 +184,8 @@ class BillingController extends Controller
             'payload' => [
                 'started_by' => $request->user()->email,
                 'plan_name' => $plan->name,
+                'platform_gateway' => $platformSettings->activeGateway(),
+                'platform_gateway_name' => $platformSettings->activeGatewayName(),
             ],
         ]);
 
@@ -189,6 +199,7 @@ class BillingController extends Controller
                 'provider_reference' => $checkout['provider_reference'],
                 'payload' => array_merge($payment->payload ?? [], [
                     'checkout_url' => $checkout['checkout_url'],
+                    'gateway_init_response' => $checkout['response'],
                     'flutterwave_init_response' => $checkout['response'],
                 ]),
             ]);
@@ -225,7 +236,7 @@ class BillingController extends Controller
                 'query' => $request->query(),
             ]);
 
-            return redirect()->route('admin.billing.index')->withErrors(['billing' => 'Could not find the returned Flutterwave payment reference. Please check billing history or contact support if money was debited.']);
+            return redirect()->route('admin.billing.index')->withErrors(['billing' => 'Could not find the returned gateway payment reference. Please check billing history or contact support if money was debited.']);
         }
 
         abort_unless($request->user()->isSuperAdmin() || $request->user()->tenant_id === $payment->tenant_id, 403);
@@ -261,7 +272,7 @@ class BillingController extends Controller
         }
 
         if (! $confirmed) {
-            return redirect()->route('admin.billing.index')->withErrors(['billing' => 'Flutterwave verification did not match this billing payment.']);
+            return redirect()->route('admin.billing.index')->withErrors(['billing' => 'Gateway verification did not match this billing payment.']);
         }
 
         return redirect()->route('admin.billing.index')->with('status', 'Platform subscription payment confirmed.');
@@ -311,11 +322,11 @@ class BillingController extends Controller
                 'message' => $exception->getMessage(),
             ]);
 
-            return redirect()->route('admin.billing.index')->withErrors(['billing' => 'Could not verify this platform payment. Check the platform Flutterwave credentials and try again.']);
+            return redirect()->route('admin.billing.index')->withErrors(['billing' => 'Could not verify this platform payment. Check the platform gateway credentials and try again.']);
         }
 
         if (! $confirmed) {
-            return redirect()->route('admin.billing.index')->withErrors(['billing' => 'Flutterwave did not confirm this platform payment yet.']);
+            return redirect()->route('admin.billing.index')->withErrors(['billing' => 'The payment gateway did not confirm this platform payment yet.']);
         }
 
         return redirect()->route('admin.billing.index')->with('status', 'Platform payment verified and subscription activated.');

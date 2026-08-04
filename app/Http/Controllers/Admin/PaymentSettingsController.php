@@ -23,6 +23,7 @@ class PaymentSettingsController extends Controller
         return view('admin.payment-settings.index', [
             'shops' => $shops,
             'gateway' => PaymentGatewayCatalog::tenantProvider(),
+            'gatewayOptions' => PaymentGatewayCatalog::gatewayOptions(),
             'webhookUrl' => route('hotspot.payment.webhook'),
             'callbackUrl' => route('hotspot.payment.callback'),
             'summary' => [

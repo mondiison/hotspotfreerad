@@ -4,14 +4,17 @@ namespace App\Services;
 
 use App\Models\Shop;
 use App\Models\User;
+use App\Support\PaymentGatewayCatalog;
 use App\Support\TenantAccess;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class PaymentSettingsService
 {
     public function rules(): array
     {
         return [
+            'payment_gateway' => ['nullable', 'string', Rule::in(array_keys(PaymentGatewayCatalog::onlineGateways()))],
             'flutterwave_client_id' => ['nullable', 'string', 'required_with:flutterwave_client_secret'],
             'flutterwave_client_secret' => ['nullable', 'string', 'required_with:flutterwave_client_id'],
             'flutterwave_secret_key' => ['nullable', 'string'],
@@ -42,7 +45,9 @@ class PaymentSettingsService
 
     private function updates(array $data): array
     {
-        $updates = [];
+        $updates = [
+            'payment_gateway' => $data['payment_gateway'] ?? PaymentGatewayCatalog::FLUTTERWAVE,
+        ];
 
         if ((bool) ($data['clear_flutterwave_credentials'] ?? false)) {
             $updates['flutterwave_client_id'] = null;

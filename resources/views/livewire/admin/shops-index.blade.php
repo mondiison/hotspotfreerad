@@ -125,38 +125,49 @@
 
                     <section class="rounded-lg border border-zinc-200 bg-zinc-50 p-4 md:col-span-2">
                         <div class="mb-4">
-                            <h2 class="text-sm font-semibold text-zinc-950">Flutterwave payments</h2>
+                            <h2 class="text-sm font-semibold text-zinc-950">Default tenant gateway</h2>
                             <p class="mt-1 text-sm leading-6 text-zinc-600">
-                                Add this shop's Flutterwave keys so hotspot customer payments settle into the tenant's own Flutterwave account.
+                                Choose the gateway for customer hotspot payments. Collections settle into the tenant-owned account configured here.
                             </p>
                         </div>
 
                         <div class="grid gap-5">
                             <flux:field>
-                                <flux:label>Flutterwave client ID</flux:label>
+                                <flux:label>Payment gateway</flux:label>
+                                <flux:select wire:model.live="payment_gateway">
+                                    @foreach ($gatewayOptions as $key => $label)
+                                        <flux:select.option value="{{ $key }}">{{ $label }}</flux:select.option>
+                                    @endforeach
+                                </flux:select>
+                                <flux:description>Only live adapters can process online checkout. Coming-soon gateways are saved for planning.</flux:description>
+                                <flux:error name="payment_gateway" />
+                            </flux:field>
+
+                            <flux:field>
+                                <flux:label>Gateway client ID</flux:label>
                                 <flux:input wire:model.blur="flutterwave_client_id" icon="identification" placeholder="{{ $editingShopId ? 'Leave blank to keep current value' : 'Example: FLW_CLIENT_...' }}" />
                                 <flux:description>Required with client secret for tenant-owned collections.</flux:description>
                                 <flux:error name="flutterwave_client_id" />
                             </flux:field>
 
                             <flux:field>
-                                <flux:label>Flutterwave client secret</flux:label>
+                                <flux:label>Gateway client secret</flux:label>
                                 <flux:input wire:model.blur="flutterwave_client_secret" icon="key" placeholder="{{ $editingShopId ? 'Leave blank to keep current value' : 'Paste the matching v4 client secret' }}" viewable />
-                                <flux:description>The app uses this only on the server to request Flutterwave access tokens.</flux:description>
+                                <flux:description>The app uses this only on the server to request gateway access tokens.</flux:description>
                                 <flux:error name="flutterwave_client_secret" />
                             </flux:field>
 
                             <flux:field>
-                                <flux:label>Flutterwave secret key</flux:label>
+                                <flux:label>Gateway hosted checkout secret key</flux:label>
                                 <flux:input wire:model.blur="flutterwave_secret_key" icon="lock-closed" placeholder="{{ $editingShopId ? 'Leave blank to keep current value' : 'Example: FLWSECK_TEST-...' }}" viewable />
                                 <flux:description>Needed for Card hosted checkout. Client ID/secret still powers OPay and transfer.</flux:description>
                                 <flux:error name="flutterwave_secret_key" />
                             </flux:field>
 
                             <flux:field>
-                                <flux:label>Flutterwave webhook secret hash</flux:label>
+                                <flux:label>Gateway webhook secret hash</flux:label>
                                 <flux:input wire:model.blur="flutterwave_webhook_secret" icon="shield-check" placeholder="{{ $editingShopId ? 'Leave blank to keep current value' : 'Optional: tenant webhook verif-hash' }}" viewable />
-                                <flux:description>Use the verif-hash from this tenant's Flutterwave webhook settings.</flux:description>
+                                <flux:description>Use the webhook verification secret from this tenant's gateway dashboard.</flux:description>
                                 <flux:error name="flutterwave_webhook_secret" />
                             </flux:field>
                         </div>

@@ -14,6 +14,7 @@ use App\Services\HotspotPaymentConfirmationService;
 use App\Services\RadiusProvisioningService;
 use App\Services\VoucherManagementService;
 use App\Support\PaymentCommission;
+use App\Support\PaymentGatewayCatalog;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -239,7 +240,7 @@ class PortalController extends Controller
                 'shop_id' => $router->shop_id,
                 'package_id' => $package->id,
                 'customer_id' => $customer->id,
-                'provider' => 'flutterwave',
+                'provider' => $router->shop->paymentGateway(),
                 'tx_ref' => 'HSF-'.now()->format('YmdHis').'-'.Str::upper(Str::random(8)),
                 'amount' => $package->price,
                 ...PaymentCommission::forShop($router->shop, (float) $package->price),
@@ -249,6 +250,8 @@ class PortalController extends Controller
                     'mac' => $validated['mac'],
                     'nasid' => $validated['nasid'],
                     'payment_method' => $validated['payment_method'] ?? null,
+                    'payment_gateway' => $router->shop->paymentGateway(),
+                    'payment_gateway_name' => $router->shop->paymentGatewayName(),
                     'link_login' => $validated['link-login'] ?? null,
                     'link_orig' => $validated['link-orig'] ?? null,
                 ],
@@ -260,7 +263,9 @@ class PortalController extends Controller
         $checkoutUnavailableReason = 'missing_credentials';
         $paymentMethod = $validated['payment_method'] ?? 'opay';
 
-        if ($paymentMethod === 'card') {
+        if (! in_array($payment->provider, PaymentGatewayCatalog::implementedGatewayKeys(), true)) {
+            $checkoutUnavailableReason = 'gateway_not_live';
+        } elseif ($paymentMethod === 'card') {
             $credentialSource = $flutterwave->hostedCheckoutCredentialSource($payment);
 
             if (! $flutterwave->hasHostedCheckoutFor($payment)) {

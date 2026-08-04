@@ -722,7 +722,7 @@ class HotspotPortalTest extends TestCase
             'email' => 'customer@example.com',
         ])
             ->assertOk()
-            ->assertSee('no complete Flutterwave client ID and client secret');
+            ->assertSee('no complete gateway client ID and client secret');
 
         Http::assertNothingSent();
 
@@ -755,7 +755,7 @@ class HotspotPortalTest extends TestCase
             'email' => 'customer@example.com',
         ])
             ->assertOk()
-            ->assertSee('Flutterwave checkout could not start even though credentials were found')
+            ->assertSee('Gateway checkout could not start even though credentials were found')
             ->assertSee('Demo ISP / Demo Shop');
 
         $payment = Payment::firstOrFail();

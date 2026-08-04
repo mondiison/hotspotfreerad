@@ -24,7 +24,7 @@
             </div>
 
             <h1 class="mt-4 text-2xl font-semibold">Pay by bank transfer</h1>
-            <p class="mt-2 text-sm text-zinc-600">Transfer the exact amount to this account. Access activates automatically when Flutterwave confirms the payment.</p>
+            <p class="mt-2 text-sm text-zinc-600">Transfer the exact amount to this account. Access activates automatically when the payment gateway confirms the payment.</p>
 
             @if ($statusMessage ?? null)
                 <div class="mt-4 rounded-md bg-amber-50 p-3 text-sm text-amber-800">{{ $statusMessage }}</div>

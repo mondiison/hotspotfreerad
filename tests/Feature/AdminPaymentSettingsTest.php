@@ -48,6 +48,7 @@ class AdminPaymentSettingsTest extends TestCase
 
         $this->actingAs($user)
             ->put(route('admin.payment-settings.update', $shop), [
+                'payment_gateway' => 'flutterwave',
                 'flutterwave_client_id' => 'tenant-client-id',
                 'flutterwave_client_secret' => 'tenant-client-secret',
                 'flutterwave_secret_key' => 'FLWSECK_TEST-tenant-secret-key',
@@ -60,6 +61,7 @@ class AdminPaymentSettingsTest extends TestCase
         $this->assertTrue($shop->hasCompleteFlutterwaveCredentials());
         $this->assertTrue($shop->hasFlutterwaveHostedCheckoutKey());
         $this->assertTrue($shop->hasFlutterwaveWebhookSecret());
+        $this->assertSame('flutterwave', $shop->payment_gateway);
         $this->assertSame('tenant-client-id', $shop->flutterwave_client_id);
         $this->assertSame('tenant-client-secret', $shop->flutterwave_client_secret);
         $this->assertSame('FLWSECK_TEST-tenant-secret-key', $shop->flutterwave_secret_key);
@@ -84,6 +86,25 @@ class AdminPaymentSettingsTest extends TestCase
             ->assertForbidden();
 
         $this->assertNull($otherShop->refresh()->flutterwave_client_id);
+    }
+
+    public function test_tenant_admin_can_select_future_shop_gateway_without_credentials(): void
+    {
+        [$tenant] = $this->tenants();
+        $shop = $this->shop($tenant, 'Future Gateway Shop', false);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->put(route('admin.payment-settings.update', $shop), [
+                'payment_gateway' => 'monnify',
+            ])
+            ->assertRedirect(route('admin.payment-settings.index'));
+
+        $this->assertSame('monnify', $shop->refresh()->payment_gateway);
     }
 
     public function test_client_credentials_must_be_saved_together(): void

@@ -14,6 +14,8 @@ class PlatformPaymentSettingsCard extends Component
 
     public string $webhook_secret_hash = '';
 
+    public string $active_gateway = 'flutterwave';
+
     public string $default_payment_method = 'opay';
 
     public bool $clear_client_credentials = false;
@@ -26,6 +28,7 @@ class PlatformPaymentSettingsCard extends Component
     {
         abort_unless(auth()->user()->isSuperAdmin(), 403);
 
+        $this->active_gateway = $settings->activeGateway();
         $this->default_payment_method = $settings->defaultPaymentMethod();
     }
 
@@ -42,6 +45,7 @@ class PlatformPaymentSettingsCard extends Component
             'clear_client_credentials',
             'clear_webhook_secret',
         ]);
+        $this->active_gateway = $settings->activeGateway();
         $this->default_payment_method = $settings->defaultPaymentMethod();
         $this->savedMessage = 'Platform payment settings updated.';
         session()->flash('status', $this->savedMessage);
@@ -49,6 +53,7 @@ class PlatformPaymentSettingsCard extends Component
         $activity->log(auth()->user(), 'platform_payment_settings_updated', 'Platform payment settings updated.', [
             'client_credentials_updated' => filled($data['client_id'] ?? null) && filled($data['client_secret'] ?? null),
             'webhook_secret_updated' => filled($data['webhook_secret_hash'] ?? null),
+            'active_gateway' => $this->active_gateway,
             'default_payment_method' => $this->default_payment_method,
         ]);
     }

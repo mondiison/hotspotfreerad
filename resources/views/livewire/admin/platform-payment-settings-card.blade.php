@@ -8,13 +8,16 @@
     <div class="flex flex-col justify-between gap-3 md:flex-row md:items-start">
         <div class="min-w-0">
             <div class="flex flex-wrap items-center gap-2">
-                <h2 class="text-base font-semibold">Platform Flutterwave Account</h2>
+                <h2 class="text-base font-semibold">Default Platform Gateway</h2>
                 <flux:badge color="{{ $snapshot['source'] === 'database' ? 'blue' : 'zinc' }}" size="sm">
                     {{ $snapshot['source'] === 'database' ? 'Managed in app' : '.env fallback' }}
                 </flux:badge>
+                <flux:badge color="{{ $snapshot['active_gateway_implemented'] ? 'emerald' : 'amber' }}" size="sm">
+                    {{ $snapshot['active_gateway_name'] }}
+                </flux:badge>
             </div>
             <p class="mt-1 max-w-2xl text-sm leading-6 text-zinc-500">
-                Used only for tenant subscription payments. Tenant customer collections still use each shop's own payment setup.
+                Used only for tenant subscription payments. Tenant customer collections still use each shop's selected tenant gateway.
             </p>
         </div>
 
@@ -36,17 +39,28 @@
 
     <div class="mt-5 grid gap-4 md:grid-cols-2">
         <flux:field>
-            <flux:label>Platform client ID</flux:label>
+            <flux:label>Active platform gateway</flux:label>
+            <flux:select wire:model.live="active_gateway">
+                @foreach ($snapshot['gateway_options'] as $key => $label)
+                    <flux:select.option value="{{ $key }}">{{ $label }}</flux:select.option>
+                @endforeach
+            </flux:select>
+            <flux:description>Only live adapters can process checkout. Coming-soon gateways can be selected for planning, but checkout stays disabled until their adapter is added.</flux:description>
+            <flux:error name="active_gateway" />
+        </flux:field>
+
+        <flux:field>
+            <flux:label>{{ $snapshot['active_gateway_name'] }} client ID</flux:label>
             <flux:input
                 wire:model.blur="client_id"
                 icon="identification"
-                placeholder="{{ $snapshot['client_id_configured'] ? 'Leave blank to keep saved client ID' : 'Paste platform Flutterwave v4 client ID' }}"
+                placeholder="{{ $snapshot['client_id_configured'] ? 'Leave blank to keep saved client ID' : 'Paste platform gateway client ID' }}"
             />
             <flux:error name="client_id" />
         </flux:field>
 
         <flux:field>
-            <flux:label>Platform client secret</flux:label>
+            <flux:label>{{ $snapshot['active_gateway_name'] }} client secret</flux:label>
             <flux:input
                 wire:model.blur="client_secret"
                 icon="key"
@@ -57,14 +71,14 @@
         </flux:field>
 
         <flux:field>
-            <flux:label>Platform webhook secret hash</flux:label>
+            <flux:label>{{ $snapshot['active_gateway_name'] }} webhook secret</flux:label>
             <flux:input
                 wire:model.blur="webhook_secret_hash"
                 icon="shield-check"
-                placeholder="{{ $snapshot['webhook_secret_configured'] ? 'Leave blank to keep saved webhook secret' : 'Paste platform Flutterwave verif-hash' }}"
+                placeholder="{{ $snapshot['webhook_secret_configured'] ? 'Leave blank to keep saved webhook secret' : 'Paste platform gateway webhook secret' }}"
                 viewable
             />
-            <flux:description>Use this on the platform Flutterwave webhook settings, not tenant/shop accounts.</flux:description>
+            <flux:description>Use this on the platform gateway webhook settings, not tenant/shop accounts.</flux:description>
             <flux:error name="webhook_secret_hash" />
         </flux:field>
 

@@ -4,8 +4,10 @@ namespace App\Services;
 
 use App\Models\PlatformSetting;
 use App\Models\User;
+use App\Support\PaymentGatewayCatalog;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Validation\Rule;
 
 class PlatformPaymentSettingsService
 {
@@ -14,6 +16,7 @@ class PlatformPaymentSettingsService
     public function rules(): array
     {
         return [
+            'active_gateway' => ['required', 'string', Rule::in(array_keys(PaymentGatewayCatalog::onlineGateways()))],
             'client_id' => ['nullable', 'string', 'required_with:client_secret'],
             'client_secret' => ['nullable', 'string', 'required_with:client_id'],
             'webhook_secret_hash' => ['nullable', 'string'],
@@ -28,6 +31,7 @@ class PlatformPaymentSettingsService
         abort_unless($actor->isSuperAdmin(), 403);
 
         $settings = $this->stored();
+        $settings['active_gateway'] = (string) ($data['active_gateway'] ?? $this->activeGateway());
 
         if ((bool) ($data['clear_client_credentials'] ?? false)) {
             unset($settings['client_id'], $settings['client_secret']);
@@ -58,6 +62,10 @@ class PlatformPaymentSettingsService
             'client_id_configured' => filled($this->clientId()),
             'client_secret_configured' => filled($this->clientSecret()),
             'webhook_secret_configured' => filled($this->webhookSecretHash()),
+            'active_gateway' => $this->activeGateway(),
+            'active_gateway_name' => PaymentGatewayCatalog::gatewayName($this->activeGateway()),
+            'active_gateway_implemented' => $this->activeGatewayIsImplemented(),
+            'gateway_options' => PaymentGatewayCatalog::gatewayOptions(),
             'default_payment_method' => $this->defaultPaymentMethod(),
             'source' => $this->hasStoredCredentials() ? 'database' : 'env',
         ];
@@ -83,6 +91,23 @@ class PlatformPaymentSettingsService
         $method = $this->stored()['default_payment_method'] ?? config('services.flutterwave.default_payment_method') ?? 'opay';
 
         return in_array($method, ['opay', 'card', 'bank_transfer'], true) ? (string) $method : 'opay';
+    }
+
+    public function activeGateway(): string
+    {
+        $gateway = $this->stored()['active_gateway'] ?? PaymentGatewayCatalog::FLUTTERWAVE;
+
+        return array_key_exists($gateway, PaymentGatewayCatalog::onlineGateways()) ? (string) $gateway : PaymentGatewayCatalog::FLUTTERWAVE;
+    }
+
+    public function activeGatewayName(): string
+    {
+        return PaymentGatewayCatalog::gatewayName($this->activeGateway());
+    }
+
+    public function activeGatewayIsImplemented(): bool
+    {
+        return in_array($this->activeGateway(), PaymentGatewayCatalog::implementedGatewayKeys(), true);
     }
 
     public function hasStoredCredentials(): bool

@@ -7,54 +7,118 @@ use App\Services\PlatformPaymentSettingsService;
 
 class PaymentGatewayCatalog
 {
-    public static function tenantProvider(): array
+    public const FLUTTERWAVE = 'flutterwave';
+
+    public static function onlineGateways(): array
     {
         return [
-            'key' => 'flutterwave',
-            'name' => 'Flutterwave',
-            'label' => 'Tenant Flutterwave',
-            'summary' => 'Customer hotspot payments settle into this shop or tenant Flutterwave account.',
+            self::FLUTTERWAVE => [
+                'key' => self::FLUTTERWAVE,
+                'name' => 'Flutterwave',
+                'status' => 'live',
+                'summary' => 'Live adapter for OPay, bank transfer, and card checkout.',
+            ],
+            'paystack' => [
+                'key' => 'paystack',
+                'name' => 'Paystack',
+                'status' => 'planned',
+                'summary' => 'Vendor-ready placeholder for future Paystack checkout.',
+            ],
+            'monnify' => [
+                'key' => 'monnify',
+                'name' => 'Monnify',
+                'status' => 'planned',
+                'summary' => 'Vendor-ready placeholder for reserved accounts and transfer collection.',
+            ],
+            'squad' => [
+                'key' => 'squad',
+                'name' => 'Squad',
+                'status' => 'planned',
+                'summary' => 'Vendor-ready placeholder for GTCO Squad collections.',
+            ],
+            'manual_bank' => [
+                'key' => 'manual_bank',
+                'name' => 'Manual bank transfer',
+                'status' => 'planned',
+                'summary' => 'Vendor-ready placeholder for admin-confirmed offline transfer.',
+            ],
+        ];
+    }
+
+    public static function gatewayOptions(): array
+    {
+        return collect(self::onlineGateways())
+            ->mapWithKeys(fn (array $gateway, string $key): array => [
+                $key => $gateway['name'].($gateway['status'] === 'live' ? ' (live)' : ' (coming soon)'),
+            ])
+            ->all();
+    }
+
+    public static function gatewayName(?string $gateway): string
+    {
+        return self::onlineGateways()[$gateway ?: self::FLUTTERWAVE]['name'] ?? str((string) $gateway)->replace('_', ' ')->headline()->toString();
+    }
+
+    public static function implementedGatewayKeys(): array
+    {
+        return [self::FLUTTERWAVE];
+    }
+
+    public static function tenantProvider(?string $gatewayKey = null): array
+    {
+        $gatewayKey = $gatewayKey ?: self::FLUTTERWAVE;
+        $gateway = self::onlineGateways()[$gatewayKey] ?? self::onlineGateways()[self::FLUTTERWAVE];
+
+        return [
+            'key' => $gateway['key'],
+            'name' => $gateway['name'],
+            'label' => 'Default tenant gateway',
+            'summary' => 'Customer hotspot payments settle into the payment account configured for each tenant shop.',
+            'status' => $gateway['status'],
             'channels' => [
                 'opay_transfer' => [
                     'label' => 'OPay and transfer',
                     'requires' => 'v4 Client ID + Client Secret',
-                    'description' => 'Used for direct charge, OPay, and bank transfer collection from the captive portal.',
+                    'description' => 'Used by the live gateway adapter for direct charge, OPay, and bank transfer collection from the captive portal.',
                 ],
                 'card' => [
                     'label' => 'Card checkout',
                     'requires' => 'v3 Secret Key',
-                    'description' => 'Used when the customer chooses card checkout from Flutterwave hosted payment.',
+                    'description' => 'Used when the customer chooses card checkout from the hosted payment page.',
                 ],
                 'webhook' => [
                     'label' => 'Webhook confirmation',
                     'requires' => 'Webhook secret hash',
-                    'description' => 'Allows Flutterwave to confirm payments even if the customer closes the browser.',
+                    'description' => 'Allows the selected gateway to confirm payments even if the customer closes the browser.',
                 ],
             ],
         ];
     }
 
-    public static function platformProvider(): array
+    public static function platformProvider(?string $gatewayKey = null): array
     {
         $settings = app(PlatformPaymentSettingsService::class);
+        $gatewayKey = $gatewayKey ?: $settings->activeGateway();
+        $gateway = self::onlineGateways()[$gatewayKey] ?? self::onlineGateways()[self::FLUTTERWAVE];
 
         return [
-            'key' => 'flutterwave',
-            'name' => 'Flutterwave',
-            'label' => 'Platform Flutterwave',
-            'summary' => 'Tenant subscription payments settle into the MMS Radius platform account.',
+            'key' => $gateway['key'],
+            'name' => $gateway['name'],
+            'label' => 'Default platform gateway',
+            'summary' => 'Tenant subscription payments settle into the MMS Radius platform billing account.',
+            'status' => $gateway['status'],
             'channels' => [
                 'checkout' => [
                     'label' => 'Platform checkout',
-                    'requires' => 'Platform Client ID + Client Secret',
+                    'requires' => 'Platform gateway credentials',
                     'description' => 'Used when tenants pay or renew their SaaS subscription.',
-                    'ready' => filled($settings->clientId()) && filled($settings->clientSecret()),
+                    'ready' => $settings->activeGatewayIsImplemented() && filled($settings->clientId()) && filled($settings->clientSecret()),
                 ],
                 'webhook' => [
                     'label' => 'Platform webhook',
-                    'requires' => 'Platform webhook secret hash',
+                    'requires' => 'Platform webhook secret',
                     'description' => 'Keeps platform billing active even when callback redirects are interrupted.',
-                    'ready' => filled($settings->webhookSecretHash()),
+                    'ready' => $settings->activeGatewayIsImplemented() && filled($settings->webhookSecretHash()),
                 ],
             ],
         ];
@@ -96,7 +160,7 @@ class PaymentGatewayCatalog
     public static function paymentMethods(): array
     {
         return [
-            'flutterwave' => 'Flutterwave online',
+            'flutterwave' => 'Default gateway online',
             'voucher_cash' => 'Voucher cash',
         ];
     }

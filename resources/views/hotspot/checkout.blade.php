@@ -64,15 +64,17 @@
 
             <div class="mt-6 rounded-md bg-amber-50 p-4 text-sm leading-6 text-amber-800">
                 @if (($checkoutUnavailableReason ?? null) === 'missing_credentials')
-                    This shop has no complete Flutterwave client ID and client secret saved for hotspot customer payments. Check Payment Setup for {{ $shop->name }}.
+                    This shop has no complete gateway client ID and client secret saved for hotspot customer payments. Check Payment Setup for {{ $shop->name }}.
+                @elseif (($checkoutUnavailableReason ?? null) === 'gateway_not_live')
+                    {{ $shop->paymentGatewayName() }} has been selected for this shop, but its checkout adapter is not live yet. Ask the hotspot operator to switch this shop to a live gateway.
                 @elseif (($checkoutUnavailableReason ?? null) === 'missing_checkout_url')
-                    Flutterwave accepted the payment request, but did not return a checkout link. Check the tenant Flutterwave account/payment method configuration.
+                    The payment gateway accepted the payment request, but did not return a checkout link. Check the tenant gateway account/payment method configuration.
                 @elseif (($checkoutUnavailableReason ?? null) === 'missing_card_secret_key')
-                    Card checkout needs the tenant Flutterwave secret key. Ask the hotspot operator to add it under Payment Setup for {{ $shop->name }}.
+                    Card checkout needs the tenant gateway secret key. Ask the hotspot operator to add it under Payment Setup for {{ $shop->name }}.
                 @elseif (($checkoutUnavailableReason ?? null) === 'invalid_card_secret_key')
-                    Flutterwave rejected the saved card checkout secret key. Check Payment Setup for {{ $shop->name }} and paste the Secret Key from Flutterwave API Keys, not the client secret.
+                    The payment gateway rejected the saved card checkout secret key. Check Payment Setup for {{ $shop->name }} and paste the hosted checkout Secret Key, not the client secret.
                 @else
-                    Flutterwave checkout could not start even though credentials were found for {{ $credentialSource['label'] ?? $shop->name }}. Check the saved client ID/secret, payment method, and Laravel logs.
+                    Gateway checkout could not start even though credentials were found for {{ $credentialSource['label'] ?? $shop->name }}. Check the saved client ID/secret, payment method, and Laravel logs.
                 @endif
             </div>
 

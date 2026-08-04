@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Model;
+use App\Support\PaymentGatewayCatalog;
 
 class Shop extends Model
 {
@@ -26,6 +27,21 @@ class Shop extends Model
             'flutterwave_webhook_secret' => 'encrypted',
             'is_active' => 'boolean',
         ];
+    }
+
+    public function paymentGateway(): string
+    {
+        return $this->payment_gateway ?: PaymentGatewayCatalog::FLUTTERWAVE;
+    }
+
+    public function paymentGatewayName(): string
+    {
+        return PaymentGatewayCatalog::gatewayName($this->paymentGateway());
+    }
+
+    public function paymentGatewayIsImplemented(): bool
+    {
+        return in_array($this->paymentGateway(), PaymentGatewayCatalog::implementedGatewayKeys(), true);
     }
 
     public function tenant(): BelongsTo

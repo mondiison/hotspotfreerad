@@ -11,6 +11,8 @@ class PaymentSettingsCard extends Component
 {
     public Shop $shop;
 
+    public string $payment_gateway = 'flutterwave';
+
     public string $flutterwave_client_id = '';
 
     public string $flutterwave_client_secret = '';
@@ -30,6 +32,7 @@ class PaymentSettingsCard extends Component
     public function mount(Shop $shop): void
     {
         $this->shop = $shop;
+        $this->payment_gateway = $shop->paymentGateway();
     }
 
     public function save(PaymentSettingsService $settings): void
@@ -48,6 +51,7 @@ class PaymentSettingsCard extends Component
             'clear_flutterwave_secret_key',
             'clear_flutterwave_webhook_secret',
         ]);
+        $this->payment_gateway = $this->shop->paymentGateway();
 
         $this->savedMessage = 'Payment settings updated for '.$this->shop->name.'.';
 
@@ -58,6 +62,7 @@ class PaymentSettingsCard extends Component
     {
         return view('livewire.admin.payment-settings-card', [
             'readiness' => PaymentGatewayCatalog::tenantReadiness($this->shop),
+            'gatewayOptions' => PaymentGatewayCatalog::gatewayOptions(),
         ]);
     }
 }
