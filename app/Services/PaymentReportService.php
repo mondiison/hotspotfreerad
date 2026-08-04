@@ -31,7 +31,7 @@ class PaymentReportService
             'to' => ['nullable', 'date', 'after_or_equal:from'],
             'search' => ['nullable', 'string', 'max:255'],
             'status' => ['nullable', 'in:attention,pending,successful,failed,verification_failed'],
-            'provider' => ['nullable', 'in:flutterwave,voucher_cash'],
+            'provider' => ['nullable', 'in:'.implode(',', array_keys(PaymentGatewayCatalog::paymentMethods()))],
         ])->validate();
 
         $preset = $data['preset'] ?? null;

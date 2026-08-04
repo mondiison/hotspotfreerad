@@ -12,6 +12,8 @@ use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -284,6 +286,81 @@ class AdminPaymentIndexTest extends TestCase
             ->assertDontSee('Other Live Shop');
     }
 
+    public function test_tenant_admin_can_confirm_manual_bank_transfer_and_provision_access(): void
+    {
+        $this->createRadiusTables();
+        [$payment, $tenant] = $this->paymentFixture('Manual Tenant', 'manual@example.com', 'Manual Shop', 'MANUAL-PENDING', 'pending');
+        $payment->update([
+            'provider' => 'manual_bank',
+            'provider_reference' => $payment->tx_ref,
+            'payload' => array_merge($payment->payload ?? [], [
+                'manual_bank_transfer' => [
+                    'bank_name' => 'MMS Microfinance Bank',
+                    'account_name' => 'Manual Shop',
+                    'account_number' => '1234567890',
+                ],
+            ]),
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(PaymentsIndex::class)
+            ->assertSee('MANUAL-PENDING')
+            ->assertSee('Confirm')
+            ->call('confirmManualTransfer', $payment->id)
+            ->assertDispatched('notify');
+
+        $this->assertDatabaseHas('payments', [
+            'id' => $payment->id,
+            'status' => 'successful',
+        ]);
+        $this->assertDatabaseHas('subscriptions', [
+            'payment_id' => $payment->id,
+            'mac_address' => data_get($payment->payload, 'mac'),
+        ]);
+        $this->assertDatabaseHas('radcheck', [
+            'username' => data_get($payment->payload, 'mac'),
+            'attribute' => 'Cleartext-Password',
+        ]);
+    }
+
+    public function test_tenant_admin_cannot_confirm_other_tenant_manual_transfer(): void
+    {
+        [$payment] = $this->paymentFixture('Other Manual Tenant', 'other-manual@example.com', 'Other Manual Shop', 'OTHER-MANUAL', 'pending');
+        $payment->update([
+            'provider' => 'manual_bank',
+            'provider_reference' => $payment->tx_ref,
+        ]);
+        $actorTenant = Tenant::create([
+            'company_name' => 'Actor Tenant',
+            'owner_email' => 'actor@example.com',
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $actorTenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        try {
+            Livewire::actingAs($user)
+                ->test(PaymentsIndex::class)
+                ->call('confirmManualTransfer', $payment->id);
+
+            $this->fail('Expected tenant-scoped manual transfer confirmation to hide other tenant payment.');
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
+            $this->assertTrue(true);
+        }
+
+        $this->assertDatabaseHas('payments', [
+            'id' => $payment->id,
+            'status' => 'pending',
+        ]);
+    }
+
     private function paymentFixture(string $tenantName, string $ownerEmail, string $shopName, string $txRef, string $status, array $tenantOverrides = []): array
     {
         $tenant = Tenant::create(array_merge([
@@ -343,5 +420,42 @@ class AdminPaymentIndexTest extends TestCase
         }
 
         return [$payment, $tenant, $shop, $package, $customer];
+    }
+
+    private function createRadiusTables(): void
+    {
+        if (Schema::hasTable('radcheck')) {
+            return;
+        }
+
+        Schema::create('radcheck', function (Blueprint $table) {
+            $table->id();
+            $table->string('username');
+            $table->string('attribute');
+            $table->string('op', 2);
+            $table->string('value');
+        });
+
+        Schema::create('radreply', function (Blueprint $table) {
+            $table->id();
+            $table->string('username');
+            $table->string('attribute');
+            $table->string('op', 2);
+            $table->string('value');
+        });
+
+        Schema::create('radusergroup', function (Blueprint $table) {
+            $table->string('username');
+            $table->string('groupname');
+            $table->integer('priority')->default(1);
+        });
+
+        Schema::create('radgroupreply', function (Blueprint $table) {
+            $table->id();
+            $table->string('groupname');
+            $table->string('attribute');
+            $table->string('op', 2);
+            $table->string('value');
+        });
     }
 }

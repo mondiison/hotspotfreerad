@@ -2,8 +2,11 @@
 
 namespace App\Livewire\Admin;
 
+use App\Models\Payment;
+use App\Services\HotspotPaymentConfirmationService;
 use App\Services\PaymentReportService;
 use App\Support\PaymentGatewayCatalog;
+use App\Support\TenantAccess;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -87,6 +90,34 @@ class PaymentsIndex extends Component
         $this->status = '';
         $this->provider = '';
         $this->resetPage();
+    }
+
+    public function confirmManualTransfer(int $paymentId, HotspotPaymentConfirmationService $payments): void
+    {
+        $payment = TenantAccess::scopePayments(
+            Payment::query()->with(['shop.tenant', 'package', 'subscription']),
+            auth()->user()
+        )->findOrFail($paymentId);
+
+        if ($payment->provider !== PaymentGatewayCatalog::MANUAL_BANK || $payment->status !== 'pending') {
+            $this->dispatch('notify', type: 'warning', message: 'Only pending manual bank transfers can be confirmed here.');
+
+            return;
+        }
+
+        $payments->markPaidAndGrantAccess($payment, [
+            'status' => 'success',
+            'data' => [
+                'reference' => $payment->tx_ref,
+                'status' => 'successful',
+                'amount' => (float) $payment->amount,
+                'currency' => $payment->currency,
+                'confirmed_by' => auth()->id(),
+                'confirmed_manually_at' => now()->toIso8601String(),
+            ],
+        ]);
+
+        $this->dispatch('notify', type: 'success', message: 'Manual transfer confirmed and hotspot access provisioned.');
     }
 
     public function render(PaymentReportService $reports)

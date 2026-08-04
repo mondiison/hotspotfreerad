@@ -86,6 +86,7 @@
                     <th class="px-4 py-3 text-right font-medium">Gross</th>
                     <th class="px-4 py-3 text-right font-medium">Commission</th>
                     <th class="px-4 py-3 text-right font-medium">Tenant Net</th>
+                    <th class="px-4 py-3 text-right font-medium">Action</th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-zinc-100">
@@ -131,9 +132,28 @@
                             @endif
                         </td>
                         <td class="px-4 py-3 text-right font-medium">{{ $payment->currency }} {{ number_format($payment->tenant_net_amount ?: ($payment->gross_amount ?: $payment->amount), 2) }}</td>
+                        <td class="px-4 py-3 text-right">
+                            @if ($payment->provider === \App\Support\PaymentGatewayCatalog::MANUAL_BANK && $payment->status === 'pending')
+                                <flux:button
+                                    type="button"
+                                    size="xs"
+                                    variant="primary"
+                                    icon="check"
+                                    wire:click="confirmManualTransfer({{ $payment->id }})"
+                                    wire:confirm="Confirm this bank transfer and provision hotspot access?"
+                                    wire:loading.attr="disabled"
+                                    wire:target="confirmManualTransfer({{ $payment->id }})"
+                                >
+                                    <span wire:loading.remove wire:target="confirmManualTransfer({{ $payment->id }})">Confirm</span>
+                                    <span wire:loading wire:target="confirmManualTransfer({{ $payment->id }})">Confirming...</span>
+                                </flux:button>
+                            @else
+                                <span class="text-xs text-zinc-400">-</span>
+                            @endif
+                        </td>
                     </tr>
                 @empty
-                    <tr><td colspan="9" class="px-4 py-8 text-center text-zinc-500">No payments found.</td></tr>
+                    <tr><td colspan="10" class="px-4 py-8 text-center text-zinc-500">No payments found.</td></tr>
                 @endforelse
             </tbody>
         </table>

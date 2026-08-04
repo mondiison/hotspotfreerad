@@ -11,6 +11,7 @@ use App\Models\Router;
 use App\Models\Subscription;
 use App\Services\FlutterwaveService;
 use App\Services\HotspotPaymentConfirmationService;
+use App\Services\ManualBankTransferService;
 use App\Services\MonnifyService;
 use App\Services\PaystackService;
 use App\Services\Payments\HotspotHostedCheckoutManager;
@@ -198,7 +199,7 @@ class PortalController extends Controller
         ]);
     }
 
-    public function pay(Request $request, FlutterwaveService $flutterwave, HotspotHostedCheckoutManager $hostedGateways): RedirectResponse|View
+    public function pay(Request $request, FlutterwaveService $flutterwave, HotspotHostedCheckoutManager $hostedGateways, ManualBankTransferService $manualBank): RedirectResponse|View
     {
         $validated = $request->validate([
             'mac' => ['required', 'string', 'max:64'],
@@ -269,6 +270,29 @@ class PortalController extends Controller
 
         if (! in_array($payment->provider, PaymentGatewayCatalog::implementedGatewayKeys(), true)) {
             $checkoutUnavailableReason = 'gateway_not_live';
+        } elseif ($payment->provider === PaymentGatewayCatalog::MANUAL_BANK) {
+            if (! $manualBank->isConfiguredFor($payment)) {
+                $checkoutUnavailableReason = 'missing_manual_bank_details';
+            } else {
+                $payment->update([
+                    'provider_reference' => $payment->tx_ref,
+                    'payload' => array_merge($payment->payload ?? [], [
+                        'payment_channel' => 'Manual bank transfer',
+                        'manual_bank_transfer' => $manualBank->transferDetails($payment),
+                    ]),
+                ]);
+
+                return view('hotspot.manual-bank-transfer', [
+                    'router' => $router,
+                    'shop' => $router->shop,
+                    'package' => $package,
+                    'payment' => $payment->fresh(['shop.tenant', 'package']),
+                    'transfer' => $manualBank->transferDetails($payment),
+                    'macAddress' => $validated['mac'],
+                    'loginUrl' => $validated['link-login'] ?? null,
+                    'originalUrl' => $validated['link-orig'] ?? null,
+                ]);
+            }
         } elseif ($hostedGateways->supports($payment)) {
             $attempt = $hostedGateways->start($payment, [
                 'email' => $validated['email'] ?? null,
@@ -427,7 +451,7 @@ class PortalController extends Controller
         ]);
     }
 
-    public function checkBankTransfer(Request $request, FlutterwaveService $flutterwave, HotspotPaymentConfirmationService $payments): View
+    public function checkBankTransfer(Request $request, FlutterwaveService $flutterwave, HotspotPaymentConfirmationService $payments, ManualBankTransferService $manualBank): View
     {
         $validated = $request->validate([
             'tx_ref' => ['required', 'string', 'exists:payments,tx_ref'],
@@ -436,6 +460,20 @@ class PortalController extends Controller
         $payment = Payment::with(['shop.tenant', 'package'])
             ->where('tx_ref', $validated['tx_ref'])
             ->firstOrFail();
+
+        if ($payment->provider === PaymentGatewayCatalog::MANUAL_BANK) {
+            return view('hotspot.manual-bank-transfer', [
+                'router' => Router::with('shop.tenant')->where('shop_id', $payment->shop_id)->first(),
+                'shop' => $payment->shop,
+                'package' => $payment->package,
+                'payment' => $payment,
+                'transfer' => $manualBank->transferDetails($payment),
+                'macAddress' => $payment->payload['mac'],
+                'loginUrl' => $payment->payload['link_login'] ?? null,
+                'originalUrl' => $payment->payload['link_orig'] ?? null,
+                'statusMessage' => 'We have not confirmed your transfer yet. Keep this reference and wait for the hotspot operator to approve it.',
+            ]);
+        }
 
         $virtualAccountId = (string) data_get($payment->payload, 'virtual_account.virtual_account_id');
 

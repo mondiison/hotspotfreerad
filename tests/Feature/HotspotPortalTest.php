@@ -1775,6 +1775,77 @@ class HotspotPortalTest extends TestCase
         Queue::assertPushed(VerifyHotspotPaymentWebhook::class);
     }
 
+    public function test_manual_bank_transfer_shows_tenant_bank_details(): void
+    {
+        [$router, $package] = $this->routerWithPackage([
+            'payment_gateway_settings' => [
+                'manual_bank' => [
+                    'bank_name' => 'MMS Microfinance Bank',
+                    'account_name' => 'MMS Shop Collections',
+                    'account_number' => '1234567890',
+                    'instructions' => 'Send receipt to the hotspot desk after transfer.',
+                ],
+            ],
+        ]);
+        $router->shop->update(['payment_gateway' => 'manual_bank']);
+
+        $this->post(route('hotspot.pay'), [
+            'mac' => 'AA:BB:CC:DD:EE:FF',
+            'nasid' => $router->nas_identifier,
+            'package_id' => $package->id,
+            'email' => 'customer@example.com',
+            'phone' => '08000000000',
+            'payment_method' => 'bank_transfer',
+        ])
+            ->assertOk()
+            ->assertSee('Pay by manual bank transfer')
+            ->assertSee('MMS Microfinance Bank')
+            ->assertSee('MMS Shop Collections')
+            ->assertSee('1234567890')
+            ->assertSee('Send receipt to the hotspot desk after transfer.');
+
+        $payment = Payment::firstOrFail();
+
+        $this->assertSame('manual_bank', $payment->provider);
+        $this->assertSame($payment->tx_ref, $payment->provider_reference);
+        $this->assertSame('Manual bank transfer', data_get($payment->payload, 'payment_channel'));
+
+        $router->shop->tenant->update([
+            'payment_gateway_settings' => [
+                'manual_bank' => [
+                    'bank_name' => 'Changed Bank',
+                    'account_name' => 'Changed Account',
+                    'account_number' => '0000000000',
+                ],
+            ],
+        ]);
+
+        $this->post(route('hotspot.payment.bank-transfer.check'), [
+            'tx_ref' => $payment->tx_ref,
+        ])
+            ->assertOk()
+            ->assertSee('MMS Microfinance Bank')
+            ->assertSee('MMS Shop Collections')
+            ->assertSee('1234567890')
+            ->assertDontSee('Changed Bank');
+    }
+
+    public function test_manual_bank_transfer_requires_saved_bank_details(): void
+    {
+        [$router, $package] = $this->routerWithPackage();
+        $router->shop->update(['payment_gateway' => 'manual_bank']);
+
+        $this->post(route('hotspot.pay'), [
+            'mac' => 'AA:BB:CC:DD:EE:FF',
+            'nasid' => $router->nas_identifier,
+            'package_id' => $package->id,
+            'email' => 'customer@example.com',
+            'payment_method' => 'bank_transfer',
+        ])
+            ->assertOk()
+            ->assertSee('Manual bank transfer is selected for this shop, but bank name, account name, or account number is missing');
+    }
+
     private function routerWithPackage(array $tenantOverrides = []): array
     {
         $tenant = Tenant::create(array_merge([

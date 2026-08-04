@@ -11,6 +11,7 @@ class PaymentGatewayCatalog
     public const PAYSTACK = 'paystack';
     public const MONNIFY = 'monnify';
     public const SQUAD = 'squad';
+    public const MANUAL_BANK = 'manual_bank';
 
     public static function onlineGateways(): array
     {
@@ -86,21 +87,22 @@ class PaymentGatewayCatalog
                 ],
                 'secret_fields' => ['secret_key'],
             ],
-            'manual_bank' => [
-                'key' => 'manual_bank',
+            self::MANUAL_BANK => [
+                'key' => self::MANUAL_BANK,
                 'name' => 'Manual bank transfer',
                 'brand_color' => '#18181b',
                 'logo_path' => null,
                 'region' => 'Offline',
                 'currencies' => ['NGN'],
-                'status' => 'planned',
-                'summary' => 'Vendor-ready for admin-confirmed offline transfer where online checkout is not required.',
+                'status' => 'live',
+                'summary' => 'Live adapter for admin-confirmed offline transfer where online checkout is not required.',
                 'webhook_header' => null,
                 'webhook_note' => 'Manual transfer does not need a provider webhook. Admin confirmation will be required.',
                 'fields' => [
                     'bank_name' => 'Bank Name',
                     'account_name' => 'Account Name',
                     'account_number' => 'Account Number',
+                    'instructions' => 'Customer Instructions',
                 ],
                 'secret_fields' => [],
             ],
@@ -160,7 +162,7 @@ class PaymentGatewayCatalog
 
     public static function implementedGatewayKeys(): array
     {
-        return [self::FLUTTERWAVE, self::PAYSTACK, self::MONNIFY, self::SQUAD];
+        return [self::FLUTTERWAVE, self::PAYSTACK, self::MONNIFY, self::SQUAD, self::MANUAL_BANK];
     }
 
     public static function tenantProvider(?string $gatewayKey = null): array
@@ -226,6 +228,21 @@ class PaymentGatewayCatalog
                     'label' => 'Webhook confirmation',
                     'requires' => 'x-squad-encrypted-body validation with Secret Key',
                     'description' => 'Allows Squad to confirm completed payments even if the customer closes the browser.',
+                ],
+            ];
+        }
+
+        if ($gatewayKey === self::MANUAL_BANK) {
+            $channels = [
+                'instructions' => [
+                    'label' => 'Bank details',
+                    'requires' => 'Bank name + account name + account number',
+                    'description' => 'Shown to customers on the captive portal when online checkout is not required.',
+                ],
+                'confirmation' => [
+                    'label' => 'Admin confirmation',
+                    'requires' => 'Tenant admin verifies the bank alert or statement',
+                    'description' => 'Access is provisioned only after an admin confirms the pending payment.',
                 ],
             ];
         }
@@ -327,7 +344,11 @@ class PaymentGatewayCatalog
     public static function paymentMethods(): array
     {
         return [
-            'flutterwave' => 'Default gateway online',
+            self::FLUTTERWAVE => 'Flutterwave',
+            self::PAYSTACK => 'Paystack',
+            self::MONNIFY => 'Monnify',
+            self::SQUAD => 'Squad',
+            self::MANUAL_BANK => 'Manual bank transfer',
             'voucher_cash' => 'Voucher cash',
         ];
     }
