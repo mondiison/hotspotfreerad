@@ -1552,6 +1552,229 @@ class HotspotPortalTest extends TestCase
         Queue::assertPushed(VerifyHotspotPaymentWebhook::class);
     }
 
+    public function test_squad_checkout_redirects_to_checkout_url(): void
+    {
+        config(['services.squad.base_url' => 'https://sandbox-api-d.squadco.com']);
+        Http::fake([
+            'sandbox-api-d.squadco.com/transaction/initiate' => fn ($request) => Http::response([
+                'status' => 200,
+                'success' => true,
+                'message' => 'Success',
+                'data' => [
+                    'transaction_amount' => $request['amount'],
+                    'transaction_ref' => $request['transaction_ref'],
+                    'checkout_url' => 'https://sandbox-pay.squadco.com/demo-checkout',
+                ],
+            ]),
+        ]);
+
+        [$router, $package] = $this->routerWithPackage([
+            'payment_gateway_settings' => [
+                'squad' => [
+                    'public_key' => 'sandbox_pk_demo',
+                    'secret_key' => 'sandbox_sk_demo',
+                ],
+            ],
+        ]);
+        $router->shop->update(['payment_gateway' => 'squad']);
+
+        $this->post(route('hotspot.pay'), [
+            'mac' => 'AA:BB:CC:DD:EE:FF',
+            'nasid' => $router->nas_identifier,
+            'package_id' => $package->id,
+            'email' => 'customer@example.com',
+            'phone' => '08000000000',
+            'payment_method' => 'card',
+        ])
+            ->assertRedirect('https://sandbox-pay.squadco.com/demo-checkout');
+
+        $payment = Payment::firstOrFail();
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/transaction/initiate')
+            && $request->hasHeader('Authorization', 'Bearer sandbox_sk_demo')
+            && $request['transaction_ref'] === $payment->tx_ref
+            && $request['amount'] === 50000
+            && $request['currency'] === 'NGN'
+            && $request['email'] === 'customer@example.com'
+            && $request['callback_url'] === route('hotspot.payment.callback', ['transaction_ref' => $payment->tx_ref])
+            && $request['initiate_type'] === 'inline'
+            && $request['payment_channels'] === ['card', 'bank', 'ussd', 'transfer']
+            && $request['metadata']['tenant_name'] === 'Demo ISP'
+            && $request['metadata']['shop_name'] === 'Demo Shop'
+            && $request['metadata']['device_mac'] === 'AA:BB:CC:DD:EE:FF');
+
+        $this->assertSame('squad', $payment->provider);
+        $this->assertSame($payment->tx_ref, $payment->provider_reference);
+        $this->assertSame('https://sandbox-pay.squadco.com/demo-checkout', data_get($payment->payload, 'checkout_url'));
+    }
+
+    public function test_squad_manual_verification_provisions_radius_access(): void
+    {
+        config(['services.squad.base_url' => 'https://sandbox-api-d.squadco.com']);
+        [$router, $package] = $this->routerWithPackage([
+            'payment_gateway_settings' => [
+                'squad' => [
+                    'public_key' => 'sandbox_pk_demo',
+                    'secret_key' => 'sandbox_sk_demo',
+                ],
+            ],
+        ]);
+
+        $payment = Payment::create([
+            'shop_id' => $router->shop_id,
+            'package_id' => $package->id,
+            'provider' => 'squad',
+            'tx_ref' => 'HSF-SQUAD-VERIFY',
+            'provider_reference' => 'HSF-SQUAD-VERIFY',
+            'amount' => 500,
+            'gross_amount' => 500,
+            'platform_fee_amount' => 0,
+            'tenant_net_amount' => 500,
+            'currency' => 'NGN',
+            'status' => 'pending',
+            'payload' => [
+                'mac' => 'AA:BB:CC:DD:EE:FF',
+                'nasid' => $router->nas_identifier,
+                'link_login' => 'http://10.5.50.1/login',
+                'link_orig' => 'http://example.com',
+            ],
+        ]);
+
+        Http::fake([
+            'sandbox-api-d.squadco.com/transaction/verify/HSF-SQUAD-VERIFY' => Http::response([
+                'status' => 200,
+                'success' => true,
+                'message' => 'Success',
+                'data' => [
+                    'transaction_ref' => $payment->tx_ref,
+                    'transaction_amount' => 50000,
+                    'transaction_status' => 'Success',
+                    'currency' => 'NGN',
+                ],
+            ]),
+        ]);
+
+        $this->post(route('hotspot.payment.verify'), [
+            'tx_ref' => $payment->tx_ref,
+        ])
+            ->assertOk()
+            ->assertSee('Access provisioned')
+            ->assertSee('Connecting this device...');
+
+        $this->assertDatabaseHas('payments', [
+            'id' => $payment->id,
+            'status' => 'successful',
+            'provider_reference' => 'HSF-SQUAD-VERIFY',
+        ]);
+        $this->assertDatabaseHas('subscriptions', [
+            'payment_id' => $payment->id,
+            'mac_address' => 'AA:BB:CC:DD:EE:FF',
+        ]);
+    }
+
+    public function test_squad_callback_uses_transaction_ref_and_provisions_access(): void
+    {
+        config(['services.squad.base_url' => 'https://sandbox-api-d.squadco.com']);
+        [$router, $package] = $this->routerWithPackage([
+            'payment_gateway_settings' => [
+                'squad' => [
+                    'public_key' => 'sandbox_pk_demo',
+                    'secret_key' => 'sandbox_sk_demo',
+                ],
+            ],
+        ]);
+
+        $payment = Payment::create([
+            'shop_id' => $router->shop_id,
+            'package_id' => $package->id,
+            'provider' => 'squad',
+            'tx_ref' => 'HSF-SQUAD-CALLBACK',
+            'provider_reference' => 'HSF-SQUAD-CALLBACK',
+            'amount' => 500,
+            'gross_amount' => 500,
+            'platform_fee_amount' => 0,
+            'tenant_net_amount' => 500,
+            'currency' => 'NGN',
+            'status' => 'pending',
+            'payload' => [
+                'mac' => 'AA:BB:CC:DD:EE:FF',
+                'nasid' => $router->nas_identifier,
+            ],
+        ]);
+
+        Http::fake([
+            'sandbox-api-d.squadco.com/transaction/verify/HSF-SQUAD-CALLBACK' => Http::response([
+                'status' => 200,
+                'success' => true,
+                'data' => [
+                    'transaction_ref' => $payment->tx_ref,
+                    'transaction_amount' => 50000,
+                    'transaction_status' => 'Success',
+                    'currency' => 'NGN',
+                ],
+            ]),
+        ]);
+
+        $this->get(route('hotspot.payment.callback', [
+            'transaction_ref' => $payment->tx_ref,
+        ]))
+            ->assertOk()
+            ->assertSee('Access provisioned');
+
+        $this->assertDatabaseHas('payments', [
+            'id' => $payment->id,
+            'status' => 'successful',
+        ]);
+    }
+
+    public function test_squad_webhook_validates_signature_and_dispatches_verification(): void
+    {
+        Queue::fake();
+        [$router, $package] = $this->routerWithPackage([
+            'payment_gateway_settings' => [
+                'squad' => [
+                    'public_key' => 'sandbox_pk_demo',
+                    'secret_key' => 'sandbox_sk_demo',
+                ],
+            ],
+        ]);
+
+        Payment::create([
+            'shop_id' => $router->shop_id,
+            'package_id' => $package->id,
+            'provider' => 'squad',
+            'tx_ref' => 'HSF-SQUAD-WEBHOOK',
+            'provider_reference' => 'HSF-SQUAD-WEBHOOK',
+            'amount' => 500,
+            'gross_amount' => 500,
+            'platform_fee_amount' => 0,
+            'tenant_net_amount' => 500,
+            'currency' => 'NGN',
+            'status' => 'pending',
+            'payload' => [
+                'mac' => 'AA:BB:CC:DD:EE:FF',
+                'nasid' => $router->nas_identifier,
+            ],
+        ]);
+        $payload = [
+            'event' => 'charge_successful',
+            'data' => [
+                'transaction_ref' => 'HSF-SQUAD-WEBHOOK',
+                'transaction_amount' => 50000,
+                'transaction_status' => 'Success',
+            ],
+        ];
+        $rawPayload = json_encode($payload);
+
+        $this->postJson(route('hotspot.payment.webhook'), $payload, [
+            'x-squad-encrypted-body' => hash_hmac('sha512', $rawPayload, 'sandbox_sk_demo'),
+        ])
+            ->assertOk()
+            ->assertSee('ok');
+
+        Queue::assertPushed(VerifyHotspotPaymentWebhook::class);
+    }
+
     private function routerWithPackage(array $tenantOverrides = []): array
     {
         $tenant = Tenant::create(array_merge([

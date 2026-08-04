@@ -71,4 +71,8 @@ return [
         'base_url' => env('MONNIFY_BASE_URL', 'https://sandbox.monnify.com'),
     ],
 
+    'squad' => [
+        'base_url' => env('SQUAD_BASE_URL', 'https://sandbox-api-d.squadco.com'),
+    ],
+
 ];

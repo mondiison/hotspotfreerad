@@ -14,6 +14,7 @@ use App\Services\HotspotPaymentConfirmationService;
 use App\Services\MonnifyService;
 use App\Services\PaystackService;
 use App\Services\RadiusProvisioningService;
+use App\Services\SquadService;
 use App\Services\VoucherManagementService;
 use App\Support\PaymentCommission;
 use App\Support\PaymentGatewayCatalog;
@@ -196,7 +197,7 @@ class PortalController extends Controller
         ]);
     }
 
-    public function pay(Request $request, FlutterwaveService $flutterwave, MonnifyService $monnify, PaystackService $paystack): RedirectResponse|View
+    public function pay(Request $request, FlutterwaveService $flutterwave, MonnifyService $monnify, PaystackService $paystack, SquadService $squad): RedirectResponse|View
     {
         $validated = $request->validate([
             'mac' => ['required', 'string', 'max:64'],
@@ -267,6 +268,57 @@ class PortalController extends Controller
 
         if (! in_array($payment->provider, PaymentGatewayCatalog::implementedGatewayKeys(), true)) {
             $checkoutUnavailableReason = 'gateway_not_live';
+        } elseif ($payment->provider === PaymentGatewayCatalog::SQUAD) {
+            $credentialSource = $squad->credentialSource($payment);
+
+            if (! $squad->isConfiguredFor($payment)) {
+                $checkoutUnavailableReason = 'missing_gateway_secret_key';
+            } else {
+                try {
+                    $checkout = $squad->initializeCheckout(
+                        $payment,
+                        [
+                            'email' => $validated['email'] ?? null,
+                            'phone' => $validated['phone'] ?? null,
+                            'name' => 'Hotspot Customer',
+                        ],
+                        route('hotspot.payment.callback', ['transaction_ref' => $payment->tx_ref])
+                    );
+
+                    $payment->update([
+                        'provider_reference' => $checkout['provider_reference'],
+                        'payload' => array_merge($payment->payload ?? [], [
+                            'checkout_url' => $checkout['checkout_url'],
+                            'squad_account' => $credentialSource,
+                            'squad_init_response' => $checkout['response'],
+                        ]),
+                    ]);
+
+                    if (filled($checkout['checkout_url'])) {
+                        return redirect()->away($checkout['checkout_url']);
+                    }
+
+                    Log::warning('Squad checkout response missing checkout URL', [
+                        'payment_id' => $payment->id,
+                        'tx_ref' => $payment->tx_ref,
+                        'payment_method' => $paymentMethod,
+                        'response_body' => $checkout['response'] ?? null,
+                    ]);
+
+                    $checkoutUnavailableReason = 'missing_checkout_url';
+                } catch (Throwable $exception) {
+                    $checkoutUnavailableReason = $this->squadCheckoutFailureReason($exception);
+
+                    Log::warning('Squad checkout initialization failed', [
+                        'payment_id' => $payment->id,
+                        'tx_ref' => $payment->tx_ref,
+                        'message' => $exception->getMessage(),
+                        'response_body' => $exception instanceof RequestException
+                            ? $exception->response->json() ?: $exception->response->body()
+                            : null,
+                    ]);
+                }
+            }
         } elseif ($payment->provider === PaymentGatewayCatalog::MONNIFY) {
             $credentialSource = $monnify->credentialSource($payment);
 
@@ -637,7 +689,7 @@ class PortalController extends Controller
 
     public function callback(Request $request, HotspotPaymentConfirmationService $payments): View
     {
-        $txRef = $request->query('tx_ref') ?: $request->query('paymentReference') ?: $request->query('reference');
+        $txRef = $request->query('tx_ref') ?: $request->query('paymentReference') ?: $request->query('transaction_ref') ?: $request->query('reference');
 
         $payment = Payment::with(['shop.tenant', 'package'])
             ->where('tx_ref', $txRef)
@@ -655,7 +707,7 @@ class PortalController extends Controller
             ]);
         }
 
-        if (! in_array($payment->provider, [PaymentGatewayCatalog::PAYSTACK, PaymentGatewayCatalog::MONNIFY], true)
+        if (! in_array($payment->provider, [PaymentGatewayCatalog::PAYSTACK, PaymentGatewayCatalog::MONNIFY, PaymentGatewayCatalog::SQUAD], true)
             && ! $this->statusIsSuccessful($request->query('status'))) {
             $payment->update(['status' => $request->query('status', 'failed')]);
 
@@ -705,11 +757,12 @@ class PortalController extends Controller
         ]);
     }
 
-    public function webhook(Request $request, FlutterwaveService $flutterwave, MonnifyService $monnify, PaystackService $paystack): Response
+    public function webhook(Request $request, FlutterwaveService $flutterwave, MonnifyService $monnify, PaystackService $paystack, SquadService $squad): Response
     {
         $payload = $request->all();
         $txRef = data_get($payload, 'data.reference')
             ?: data_get($payload, 'data.tx_ref')
+            ?: data_get($payload, 'data.transaction_ref')
             ?: data_get($payload, 'eventData.paymentReference');
 
         if (blank($txRef)) {
@@ -730,6 +783,10 @@ class PortalController extends Controller
             if (! $monnify->webhookIsValid($request->getContent(), $request->header('monnify-signature'), $payment)) {
                 abort(401);
             }
+        } elseif ($payment->provider === PaymentGatewayCatalog::SQUAD) {
+            if (! $squad->webhookIsValid($request->getContent(), $request->header('x-squad-encrypted-body'), $payment)) {
+                abort(401);
+            }
         } elseif (! $flutterwave->webhookIsValid($request->header('verif-hash'), $payment)) {
             abort(401);
         }
@@ -737,6 +794,7 @@ class PortalController extends Controller
         $providerReference = data_get($payload, 'data.id')
             ?: data_get($payload, 'data.order.id')
             ?: data_get($payload, 'data.order_id')
+            ?: data_get($payload, 'data.transaction_ref')
             ?: data_get($payload, 'eventData.transactionReference')
             ?: $payment->provider_reference
             ?: $txRef;
@@ -756,7 +814,7 @@ class PortalController extends Controller
 
     private function providerReferenceFromRequest(Request $request): ?string
     {
-        foreach (['paymentReference', 'transactionReference', 'reference', 'id', 'order_id', 'charge_id', 'transaction_id'] as $key) {
+        foreach (['paymentReference', 'transactionReference', 'transaction_ref', 'reference', 'id', 'order_id', 'charge_id', 'transaction_id'] as $key) {
             if (filled($request->query($key))) {
                 return (string) $request->query($key);
             }
@@ -793,6 +851,15 @@ class PortalController extends Controller
     }
 
     private function monnifyCheckoutFailureReason(Throwable $exception): string
+    {
+        if ($exception instanceof RequestException && $exception->response->status() === 401) {
+            return 'invalid_gateway_secret_key';
+        }
+
+        return 'initialization_failed';
+    }
+
+    private function squadCheckoutFailureReason(Throwable $exception): string
     {
         if ($exception instanceof RequestException && $exception->response->status() === 401) {
             return 'invalid_gateway_secret_key';

@@ -10,6 +10,7 @@ class PaymentGatewayCatalog
     public const FLUTTERWAVE = 'flutterwave';
     public const PAYSTACK = 'paystack';
     public const MONNIFY = 'monnify';
+    public const SQUAD = 'squad';
 
     public static function onlineGateways(): array
     {
@@ -68,15 +69,15 @@ class PaymentGatewayCatalog
                 ],
                 'secret_fields' => ['secret_key'],
             ],
-            'squad' => [
-                'key' => 'squad',
+            self::SQUAD => [
+                'key' => self::SQUAD,
                 'name' => 'Squad',
                 'brand_color' => '#ed1c24',
                 'logo_path' => 'images/payment-gateways/squad.svg',
                 'region' => 'Nigeria',
                 'currencies' => ['NGN'],
-                'status' => 'planned',
-                'summary' => 'Vendor-ready for GTCO Squad collections and local Nigerian settlement.',
+                'status' => 'live',
+                'summary' => 'Live adapter for hosted checkout with cards, bank transfer, and USSD through Squad by GTCO.',
                 'webhook_header' => 'x-squad-encrypted-body',
                 'webhook_note' => 'Set this endpoint in Squad webhooks so completed transactions reconcile automatically.',
                 'fields' => [
@@ -159,7 +160,7 @@ class PaymentGatewayCatalog
 
     public static function implementedGatewayKeys(): array
     {
-        return [self::FLUTTERWAVE, self::PAYSTACK, self::MONNIFY];
+        return [self::FLUTTERWAVE, self::PAYSTACK, self::MONNIFY, self::SQUAD];
     }
 
     public static function tenantProvider(?string $gatewayKey = null): array
@@ -210,6 +211,21 @@ class PaymentGatewayCatalog
                     'label' => 'Webhook confirmation',
                     'requires' => 'monnify-signature validation with Secret Key',
                     'description' => 'Allows Monnify to confirm completed payments even if the customer closes the browser.',
+                ],
+            ];
+        }
+
+        if ($gatewayKey === self::SQUAD) {
+            $channels = [
+                'checkout' => [
+                    'label' => 'Hosted checkout',
+                    'requires' => 'Squad Secret Key',
+                    'description' => 'Used to redirect hotspot customers to Squad checkout for card, bank transfer, and USSD payments.',
+                ],
+                'webhook' => [
+                    'label' => 'Webhook confirmation',
+                    'requires' => 'x-squad-encrypted-body validation with Secret Key',
+                    'description' => 'Allows Squad to confirm completed payments even if the customer closes the browser.',
                 ],
             ];
         }
