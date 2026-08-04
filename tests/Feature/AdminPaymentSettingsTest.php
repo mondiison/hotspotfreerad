@@ -182,11 +182,12 @@ class AdminPaymentSettingsTest extends TestCase
             ->assertSee('Monnify');
 
         $shop->refresh();
+        $tenant->refresh();
 
         $this->assertSame('monnify', $shop->payment_gateway);
-        $this->assertSame('MK_TEST_PUBLIC', $shop->payment_gateway_settings['monnify']['public_key']);
-        $this->assertSame('MK_TEST_SECRET', $shop->payment_gateway_settings['monnify']['secret_key']);
-        $this->assertSame('1234567890', $shop->payment_gateway_settings['monnify']['contract_code']);
+        $this->assertSame('MK_TEST_PUBLIC', $tenant->payment_gateway_settings['monnify']['public_key']);
+        $this->assertSame('MK_TEST_SECRET', $tenant->payment_gateway_settings['monnify']['secret_key']);
+        $this->assertSame('1234567890', $tenant->payment_gateway_settings['monnify']['contract_code']);
     }
 
     public function test_livewire_payment_settings_card_validates_credentials_together(): void

@@ -16,7 +16,6 @@ class Shop extends Model
         'flutterwave_client_secret',
         'flutterwave_secret_key',
         'flutterwave_webhook_secret',
-        'payment_gateway_settings',
     ];
 
     protected function casts(): array
@@ -26,7 +25,6 @@ class Shop extends Model
             'flutterwave_client_secret' => 'encrypted',
             'flutterwave_secret_key' => 'encrypted',
             'flutterwave_webhook_secret' => 'encrypted',
-            'payment_gateway_settings' => 'encrypted:array',
             'is_active' => 'boolean',
         ];
     }
@@ -53,7 +51,7 @@ class Shop extends Model
 
     public function paymentGatewaySettings(): array
     {
-        return (array) ($this->payment_gateway_settings ?? []);
+        return $this->tenant?->paymentGatewaySettings() ?? [];
     }
 
     public function tenant(): BelongsTo

@@ -35,14 +35,22 @@ class PaymentSettingsService
     public function update(Shop $shop, array $data, User $user): bool
     {
         TenantAccess::assertShop($shop, $user);
+        $shop->loadMissing('tenant');
 
         $updates = $this->updates($shop, $data);
 
-        if ($updates === []) {
-            return false;
+        $tenantUpdates = $updates['tenant'] ?? [];
+        unset($updates['tenant']);
+
+        $shopUpdated = $updates === [] ? false : $shop->update($updates);
+
+        if ($tenantUpdates !== [] && $shop->tenant) {
+            $shop->tenant->update($tenantUpdates);
+
+            return true;
         }
 
-        return $shop->update($updates);
+        return $shopUpdated;
     }
 
     private function updates(Shop $shop, array $data): array
@@ -55,9 +63,9 @@ class PaymentSettingsService
         ];
 
         if ($gatewaySettings !== []) {
-            $allSettings = (array) ($shop->payment_gateway_settings ?? []);
+            $allSettings = (array) ($shop->tenant?->payment_gateway_settings ?? []);
             $allSettings[$gateway] = $gatewaySettings;
-            $updates['payment_gateway_settings'] = $allSettings;
+            $updates['tenant'] = ['payment_gateway_settings' => $allSettings];
         }
 
         if ($gateway === PaymentGatewayCatalog::FLUTTERWAVE) {

@@ -11,6 +11,10 @@ class Tenant extends Model
 {
     protected $guarded = [];
 
+    protected $hidden = [
+        'payment_gateway_settings',
+    ];
+
     protected static function booted(): void
     {
         static::creating(function (Tenant $tenant): void {
@@ -35,6 +39,7 @@ class Tenant extends Model
             'commission_rate' => 'decimal:2',
             'public_site_enabled' => 'boolean',
             'public_site_slides' => 'array',
+            'payment_gateway_settings' => 'encrypted:array',
         ];
     }
 
@@ -71,6 +76,11 @@ class Tenant extends Model
     public function publicUrl(): string
     {
         return route('tenant.public-site', $this);
+    }
+
+    public function paymentGatewaySettings(): array
+    {
+        return (array) ($this->payment_gateway_settings ?? []);
     }
 
     private static function uniqueSlug(string $name, ?int $ignoreId = null): string
