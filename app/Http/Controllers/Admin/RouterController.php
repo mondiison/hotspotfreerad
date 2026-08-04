@@ -67,7 +67,7 @@ class RouterController extends Controller
             'infrastructureProfiles' => $mikroTik->infrastructureProfiles(),
             'loginTemplate' => $mikroTik->generateLoginTemplate(),
             'provisioningConfig' => [
-                'portal_url' => rtrim(config('app.url'), '/').'/hotspot/portal',
+                'portal_url' => $mikroTik->portalUrl(),
                 'radius_server_ip' => config('services.radius.server_ip'),
                 'wireguard_endpoint_host' => config('services.wireguard.endpoint_host'),
                 'wireguard_endpoint_port' => config('services.wireguard.endpoint_port'),

@@ -49,6 +49,7 @@ return [
 
     'mikrotik' => [
         'hotspot_dns_name' => env('HOTSPOT_DNS_NAME', 'hotspot.local'),
+        'portal_url' => env('HOTSPOT_PORTAL_URL'),
     ],
 
     'flutterwave' => [

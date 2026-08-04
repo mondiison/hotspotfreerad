@@ -17,6 +17,7 @@ class RouterProvisioningPageTest extends TestCase
     {
         config([
             'app.url' => 'https://portal.example.com',
+            'services.mikrotik.portal_url' => 'https://public.example.com/hotspot/portal',
             'services.radius.server_ip' => '10.8.0.1',
             'services.wireguard.endpoint_host' => 'vpn.example.com',
             'services.wireguard.public_key' => 'server-public-key',
@@ -51,7 +52,7 @@ class RouterProvisioningPageTest extends TestCase
             ->assertSee('/system identity set name=&quot;demo-router&quot;', false)
             ->assertSee('endpoint-address=vpn.example.com')
             ->assertSee('/radius add address=10.8.0.1 secret=&quot;radius-secret&quot; service=hotspot,ppp', false)
-            ->assertSee('/ip hotspot walled-garden add dst-host=portal.example.com action=allow')
+            ->assertSee('/ip hotspot walled-garden add dst-host=public.example.com action=allow')
             ->assertSee('Fresh MikroTik Infrastructure Script')
             ->assertSee('Starlink plaza / high concurrency')
             ->assertSee('MMS POS = WPA2/WPA3 SSID tagged VLAN 50')
@@ -62,7 +63,8 @@ class RouterProvisioningPageTest extends TestCase
             ->assertSee('/interface pppoe-server server add interface=bridge1 service-name=mms-radius')
             ->assertSee('Config In Use')
             ->assertSee('MikroTik login.html')
-            ->assertSee('https://portal.example.com/hotspot/portal')
+            ->assertSee('https://public.example.com/hotspot/portal')
+            ->assertDontSee('https://portal.example.com/hotspot/portal')
             ->assertSee('window.location.replace(portal)')
             ->assertSee('/ip hotspot active remove', false)
             ->assertSee('sudo freeradius -X');
@@ -133,7 +135,8 @@ class RouterProvisioningPageTest extends TestCase
             ->assertOk()
             ->assertSee(':global wan1 &quot;ether5&quot;', false)
             ->assertSee(':global hotspotVlan &quot;120&quot;', false)
-            ->assertSee('vlan-ids=11,120,130')
+            ->assertSee('untagged=ether3 vlan-ids=11')
+            ->assertSee('vlan-ids=120,130')
             ->assertSee('POS VLAN is disabled')
             ->assertSee('Realtime QoS and PCQ are disabled');
     }

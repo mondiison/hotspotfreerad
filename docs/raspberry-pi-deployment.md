@@ -99,6 +99,7 @@ WIREGUARD_ENDPOINT_PORT=13231
 WIREGUARD_PUBLIC_KEY=your_pi_wireguard_public_key
 
 HOTSPOT_DNS_NAME=hotspot.local
+HOTSPOT_PORTAL_URL=https://mmsradius.com/hotspot/portal
 SECURITY_ACTIVITY_RETENTION_DAYS=180
 ```
 

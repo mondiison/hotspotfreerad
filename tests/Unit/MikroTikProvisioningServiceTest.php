@@ -211,4 +211,18 @@ class MikroTikProvisioningServiceTest extends TestCase
         $this->assertArrayHasKey('l009_builtin_wifi', $profiles);
         $this->assertArrayHasKey('pppoe_isp', $profiles);
     }
+
+    public function test_login_template_uses_public_hotspot_portal_url_when_configured(): void
+    {
+        config([
+            'app.url' => 'http://127.0.0.1:8001',
+            'services.mikrotik.portal_url' => 'https://mmsradius.com/hotspot/portal',
+        ]);
+
+        $template = app(MikroTikProvisioningService::class)->generateLoginTemplate();
+
+        $this->assertStringContainsString('https://mmsradius.com/hotspot/portal?mac=$(mac)&nasid=$(identity)&link-login=$(link-login)&link-orig=$(link-orig)', $template);
+        $this->assertStringContainsString("var portal = 'https://mmsradius.com/hotspot/portal'", $template);
+        $this->assertStringNotContainsString('http://127.0.0.1:8001/hotspot/portal', $template);
+    }
 }

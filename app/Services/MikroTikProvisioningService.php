@@ -44,7 +44,7 @@ class MikroTikProvisioningService
         $wgEndpointHost = config('services.wireguard.endpoint_host');
         $wgEndpointPort = config('services.wireguard.endpoint_port');
         $wgPublicKey = config('services.wireguard.public_key');
-        $portalUrl = rtrim(config('app.url'), '/') . '/hotspot/portal';
+        $portalUrl = $this->portalUrl();
         $portalHost = parse_url($portalUrl, PHP_URL_HOST) ?: config('services.mikrotik.hotspot_dns_name');
         $hotspotDnsName = config('services.mikrotik.hotspot_dns_name');
 
@@ -100,7 +100,7 @@ SCRIPT;
         $wgEndpointHost = config('services.wireguard.endpoint_host');
         $wgEndpointPort = config('services.wireguard.endpoint_port');
         $wgPublicKey = $this->quote(config('services.wireguard.public_key'));
-        $portalUrl = rtrim(config('app.url'), '/') . '/hotspot/portal';
+        $portalUrl = $this->portalUrl();
         $portalHost = parse_url($portalUrl, PHP_URL_HOST) ?: config('services.mikrotik.hotspot_dns_name');
         $hotspotDnsName = config('services.mikrotik.hotspot_dns_name');
         $enableBuiltinWifi = (bool) $settings['enable_builtin_wifi'];
@@ -341,7 +341,7 @@ SCRIPT;
 
     public function generateLoginTemplate(): string
     {
-        $portalUrl = rtrim(config('app.url'), '/') . '/hotspot/portal';
+        $portalUrl = $this->portalUrl();
 
         return <<<HTML
 <!doctype html>
@@ -350,6 +350,7 @@ SCRIPT;
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Opening hotspot portal</title>
+    <meta http-equiv="refresh" content="0; url={$portalUrl}?mac=\$(mac)&nasid=\$(identity)&link-login=\$(link-login)&link-orig=\$(link-orig)">
 </head>
 <body style="font-family: system-ui, sans-serif; padding: 24px;">
     <h1>Opening internet access</h1>
@@ -369,6 +370,15 @@ SCRIPT;
 </body>
 </html>
 HTML;
+    }
+
+    public function portalUrl(): string
+    {
+        $configuredUrl = config('services.mikrotik.portal_url');
+
+        return $configuredUrl
+            ? rtrim((string) $configuredUrl, '/')
+            : rtrim(config('app.url'), '/').'/hotspot/portal';
     }
 
     private function profileDefaults(string $profile): array
