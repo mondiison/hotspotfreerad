@@ -119,13 +119,15 @@ SCRIPT;
             $allVlans,
             fn ($vlan): bool => (string) $vlan !== (string) $settings['hotspot_vlan']
         ));
+        $lanBridgeName = 'bridge-lan';
+        $taggedPorts = $lanBridgeName.','.$settings['trunk_port'];
 
         $bridgeVlanLines = $enableBuiltinWifi
             ? array_filter([
-                '/interface bridge vlan add bridge=$lanBridge tagged=$lanBridge,$trunkPort untagged=$builtinWifiInterface vlan-ids=$hotspotVlan',
-                $nonHotspotTaggedVlans !== '' ? '/interface bridge vlan add bridge=$lanBridge tagged=$lanBridge,$trunkPort vlan-ids='.$nonHotspotTaggedVlans : null,
+                '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' untagged='.$builtinWifiInterface.' vlan-ids='.$settings['hotspot_vlan'],
+                $nonHotspotTaggedVlans !== '' ? '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' vlan-ids='.$nonHotspotTaggedVlans : null,
             ])
-            : ['/interface bridge vlan add bridge=$lanBridge tagged=$lanBridge,$trunkPort vlan-ids='.$taggedVlans];
+            : ['/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' vlan-ids='.$taggedVlans];
 
         $secondWanMember = $settings['enable_second_wan']
             ? '/interface list member add list=WAN interface=$wan2'

@@ -177,7 +177,7 @@ class MikroTikProvisioningServiceTest extends TestCase
         $this->assertStringContainsString(':global builtinWifiInterface "wifi1"', $script);
         $this->assertStringContainsString('/interface wifi configuration add name=mms-open-hotspot-cfg mode=ap ssid="MMS Hotspot"', $script);
         $this->assertStringContainsString('/interface bridge port add bridge=$lanBridge interface=$builtinWifiInterface pvid=$hotspotVlan', $script);
-        $this->assertStringContainsString('untagged=$builtinWifiInterface vlan-ids=$hotspotVlan', $script);
+        $this->assertStringContainsString('/interface bridge vlan add bridge=bridge-lan tagged=bridge-lan,ether2 untagged=wifi1 vlan-ids=20', $script);
         $this->assertStringContainsString('vlan-ids=10,30', $script);
         $this->assertStringContainsString('POS VLAN is disabled', $script);
         $this->assertStringContainsString('PPPoE is disabled', $script);
