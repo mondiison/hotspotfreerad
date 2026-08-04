@@ -179,6 +179,13 @@
                         </flux:field>
 
                         <flux:field>
+                            <flux:label>Built-in Wi-Fi</flux:label>
+                            <flux:input wire:model.blur="provisioning_settings.builtin_wifi_interface" placeholder="wifi1" />
+                            <flux:description>For L009UiGS testing, use <code>wifi1</code> as the open hotspot SSID.</flux:description>
+                            <flux:error name="provisioning_settings.builtin_wifi_interface" />
+                        </flux:field>
+
+                        <flux:field>
                             <flux:label>Download limit</flux:label>
                             <flux:input wire:model.blur="provisioning_settings.download_limit" placeholder="120M" />
                             <flux:description>Parent PCQ limit. Example: <code>120M</code>.</flux:description>
@@ -193,10 +200,21 @@
                         </flux:field>
 
                         <div class="grid gap-3 rounded-md border border-zinc-200 bg-white p-3 text-sm">
+                            <flux:checkbox wire:model.live="provisioning_settings.enable_builtin_wifi" label="L009 built-in Wi-Fi hotspot" />
                             <flux:checkbox wire:model.live="provisioning_settings.enable_realtime_qos" label="Realtime voice/video QoS" />
                             <flux:checkbox wire:model.live="provisioning_settings.enable_pos" label="POS VLAN/SSID" />
                             <flux:checkbox wire:model.live="provisioning_settings.enable_pppoe" label="PPPoE/CPE VLAN" />
                             <flux:checkbox wire:model.live="provisioning_settings.enable_second_wan" label="Second Starlink/WAN" />
+                        </div>
+                    </div>
+
+                    <div class="mt-4 rounded-md border border-zinc-200 bg-white p-3">
+                        <p class="text-sm font-medium text-zinc-900">Quick-fill router layout</p>
+                        <p class="mt-1 text-xs leading-5 text-zinc-500">Use a preset, then adjust any value before saving.</p>
+                        <div class="mt-3 flex flex-wrap gap-2">
+                            <flux:button type="button" size="xs" wire:click="setRouterLayoutPreset('l009_lab_wifi')">L009 lab Wi-Fi</flux:button>
+                            <flux:button type="button" size="xs" wire:click="setRouterLayoutPreset('plaza_23')">Plaza VLAN /23</flux:button>
+                            <flux:button type="button" size="xs" wire:click="setRouterLayoutPreset('small_ap_24')">Small AP /24</flux:button>
                         </div>
                     </div>
 
@@ -250,6 +268,25 @@
                             <flux:input wire:model.blur="provisioning_settings.hotspot_pool" placeholder="10.5.50.10-10.5.51.250" />
                             <flux:error name="provisioning_settings.hotspot_pool" />
                         </flux:field>
+
+                        <div class="md:col-span-3">
+                            <div class="mt-1 flex flex-wrap gap-2">
+                                <flux:button type="button" size="xs" wire:click="setHotspotIpSize('22')">/22, about 1,000 clients</flux:button>
+                                <flux:button type="button" size="xs" wire:click="setHotspotIpSize('23')">/23, about 500 clients</flux:button>
+                                <flux:button type="button" size="xs" wire:click="setHotspotIpSize('24')">/24, about 250 clients</flux:button>
+                            </div>
+                            <p class="mt-2 text-xs leading-5 text-zinc-500">Quick-fill the customer hotspot gateway, network, and DHCP pool.</p>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 rounded-md border border-zinc-200 bg-white p-3">
+                        <p class="text-sm font-medium text-zinc-900">Hotspot IP examples</p>
+                        <p class="mt-1 text-xs leading-5 text-zinc-500">Choose based on expected concurrent users. You can still edit the values manually after clicking.</p>
+                        <div class="mt-3 grid gap-2 text-xs text-zinc-600 sm:grid-cols-3">
+                            <div><span class="font-medium text-zinc-900">/24:</span> one small zone, about 250 usable addresses.</div>
+                            <div><span class="font-medium text-zinc-900">/23:</span> plaza starter, about 500 usable addresses.</div>
+                            <div><span class="font-medium text-zinc-900">/22:</span> larger rollout, about 1,000 usable addresses.</div>
+                        </div>
                     </div>
                 </section>
 

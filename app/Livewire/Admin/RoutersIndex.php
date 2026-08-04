@@ -104,6 +104,85 @@ class RoutersIndex extends Component
         $this->wireguard_internal_ip = $value;
     }
 
+    public function setRouterLayoutPreset(string $preset): void
+    {
+        $settings = match ($preset) {
+            'l009_lab_wifi' => [
+                'profile' => 'l009_builtin_wifi',
+                'wan1' => 'ether1',
+                'wan2' => 'ether7',
+                'trunk_port' => 'ether2',
+                'builtin_wifi_interface' => 'wifi1',
+                'download_limit' => '80M',
+                'upload_limit' => '15M',
+                'hotspot_gateway' => '10.5.50.1/24',
+                'hotspot_network' => '10.5.50.0/24',
+                'hotspot_pool' => '10.5.50.10-10.5.50.250',
+                'enable_builtin_wifi' => true,
+                'enable_pos' => false,
+                'enable_pppoe' => false,
+                'enable_realtime_qos' => true,
+                'enable_second_wan' => false,
+            ],
+            'small_ap_24' => [
+                'profile' => 'small_hotspot',
+                'wan1' => 'ether1',
+                'wan2' => 'ether8',
+                'trunk_port' => 'ether2',
+                'download_limit' => '80M',
+                'upload_limit' => '15M',
+                'hotspot_gateway' => '10.5.50.1/24',
+                'hotspot_network' => '10.5.50.0/24',
+                'hotspot_pool' => '10.5.50.10-10.5.50.250',
+                'enable_builtin_wifi' => false,
+                'enable_pos' => true,
+                'enable_pppoe' => false,
+                'enable_realtime_qos' => true,
+            ],
+            default => [
+                'profile' => 'starlink_plaza',
+                'wan1' => 'ether1',
+                'wan2' => 'ether8',
+                'trunk_port' => 'ether2',
+                'builtin_wifi_interface' => 'wifi1',
+                'download_limit' => '120M',
+                'upload_limit' => '20M',
+                'hotspot_gateway' => '10.5.50.1/23',
+                'hotspot_network' => '10.5.50.0/23',
+                'hotspot_pool' => '10.5.50.10-10.5.51.250',
+                'enable_builtin_wifi' => false,
+                'enable_pos' => true,
+                'enable_pppoe' => true,
+                'enable_realtime_qos' => true,
+            ],
+        };
+
+        $this->provisioning_settings = array_replace($this->provisioning_settings, $settings);
+    }
+
+    public function setHotspotIpSize(string $size): void
+    {
+        $settings = match ($size) {
+            '22' => [
+                'hotspot_gateway' => '10.5.48.1/22',
+                'hotspot_network' => '10.5.48.0/22',
+                'hotspot_pool' => '10.5.48.10-10.5.51.250',
+            ],
+            '24' => [
+                'hotspot_gateway' => '10.5.50.1/24',
+                'hotspot_network' => '10.5.50.0/24',
+                'hotspot_pool' => '10.5.50.10-10.5.50.250',
+            ],
+            default => [
+                'hotspot_gateway' => '10.5.50.1/23',
+                'hotspot_network' => '10.5.50.0/23',
+                'hotspot_pool' => '10.5.50.10-10.5.51.250',
+            ],
+        };
+
+        $this->provisioning_settings = array_replace($this->provisioning_settings, $settings);
+    }
+
     public function save(RouterManagementService $routers): void
     {
         $router = $this->editingRouterId
