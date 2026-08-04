@@ -132,8 +132,6 @@
                         <flux:description>Random password shared by MikroTik and FreeRADIUS. Use a different secret per router.</flux:description>
                         <flux:error name="shared_secret" />
                     </flux:field>
-
-                    <flux:checkbox wire:model.live="is_online" label="Online" />
                 </div>
 
                 <section class="rounded-lg border border-zinc-200 bg-zinc-50 p-4">

@@ -55,8 +55,14 @@ class RouterManagementService
 
     public function validated(Request $request, ?Router $router = null): array
     {
+        $data = $request->validate($this->rules($request->user(), $router));
+
+        if (! $router) {
+            $data += ['is_online' => false];
+        }
+
         return $this->normalize(
-            $request->validate($this->rules($request->user(), $router)) + ['is_online' => false],
+            $data,
             $router
         );
     }
@@ -90,7 +96,12 @@ class RouterManagementService
 
     public function normalize(array $data, ?Router $router = null): array
     {
-        $data['is_online'] = (bool) ($data['is_online'] ?? false);
+        if (array_key_exists('is_online', $data)) {
+            $data['is_online'] = (bool) $data['is_online'];
+        } elseif (! $router) {
+            $data['is_online'] = false;
+        }
+
         $data['provisioning_settings'] = $this->normalizeProvisioningSettings($data['provisioning_settings'] ?? []);
 
         if ($router && blank($data['shared_secret'] ?? null)) {

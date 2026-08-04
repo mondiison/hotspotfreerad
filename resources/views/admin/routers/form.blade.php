@@ -55,8 +55,6 @@
                     <flux:description>Random password shared by MikroTik and FreeRADIUS. Use a different secret per router.</flux:description>
                     <flux:error name="shared_secret" />
                 </flux:field>
-
-                <flux:checkbox name="is_online" value="1" :checked="(bool) old('is_online', $router->is_online ?? false)" label="Online" />
             </div>
 
             @php($settings = $provisioningSettings ?? [])

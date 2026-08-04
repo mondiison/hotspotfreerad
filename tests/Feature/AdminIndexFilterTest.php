@@ -282,12 +282,39 @@ class AdminIndexFilterTest extends TestCase
 
         $this->assertSame('Updated Router', $router->name);
         $this->assertSame('original-secret', $router->shared_secret);
+        $this->assertFalse($router->is_online);
         $this->assertDatabaseHas('nas', [
             'nasname' => '10.8.0.61',
             'shortname' => 'updated-router',
             'secret' => 'original-secret',
             'description' => 'Updated Router (services: hotspot, ppp)',
         ]);
+    }
+
+    public function test_livewire_router_index_edit_preserves_detected_online_status(): void
+    {
+        $shop = $this->shop();
+        $router = Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'Detected Router',
+            'nas_identifier' => 'detected-router',
+            'wireguard_internal_ip' => '10.8.0.62',
+            'shared_secret' => 'radius-secret',
+            'is_online' => true,
+        ]);
+
+        Livewire::actingAs($this->superAdmin())
+            ->test(RoutersIndex::class)
+            ->call('edit', $router->id)
+            ->set('name', 'Detected Router Updated')
+            ->set('shared_secret', '')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $router->refresh();
+
+        $this->assertSame('Detected Router Updated', $router->name);
+        $this->assertTrue($router->is_online);
     }
 
     public function test_livewire_router_index_sets_ip_preset_and_filters_without_reload(): void
