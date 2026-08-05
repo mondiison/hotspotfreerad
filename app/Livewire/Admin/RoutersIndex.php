@@ -40,6 +40,8 @@ class RoutersIndex extends Component
 
     public string $shared_secret = '';
 
+    public ?string $wireguard_public_key = null;
+
     public bool $is_online = false;
 
     public array $provisioning_settings = [];
@@ -88,11 +90,35 @@ class RoutersIndex extends Component
         $this->name = (string) $router->name;
         $this->nas_identifier = (string) $router->nas_identifier;
         $this->wireguard_internal_ip = (string) $router->wireguard_internal_ip;
+        $this->wireguard_public_key = $router->wireguard_public_key;
         $this->is_online = (bool) $router->is_online;
         $this->provisioning_settings = $this->routerProvisioningSettings($router);
         $this->shared_secret = '';
         $this->savedMessage = null;
         $this->showFormModal = true;
+    }
+
+    public function updatedShopId(string $value): void
+    {
+        if ($this->editingRouterId || $this->nas_identifier !== '' || $value === '') {
+            return;
+        }
+
+        $shop = Shop::find($value);
+
+        if ($shop) {
+            $this->nas_identifier = app(RouterManagementService::class)->suggestedNasIdentifier($shop);
+        }
+    }
+
+    public function suggestWireguardIp(RouterManagementService $routers): void
+    {
+        $this->wireguard_internal_ip = $routers->suggestedWireguardInternalIp();
+    }
+
+    public function regenerateSharedSecret(RouterManagementService $routers): void
+    {
+        $this->shared_secret = $routers->suggestedSharedSecret();
     }
 
     public function setPreset(string $field, string $value): void
@@ -292,10 +318,16 @@ class RoutersIndex extends Component
             'nas_identifier',
             'wireguard_internal_ip',
             'shared_secret',
+            'wireguard_public_key',
             'provisioning_settings',
         ]);
         $this->is_online = false;
         $this->provisioning_settings = app(RouterManagementService::class)->defaultProvisioningSettings();
+
+        $routers = app(RouterManagementService::class);
+        $this->wireguard_internal_ip = $routers->suggestedWireguardInternalIp();
+        $this->shared_secret = $routers->suggestedSharedSecret();
+
         $this->resetValidation();
     }
 

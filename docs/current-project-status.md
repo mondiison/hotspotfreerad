@@ -1,6 +1,6 @@
 # HotspotFreeRAD Handover
 
-Last updated: 2026-08-03
+Last updated: 2026-08-05
 
 ## Project
 
@@ -95,6 +95,7 @@ Use `php artisan migrate` whenever new migrations are added.
 - Voucher generation, sale tracking, printable vouchers, voucher payment tracking
 - Packages with uptime, bandwidth, total data, and FUP fields
 - Router onboarding and MikroTik script generation
+- Automatic router-to-Pi WireGuard connection: each router gets an app-generated keypair baked into its script, and a scheduled command (`hotspot:sync-wireguard-peers`) registers it as a Pi-side peer with no manual SSH step. See `docs/wireguard-server-setup.md` for the one-time Pi bootstrap this depends on.
 - Flexible router provisioning settings:
   - WAN 1 / WAN 2
   - AP/switch trunk
@@ -145,6 +146,7 @@ POS devices should use a password-protected POS SSID, usually VLAN 50, and be re
 - Vite build may show an existing Flux CSS warning about `[snap="mandatory" &]`; build still succeeds.
 - `APP_URL` must match the access domain/protocol. For public HTTPS, Livewire must generate HTTPS URLs to avoid mixed-content errors.
 - Local `.env` currently expects `APP_URL=http://127.0.0.1:8001`.
+- `WIREGUARD_MANAGE_PEERS` defaults to `false` everywhere. Only set it to `true` on the Pi, and only after completing `docs/wireguard-server-setup.md` (installs `wg`, creates the `wg-saas` server interface, and grants `www-data` a narrowly scoped sudoers rule for `wg`/`wg-quick`).
 
 ## Next Good Work
 

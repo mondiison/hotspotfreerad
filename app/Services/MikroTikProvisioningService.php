@@ -44,13 +44,14 @@ class MikroTikProvisioningService
         $wgEndpointHost = config('services.wireguard.endpoint_host');
         $wgEndpointPort = config('services.wireguard.endpoint_port');
         $wgPublicKey = config('services.wireguard.public_key');
+        $wgInterfaceLine = $this->wireguardInterfaceLine($router);
         $portalUrl = $this->portalUrl();
         $portalHost = parse_url($portalUrl, PHP_URL_HOST) ?: config('services.mikrotik.hotspot_dns_name');
         $hotspotDnsName = config('services.mikrotik.hotspot_dns_name');
 
         return <<<SCRIPT
 /system identity set name="{$nasIdentifier}"
-/interface wireguard add name=wg-saas listen-port=13231 mtu=1420
+{$wgInterfaceLine}
 /interface wireguard peers add interface=wg-saas public-key="{$wgPublicKey}" endpoint-address={$wgEndpointHost} endpoint-port={$wgEndpointPort} allowed-address=10.8.0.1/32 persistent-keepalive=25s
 /ip address add address={$router->wireguard_internal_ip}/24 interface=wg-saas
 /radius add address={$radiusIp} secret="{$sharedSecret}" service=hotspot,ppp authentication-port={$authPort} accounting-port={$acctPort} timeout=1000ms
@@ -70,11 +71,12 @@ SCRIPT;
         $wgEndpointHost = config('services.wireguard.endpoint_host');
         $wgEndpointPort = config('services.wireguard.endpoint_port');
         $wgPublicKey = config('services.wireguard.public_key');
+        $wgInterfaceLine = $this->wireguardInterfaceLine($router);
         $pppoeInterface = 'bridge1';
 
         return <<<SCRIPT
 /system identity set name="{$nasIdentifier}"
-/interface wireguard add name=wg-saas listen-port=13231 mtu=1420
+{$wgInterfaceLine}
 /interface wireguard peers add interface=wg-saas public-key="{$wgPublicKey}" endpoint-address={$wgEndpointHost} endpoint-port={$wgEndpointPort} allowed-address=10.8.0.1/32 persistent-keepalive=25s
 /ip address add address={$router->wireguard_internal_ip}/24 interface=wg-saas
 /radius add address={$radiusIp} secret="{$sharedSecret}" service=ppp authentication-port={$authPort} accounting-port={$acctPort} timeout=1000ms
@@ -265,7 +267,7 @@ SCRIPT;
         ], $builtinWifiLines, $bridgeVlanLines, [
             '/interface bridge set $lanBridge vlan-filtering=yes',
             '',
-            '/interface wireguard add name=wg-saas listen-port=13231 mtu=1420',
+            $this->wireguardInterfaceLine($router),
             '/interface wireguard peers add interface=wg-saas public-key="'.$wgPublicKey.'" endpoint-address='.$wgEndpointHost.' endpoint-port='.$wgEndpointPort.' allowed-address=10.8.0.1/32 persistent-keepalive=25s',
             '/ip address add address='.$router->wireguard_internal_ip.'/24 interface=wg-saas comment="MMS Radius WireGuard IP"',
             '/radius add address='.$radiusIp.' secret="'.$sharedSecret.'" service=hotspot,ppp authentication-port='.$authPort.' accounting-port='.$acctPort.' timeout=1000ms',
@@ -498,5 +500,14 @@ HTML;
     private function quote(?string $value): string
     {
         return str_replace('"', '\"', (string) $value);
+    }
+
+    private function wireguardInterfaceLine(Router $router): string
+    {
+        $privateKey = $router->wireguard_private_key;
+
+        return filled($privateKey)
+            ? '/interface wireguard add name=wg-saas listen-port=13231 mtu=1420 private-key="'.$this->quote($privateKey).'"'
+            : '/interface wireguard add name=wg-saas listen-port=13231 mtu=1420';
     }
 }

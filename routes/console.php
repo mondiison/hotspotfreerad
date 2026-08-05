@@ -12,6 +12,7 @@ use App\Services\PppoeSubscriberManagementService;
 use App\Services\PosDeviceManagementService;
 use App\Services\RadiusProvisioningService;
 use App\Services\VoucherManagementService;
+use App\Services\WireGuardPeerSyncService;
 use App\Support\SchedulerHealth;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -272,5 +273,40 @@ Schedule::command('hotspot:sync-expired-hotspot')
     ->withoutOverlapping();
 
 Schedule::command('hotspot:sync-expired-pos')
+    ->everyFiveMinutes()
+    ->withoutOverlapping();
+
+Artisan::command('hotspot:sync-wireguard-peers {--dry-run}', function (WireGuardPeerSyncService $wireguard): int {
+    $dryRun = (bool) $this->option('dry-run');
+    $result = $wireguard->reconcile(dryRun: $dryRun);
+
+    if (! $result['enabled']) {
+        $this->info('WireGuard peer management is disabled. Set WIREGUARD_MANAGE_PEERS=true on the Pi (see docs/wireguard-server-setup.md) to enable it. No changes made.');
+
+        return Command::SUCCESS;
+    }
+
+    if (! $result['binary_available']) {
+        $this->error('Could not read WireGuard interface "'.$result['interface'].'": '.implode(' ', $result['errors']));
+
+        return Command::FAILURE;
+    }
+
+    $added = count($result['added']);
+    $updated = count($result['updated']);
+    $errorCount = count($result['errors']);
+    $addedLabel = $dryRun ? 'would add' : 'added';
+    $updatedLabel = $dryRun ? 'would update' : 'updated';
+
+    $this->info("WireGuard sync on \"{$result['interface']}\": {$addedLabel} {$added} peer(s), {$updatedLabel} {$updated} peer(s), {$errorCount} error(s).");
+
+    foreach ($result['errors'] as $error) {
+        $this->error($error);
+    }
+
+    return $errorCount > 0 ? Command::FAILURE : Command::SUCCESS;
+})->purpose('Reconcile Raspberry Pi WireGuard peers from router records (adds/updates only, never removes a peer)');
+
+Schedule::command('hotspot:sync-wireguard-peers')
     ->everyFiveMinutes()
     ->withoutOverlapping();

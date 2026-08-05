@@ -2,6 +2,8 @@
 
 This guide explains the values needed when adding a MikroTik router in HotspotFreeRAD.
 
+Connecting a router to the Pi's WireGuard tunnel is automatic: HotspotFreeRAD generates a WireGuard keypair for each router, bakes the private key into its generated script, and a scheduled command registers the router as a peer on the Pi within a few minutes. The one manual step is a one-time server bootstrap on the Pi itself — see [WireGuard server setup](wireguard-server-setup.md) if that hasn't been done yet.
+
 ## Field Examples
 
 | Field | Example | Where it comes from |
@@ -137,9 +139,10 @@ HotspotFreeRAD stores the secret encrypted in the application table, and syncs i
    - RADIUS shared secret: generated random value
 4. Open the router's Script page.
 5. Review `RADIUS_SERVER_IP`, `WIREGUARD_ENDPOINT_HOST`, and `WIREGUARD_PUBLIC_KEY` in `.env`.
-6. Paste the generated script into MikroTik RouterOS terminal.
-7. Confirm FreeRADIUS sees the router in the `nas` table.
-8. Test authentication with FreeRADIUS debug mode:
+6. Paste the generated script into MikroTik RouterOS terminal. Its WireGuard section already includes a private key HotspotFreeRAD generated for this router — you don't need to run `/interface wireguard print` to find one.
+7. Wait up to 5 minutes (or run `php artisan hotspot:sync-wireguard-peers` on the Pi) for the router to appear as a peer in `sudo wg show wg-saas`. No manual peer registration needed.
+8. Confirm FreeRADIUS sees the router in the `nas` table.
+9. Test authentication with FreeRADIUS debug mode:
 
 ```bash
 sudo freeradius -X

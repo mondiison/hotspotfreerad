@@ -97,11 +97,15 @@ RADIUS_ACCT_PORT=1813
 WIREGUARD_ENDPOINT_HOST=your_public_ip_or_ddns_name
 WIREGUARD_ENDPOINT_PORT=13231
 WIREGUARD_PUBLIC_KEY=your_pi_wireguard_public_key
+WIREGUARD_INTERFACE=wg-saas
+WIREGUARD_MANAGE_PEERS=true
 
 HOTSPOT_DNS_NAME=hotspot.local
 HOTSPOT_PORTAL_URL=https://mmsradius.com/hotspot/portal
 SECURITY_ACTIVITY_RETENTION_DAYS=180
 ```
+
+`WIREGUARD_MANAGE_PEERS=true` only belongs on the Pi, and only after completing the one-time bootstrap in [WireGuard server setup](wireguard-server-setup.md). Leave it `false` (the default) everywhere else, including local dev.
 
 Passkeys need a secure browser origin. They work on `localhost` for development, but most browsers will not register passkeys on a plain LAN URL like `http://192.168.190.244`. For production, use your HTTPS domain in `APP_URL`, set `PASSKEYS_RELYING_PARTY_ID` to only the hostname, and set `PASSKEYS_ALLOWED_ORIGINS` to the full HTTPS origin.
 

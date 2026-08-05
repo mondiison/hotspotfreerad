@@ -91,6 +91,7 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::post('tenants/{tenant}/owner-reset-link', [TenantController::class, 'sendOwnerResetLink'])->name('tenants.owner-reset-link');
     Route::resource('tenants', TenantController::class)->except('show');
     Route::resource('shops', ShopController::class)->except('show');
+    Route::post('routers/{router}/regenerate-wireguard-key', [RouterController::class, 'regenerateWireguardKey'])->name('routers.regenerate-wireguard-key');
     Route::resource('routers', RouterController::class);
     Route::resource('packages', PackageController::class)->except('show');
     Route::get('subscriptions-export', [SubscriptionController::class, 'export'])->name('subscriptions.export');

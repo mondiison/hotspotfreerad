@@ -27,12 +27,14 @@ class MikroTikProvisioningServiceTest extends TestCase
         $router = new Router([
             'nas_identifier' => 'shop-main-router',
             'wireguard_internal_ip' => '10.8.0.10',
+            'wireguard_private_key' => 'client-private-key',
             'shared_secret' => 'radius-secret',
         ]);
 
         $script = app(MikroTikProvisioningService::class)->generateScript($router);
 
         $this->assertStringContainsString('/system identity set name="shop-main-router"', $script);
+        $this->assertStringContainsString('/interface wireguard add name=wg-saas listen-port=13231 mtu=1420 private-key="client-private-key"', $script);
         $this->assertStringContainsString('endpoint-address=vpn.example.com', $script);
         $this->assertStringContainsString('/ip address add address=10.8.0.10/24 interface=wg-saas', $script);
         $this->assertStringContainsString('/radius add address=10.8.0.1 secret="radius-secret" service=hotspot,ppp', $script);
@@ -54,11 +56,13 @@ class MikroTikProvisioningServiceTest extends TestCase
         $router = new Router([
             'nas_identifier' => 'shop-main-router',
             'wireguard_internal_ip' => '10.8.0.10',
+            'wireguard_private_key' => 'client-private-key',
             'shared_secret' => 'radius-secret',
         ]);
 
         $script = app(MikroTikProvisioningService::class)->generatePppoeScript($router);
 
+        $this->assertStringContainsString('/interface wireguard add name=wg-saas listen-port=13231 mtu=1420 private-key="client-private-key"', $script);
         $this->assertStringContainsString('/radius add address=10.8.0.1 secret="radius-secret" service=ppp', $script);
         $this->assertStringContainsString('/ppp aaa set use-radius=yes accounting=yes interim-update=5m', $script);
         $this->assertStringContainsString('Mikrotik-Rate-Limit', $script);
@@ -215,6 +219,27 @@ class MikroTikProvisioningServiceTest extends TestCase
         $this->assertStringContainsString('Do not attach hotspot DHCP directly to wifi1/ether ports', $script);
         $this->assertStringContainsString('/ip dhcp-server add name=dhcp-pos interface=vlan-pos', $script);
         $this->assertStringContainsString('PPPoE is disabled', $script);
+    }
+
+    public function test_it_omits_wireguard_private_key_when_router_has_none(): void
+    {
+        config([
+            'services.radius.server_ip' => '10.8.0.1',
+            'services.wireguard.endpoint_host' => 'vpn.example.com',
+            'services.wireguard.endpoint_port' => 13231,
+            'services.wireguard.public_key' => 'server-public-key',
+        ]);
+
+        $router = new Router([
+            'nas_identifier' => 'legacy-router',
+            'wireguard_internal_ip' => '10.8.0.40',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        $script = app(MikroTikProvisioningService::class)->generateScript($router);
+
+        $this->assertStringContainsString('/interface wireguard add name=wg-saas listen-port=13231 mtu=1420'."\n", $script);
+        $this->assertStringNotContainsString('private-key=', $script);
     }
 
     public function test_it_lists_flexible_infrastructure_profiles(): void

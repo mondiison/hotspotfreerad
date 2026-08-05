@@ -3,10 +3,13 @@
 namespace App\Services;
 
 use App\Models\Router;
+use App\Models\Shop;
 use App\Models\User;
 use App\Support\BillingPlanLimits;
 use App\Support\TenantAccess;
+use App\Support\WireGuardKeyPair;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class RouterManagementService
@@ -101,6 +104,20 @@ class RouterManagementService
         $router->delete();
     }
 
+    public function regenerateWireguardKey(Router $router, User $user): Router
+    {
+        TenantAccess::assertRouter($router, $user);
+
+        $keyPair = WireGuardKeyPair::generate();
+
+        $router->update([
+            'wireguard_private_key' => $keyPair['private'],
+            'wireguard_public_key' => $keyPair['public'],
+        ]);
+
+        return $router;
+    }
+
     public function normalize(array $data, ?Router $router = null): array
     {
         if (array_key_exists('is_online', $data)) {
@@ -116,6 +133,35 @@ class RouterManagementService
         }
 
         return $data;
+    }
+
+    public function suggestedWireguardInternalIp(): string
+    {
+        $lastOctet = Router::query()
+            ->where('wireguard_internal_ip', 'like', '10.8.0.%')
+            ->pluck('wireguard_internal_ip')
+            ->map(fn (string $ip): int => (int) str($ip)->afterLast('.')->toString())
+            ->max();
+
+        return '10.8.0.'.max(10, ($lastOctet ?? 9) + 1);
+    }
+
+    public function suggestedNasIdentifier(Shop $shop): string
+    {
+        $base = Str::slug($shop->name) ?: 'router';
+        $suffix = 1;
+
+        do {
+            $candidate = "{$base}-{$suffix}";
+            $suffix++;
+        } while (Router::query()->where('nas_identifier', $candidate)->exists());
+
+        return $candidate;
+    }
+
+    public function suggestedSharedSecret(): string
+    {
+        return Str::random(32);
     }
 
     public function defaultProvisioningSettings(?string $profile = null): array

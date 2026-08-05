@@ -44,13 +44,19 @@ class RouterController extends Controller
         $user = request()->user();
         $routerManagement = app(RouterManagementService::class);
         $mikroTik = app(MikroTikProvisioningService::class);
+        $shops = TenantAccess::scopeShops(Shop::with('tenant'), $user)->orderBy('name')->get();
 
         return view('admin.routers.form', [
             'router' => new Router,
-            'shops' => TenantAccess::scopeShops(Shop::with('tenant'), $user)->orderBy('name')->get(),
+            'shops' => $shops,
             'provisioningSettings' => old('provisioning_settings', $routerManagement->defaultProvisioningSettings()),
             'infrastructureProfiles' => $mikroTik->infrastructureProfiles(),
             'billingUsage' => BillingPlanLimits::usageSummary($user, 'routers'),
+            'suggestedWireguardInternalIp' => $routerManagement->suggestedWireguardInternalIp(),
+            'suggestedSharedSecret' => $routerManagement->suggestedSharedSecret(),
+            'suggestedNasIdentifiers' => $shops->mapWithKeys(
+                fn (Shop $shop): array => [$shop->id => $routerManagement->suggestedNasIdentifier($shop)]
+            ),
         ]);
     }
 
@@ -116,5 +122,13 @@ class RouterController extends Controller
         $routers->delete($router, $request->user());
 
         return redirect()->route('admin.routers.index')->with('status', 'Router deleted.');
+    }
+
+    public function regenerateWireguardKey(Request $request, Router $router, RouterManagementService $routers): RedirectResponse
+    {
+        $routers->regenerateWireguardKey($router, $request->user());
+
+        return redirect()->route('admin.routers.show', $router)
+            ->with('status', 'New WireGuard key generated. Re-run the WireGuard section of the script on this router, then wait for (or trigger) the next peer sync.');
     }
 }
