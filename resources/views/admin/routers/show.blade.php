@@ -114,6 +114,49 @@
         <div class="min-w-0 space-y-6">
             <section class="min-w-0 overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
                 <div class="border-b border-zinc-200 px-5 py-4">
+                    <h2 class="text-base font-semibold">Usage History</h2>
+                    <p class="mt-1 text-sm text-zinc-500">Daily download/upload from FreeRADIUS accounting, last 30 days. A session's data is counted on the day it started.</p>
+                </div>
+                <div class="p-5">
+                    @if ($hasUsageHistory)
+                        <flux:chart :value="$dailyUsage" class="aspect-[3/1]">
+                            <flux:chart.svg>
+                                <flux:chart.line field="download_gb" class="text-blue-500" />
+                                <flux:chart.line field="upload_gb" class="text-violet-500" />
+
+                                <flux:chart.axis axis="x" field="date">
+                                    <flux:chart.axis.tick />
+                                    <flux:chart.axis.line />
+                                </flux:chart.axis>
+                                <flux:chart.axis axis="y">
+                                    <flux:chart.axis.grid />
+                                    <flux:chart.axis.tick />
+                                </flux:chart.axis>
+                            </flux:chart.svg>
+
+                            <flux:chart.tooltip>
+                                <flux:chart.tooltip.heading field="date" />
+                                <flux:chart.tooltip.value field="download_gb" label="Download" suffix=" GB" />
+                                <flux:chart.tooltip.value field="upload_gb" label="Upload" suffix=" GB" />
+                            </flux:chart.tooltip>
+                        </flux:chart>
+
+                        <div class="mt-3 flex justify-center gap-4">
+                            <flux:chart.legend label="Download">
+                                <flux:chart.legend.indicator class="bg-blue-500" />
+                            </flux:chart.legend>
+                            <flux:chart.legend label="Upload">
+                                <flux:chart.legend.indicator class="bg-violet-500" />
+                            </flux:chart.legend>
+                        </div>
+                    @else
+                        <p class="py-8 text-center text-sm text-zinc-500">No accounting data yet for this router in the last 30 days.</p>
+                    @endif
+                </div>
+            </section>
+
+            <section class="min-w-0 overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
+                <div class="border-b border-zinc-200 px-5 py-4">
                     <div class="flex flex-col justify-between gap-3 md:flex-row md:items-start">
                         <div>
                             <h2 class="text-base font-semibold">Fresh MikroTik Infrastructure Script</h2>

@@ -9,6 +9,7 @@ use App\Services\MikroTikProvisioningService;
 use App\Services\RouterManagementService;
 use App\Support\BillingPlanLimits;
 use App\Support\RadiusAccountingStats;
+use App\Support\RouterUsageHistory;
 use App\Support\TenantAccess;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -60,12 +61,20 @@ class RouterController extends Controller
         ]);
     }
 
-    public function show(Router $router, MikroTikProvisioningService $mikroTik): View
+    public function show(Router $router, MikroTikProvisioningService $mikroTik, RouterUsageHistory $usageHistory): View
     {
         TenantAccess::assertRouter($router, request()->user());
 
+        $dailyUsage = collect($usageHistory->daily($router))->map(fn (array $day): array => [
+            'date' => $day['date'],
+            'download_gb' => round($day['download_bytes'] / 1073741824, 3),
+            'upload_gb' => round($day['upload_bytes'] / 1073741824, 3),
+        ])->all();
+
         return view('admin.routers.show', [
             'router' => $router->load('shop.tenant'),
+            'dailyUsage' => $dailyUsage,
+            'hasUsageHistory' => collect($dailyUsage)->contains(fn (array $day): bool => $day['download_gb'] > 0 || $day['upload_gb'] > 0),
             'script' => $mikroTik->generateScript($router),
             'pppoeScript' => $mikroTik->generatePppoeScript($router),
             'freshInfrastructureScript' => $mikroTik->generateFreshInfrastructureScript($router),

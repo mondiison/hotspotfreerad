@@ -7,6 +7,8 @@ use App\Models\Shop;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class RouterProvisioningPageTest extends TestCase
@@ -68,6 +70,60 @@ class RouterProvisioningPageTest extends TestCase
             ->assertSee('window.location.replace(portal)')
             ->assertSee('/ip hotspot active remove', false)
             ->assertSee('sudo freeradius -X');
+    }
+
+    public function test_router_show_page_displays_usage_history_from_radacct(): void
+    {
+        $tenant = Tenant::create(['company_name' => 'Demo ISP', 'owner_email' => 'owner@example.com']);
+        $shop = Shop::create(['tenant_id' => $tenant->id, 'name' => 'Demo Shop']);
+
+        $router = Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'Usage Router',
+            'nas_identifier' => 'usage-router',
+            'wireguard_internal_ip' => '10.8.0.50',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        DB::table('radacct')->insert([
+            'acctsessionid' => 'session-usage-1',
+            'acctuniqueid' => 'unique-usage-1',
+            'username' => 'AA:BB:CC:DD:EE:FF',
+            'nasipaddress' => '10.8.0.50',
+            'acctstarttime' => now()->subDay(),
+            'acctstoptime' => now()->subDay()->addHour(),
+            'acctinputoctets' => 1073741824,
+            'acctoutputoctets' => 2147483648,
+        ]);
+
+        $user = User::factory()->create(['role' => 'super_admin', 'is_active' => true]);
+
+        $this->actingAs($user)
+            ->get(route('admin.routers.show', $router))
+            ->assertOk()
+            ->assertSee('Usage History')
+            ->assertDontSee('No accounting data yet');
+    }
+
+    public function test_router_show_page_shows_empty_state_without_usage_history(): void
+    {
+        $tenant = Tenant::create(['company_name' => 'Demo ISP', 'owner_email' => 'owner@example.com']);
+        $shop = Shop::create(['tenant_id' => $tenant->id, 'name' => 'Demo Shop']);
+
+        $router = Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'No Usage Router',
+            'nas_identifier' => 'no-usage-router',
+            'wireguard_internal_ip' => '10.8.0.51',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        $user = User::factory()->create(['role' => 'super_admin', 'is_active' => true]);
+
+        $this->actingAs($user)
+            ->get(route('admin.routers.show', $router))
+            ->assertOk()
+            ->assertSee('No accounting data yet for this router in the last 30 days.');
     }
 
     public function test_router_provisioning_settings_are_saved_and_used_on_script_page(): void
