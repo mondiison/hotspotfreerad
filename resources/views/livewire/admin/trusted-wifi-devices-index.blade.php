@@ -74,12 +74,15 @@
                         </td>
                         <td class="px-4 py-3">
                             <div class="flex justify-end gap-2">
-                                <flux:button type="button" wire:click="sync({{ $device->id }})" wire:loading.attr="disabled" wire:target="sync({{ $device->id }})" variant="outline" size="sm" icon="cloud-arrow-up">
-                                    <span wire:loading.remove wire:target="sync({{ $device->id }})">Sync</span>
-                                    <span wire:loading wire:target="sync({{ $device->id }})">Syncing...</span>
-                                </flux:button>
                                 <flux:button type="button" wire:click="edit({{ $device->id }})" wire:loading.attr="disabled" wire:target="edit({{ $device->id }})" variant="outline" size="sm" icon="pencil-square">Edit</flux:button>
-                                <flux:button type="button" wire:click="confirmDelete({{ $device->id }})" wire:loading.attr="disabled" wire:target="confirmDelete({{ $device->id }})" variant="danger" size="sm" icon="trash">Delete</flux:button>
+                                <flux:dropdown>
+                                    <flux:button type="button" variant="outline" size="sm" icon="ellipsis-horizontal" aria-label="More actions" />
+                                    <flux:menu>
+                                        <flux:menu.item wire:click="sync({{ $device->id }})" icon="cloud-arrow-up">Sync</flux:menu.item>
+                                        <flux:menu.separator />
+                                        <flux:menu.item wire:click="confirmDelete({{ $device->id }})" icon="trash" variant="danger">Delete</flux:menu.item>
+                                    </flux:menu>
+                                </flux:dropdown>
                             </div>
                         </td>
                     </tr>

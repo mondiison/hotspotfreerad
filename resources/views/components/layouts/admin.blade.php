@@ -18,7 +18,6 @@
             this.sidebarCollapsed = value;
             localStorage.setItem('adminSidebarCollapsed', value ? '1' : '0');
         },
-        accountMenuOpen: false,
         headerAccountMenuOpen: false,
     }"
 >
@@ -67,111 +66,120 @@
 
             <nav class="mt-8 space-y-1 text-sm">
                 @php
-                    $links = [
+                    $topLinks = [
                         ['label' => 'Dashboard', 'route' => 'admin.dashboard', 'icon' => 'squares-2x2'],
                         ['label' => 'Setup', 'route' => 'admin.setup.index', 'icon' => 'rocket-launch'],
-                        ['label' => 'Tenants', 'route' => 'admin.tenants.index', 'icon' => 'building-storefront', 'super_admin' => true],
-                        ['label' => 'Security', 'route' => 'admin.security.index', 'icon' => 'shield-check', 'super_admin' => true],
-                        ['label' => 'Activity', 'route' => 'admin.security-activity.index', 'icon' => 'clock'],
-                        ['label' => 'Brand', 'route' => 'admin.brand.edit', 'icon' => 'swatch', 'tenant_admin' => true],
-                        ['label' => 'Billing', 'route' => 'admin.billing.index', 'icon' => 'credit-card'],
-                        ['label' => 'Users', 'route' => 'admin.users.index', 'icon' => 'users'],
-                        ['label' => 'Shops', 'route' => 'admin.shops.index', 'icon' => 'building-storefront'],
-                        ['label' => 'Routers', 'route' => 'admin.routers.index', 'icon' => 'signal'],
-                        ['label' => 'Packages', 'route' => 'admin.packages.index', 'icon' => 'radio'],
-                        ['label' => 'Access', 'route' => 'admin.subscriptions.index', 'icon' => 'key'],
-                        ['label' => 'Vouchers', 'route' => 'admin.vouchers.index', 'icon' => 'ticket'],
-                        ['label' => 'POS Devices', 'route' => 'admin.pos-devices.index', 'icon' => 'device-phone-mobile'],
-                        ['label' => 'Trusted Wi-Fi', 'route' => 'admin.trusted-wifi-devices.index', 'icon' => 'shield-check'],
-                        ['label' => 'PPPoE', 'route' => 'admin.pppoe-subscribers.index', 'icon' => 'wifi'],
-                        ['label' => 'Payments', 'route' => 'admin.payments.index', 'icon' => 'banknotes'],
-                        ['label' => 'Expenses', 'route' => 'admin.expenses.index', 'icon' => 'receipt-percent'],
-                        ['label' => 'Reports', 'route' => 'admin.reports.sales', 'icon' => 'chart-bar'],
-                        ['label' => 'Payment Setup', 'route' => 'admin.payment-settings.index', 'icon' => 'credit-card', 'tenant_admin' => true],
                     ];
+
+                    $groups = [
+                        [
+                            'label' => 'Network',
+                            'links' => [
+                                ['label' => 'Routers', 'route' => 'admin.routers.index', 'icon' => 'signal'],
+                                ['label' => 'Packages', 'route' => 'admin.packages.index', 'icon' => 'radio'],
+                                ['label' => 'POS Devices', 'route' => 'admin.pos-devices.index', 'icon' => 'device-phone-mobile'],
+                                ['label' => 'Trusted Wi-Fi', 'route' => 'admin.trusted-wifi-devices.index', 'icon' => 'shield-check'],
+                                ['label' => 'PPPoE', 'route' => 'admin.pppoe-subscribers.index', 'icon' => 'wifi'],
+                            ],
+                        ],
+                        [
+                            'label' => 'Customers',
+                            'links' => [
+                                ['label' => 'Access', 'route' => 'admin.subscriptions.index', 'icon' => 'key'],
+                                ['label' => 'Vouchers', 'route' => 'admin.vouchers.index', 'icon' => 'ticket'],
+                            ],
+                        ],
+                        [
+                            'label' => 'Money',
+                            'links' => [
+                                ['label' => 'Payments', 'route' => 'admin.payments.index', 'icon' => 'banknotes'],
+                                ['label' => 'Billing', 'route' => 'admin.billing.index', 'icon' => 'credit-card'],
+                                ['label' => 'Payment Setup', 'route' => 'admin.payment-settings.index', 'icon' => 'building-library', 'tenant_admin' => true],
+                                ['label' => 'Expenses', 'route' => 'admin.expenses.index', 'icon' => 'receipt-percent'],
+                                ['label' => 'Reports', 'route' => 'admin.reports.sales', 'icon' => 'chart-bar'],
+                            ],
+                        ],
+                        [
+                            'label' => 'Organization',
+                            'links' => [
+                                ['label' => 'Tenants', 'route' => 'admin.tenants.index', 'icon' => 'building-storefront', 'super_admin' => true],
+                                ['label' => 'Shops', 'route' => 'admin.shops.index', 'icon' => 'building-storefront'],
+                                ['label' => 'Users', 'route' => 'admin.users.index', 'icon' => 'users'],
+                                ['label' => 'Brand', 'route' => 'admin.brand.edit', 'icon' => 'swatch', 'tenant_admin' => true],
+                            ],
+                        ],
+                        [
+                            'label' => 'Security',
+                            'links' => [
+                                ['label' => 'Security', 'route' => 'admin.security.index', 'icon' => 'shield-check', 'super_admin' => true],
+                                ['label' => 'Activity', 'route' => 'admin.security-activity.index', 'icon' => 'clock'],
+                            ],
+                        ],
+                    ];
+
+                    $visibleFor = fn (array $link): bool =>
+                        ! (($link['super_admin'] ?? false) && ! auth()->user()?->isSuperAdmin())
+                        && ! (($link['tenant_admin'] ?? false) && auth()->user()?->isSuperAdmin());
+
+                    $sectionPatternFor = fn (string $route): string => $route === 'admin.dashboard'
+                        ? $route
+                        : \Illuminate\Support\Str::beforeLast($route, '.').'.*';
                 @endphp
 
-                @foreach ($links as $link)
-                    @continue(($link['super_admin'] ?? false) && ! auth()->user()?->isSuperAdmin())
-                    @continue(($link['tenant_admin'] ?? false) && auth()->user()?->isSuperAdmin())
-
-                    @php
-                        $sectionPattern = $link['route'] === 'admin.dashboard'
-                            ? $link['route']
-                            : \Illuminate\Support\Str::beforeLast($link['route'], '.') . '.*';
-                    @endphp
+                @foreach ($topLinks as $link)
+                    @continue(! $visibleFor($link))
+                    @php($active = request()->routeIs($sectionPatternFor($link['route'])))
                     <a
                         href="{{ route($link['route']) }}"
                         wire:navigate
                         title="{{ $link['label'] }}"
-                        class="flex items-center gap-3 rounded-md px-3 py-2 {{ request()->routeIs($sectionPattern) ? 'bg-zinc-950 text-white' : 'text-zinc-700 hover:bg-zinc-100' }}"
+                        class="flex items-center gap-3 rounded-md px-3 py-2 {{ $active ? 'bg-zinc-950 text-white' : 'text-zinc-700 hover:bg-zinc-100' }}"
                         :class="{ 'lg:justify-center': sidebarCollapsed }"
                     >
-                        <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-md {{ request()->routeIs($sectionPattern) ? 'bg-white/10' : 'bg-zinc-100' }}">
+                        <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-md {{ $active ? 'bg-white/10' : 'bg-zinc-100' }}">
                             <x-dynamic-component :component="'flux::icon.'.$link['icon']" class="size-4" />
                         </span>
                         <span :class="{ 'lg:hidden': sidebarCollapsed }">{{ $link['label'] }}</span>
                     </a>
                 @endforeach
-            </nav>
 
-            @auth
-                <div class="relative mt-auto pt-8" @keydown.escape.window="accountMenuOpen = false">
-                    <div
-                        x-cloak
-                        x-show="accountMenuOpen"
-                        x-transition.origin.bottom.left
-                        @click.outside="accountMenuOpen = false"
-                        class="absolute bottom-full left-0 z-50 mb-3 w-full min-w-60 rounded-lg border border-zinc-200 bg-white p-2 text-sm shadow-lg"
-                    >
-                        <a href="{{ route('admin.profile.edit') }}" wire:navigate class="flex items-center gap-3 rounded-md px-3 py-2 text-zinc-700 hover:bg-zinc-100">
-                            <flux:icon.user-circle class="size-4" />
-                            <span>Profile</span>
-                        </a>
+                @foreach ($groups as $group)
+                    @php($visibleLinks = collect($group['links'])->filter($visibleFor)->values())
+                    @continue($visibleLinks->isEmpty())
+                    @php($groupActive = $visibleLinks->contains(fn ($link) => request()->routeIs($sectionPatternFor($link['route']))))
 
-                        <a href="{{ route('admin.passkeys.index') }}" wire:navigate class="flex items-center gap-3 rounded-md px-3 py-2 text-zinc-700 hover:bg-zinc-100">
-                            <flux:icon.key class="size-4" />
-                            <span>Passkeys</span>
-                        </a>
+                    <div class="pt-3" x-data="{ groupOpen: {{ $groupActive ? 'true' : 'false' }} }">
+                        <button
+                            type="button"
+                            @click="groupOpen = ! groupOpen"
+                            class="flex w-full items-center justify-between rounded-md px-3 py-1.5 text-xs font-semibold tracking-wide text-zinc-400 uppercase hover:text-zinc-600"
+                            :class="{ 'lg:justify-center lg:px-0': sidebarCollapsed }"
+                        >
+                            <span :class="{ 'lg:hidden': sidebarCollapsed }">{{ $group['label'] }}</span>
+                            <span class="hidden text-zinc-300" :class="{ 'lg:block': sidebarCollapsed }">&middot;&middot;&middot;</span>
+                            <flux:icon.chevron-down class="size-3.5 shrink-0 transition-transform" x-bind:class="{ '-rotate-90': ! groupOpen, 'lg:hidden': sidebarCollapsed }" />
+                        </button>
 
-                        @if (auth()->user()->isTenantAdmin() && auth()->user()->tenant)
-                            <a href="{{ auth()->user()->tenant->publicUrl() }}" target="_blank" class="flex items-center gap-3 rounded-md px-3 py-2 text-zinc-700 hover:bg-zinc-100">
-                                <flux:icon.arrow-top-right-on-square class="size-4" />
-                                <span>Public page</span>
-                            </a>
-                        @endif
-
-                        <form method="POST" action="{{ route('logout') }}" class="mt-1 border-t border-zinc-100 pt-1">
-                            @csrf
-                            <button class="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-red-700 hover:bg-red-50">
-                                <flux:icon.arrow-left-start-on-rectangle class="size-4" />
-                                <span>Sign out</span>
-                            </button>
-                        </form>
+                        <div x-show="groupOpen || sidebarCollapsed" x-transition.opacity.duration.150ms class="mt-1 space-y-1">
+                            @foreach ($visibleLinks as $link)
+                                @php($active = request()->routeIs($sectionPatternFor($link['route'])))
+                                <a
+                                    href="{{ route($link['route']) }}"
+                                    wire:navigate
+                                    title="{{ $link['label'] }}"
+                                    class="flex items-center gap-3 rounded-md px-3 py-2 {{ $active ? 'bg-zinc-950 text-white' : 'text-zinc-700 hover:bg-zinc-100' }}"
+                                    :class="{ 'lg:justify-center': sidebarCollapsed }"
+                                >
+                                    <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-md {{ $active ? 'bg-white/10' : 'bg-zinc-100' }}">
+                                        <x-dynamic-component :component="'flux::icon.'.$link['icon']" class="size-4" />
+                                    </span>
+                                    <span :class="{ 'lg:hidden': sidebarCollapsed }">{{ $link['label'] }}</span>
+                                </a>
+                            @endforeach
+                        </div>
                     </div>
-
-                    <button
-                        type="button"
-                        @click="accountMenuOpen = ! accountMenuOpen"
-                        class="flex w-full items-center gap-3 rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-left text-sm hover:bg-zinc-100"
-                        :class="{ 'lg:justify-center lg:p-2': sidebarCollapsed }"
-                        title="{{ auth()->user()->name }}"
-                    >
-                        <span class="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-md bg-zinc-950 text-xs font-semibold text-white">
-                            @if (auth()->user()->avatarUrl())
-                                <img src="{{ auth()->user()->avatarUrl() }}" alt="{{ auth()->user()->name }} profile photo" class="h-full w-full object-cover">
-                            @else
-                                {{ auth()->user()->initials() }}
-                            @endif
-                        </span>
-                        <span class="min-w-0 flex-1" :class="{ 'lg:hidden': sidebarCollapsed }">
-                            <span class="block truncate font-medium">{{ auth()->user()->name }}</span>
-                            <span class="mt-1 block truncate text-xs text-zinc-500">{{ str_replace('_', ' ', auth()->user()->role) }}</span>
-                        </span>
-                        <flux:icon.chevron-up class="size-4 text-zinc-500" x-bind:class="{ 'lg:hidden': sidebarCollapsed }" />
-                    </button>
-                </div>
-            @endauth
+                @endforeach
+            </nav>
         </aside>
 
         <main class="min-w-0 max-w-full flex-1 overflow-x-hidden">

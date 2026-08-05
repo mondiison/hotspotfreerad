@@ -158,22 +158,20 @@
                         </td>
                         <td class="px-4 py-3">
                             <div class="flex justify-end gap-2">
-                                <flux:button type="button" wire:click="renew({{ $subscriber->id }})" wire:loading.attr="disabled" wire:target="renew({{ $subscriber->id }})" variant="outline" size="sm" icon="arrow-path">
-                                    <span wire:loading.remove wire:target="renew({{ $subscriber->id }})">Renew</span>
-                                    <span wire:loading wire:target="renew({{ $subscriber->id }})">Renewing...</span>
-                                </flux:button>
-                                <flux:button type="button" wire:click="sync({{ $subscriber->id }})" wire:loading.attr="disabled" wire:target="sync({{ $subscriber->id }})" variant="outline" size="sm" icon="cloud-arrow-up">
-                                    <span wire:loading.remove wire:target="sync({{ $subscriber->id }})">Sync</span>
-                                    <span wire:loading wire:target="sync({{ $subscriber->id }})">Syncing...</span>
-                                </flux:button>
+                                <flux:button type="button" wire:click="edit({{ $subscriber->id }})" wire:loading.attr="disabled" wire:target="edit({{ $subscriber->id }})" variant="outline" size="sm" icon="pencil-square">Edit</flux:button>
                                 <flux:button type="button" wire:click="inspect({{ $subscriber->id }})" wire:loading.attr="disabled" wire:target="inspect({{ $subscriber->id }})" variant="outline" size="sm" icon="magnifying-glass">
                                     Inspect
                                 </flux:button>
-                                <flux:button type="button" wire:click="setupNote({{ $subscriber->id }})" wire:loading.attr="disabled" wire:target="setupNote({{ $subscriber->id }})" variant="outline" size="sm" icon="clipboard-document-list">
-                                    Setup
-                                </flux:button>
-                                <flux:button type="button" wire:click="edit({{ $subscriber->id }})" wire:loading.attr="disabled" wire:target="edit({{ $subscriber->id }})" variant="outline" size="sm" icon="pencil-square">Edit</flux:button>
-                                <flux:button type="button" wire:click="confirmDelete({{ $subscriber->id }})" wire:loading.attr="disabled" wire:target="confirmDelete({{ $subscriber->id }})" variant="danger" size="sm" icon="trash">Delete</flux:button>
+                                <flux:dropdown>
+                                    <flux:button type="button" variant="outline" size="sm" icon="ellipsis-horizontal" aria-label="More actions" />
+                                    <flux:menu>
+                                        <flux:menu.item wire:click="renew({{ $subscriber->id }})" icon="arrow-path">Renew</flux:menu.item>
+                                        <flux:menu.item wire:click="sync({{ $subscriber->id }})" icon="cloud-arrow-up">Sync</flux:menu.item>
+                                        <flux:menu.item wire:click="setupNote({{ $subscriber->id }})" icon="clipboard-document-list">Setup note</flux:menu.item>
+                                        <flux:menu.separator />
+                                        <flux:menu.item wire:click="confirmDelete({{ $subscriber->id }})" icon="trash" variant="danger">Delete</flux:menu.item>
+                                    </flux:menu>
+                                </flux:dropdown>
                             </div>
                         </td>
                     </tr>
