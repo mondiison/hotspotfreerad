@@ -9,6 +9,7 @@ use App\Models\PppoeSubscriber;
 use App\Models\Router;
 use App\Models\Shop;
 use App\Models\Subscription;
+use App\Models\TrustedWifiDevice;
 use App\Models\User;
 use App\Models\Voucher;
 use App\Models\VoucherBatch;
@@ -84,6 +85,13 @@ class TenantAccess
             : $query->whereHas('shop', fn (Builder $shop) => $shop->where('tenant_id', $user->tenant_id));
     }
 
+    public static function scopeTrustedWifiDevices(Builder $query, User $user): Builder
+    {
+        return $user->isSuperAdmin()
+            ? $query
+            : $query->whereHas('shop', fn (Builder $shop) => $shop->where('tenant_id', $user->tenant_id));
+    }
+
     public static function scopeVoucherBatches(Builder $query, User $user): Builder
     {
         return $user->isSuperAdmin()
@@ -137,6 +145,13 @@ class TenantAccess
     }
 
     public static function assertPosDevice(PosDevice $device, User $user): void
+    {
+        $device->loadMissing('shop');
+
+        self::assertShop($device->shop, $user);
+    }
+
+    public static function assertTrustedWifiDevice(TrustedWifiDevice $device, User $user): void
     {
         $device->loadMissing('shop');
 

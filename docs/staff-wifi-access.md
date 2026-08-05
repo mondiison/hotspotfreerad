@@ -1,0 +1,38 @@
+# Staff & Management Wi-Fi Access
+
+The Staff and Management SSIDs are WPA2/WPA3-PSK, not open like the customer hotspot. A shared password on its own has a real weakness: anyone who knows it can share it (a phone's built-in "share Wi-Fi password" feature, a screenshot, a coworker just reading it out) and there is no way to stop that while the network is protected by a single shared string. There is no way to close that gap completely without moving to per-person credentials (WPA2/3-Enterprise with 802.1X/EAP against FreeRADIUS) — that is a larger project, not yet built.
+
+**Trusted Wi-Fi Devices** (`admin/trusted-wifi-devices`) is the practical middle ground shipped now: register each staff/management device by MAC address, and only registered devices can join those SSIDs — even with the correct password — everywhere the mechanism below is actually wired up. This does not replace the Wi-Fi password; it adds a second check.
+
+## How enforcement actually works today
+
+There are two different SSID hosting situations in this app, and the mechanism differs between them.
+
+### MikroTik built-in Wi-Fi (the `l009_builtin_wifi` lab/test profile)
+
+This is the one case where HotspotFreeRAD directly controls the SSID. The router's generated script (Script page → Fresh Infrastructure Script) now includes, for each of the Staff and Management SSIDs:
+
+```routeros
+/interface wifi access-list add interface=$staffWifiInterface mac-address=AA:BB:CC:DD:EE:FF action=accept comment="..."
+/interface wifi access-list add interface=$staffWifiInterface action=reject comment="Default-deny: only registered MMS Staff devices may join"
+```
+
+One `accept` line per active, non-expired device registered for that shop and network, followed by a catch-all `reject`. If **no** devices are registered for a network yet, the reject line is omitted entirely and a comment explains why — so a brand-new setup doesn't accidentally lock out the admin's own device before anything has been registered.
+
+**This list is generated fresh every time you view/copy the script — it is not pushed to the router automatically.** After adding, editing, or removing a trusted device, re-open the router's Script page and re-run at least the WireGuard/Wi-Fi section on the physical router to pick up the change. There is no live sync to the router today (unlike the WireGuard peer sync, which does update automatically — see `docs/wireguard-server-setup.md`).
+
+`/interface/wifi/access-list` is a real RouterOS 7 wifiwave2 feature, but its exact behavior has evolved across RouterOS releases. **Verify it behaves as expected on your specific RouterOS version before relying on it in production** — test with a device that is not on the accept list and confirm it's actually rejected.
+
+### External APs (the recommended production setup)
+
+For real deployments, `docs/router-onboarding.md` recommends external business APs (Ruijie/Reyee, TP-Link Omada, etc.) rather than the MikroTik's own radio — the built-in Wi-Fi profile above is for lab/pilot testing. HotspotFreeRAD's script generator does not configure third-party AP hardware, so the local access-list above does not apply there.
+
+The vendor-agnostic equivalent is **RADIUS MAC authentication**, which most decent AP controllers support natively: the AP asks the RADIUS server "is this MAC allowed?" before letting a device associate, independent of the PSK. Registering a device under Trusted Wi-Fi Devices already writes it into FreeRADIUS (`radcheck`, username and password both set to the device's MAC) — so if you configure your AP controller's RADIUS MAC-auth to point at the same RADIUS server (`RADIUS_SERVER_IP`, plus a shared secret configured on your AP controller and in FreeRADIUS's `clients.conf`) using `service=wireless`, it can use exactly this same device list.
+
+**Known limitation:** an AP sitting on the router's LAN (e.g. the management VLAN) reaching the Pi's RADIUS server means its traffic has to cross the WireGuard tunnel. Today's automatic WireGuard peer sync (`hotspot:sync-wireguard-peers`, see `docs/wireguard-server-setup.md`) only allows each router's own tunnel IP (`allowed-ips = <ip>/32`) — it does not yet open a path for the router's LAN/VLAN subnets to reach the Pi through the tunnel. Until that's extended, an external AP's RADIUS requests likely won't reach the Pi unless you set up routing for this by hand. Treat "external AP + RADIUS MAC-auth" as validated in principle, not yet a turnkey path — this is a natural follow-up, not something to assume works today.
+
+## Managing devices
+
+- **Admin → Trusted Wi-Fi** lists, adds, edits, and removes devices per shop, per network (`staff` or `mgmt`).
+- Devices can have an optional expiry (useful for contractors/temporary access) and an active/inactive toggle — either one revokes RADIUS access immediately (`radcheck` row removed) without deleting the record.
+- Every save re-syncs RADIUS via `App\Services\RadiusProvisioningService::provisionTrustedWifiDevice()` / `revokeTrustedWifiDevice()`.

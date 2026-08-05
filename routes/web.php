@@ -19,6 +19,7 @@ use App\Http\Controllers\Admin\ShopController;
 use App\Http\Controllers\Admin\SubscriptionController;
 use App\Http\Controllers\Admin\TenantBrandController;
 use App\Http\Controllers\Admin\TenantController;
+use App\Http\Controllers\Admin\TrustedWifiDeviceController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\VoucherController;
 use App\Http\Controllers\Auth\ForcePasswordChangeController;
@@ -101,6 +102,7 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::get('voucher-batches/{voucherBatch}/export', [VoucherController::class, 'exportBatch'])->name('voucher-batches.export');
     Route::get('voucher-batches/{voucherBatch}/print', [VoucherController::class, 'print'])->name('voucher-batches.print');
     Route::get('pos-devices', [PosDeviceController::class, 'index'])->name('pos-devices.index');
+    Route::get('trusted-wifi-devices', [TrustedWifiDeviceController::class, 'index'])->name('trusted-wifi-devices.index');
     Route::get('pppoe-subscribers-export', [PppoeSubscriberController::class, 'export'])->name('pppoe-subscribers.export');
     Route::get('pppoe-subscribers', [PppoeSubscriberController::class, 'index'])->name('pppoe-subscribers.index');
     Route::get('payments-export', [PaymentController::class, 'export'])->name('payments.export');

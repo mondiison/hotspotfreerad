@@ -96,6 +96,7 @@ Use `php artisan migrate` whenever new migrations are added.
 - Packages with uptime, bandwidth, total data, and FUP fields
 - Router onboarding and MikroTik script generation
 - Automatic router-to-Pi WireGuard connection: each router gets an app-generated keypair baked into its script, and a scheduled command (`hotspot:sync-wireguard-peers`) registers it as a Pi-side peer with no manual SSH step. See `docs/wireguard-server-setup.md` for the one-time Pi bootstrap this depends on.
+- Trusted Wi-Fi Devices: MAC-based allowlisting for the Staff/Management SSIDs so the shared PSK alone isn't enough to join, synced to RADIUS and (for the MikroTik built-in Wi-Fi test profile) baked into the generated access-list. See `docs/staff-wifi-access.md`, including current limitations for external APs.
 - Flexible router provisioning settings:
   - WAN 1 / WAN 2
   - AP/switch trunk
@@ -154,4 +155,6 @@ POS devices should use a password-protected POS SSID, usually VLAN 50, and be re
 - Add POS payment tracking when tenant sells/renews POS access.
 - Improve router script generator with selectable AP vendor notes: MikroTik, Ruijie/Reyee, TP-Link Omada, Wavlink.
 - Add second Starlink load-balancing/failover script profile.
+- Extend the WireGuard peer sync (`hotspot:sync-wireguard-peers`) to allow each router's LAN/VLAN subnets through the tunnel (not just its own tunnel IP), so external APs can reach the Pi's RADIUS server for MAC authentication — see the limitation noted in `docs/staff-wifi-access.md`.
+- Longer term: WPA2/3-Enterprise (802.1X/EAP) for Staff/Management Wi-Fi, giving each person their own revocable login instead of a MAC allowlist plus shared PSK. Would need FreeRADIUS EAP/cert setup and a CA cert distribution flow (`.mobileconfig` for iOS/macOS, a PowerShell import script for Windows) — MAC allowlisting is the interim step already shipped.
 - Add public MMS Radius homepage/pricing after core feature set stabilizes.

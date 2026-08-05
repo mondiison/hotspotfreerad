@@ -7,6 +7,7 @@ use App\Models\PosDevice;
 use App\Models\PppoeSubscriber;
 use App\Models\Router;
 use App\Models\Subscription;
+use App\Models\TrustedWifiDevice;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -131,6 +132,32 @@ class RadiusProvisioningService
     }
 
     public function revokePosDevice(PosDevice $device): void
+    {
+        $this->revokeMacAccess($this->normalizeMacAddress($device->mac_address));
+    }
+
+    public function provisionTrustedWifiDevice(TrustedWifiDevice $device): void
+    {
+        $macAddress = $this->normalizeMacAddress($device->mac_address);
+
+        DB::table('radcheck')->updateOrInsert(
+            [
+                'username' => $macAddress,
+                'attribute' => 'Cleartext-Password',
+            ],
+            [
+                'op' => ':=',
+                'value' => $macAddress,
+            ]
+        );
+
+        $device->forceFill([
+            'mac_address' => $macAddress,
+            'last_provisioned_at' => now(),
+        ])->save();
+    }
+
+    public function revokeTrustedWifiDevice(TrustedWifiDevice $device): void
     {
         $this->revokeMacAccess($this->normalizeMacAddress($device->mac_address));
     }

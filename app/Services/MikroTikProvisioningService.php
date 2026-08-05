@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Router;
+use App\Models\TrustedWifiDevice;
 
 class MikroTikProvisioningService
 {
@@ -208,6 +209,8 @@ SCRIPT;
             '/interface bridge port add bridge=$lanBridge interface=$staffWifiInterface pvid=$staffVlan comment="Virtual staff/admin Wi-Fi"',
             $settings['enable_pos'] ? '/interface bridge port add bridge=$lanBridge interface=$posWifiInterface pvid=$posVlan comment="Virtual POS Wi-Fi for terminal testing"' : '# POS virtual bridge port disabled.',
             '/interface bridge port add bridge=$lanBridge interface=$mgmtWifiInterface pvid=$mgmtVlan comment="Virtual management Wi-Fi for lab testing"',
+            ...$this->wifiAccessListLines($router, '$staffWifiInterface', 'MMS Staff', TrustedWifiDevice::NETWORK_STAFF),
+            ...$this->wifiAccessListLines($router, '$mgmtWifiInterface', 'MMS Mgmt', TrustedWifiDevice::NETWORK_MGMT),
         ] : [
             '',
             '# Built-in MikroTik Wi-Fi is disabled for this profile. Use the AP/switch trunk for external APs.',
@@ -500,6 +503,39 @@ HTML;
     private function quote(?string $value): string
     {
         return str_replace('"', '\"', (string) $value);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function wifiAccessListLines(Router $router, string $interfaceVariable, string $ssidLabel, string $network): array
+    {
+        $devices = TrustedWifiDevice::query()
+            ->where('shop_id', $router->shop_id)
+            ->where('network', $network)
+            ->get()
+            ->filter(fn (TrustedWifiDevice $device): bool => $device->isCurrentlyActive());
+
+        if ($devices->isEmpty()) {
+            return [
+                "# No trusted {$ssidLabel} devices registered in MMS Radius yet, so this SSID currently accepts anyone with the password.",
+                "# Register devices under Trusted Wi-Fi Devices, then regenerate this script to restrict {$ssidLabel} to only those MAC addresses.",
+            ];
+        }
+
+        $lines = [
+            "# Only these MMS Radius-registered devices may join {$ssidLabel}, even with the correct password.",
+            "# Verify access-list behavior on your exact RouterOS/wifi-package version before relying on it in production.",
+        ];
+
+        foreach ($devices as $device) {
+            $comment = trim($device->device_name.($device->owner_name ? ' ('.$device->owner_name.')' : ''));
+            $lines[] = '/interface wifi access-list add interface='.$interfaceVariable.' mac-address='.$device->mac_address.' action=accept comment="'.$this->quote($comment).'"';
+        }
+
+        $lines[] = '/interface wifi access-list add interface='.$interfaceVariable.' action=reject comment="Default-deny: only registered '.$ssidLabel.' devices may join"';
+
+        return $lines;
     }
 
     private function wireguardInterfaceLine(Router $router): string

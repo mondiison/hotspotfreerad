@@ -4,6 +4,8 @@ This guide explains the values needed when adding a MikroTik router in HotspotFr
 
 Connecting a router to the Pi's WireGuard tunnel is automatic: HotspotFreeRAD generates a WireGuard keypair for each router, bakes the private key into its generated script, and a scheduled command registers the router as a peer on the Pi within a few minutes. The one manual step is a one-time server bootstrap on the Pi itself — see [WireGuard server setup](wireguard-server-setup.md) if that hasn't been done yet.
 
+For the password-protected Staff/Management Wi-Fi SSIDs, see [Staff & management Wi-Fi access](staff-wifi-access.md) — registering trusted devices by MAC address means the password alone isn't enough to join those networks.
+
 ## Field Examples
 
 | Field | Example | Where it comes from |

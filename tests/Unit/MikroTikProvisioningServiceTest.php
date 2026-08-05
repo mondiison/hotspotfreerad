@@ -3,6 +3,9 @@
 namespace Tests\Unit;
 
 use App\Models\Router;
+use App\Models\Shop;
+use App\Models\Tenant;
+use App\Models\TrustedWifiDevice;
 use App\Services\MikroTikProvisioningService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -219,6 +222,64 @@ class MikroTikProvisioningServiceTest extends TestCase
         $this->assertStringContainsString('Do not attach hotspot DHCP directly to wifi1/ether ports', $script);
         $this->assertStringContainsString('/ip dhcp-server add name=dhcp-pos interface=vlan-pos', $script);
         $this->assertStringContainsString('PPPoE is disabled', $script);
+        $this->assertStringContainsString('No trusted MMS Staff devices registered', $script);
+        $this->assertStringContainsString('No trusted MMS Mgmt devices registered', $script);
+        $this->assertStringNotContainsString('/interface wifi access-list add', $script);
+    }
+
+    public function test_l009_script_restricts_staff_and_mgmt_wifi_to_registered_devices(): void
+    {
+        config([
+            'app.url' => 'https://mmsradius.com',
+            'services.radius.server_ip' => '10.8.0.1',
+            'services.wireguard.endpoint_host' => 'vpn.example.com',
+            'services.wireguard.endpoint_port' => 13231,
+            'services.wireguard.public_key' => 'server-public-key',
+            'services.mikrotik.hotspot_dns_name' => 'hotspot.local',
+        ]);
+
+        $tenant = Tenant::create(['company_name' => 'Demo ISP', 'owner_email' => 'owner@example.com']);
+        $shop = Shop::create(['tenant_id' => $tenant->id, 'name' => 'Demo Shop']);
+
+        $router = Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'L009 Router',
+            'nas_identifier' => 'l009-router',
+            'wireguard_internal_ip' => '10.8.0.31',
+            'shared_secret' => 'radius-secret',
+            'provisioning_settings' => ['profile' => 'l009_builtin_wifi'],
+        ]);
+
+        $staffDevice = TrustedWifiDevice::create([
+            'shop_id' => $shop->id,
+            'network' => TrustedWifiDevice::NETWORK_STAFF,
+            'device_name' => "Tolu's Laptop",
+            'mac_address' => 'AA:BB:CC:DD:EE:01',
+            'is_active' => true,
+        ]);
+        TrustedWifiDevice::create([
+            'shop_id' => $shop->id,
+            'network' => TrustedWifiDevice::NETWORK_STAFF,
+            'device_name' => 'Expired Contractor Laptop',
+            'mac_address' => 'AA:BB:CC:DD:EE:02',
+            'is_active' => true,
+            'expires_at' => now()->subDay(),
+        ]);
+        $mgmtDevice = TrustedWifiDevice::create([
+            'shop_id' => $shop->id,
+            'network' => TrustedWifiDevice::NETWORK_MGMT,
+            'device_name' => 'Admin Phone',
+            'mac_address' => 'AA:BB:CC:DD:EE:03',
+            'is_active' => true,
+        ]);
+
+        $script = app(MikroTikProvisioningService::class)->generateFreshInfrastructureScript($router);
+
+        $this->assertStringContainsString('/interface wifi access-list add interface=$staffWifiInterface mac-address='.$staffDevice->mac_address.' action=accept', $script);
+        $this->assertStringContainsString('/interface wifi access-list add interface=$staffWifiInterface action=reject', $script);
+        $this->assertStringNotContainsString('AA:BB:CC:DD:EE:02', $script);
+        $this->assertStringContainsString('/interface wifi access-list add interface=$mgmtWifiInterface mac-address='.$mgmtDevice->mac_address.' action=accept', $script);
+        $this->assertStringContainsString('/interface wifi access-list add interface=$mgmtWifiInterface action=reject', $script);
     }
 
     public function test_it_omits_wireguard_private_key_when_router_has_none(): void

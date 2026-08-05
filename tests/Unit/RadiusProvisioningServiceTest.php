@@ -8,6 +8,7 @@ use App\Models\Router;
 use App\Models\Shop;
 use App\Models\Subscription;
 use App\Models\Tenant;
+use App\Models\TrustedWifiDevice;
 use App\Services\RadiusProvisioningService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -163,6 +164,34 @@ class RadiusProvisioningServiceTest extends TestCase
 
         $this->assertDatabaseMissing('radcheck', ['username' => 'customer001']);
         $this->assertDatabaseMissing('radusergroup', ['username' => 'customer001']);
+    }
+
+    public function test_it_provisions_and_revokes_a_trusted_wifi_device(): void
+    {
+        $shop = $this->shop($this->tenant());
+        $device = TrustedWifiDevice::create([
+            'shop_id' => $shop->id,
+            'network' => TrustedWifiDevice::NETWORK_STAFF,
+            'device_name' => "Tolu's Laptop",
+            'mac_address' => 'aa-bb-cc-dd-ee-ff',
+            'is_active' => true,
+        ]);
+
+        $service = app(RadiusProvisioningService::class);
+        $service->provisionTrustedWifiDevice($device);
+
+        $this->assertDatabaseHas('radcheck', [
+            'username' => 'AA:BB:CC:DD:EE:FF',
+            'attribute' => 'Cleartext-Password',
+            'op' => ':=',
+            'value' => 'AA:BB:CC:DD:EE:FF',
+        ]);
+        $this->assertSame('AA:BB:CC:DD:EE:FF', $device->refresh()->mac_address);
+        $this->assertNotNull($device->last_provisioned_at);
+
+        $service->revokeTrustedWifiDevice($device);
+
+        $this->assertDatabaseMissing('radcheck', ['username' => 'AA:BB:CC:DD:EE:FF']);
     }
 
     private function createRadiusTables(): void
