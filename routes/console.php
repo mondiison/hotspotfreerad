@@ -7,10 +7,12 @@ use App\Models\SecurityActivity;
 use App\Models\Subscription;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Models\Router;
 use App\Models\Voucher;
 use App\Services\PppoeSubscriberManagementService;
 use App\Services\PosDeviceManagementService;
 use App\Services\RadiusProvisioningService;
+use App\Services\RouterMetricSamplingService;
 use App\Services\VoucherManagementService;
 use App\Services\WireGuardPeerSyncService;
 use App\Support\SchedulerHealth;
@@ -308,5 +310,27 @@ Artisan::command('hotspot:sync-wireguard-peers {--dry-run}', function (WireGuard
 })->purpose('Reconcile Raspberry Pi WireGuard peers from router records (adds/updates only, never removes a peer)');
 
 Schedule::command('hotspot:sync-wireguard-peers')
+    ->everyFiveMinutes()
+    ->withoutOverlapping();
+
+Artisan::command('hotspot:sample-router-metrics', function (RouterMetricSamplingService $sampler): int {
+    $routers = Router::all();
+    $sampled = 0;
+
+    foreach ($routers as $router) {
+        try {
+            $sampler->sample($router);
+            $sampled++;
+        } catch (\Throwable $e) {
+            $this->error("Failed to sample router {$router->id} ({$router->name}): {$e->getMessage()}");
+        }
+    }
+
+    $this->info("Sampled {$sampled}/{$routers->count()} router(s).");
+
+    return Command::SUCCESS;
+})->purpose('Record a CPU/RAM/disk/latency snapshot for every router (latency always attempted; RouterOS metrics only if API credentials are configured)');
+
+Schedule::command('hotspot:sample-router-metrics')
     ->everyFiveMinutes()
     ->withoutOverlapping();

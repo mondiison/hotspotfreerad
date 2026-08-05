@@ -39,6 +39,21 @@ Router Script page → **Live** tab → "Wi-Fi Scan". On-demand only (not polled
 
 **This is the least-verified part of this feature set.** RouterOS's scan command normally streams results until explicitly cancelled; this reads a limited batch (`count` option) and closes the connection, expecting that to implicitly stop the scan on the router side. That has historically been a source of stuck API sessions on some RouterOS releases for similar streaming commands. Test it against real hardware — including running a second scan shortly after the first — before relying on it operationally. Also note: scanning can briefly interrupt client connections on some wireless drivers when run on an interface that's actively serving an SSID.
 
+## Insight: CPU/RAM/disk, hardware health, uptime, latency history
+
+Router Script page → **Insight** tab. Two independent pieces:
+
+- **Live snapshot** (`App\Livewire\Admin\RouterInsight`, "Refresh" button): CPU load, RAM used/total, disk used/total, uptime, board name, and RouterOS version from `/system/resource/print`, plus whatever hardware sensors `/system/health/print` reports. Needs RouterOS API credentials, same as Live Bandwidth and Wi-Fi Scan.
+- **History** (Today / 7 days / 30 days buttons): CPU/RAM and latency-to-router charts, built from `router_metric_samples` — a new table populated every 5 minutes by the `hotspot:sample-router-metrics` scheduled command (`App\Services\RouterMetricSamplingService`).
+
+**Latency does not need RouterOS API credentials at all.** It's measured by shelling out to the system `ping` binary from wherever Laravel runs (the Pi in production) directly at the router's WireGuard IP — the same approach works whether or not the router has API credentials configured yet, since it's plain ICMP over the tunnel, not a RouterOS API call. CPU/RAM/disk/health history only populates once API credentials exist and the script has been re-applied on the router.
+
+Bucketing (hourly for "Today", daily for 7/30 days) happens in PHP over the fetched rows, not in SQL, because SQLite (tests) and MySQL (production) don't share a common date-truncation function — a deliberate simplification given the modest row volume (one row per router per 5 minutes).
+
+**Hardware health caveat**: `/system/health/print`'s output shape varies significantly by hardware and RouterOS version — some devices report nothing, some report voltage/temperature only, some report per-fan speeds as separate rows. The Insight tab renders whatever key/value pairs come back rather than assuming specific fields (like fan speed) exist; don't expect fan data on hardware without fans.
+
+**Flux charts have no built-in drag-to-zoom or brush selection** (confirmed against the Flux docs) — the "Today / 7 days / 30 days" buttons are a server-refetch range picker, not a client-side zoom interaction.
+
 ## Topology mapper
 
 **Admin → Network → Topology** (`admin/topology`). This is deliberately the organizational hierarchy — Tenant → Shop → Router, with live online/offline status from `RadiusAccountingStats` — not physical network topology discovery (LLDP/CDP neighbor walking). Real physical-topology discovery would need its own RouterOS API work and hasn't been attempted; the scoping choice here was to ship something correct and fully DB-driven (no RouterOS dependency, works even for routers with no API credentials yet) rather than a partially-working neighbor-discovery feature.

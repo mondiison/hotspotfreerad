@@ -98,6 +98,7 @@
                 <flux:tabs variant="segmented" scrollable>
                     <flux:tab name="overview" icon="chart-bar">Overview</flux:tab>
                     <flux:tab name="live" icon="bolt">Live</flux:tab>
+                    <flux:tab name="insight" icon="cpu-chip">Insight</flux:tab>
                     <flux:tab name="fresh-infra" icon="sparkles">Fresh Infrastructure Script</flux:tab>
                     <flux:tab name="hotspot" icon="wifi">Hotspot Script</flux:tab>
                     <flux:tab name="pppoe" icon="signal">PPPoE Script</flux:tab>
@@ -201,6 +202,12 @@ sudo freeradius -X</code></pre>
                             <p class="text-sm text-zinc-500">Live bandwidth and Wi-Fi scanning need RouterOS API credentials first. Generate them from the Router Details card, then re-run the script on this router.</p>
                         </section>
                     @endif
+                </flux:tab.panel>
+
+                <flux:tab.panel name="insight" class="space-y-6">
+                    <section class="min-w-0 overflow-hidden rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+                        <livewire:admin.router-insight :router="$router" :key="'insight-'.$router->id" />
+                    </section>
                 </flux:tab.panel>
 
                 <flux:tab.panel name="fresh-infra" class="space-y-6">

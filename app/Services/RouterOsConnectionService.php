@@ -131,4 +131,96 @@ class RouterOsConnectionService
             return ['success' => false, 'error' => $e->getMessage()];
         }
     }
+
+    /**
+     * CPU/RAM/disk/uptime snapshot from `/system/resource/print`.
+     *
+     * @return array{success: bool, cpu_percent?: int, ram_used_bytes?: int, ram_total_bytes?: int, disk_used_bytes?: int, disk_total_bytes?: int, uptime_seconds?: int, board_name?: ?string, version?: ?string, error?: string}
+     */
+    public function systemResource(Router $router): array
+    {
+        if (! $this->isConfigured($router)) {
+            return ['success' => false, 'error' => 'RouterOS API credentials not generated yet.'];
+        }
+
+        try {
+            $response = $this->client($router)->query(new Query('/system/resource/print'))->read();
+            $row = $response[0] ?? [];
+
+            $totalMemory = (int) ($row['total-memory'] ?? 0);
+            $freeMemory = (int) ($row['free-memory'] ?? 0);
+            $totalHdd = (int) ($row['total-hdd-space'] ?? 0);
+            $freeHdd = (int) ($row['free-hdd-space'] ?? 0);
+
+            return [
+                'success' => true,
+                'cpu_percent' => (int) ($row['cpu-load'] ?? 0),
+                'ram_used_bytes' => max(0, $totalMemory - $freeMemory),
+                'ram_total_bytes' => $totalMemory,
+                'disk_used_bytes' => max(0, $totalHdd - $freeHdd),
+                'disk_total_bytes' => $totalHdd,
+                'uptime_seconds' => self::parseRouterOsUptime((string) ($row['uptime'] ?? '')),
+                'board_name' => $row['board-name'] ?? null,
+                'version' => $row['version'] ?? null,
+            ];
+        } catch (\Throwable $e) {
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Raw hardware health fields from `/system/health/print` -- voltage,
+     * temperature, fan speeds, PSU state, etc. What's actually present
+     * varies a lot by hardware (many small routers report nothing useful
+     * here), so this returns whatever RouterOS sends back unmodified
+     * rather than assuming specific fields exist.
+     *
+     * @return array{success: bool, fields?: array<string,mixed>, error?: string}
+     */
+    public function systemHealth(Router $router): array
+    {
+        if (! $this->isConfigured($router)) {
+            return ['success' => false, 'error' => 'RouterOS API credentials not generated yet.'];
+        }
+
+        try {
+            $response = $this->client($router)->query(new Query('/system/health/print'))->read();
+
+            // Older RouterOS returns one row of key=>value pairs; newer
+            // versions return one row PER sensor with name/value/type keys.
+            $isPerSensorFormat = collect($response)->every(
+                fn ($row) => is_array($row) && array_key_exists('name', $row) && array_key_exists('value', $row)
+            );
+
+            $fields = $isPerSensorFormat
+                ? collect($response)->mapWithKeys(fn (array $row) => [$row['name'] => $row['value']])->all()
+                : (array) ($response[0] ?? []);
+
+            unset($fields['.id']);
+
+            return ['success' => true, 'fields' => $fields];
+        } catch (\Throwable $e) {
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Parses RouterOS's compact uptime string (e.g. "4w2d3h4m5s") into
+     * total seconds.
+     */
+    public static function parseRouterOsUptime(string $uptime): int
+    {
+        if (! preg_match_all('/(\d+)(w|d|h|m|s)/', $uptime, $matches, PREG_SET_ORDER)) {
+            return 0;
+        }
+
+        $unitSeconds = ['w' => 604800, 'd' => 86400, 'h' => 3600, 'm' => 60, 's' => 1];
+        $total = 0;
+
+        foreach ($matches as [, $value, $unit]) {
+            $total += ((int) $value) * $unitSeconds[$unit];
+        }
+
+        return $total;
+    }
 }

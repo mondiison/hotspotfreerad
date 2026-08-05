@@ -97,7 +97,7 @@ Use `php artisan migrate` whenever new migrations are added.
 - Router onboarding and MikroTik script generation
 - Automatic router-to-Pi WireGuard connection: each router gets an app-generated keypair baked into its script, and a scheduled command (`hotspot:sync-wireguard-peers`) registers it as a Pi-side peer with no manual SSH step. See `docs/wireguard-server-setup.md` for the one-time Pi bootstrap this depends on.
 - Trusted Wi-Fi Devices: MAC-based allowlisting for the Staff/Management SSIDs so the shared PSK alone isn't enough to join, synced to RADIUS and (for the MikroTik built-in Wi-Fi test profile) baked into the generated access-list. See `docs/staff-wifi-access.md`, including current limitations for external APs.
-- Router monitoring: per-router historical bandwidth graphs (from existing RADIUS accounting), live bandwidth polling and on-demand Wi-Fi scanning (both over an auto-provisioned read-only RouterOS API user baked into the generated scripts), and a tenant/shop/router topology view. See `docs/router-monitoring.md`, including honest caveats on Wi-Fi scan verification and the topology view's scope.
+- Router monitoring: per-router historical bandwidth graphs (from existing RADIUS accounting), live bandwidth polling and on-demand Wi-Fi scanning (both over an auto-provisioned read-only RouterOS API user baked into the generated scripts), CPU/RAM/disk/hardware-health snapshots plus 5-minute-sampled CPU/RAM/latency history, and a tenant/shop/router topology view. See `docs/router-monitoring.md`, including honest caveats on Wi-Fi scan verification, hardware-health field variability, and the topology view's scope.
 - Flexible router provisioning settings:
   - WAN 1 / WAN 2
   - AP/switch trunk
