@@ -1,0 +1,57 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Livewire\Admin\RouterLiveMonitor;
+use App\Livewire\Admin\RouterWifiScan;
+use App\Models\Router;
+use App\Models\Shop;
+use App\Models\Tenant;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Livewire;
+use Tests\TestCase;
+
+class RouterLiveMonitoringTest extends TestCase
+{
+    use RefreshDatabase;
+
+    private function makeRouter(): Router
+    {
+        $tenant = Tenant::create(['company_name' => 'Demo ISP', 'owner_email' => 'owner@example.com']);
+        $shop = Shop::create(['tenant_id' => $tenant->id, 'name' => 'Demo Shop']);
+
+        return Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'Monitor Router',
+            'nas_identifier' => 'monitor-router',
+            // Reserved documentation-only address, guaranteed unreachable.
+            'wireguard_internal_ip' => '192.0.2.10',
+            'shared_secret' => 'radius-secret',
+        ]);
+    }
+
+    public function test_live_monitor_surfaces_a_connection_error_instead_of_crashing(): void
+    {
+        $router = $this->makeRouter();
+        $user = User::factory()->create(['role' => 'super_admin', 'is_active' => true]);
+
+        Livewire::actingAs($user)
+            ->test(RouterLiveMonitor::class, ['router' => $router])
+            ->call('poll')
+            ->assertSet('samples', [])
+            ->assertSee('Could not reach this router');
+    }
+
+    public function test_wifi_scan_surfaces_a_connection_error_instead_of_crashing(): void
+    {
+        $router = $this->makeRouter();
+        $user = User::factory()->create(['role' => 'super_admin', 'is_active' => true]);
+
+        Livewire::actingAs($user)
+            ->test(RouterWifiScan::class, ['router' => $router])
+            ->call('scan')
+            ->assertSet('networks', [])
+            ->assertSee('Scan failed');
+    }
+}

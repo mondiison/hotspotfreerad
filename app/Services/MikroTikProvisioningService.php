@@ -46,6 +46,7 @@ class MikroTikProvisioningService
         $wgEndpointPort = config('services.wireguard.endpoint_port');
         $wgPublicKey = config('services.wireguard.public_key');
         $wgInterfaceLine = $this->wireguardInterfaceLine($router);
+        $apiUserLines = implode("\n", $this->apiUserProvisioningLines($router));
         $portalUrl = $this->portalUrl();
         $portalHost = parse_url($portalUrl, PHP_URL_HOST) ?: config('services.mikrotik.hotspot_dns_name');
         $hotspotDnsName = config('services.mikrotik.hotspot_dns_name');
@@ -55,6 +56,7 @@ class MikroTikProvisioningService
 {$wgInterfaceLine}
 /interface wireguard peers add interface=wg-saas public-key="{$wgPublicKey}" endpoint-address={$wgEndpointHost} endpoint-port={$wgEndpointPort} allowed-address=10.8.0.1/32 persistent-keepalive=25s
 /ip address add address={$router->wireguard_internal_ip}/24 interface=wg-saas
+{$apiUserLines}
 /radius add address={$radiusIp} secret="{$sharedSecret}" service=hotspot,ppp authentication-port={$authPort} accounting-port={$acctPort} timeout=1000ms
 /ip hotspot profile add name=saas-prof use-radius=yes login-by=http-chap,cookie,mac-cookie html-directory=flash/hotspot dns-name={$hotspotDnsName}
 /ip hotspot profile set saas-prof radius-accounting=yes
@@ -73,6 +75,7 @@ SCRIPT;
         $wgEndpointPort = config('services.wireguard.endpoint_port');
         $wgPublicKey = config('services.wireguard.public_key');
         $wgInterfaceLine = $this->wireguardInterfaceLine($router);
+        $apiUserLines = implode("\n", $this->apiUserProvisioningLines($router));
         $pppoeInterface = 'bridge1';
 
         return <<<SCRIPT
@@ -80,6 +83,7 @@ SCRIPT;
 {$wgInterfaceLine}
 /interface wireguard peers add interface=wg-saas public-key="{$wgPublicKey}" endpoint-address={$wgEndpointHost} endpoint-port={$wgEndpointPort} allowed-address=10.8.0.1/32 persistent-keepalive=25s
 /ip address add address={$router->wireguard_internal_ip}/24 interface=wg-saas
+{$apiUserLines}
 /radius add address={$radiusIp} secret="{$sharedSecret}" service=ppp authentication-port={$authPort} accounting-port={$acctPort} timeout=1000ms
 /ppp aaa set use-radius=yes accounting=yes interim-update=5m
 # PPPoE bandwidth is controlled by MMS Radius packages through Mikrotik-Rate-Limit.
@@ -273,6 +277,7 @@ SCRIPT;
             $this->wireguardInterfaceLine($router),
             '/interface wireguard peers add interface=wg-saas public-key="'.$wgPublicKey.'" endpoint-address='.$wgEndpointHost.' endpoint-port='.$wgEndpointPort.' allowed-address=10.8.0.1/32 persistent-keepalive=25s',
             '/ip address add address='.$router->wireguard_internal_ip.'/24 interface=wg-saas comment="MMS Radius WireGuard IP"',
+            ...$this->apiUserProvisioningLines($router),
             '/radius add address='.$radiusIp.' secret="'.$sharedSecret.'" service=hotspot,ppp authentication-port='.$authPort.' accounting-port='.$acctPort.' timeout=1000ms',
             '',
             '/ip address add address=$mgmtGateway interface=vlan-mgmt comment="Management VLAN for Pi, router, AP, and switch administration"',
@@ -545,5 +550,34 @@ HTML;
         return filled($privateKey)
             ? '/interface wireguard add name=wg-saas listen-port=13231 mtu=1420 private-key="'.$this->quote($privateKey).'"'
             : '/interface wireguard add name=wg-saas listen-port=13231 mtu=1420';
+    }
+
+    /**
+     * Provisions a read-only RouterOS API user so MMS Radius can pull live
+     * bandwidth, Wi-Fi scan, and topology data over the same WireGuard
+     * tunnel used for RADIUS -- no separate credential setup step. The API
+     * service is restricted to the WireGuard subnet only. Verify the exact
+     * user-group policy flags against your RouterOS version before relying
+     * on this in production; policy syntax has shifted slightly across
+     * RouterOS 7 releases.
+     *
+     * @return list<string>
+     */
+    private function apiUserProvisioningLines(Router $router): array
+    {
+        if (blank($router->api_password)) {
+            return [
+                '# No RouterOS API credentials generated yet for this router. Live monitoring, Wi-Fi scan, and topology stay unavailable until you re-save it in MMS Radius.',
+            ];
+        }
+
+        $username = $this->quote($router->api_username ?: 'mmsradius-api');
+        $password = $this->quote($router->api_password);
+
+        return [
+            '/user group add name=mmsradius-api-group policy=read,api,!local,!telnet,!ssh,!ftp,!reboot,!write,!policy,!test,!winbox,!password,!web,!sniff,!sensitive,!romon,!dude,!tikapp comment="MMS Radius read-only API access"',
+            '/user add name="'.$username.'" password="'.$password.'" group=mmsradius-api-group comment="MMS Radius monitoring"',
+            '/ip service set api disabled=no port=8728 address=10.8.0.0/24',
+        ];
     }
 }

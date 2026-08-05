@@ -7,6 +7,7 @@ use App\Models\Router;
 use App\Models\Shop;
 use App\Services\MikroTikProvisioningService;
 use App\Services\RouterManagementService;
+use App\Services\RouterOsConnectionService;
 use App\Support\BillingPlanLimits;
 use App\Support\RadiusAccountingStats;
 use App\Support\RouterUsageHistory;
@@ -139,5 +140,27 @@ class RouterController extends Controller
 
         return redirect()->route('admin.routers.show', $router)
             ->with('status', 'New WireGuard key generated. Re-run the WireGuard section of the script on this router, then wait for (or trigger) the next peer sync.');
+    }
+
+    public function regenerateApiCredentials(Request $request, Router $router, RouterManagementService $routers): RedirectResponse
+    {
+        $routers->regenerateApiCredentials($router, $request->user());
+
+        return redirect()->route('admin.routers.show', $router)
+            ->with('status', 'New RouterOS API credentials generated. Re-run the script on this router to apply them.');
+    }
+
+    public function testApiConnection(Request $request, Router $router, RouterOsConnectionService $routerOs): RedirectResponse
+    {
+        TenantAccess::assertRouter($router, $request->user());
+
+        $result = $routerOs->testConnection($router);
+
+        return redirect()->route('admin.routers.show', $router)->with(
+            'status',
+            $result['success']
+                ? 'Connected. RouterOS reports identity "'.$result['identity'].'".'
+                : 'Could not connect: '.$result['error']
+        );
     }
 }

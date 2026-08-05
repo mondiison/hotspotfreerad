@@ -19,6 +19,7 @@ use App\Http\Controllers\Admin\ShopController;
 use App\Http\Controllers\Admin\SubscriptionController;
 use App\Http\Controllers\Admin\TenantBrandController;
 use App\Http\Controllers\Admin\TenantController;
+use App\Http\Controllers\Admin\TopologyController;
 use App\Http\Controllers\Admin\TrustedWifiDeviceController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\VoucherController;
@@ -93,6 +94,9 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::resource('tenants', TenantController::class)->except('show');
     Route::resource('shops', ShopController::class)->except('show');
     Route::post('routers/{router}/regenerate-wireguard-key', [RouterController::class, 'regenerateWireguardKey'])->name('routers.regenerate-wireguard-key');
+    Route::post('routers/{router}/regenerate-api-credentials', [RouterController::class, 'regenerateApiCredentials'])->name('routers.regenerate-api-credentials');
+    Route::post('routers/{router}/test-api-connection', [RouterController::class, 'testApiConnection'])->name('routers.test-api-connection');
+    Route::get('topology', [TopologyController::class, 'index'])->name('topology.index');
     Route::resource('routers', RouterController::class);
     Route::resource('packages', PackageController::class)->except('show');
     Route::get('subscriptions-export', [SubscriptionController::class, 'export'])->name('subscriptions.export');

@@ -47,6 +47,25 @@
                         <dt class="text-zinc-500">RADIUS status</dt>
                         <dd class="font-medium">Synced to nas on save</dd>
                     </div>
+                    <div>
+                        <dt class="text-zinc-500">RouterOS API (monitoring)</dt>
+                        @if ($router->api_username)
+                            <dd class="font-mono text-xs">{{ $router->api_username }}@{{ $router->wireguard_internal_ip }}:{{ $router->api_port }}</dd>
+                            <dd class="mt-1 text-xs text-zinc-500">Read-only user baked into the script below. Powers live bandwidth, Wi-Fi scan, and topology.</dd>
+                        @else
+                            <dd class="text-xs text-amber-600">Not generated yet. Save this router again to generate API credentials.</dd>
+                        @endif
+                        <dd class="mt-2 flex flex-wrap gap-3">
+                            <form method="POST" action="{{ route('admin.routers.test-api-connection', $router) }}">
+                                @csrf
+                                <button type="submit" class="text-xs font-medium text-blue-600 hover:underline">Test connection</button>
+                            </form>
+                            <form method="POST" action="{{ route('admin.routers.regenerate-api-credentials', $router) }}" onsubmit="return confirm('This replaces the RouterOS API credentials MMS Radius manages for this router. You will need to re-run the script on the physical router afterward. Continue?');">
+                                @csrf
+                                <button type="submit" class="text-xs font-medium text-blue-600 hover:underline">{{ $router->api_username ? 'Regenerate credentials' : 'Generate credentials' }}</button>
+                            </form>
+                        </dd>
+                    </div>
                 </dl>
             </section>
 
@@ -78,6 +97,7 @@
             <flux:tab.group>
                 <flux:tabs variant="segmented" scrollable>
                     <flux:tab name="overview" icon="chart-bar">Overview</flux:tab>
+                    <flux:tab name="live" icon="bolt">Live</flux:tab>
                     <flux:tab name="fresh-infra" icon="sparkles">Fresh Infrastructure Script</flux:tab>
                     <flux:tab name="hotspot" icon="wifi">Hotspot Script</flux:tab>
                     <flux:tab name="pppoe" icon="signal">PPPoE Script</flux:tab>
@@ -153,6 +173,34 @@ sudo freeradius -X</code></pre>
                             </div>
                         </div>
                     </section>
+                </flux:tab.panel>
+
+                <flux:tab.panel name="live" class="space-y-6">
+                    @if ($router->api_username)
+                        <section class="min-w-0 overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
+                            <div class="border-b border-zinc-200 px-5 py-4">
+                                <h2 class="text-base font-semibold">Live Bandwidth</h2>
+                                <p class="mt-1 text-sm text-zinc-500">Polls the RouterOS API every 5 seconds. Requires the script's RouterOS API section to be applied on the physical router.</p>
+                            </div>
+                            <div class="p-5">
+                                <livewire:admin.router-live-monitor :router="$router" :key="'live-'.$router->id" />
+                            </div>
+                        </section>
+
+                        <section class="min-w-0 overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
+                            <div class="border-b border-zinc-200 px-5 py-4">
+                                <h2 class="text-base font-semibold">Wi-Fi Scan</h2>
+                                <p class="mt-1 text-sm text-zinc-500">On-demand scan of nearby Wi-Fi networks from this router's radio.</p>
+                            </div>
+                            <div class="p-5">
+                                <livewire:admin.router-wifi-scan :router="$router" :key="'wifi-scan-'.$router->id" />
+                            </div>
+                        </section>
+                    @else
+                        <section class="min-w-0 overflow-hidden rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+                            <p class="text-sm text-zinc-500">Live bandwidth and Wi-Fi scanning need RouterOS API credentials first. Generate them from the Router Details card, then re-run the script on this router.</p>
+                        </section>
+                    @endif
                 </flux:tab.panel>
 
                 <flux:tab.panel name="fresh-infra" class="space-y-6">

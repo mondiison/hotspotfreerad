@@ -76,6 +76,7 @@
                             'label' => 'Network',
                             'links' => [
                                 ['label' => 'Routers', 'route' => 'admin.routers.index', 'icon' => 'signal'],
+                                ['label' => 'Topology', 'route' => 'admin.topology.index', 'icon' => 'share'],
                                 ['label' => 'Packages', 'route' => 'admin.packages.index', 'icon' => 'radio'],
                                 ['label' => 'POS Devices', 'route' => 'admin.pos-devices.index', 'icon' => 'device-phone-mobile'],
                                 ['label' => 'Trusted Wi-Fi', 'route' => 'admin.trusted-wifi-devices.index', 'icon' => 'shield-check'],

@@ -59,6 +59,7 @@ Before connecting this app to the Pi, confirm these tables exist in the `radius`
 - [Router onboarding](docs/router-onboarding.md): explains NAS identifiers, WireGuard internal IPs, RADIUS shared secrets, and first-router testing.
 - [WireGuard server setup](docs/wireguard-server-setup.md): one-time Pi-side WireGuard bootstrap that makes router-to-Pi peer registration automatic.
 - [Staff & management Wi-Fi access](docs/staff-wifi-access.md): MAC-based device allowlisting for the password-protected Staff/Management SSIDs, and its current limitations.
+- [Router monitoring](docs/router-monitoring.md): historical/live bandwidth graphs, Wi-Fi scanning, and the tenant/shop/router topology view, plus the RouterOS API foundation they depend on.
 - [Deployment architecture](docs/deployment-architecture.md): explains GitHub, hosting, captive portal reachability, and database placement.
 - [Raspberry Pi deployment](docs/raspberry-pi-deployment.md): explains moving the Laravel app onto the Pi with local MySQL/FreeRADIUS access.
 - [Roles and product direction](docs/roles-and-product-direction.md): defines super admin, tenant admin, package rules, and the Flux/Livewire UI direction.

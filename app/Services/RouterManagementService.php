@@ -118,6 +118,19 @@ class RouterManagementService
         return $router;
     }
 
+    public function regenerateApiCredentials(Router $router, User $user): Router
+    {
+        TenantAccess::assertRouter($router, $user);
+
+        $router->update([
+            'api_username' => Router::API_USERNAME,
+            'api_password' => Str::random(32),
+            'api_port' => Router::API_PORT,
+        ]);
+
+        return $router;
+    }
+
     public function normalize(array $data, ?Router $router = null): array
     {
         if (array_key_exists('is_online', $data)) {
