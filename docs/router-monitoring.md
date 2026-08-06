@@ -45,6 +45,8 @@ Connections use short timeouts (5s) and a single attempt so a "Test Connection" 
 
 Router Script page → **Live** tab → "Live Bandwidth". Polls `/interface/monitor-traffic` with RouterOS's `once` flag every 5 seconds (via `App\Livewire\Admin\RouterLiveMonitor`), so each poll returns a single instantaneous sample rather than opening a streaming connection. Keeps a rolling window of the last 30 samples (~2.5 minutes) in the Livewire component's own state — nothing is persisted to the database.
 
+It only ever charts **one interface at a time**, picked from a dropdown populated live from `RouterOsConnectionService::listInterfaces()` (`/interface/print`) — so admins don't have to already know (or type out by hand) a real interface name. It defaults to `wg-saas`, which is easy to misread as "this router's traffic" — it's actually just the WireGuard tunnel to the Pi (RADIUS + RouterOS API control traffic only). To see customer or staff/management traffic, switch the dropdown to the relevant interface instead — e.g. `wifi-mgmt` for the L009 built-in Wi-Fi profile's management SSID, `vlan-mgmt` for that VLAN's aggregate traffic, or `ether1` for total WAN throughput. Switching interfaces clears the chart's rolling sample window, since mixing two interfaces' data in one line chart would be meaningless. If the interface list fails to load (API unreachable), the picker falls back to a plain text input so the feature degrades instead of breaking outright.
+
 ## Wi-Fi scanning
 
 Router Script page → **Live** tab → "Wi-Fi Scan". On-demand only (not polled) via `App\Livewire\Admin\RouterWifiScan`, using `/interface/wifi/scan` (or `/interface/wireless/scan` with the "legacy wireless package" checkbox for older RouterOS installs) on whichever interface name you enter — `wifi1` for the L009 built-in Wi-Fi test profile.
@@ -54,6 +56,8 @@ Router Script page → **Live** tab → "Wi-Fi Scan". On-demand only (not polled
 ## Read-only console
 
 Router Script page → **Live** tab → "Console". A RouterOS terminal, scoped to read-only: type any CLI-style `print` command (e.g. `/interface print`, `/ip hotspot active print where server=hotspot1`, `/ppp active print detail`) and it runs live over the same read-only API user as the rest of this feature set, showing the returned rows as a table.
+
+`RouterOsConnectionService::parseReadOnlyCommand()` returns a bare menu path (e.g. `/system/resource`) for display, but a RouterOS API command needs the trailing verb — `/system/resource` alone isn't executable and RouterOS reports `no such command` for it. `readOnlyQueryPath()` appends `/print` when actually building the query sent to the router; the original implementation missed this step entirely (fixed 2026-08-06, confirmed on real RouterOS 7.18.2 hardware), so every console command failed with `no such command` regardless of what was typed.
 
 `RouterOsConnectionService::parseReadOnlyCommand()` only accepts commands containing a `print` verb and rejects anything containing `add`/`set`/`remove`/`enable`/`disable`/`reset`/`monitor`/`scan`/etc. as a whole token, before it's ever sent to the router. This is defense-in-depth on top of the actual guarantee: the monitoring API user's RouterOS-side policy is `read,api,!write,...`, so even a crafted write command would be rejected by the router itself. There is no separate write-capable API user — this console can never change router configuration, by design.
 

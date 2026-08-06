@@ -51,4 +51,23 @@ class RouterOsConnectionServiceTest extends TestCase
             'monitor is rejected' => ['/interface monitor-traffic ether1', null],
         ];
     }
+
+    #[DataProvider('readOnlyQueryPathProvider')]
+    public function test_it_builds_the_full_print_command_path_from_a_bare_menu_path(string $menuPath, string $expected): void
+    {
+        $this->assertSame($expected, RouterOsConnectionService::readOnlyQueryPath($menuPath));
+    }
+
+    public static function readOnlyQueryPathProvider(): array
+    {
+        return [
+            // Regression: parseReadOnlyCommand() intentionally returns the bare menu
+            // path (e.g. "/system/resource") for display, but the actual RouterOS API
+            // command needs the trailing verb -- "/system/resource" alone is not
+            // executable and RouterOS reports "no such command" for it.
+            'simple path' => ['/interface', '/interface/print'],
+            'multi-segment path' => ['/ip/hotspot/profile', '/ip/hotspot/profile/print'],
+            'trailing slash is not doubled' => ['/system/resource/', '/system/resource/print'],
+        ];
+    }
 }

@@ -96,6 +96,40 @@ class RouterOsConnectionService
     }
 
     /**
+     * Every interface RouterOS knows about, for populating a picker instead
+     * of making an admin already know (and type out by hand) an interface
+     * name like "wifi-mgmt" before Live Bandwidth can show anything.
+     *
+     * @return array{success: bool, interfaces?: list<array{name: string, type: ?string, running: bool, disabled: bool}>, error?: string}
+     */
+    public function listInterfaces(Router $router): array
+    {
+        if (! $this->isConfigured($router)) {
+            return ['success' => false, 'error' => 'RouterOS API credentials not generated yet.'];
+        }
+
+        try {
+            $response = $this->client($router)->query(new Query('/interface/print'))->read();
+
+            $interfaces = collect($response)
+                ->filter(fn ($row) => is_array($row) && filled($row['name'] ?? null))
+                ->map(fn (array $row): array => [
+                    'name' => (string) $row['name'],
+                    'type' => $row['type'] ?? null,
+                    'running' => filled($row['running'] ?? null) && $row['running'] !== 'false',
+                    'disabled' => filled($row['disabled'] ?? null) && $row['disabled'] !== 'false',
+                ])
+                ->sortBy('name')
+                ->values()
+                ->all();
+
+            return ['success' => true, 'interfaces' => $interfaces];
+        } catch (\Throwable $e) {
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
      * A batch of nearby Wi-Fi networks. `/interface/wireless/scan` (and its
      * wifiwave2 equivalent `/interface/wifi/scan`) normally streams results
      * until cancelled; this reads a limited batch via the `count` option and
@@ -162,7 +196,7 @@ class RouterOsConnectionService
         }
 
         try {
-            $query = new Query($parsed['path']);
+            $query = new Query(self::readOnlyQueryPath($parsed['path']));
 
             foreach ($parsed['filters'] as $key => $value) {
                 $query->where($key, $value);
@@ -243,6 +277,16 @@ class RouterOsConnectionService
         }
 
         return ['path' => $path, 'filters' => $filters];
+    }
+
+    /**
+     * `parseReadOnlyCommand()` returns the bare menu path (e.g. "/system/resource")
+     * for display purposes -- the actual RouterOS API command needs the trailing
+     * verb, since "/system/resource" alone isn't executable ("no such command").
+     */
+    public static function readOnlyQueryPath(string $menuPath): string
+    {
+        return rtrim($menuPath, '/').'/print';
     }
 
     /**

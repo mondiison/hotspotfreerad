@@ -14,6 +14,10 @@ class RouterLiveMonitor extends Component
 
     public string $interface = 'wg-saas';
 
+    public array $interfaces = [];
+
+    public ?string $interfacesError = null;
+
     public array $samples = [];
 
     public ?string $error = null;
@@ -22,9 +26,43 @@ class RouterLiveMonitor extends Component
 
     private const MAX_SAMPLES = 30;
 
-    public function mount(Router $router): void
+    public function mount(Router $router, RouterOsConnectionService $routerOs): void
     {
         $this->routerId = $router->id;
+        $this->loadInterfaces($routerOs, $router);
+    }
+
+    public function refreshInterfaces(RouterOsConnectionService $routerOs): void
+    {
+        $router = Router::find($this->routerId);
+
+        if ($router) {
+            $this->loadInterfaces($routerOs, $router);
+        }
+    }
+
+    public function updatedInterface(): void
+    {
+        $this->samples = [];
+        $this->error = null;
+    }
+
+    private function loadInterfaces(RouterOsConnectionService $routerOs, Router $router): void
+    {
+        $result = $routerOs->listInterfaces($router);
+
+        if (! $result['success']) {
+            $this->interfacesError = $result['error'];
+
+            return;
+        }
+
+        $this->interfacesError = null;
+        $this->interfaces = $result['interfaces'];
+
+        if ($this->interfaces !== [] && ! in_array($this->interface, array_column($this->interfaces, 'name'), true)) {
+            $this->interface = $this->interfaces[0]['name'];
+        }
     }
 
     public function poll(RouterOsConnectionService $routerOs): void

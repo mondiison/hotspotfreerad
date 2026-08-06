@@ -9,6 +9,7 @@ use App\Models\Router;
 use App\Models\Shop;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\RouterOsConnectionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -42,6 +43,42 @@ class RouterLiveMonitoringTest extends TestCase
             ->call('poll')
             ->assertSet('samples', [])
             ->assertSee('Could not reach this router');
+    }
+
+    public function test_live_monitor_surfaces_an_interface_list_error_instead_of_crashing(): void
+    {
+        $router = $this->makeRouter();
+        $user = User::factory()->create(['role' => 'super_admin', 'is_active' => true]);
+
+        Livewire::actingAs($user)
+            ->test(RouterLiveMonitor::class, ['router' => $router])
+            ->assertSet('interfaces', [])
+            ->assertSet('interface', 'wg-saas')
+            ->assertSet('interfacesError', fn (?string $error) => filled($error));
+    }
+
+    public function test_changing_the_interface_clears_stale_samples(): void
+    {
+        $router = $this->makeRouter();
+        $user = User::factory()->create(['role' => 'super_admin', 'is_active' => true]);
+
+        Livewire::actingAs($user)
+            ->test(RouterLiveMonitor::class, ['router' => $router])
+            ->set('samples', [['time' => '10:00:00', 'download_mbps' => 5, 'upload_mbps' => 1]])
+            ->set('error', 'stale error')
+            ->set('interface', 'ether1')
+            ->assertSet('samples', [])
+            ->assertSet('error', null);
+    }
+
+    public function test_list_interfaces_reports_a_clear_error_when_router_is_unreachable(): void
+    {
+        $router = $this->makeRouter();
+
+        $result = app(RouterOsConnectionService::class)->listInterfaces($router);
+
+        $this->assertFalse($result['success']);
+        $this->assertNotEmpty($result['error']);
     }
 
     public function test_wifi_scan_surfaces_a_connection_error_instead_of_crashing(): void
