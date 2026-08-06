@@ -47,6 +47,14 @@ Router Script page → **Live** tab → "Wi-Fi Scan". On-demand only (not polled
 
 **This is the least-verified part of this feature set.** RouterOS's scan command normally streams results until explicitly cancelled; this reads a limited batch (`count` option) and closes the connection, expecting that to implicitly stop the scan on the router side. That has historically been a source of stuck API sessions on some RouterOS releases for similar streaming commands. Test it against real hardware — including running a second scan shortly after the first — before relying on it operationally. Also note: scanning can briefly interrupt client connections on some wireless drivers when run on an interface that's actively serving an SSID.
 
+## Read-only console
+
+Router Script page → **Live** tab → "Console". A RouterOS terminal, scoped to read-only: type any CLI-style `print` command (e.g. `/interface print`, `/ip hotspot active print where server=hotspot1`, `/ppp active print detail`) and it runs live over the same read-only API user as the rest of this feature set, showing the returned rows as a table.
+
+`RouterOsConnectionService::parseReadOnlyCommand()` only accepts commands containing a `print` verb and rejects anything containing `add`/`set`/`remove`/`enable`/`disable`/`reset`/`monitor`/`scan`/etc. as a whole token, before it's ever sent to the router. This is defense-in-depth on top of the actual guarantee: the monitoring API user's RouterOS-side policy is `read,api,!write,...`, so even a crafted write command would be rejected by the router itself. There is no separate write-capable API user — this console can never change router configuration, by design.
+
+Filters use RouterOS's `where field=value [field2=value2 ...]` syntax (quoted values with spaces are supported, e.g. `where name="customer 001"`); anything more advanced (comparison operators, `and`/`or` grouping) isn't parsed and the whole command is rejected with a clear error rather than silently doing something unexpected.
+
 ## Insight: CPU/RAM/disk, hardware health, uptime, latency history
 
 Router Script page → **Insight** tab. Two independent pieces:

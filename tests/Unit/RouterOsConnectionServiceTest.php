@@ -26,4 +26,29 @@ class RouterOsConnectionServiceTest extends TestCase
             'garbage input' => ['not-a-duration', 0],
         ];
     }
+
+    #[DataProvider('readOnlyCommandProvider')]
+    public function test_it_parses_read_only_commands(string $command, ?array $expected): void
+    {
+        $this->assertSame($expected, RouterOsConnectionService::parseReadOnlyCommand($command));
+    }
+
+    public static function readOnlyCommandProvider(): array
+    {
+        return [
+            'simple path' => ['/interface print', ['path' => '/interface', 'filters' => []]],
+            'multi-segment path' => ['/ip hotspot profile print', ['path' => '/ip/hotspot/profile', 'filters' => []]],
+            'already-slashed path' => ['/system/resource print', ['path' => '/system/resource', 'filters' => []]],
+            'single where filter' => ['/ip hotspot active print where server=hotspot1', ['path' => '/ip/hotspot/active', 'filters' => ['server' => 'hotspot1']]],
+            'multiple where filters' => ['/ppp active print where service=pppoe and running=true', ['path' => '/ppp/active', 'filters' => ['service' => 'pppoe', 'running' => 'true']]],
+            'quoted filter value' => ['/ppp active print detail where name="customer 001"', ['path' => '/ppp/active', 'filters' => ['name' => 'customer 001']]],
+            'empty command' => ['', null],
+            'no print verb' => ['/interface', null],
+            'print as only token' => ['print', null],
+            'add is rejected' => ['/ip firewall filter add chain=input action=drop', null],
+            'set is rejected' => ['/ip hotspot profile print where name=x; /system reset-configuration', null],
+            'remove is rejected' => ['/user remove admin', null],
+            'monitor is rejected' => ['/interface monitor-traffic ether1', null],
+        ];
+    }
 }

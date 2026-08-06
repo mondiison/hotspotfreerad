@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Livewire\Admin\RouterConsole;
 use App\Livewire\Admin\RouterLiveMonitor;
 use App\Livewire\Admin\RouterWifiScan;
 use App\Models\Router;
@@ -53,5 +54,30 @@ class RouterLiveMonitoringTest extends TestCase
             ->call('scan')
             ->assertSet('networks', [])
             ->assertSee('Scan failed');
+    }
+
+    public function test_console_surfaces_a_connection_error_instead_of_crashing(): void
+    {
+        $router = $this->makeRouter();
+        $user = User::factory()->create(['role' => 'super_admin', 'is_active' => true]);
+
+        Livewire::actingAs($user)
+            ->test(RouterConsole::class, ['router' => $router])
+            ->set('command', '/interface print')
+            ->call('run')
+            ->assertSet('rows', []);
+    }
+
+    public function test_console_rejects_non_print_commands_without_reaching_the_router(): void
+    {
+        $router = $this->makeRouter();
+        $user = User::factory()->create(['role' => 'super_admin', 'is_active' => true]);
+
+        Livewire::actingAs($user)
+            ->test(RouterConsole::class, ['router' => $router])
+            ->set('command', '/ip firewall filter add chain=input action=drop')
+            ->call('run')
+            ->assertSet('rows', [])
+            ->assertSee('Only read-only');
     }
 }

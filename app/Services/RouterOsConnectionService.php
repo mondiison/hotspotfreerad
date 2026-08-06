@@ -137,6 +137,115 @@ class RouterOsConnectionService
     }
 
     /**
+     * A read-only RouterOS "terminal" -- accepts a CLI-style `print` command
+     * (e.g. "/interface print", "/ip hotspot active print where server=hotspot1")
+     * and runs it as a live API query. Only `print` is accepted; this is
+     * belt-and-braces on top of the API user's own read-only policy
+     * (`policy=read,api,!write,...`), which already rejects any write
+     * command RouterOS-side regardless of what's typed here.
+     *
+     * @return array{success: bool, path?: string, rows?: list<array<string,mixed>>, error?: string}
+     */
+    public function runReadOnlyCommand(Router $router, string $command): array
+    {
+        if (! $this->isConfigured($router)) {
+            return ['success' => false, 'error' => 'RouterOS API credentials not generated yet.'];
+        }
+
+        $parsed = self::parseReadOnlyCommand($command);
+
+        if ($parsed === null) {
+            return [
+                'success' => false,
+                'error' => 'Only read-only "print" commands are supported here, for example "/interface print" or "/ip hotspot active print where server=hotspot1".',
+            ];
+        }
+
+        try {
+            $query = new Query($parsed['path']);
+
+            foreach ($parsed['filters'] as $key => $value) {
+                $query->where($key, $value);
+            }
+
+            $response = $this->client($router, 8)->query($query)->read();
+
+            $rows = collect($response)->filter(fn ($row) => is_array($row))->values()->all();
+
+            return ['success' => true, 'path' => $parsed['path'], 'rows' => $rows];
+        } catch (\Throwable $e) {
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Parses a CLI-style RouterOS command into an API path plus simple
+     * equality filters. Returns null for anything that isn't a plain
+     * `print` command (no `add`/`set`/`remove`/`monitor`/etc.), so callers
+     * can reject it before it ever reaches the router.
+     *
+     * @return array{path: string, filters: array<string,string>}|null
+     */
+    public static function parseReadOnlyCommand(string $command): ?array
+    {
+        $command = trim($command);
+
+        if ($command === '' || ! preg_match_all('/[^\s"]+="[^"]*"|"[^"]*"|\S+/', $command, $matches)) {
+            return null;
+        }
+
+        $tokens = $matches[0];
+        $lowerTokens = array_map('strtolower', $tokens);
+
+        $disallowed = ['add', 'set', 'remove', 'enable', 'disable', 'reset', 'export', 'import', 'reboot', 'shutdown', 'monitor', 'scan', 'flush', 'reset-configuration'];
+        if (array_intersect($lowerTokens, $disallowed) !== []) {
+            return null;
+        }
+
+        $printIndex = array_search('print', $lowerTokens, true);
+        if ($printIndex === false || $printIndex === 0) {
+            return null;
+        }
+
+        $pathSegments = array_filter(
+            array_map(fn (string $token): string => trim($token, '/'), array_slice($tokens, 0, $printIndex)),
+            fn (string $segment): bool => $segment !== ''
+        );
+
+        if ($pathSegments === []) {
+            return null;
+        }
+
+        $path = '/'.implode('/', $pathSegments);
+        $filters = [];
+
+        $whereIndex = array_search('where', array_slice($lowerTokens, $printIndex + 1), true);
+        if ($whereIndex !== false) {
+            foreach (array_slice($tokens, $printIndex + 1 + $whereIndex + 1) as $clause) {
+                if (! str_contains($clause, '=')) {
+                    continue;
+                }
+
+                [$key, $value] = explode('=', $clause, 2);
+                $key = trim($key);
+
+                if ($key === '' || ! preg_match('/^[a-zA-Z0-9\-]+$/', $key)) {
+                    return null;
+                }
+
+                $value = trim($value);
+                if (strlen($value) >= 2 && str_starts_with($value, '"') && str_ends_with($value, '"')) {
+                    $value = substr($value, 1, -1);
+                }
+
+                $filters[$key] = $value;
+            }
+        }
+
+        return ['path' => $path, 'filters' => $filters];
+    }
+
+    /**
      * CPU/RAM/disk/uptime snapshot from `/system/resource/print`.
      *
      * @return array{success: bool, cpu_percent?: int, ram_used_bytes?: int, ram_total_bytes?: int, disk_used_bytes?: int, disk_total_bytes?: int, uptime_seconds?: int, board_name?: ?string, version?: ?string, error?: string}

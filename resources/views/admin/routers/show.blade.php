@@ -210,6 +210,16 @@ sudo freeradius -X</code></pre>
                                 <livewire:admin.router-wifi-scan :router="$router" :key="'wifi-scan-'.$router->id" />
                             </div>
                         </section>
+
+                        <section class="min-w-0 overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
+                            <div class="border-b border-zinc-200 px-5 py-4">
+                                <h2 class="text-base font-semibold">Console</h2>
+                                <p class="mt-1 text-sm text-zinc-500">Read-only RouterOS terminal &mdash; run any <code>print</code> command against this router over the API.</p>
+                            </div>
+                            <div class="p-5">
+                                <livewire:admin.router-console :router="$router" :key="'console-'.$router->id" />
+                            </div>
+                        </section>
                     @else
                         <section class="min-w-0 overflow-hidden rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
                             <p class="text-sm text-zinc-500">Live bandwidth and Wi-Fi scanning need RouterOS API credentials first. Generate them from the Router Details card, then re-run the script on this router.</p>
