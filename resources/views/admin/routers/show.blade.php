@@ -28,43 +28,10 @@
                         <dt class="text-zinc-500">WireGuard IP</dt>
                         <dd class="font-mono">{{ $router->wireguard_internal_ip }}</dd>
                     </div>
-                    <div>
-                        <dt class="text-zinc-500">WireGuard public key</dt>
-                        @if ($router->wireguard_public_key)
-                            <dd class="break-all font-mono text-xs">{{ $router->wireguard_public_key }}</dd>
-                            <dd class="mt-1 text-xs text-zinc-500">Baked into the script below and registered as a Pi peer automatically by the scheduled WireGuard sync &mdash; no manual copying required.</dd>
-                        @else
-                            <dd class="text-xs text-amber-600">Not generated yet. This router predates app-managed WireGuard keys.</dd>
-                        @endif
-                        <dd class="mt-2">
-                            <form method="POST" action="{{ route('admin.routers.regenerate-wireguard-key', $router) }}" onsubmit="return confirm('This replaces the WireGuard key MMS Radius manages for this router. You will need to re-run the WireGuard section of the script on the physical router afterward. Continue?');">
-                                @csrf
-                                <button type="submit" class="text-xs font-medium text-blue-600 hover:underline">{{ $router->wireguard_public_key ? 'Regenerate WireGuard key' : 'Generate WireGuard key' }}</button>
-                            </form>
-                        </dd>
-                    </div>
+                    <livewire:admin.router-credentials-card :router="$router" :key="'credentials-'.$router->id" />
                     <div>
                         <dt class="text-zinc-500">RADIUS status</dt>
                         <dd class="font-medium">Synced to nas on save</dd>
-                    </div>
-                    <div>
-                        <dt class="text-zinc-500">RouterOS API (monitoring)</dt>
-                        @if ($router->api_username)
-                            <dd class="font-mono text-xs">{{ $router->api_username }}@{{ $router->wireguard_internal_ip }}:{{ $router->api_port }}</dd>
-                            <dd class="mt-1 text-xs text-zinc-500">Read-only user baked into the script below. Powers live bandwidth, Wi-Fi scan, and topology.</dd>
-                        @else
-                            <dd class="text-xs text-amber-600">Not generated yet. Save this router again to generate API credentials.</dd>
-                        @endif
-                        <dd class="mt-2 flex flex-wrap gap-3">
-                            <form method="POST" action="{{ route('admin.routers.test-api-connection', $router) }}">
-                                @csrf
-                                <button type="submit" class="text-xs font-medium text-blue-600 hover:underline">Test connection</button>
-                            </form>
-                            <form method="POST" action="{{ route('admin.routers.regenerate-api-credentials', $router) }}" onsubmit="return confirm('This replaces the RouterOS API credentials MMS Radius manages for this router. You will need to re-run the script on the physical router afterward. Continue?');">
-                                @csrf
-                                <button type="submit" class="text-xs font-medium text-blue-600 hover:underline">{{ $router->api_username ? 'Regenerate credentials' : 'Generate credentials' }}</button>
-                            </form>
-                        </dd>
                     </div>
                 </dl>
             </section>

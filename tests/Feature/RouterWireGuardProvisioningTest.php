@@ -2,12 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Livewire\Admin\RouterCredentialsCard;
 use App\Models\Router;
 use App\Models\Shop;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\RouterManagementService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Livewire;
 use Tests\TestCase;
 
 class RouterWireGuardProvisioningTest extends TestCase
@@ -145,5 +147,75 @@ class RouterWireGuardProvisioningTest extends TestCase
             ->assertOk()
             ->assertSee($router->wireguard_public_key)
             ->assertSee('registered as a Pi peer automatically');
+    }
+
+    public function test_credentials_card_regenerates_wireguard_key_without_a_page_reload(): void
+    {
+        $shop = $this->makeShop();
+        $user = User::factory()->create(['role' => 'super_admin', 'is_active' => true]);
+
+        $router = Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'Livewire Key Router',
+            'nas_identifier' => 'livewire-key-router',
+            'wireguard_internal_ip' => '10.8.0.63',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        $originalPublicKey = $router->wireguard_public_key;
+
+        Livewire::actingAs($user)
+            ->test(RouterCredentialsCard::class, ['router' => $router])
+            ->call('regenerateWireguardKey')
+            ->assertDispatched('toast-show');
+
+        $router->refresh();
+
+        $this->assertNotSame($originalPublicKey, $router->wireguard_public_key);
+    }
+
+    public function test_credentials_card_regenerates_api_credentials_without_a_page_reload(): void
+    {
+        $shop = $this->makeShop();
+        $user = User::factory()->create(['role' => 'super_admin', 'is_active' => true]);
+
+        $router = Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'Livewire API Router',
+            'nas_identifier' => 'livewire-api-router',
+            'wireguard_internal_ip' => '10.8.0.64',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        $originalPassword = $router->api_password;
+
+        Livewire::actingAs($user)
+            ->test(RouterCredentialsCard::class, ['router' => $router])
+            ->call('regenerateApiCredentials')
+            ->assertDispatched('toast-show');
+
+        $router->refresh();
+
+        $this->assertNotSame($originalPassword, $router->api_password);
+    }
+
+    public function test_credentials_card_reports_connection_failure_via_toast(): void
+    {
+        $shop = $this->makeShop();
+        $user = User::factory()->create(['role' => 'super_admin', 'is_active' => true]);
+
+        $router = Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'Unreachable Credentials Router',
+            'nas_identifier' => 'unreachable-credentials-router',
+            // Reserved documentation-only address, guaranteed unreachable.
+            'wireguard_internal_ip' => '192.0.2.6',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(RouterCredentialsCard::class, ['router' => $router])
+            ->call('testConnection')
+            ->assertDispatched('toast-show');
     }
 }
