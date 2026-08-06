@@ -12,8 +12,11 @@ class WireGuardPeerSyncService
      *
      * Only adds/updates peers derived from `Router::wireguard_public_key`; it never
      * removes a peer, so manually added peers (e.g. an admin's own management
-     * access) are left alone. Requires WIREGUARD_MANAGE_PEERS=true and the `wg`
-     * binary to be usable by the process running this (see docs/wireguard-server-setup.md).
+     * access) are left alone. Requires WIREGUARD_MANAGE_PEERS=true and every `wg`/
+     * `wg-quick` call here runs through `sudo -n` (non-interactive, so it fails fast
+     * instead of hanging a cron/queue process if the sudoers rule is missing) --
+     * see docs/wireguard-server-setup.md for the one-time NOPASSWD sudoers grant
+     * this depends on.
      *
      * @return array{enabled: bool, interface: string, binary_available: bool, desired: array<string,string>, current: array<string,string>, added: array<string,string>, updated: array<string,string>, errors: array<int,string>}
      */
@@ -38,7 +41,7 @@ class WireGuardPeerSyncService
         }
 
         try {
-            $show = Process::run(['wg', 'show', $interface, 'dump']);
+            $show = Process::run(['sudo', '-n', 'wg', 'show', $interface, 'dump']);
         } catch (\Throwable $e) {
             $result['errors'][] = 'Could not run the "wg" binary: '.$e->getMessage();
 
@@ -70,7 +73,7 @@ class WireGuardPeerSyncService
             }
 
             try {
-                $set = Process::run(['wg', 'set', $interface, 'peer', $publicKey, 'allowed-ips', $allowedIp.'/32']);
+                $set = Process::run(['sudo', '-n', 'wg', 'set', $interface, 'peer', $publicKey, 'allowed-ips', $allowedIp.'/32']);
             } catch (\Throwable $e) {
                 $result['errors'][] = "Failed to set peer {$publicKey}: ".$e->getMessage();
 
@@ -88,7 +91,7 @@ class WireGuardPeerSyncService
 
         if (! $dryRun && (count($result['added']) > 0 || count($result['updated']) > 0)) {
             try {
-                Process::run(['wg-quick', 'save', $interface]);
+                Process::run(['sudo', '-n', 'wg-quick', 'save', $interface]);
             } catch (\Throwable $e) {
                 $result['errors'][] = 'Peers were applied live but "wg-quick save" failed, so they may not survive a reboot: '.$e->getMessage();
             }
