@@ -322,6 +322,9 @@ class RouterOsConnectionService
      * live over the API, once a router already has WireGuard + API credentials
      * from the bootstrap script. Each step runs independently -- a failure on
      * one (e.g. the walled-garden entry already exists) doesn't stop the rest.
+     * The final step points any existing hotspot server at the new profile --
+     * see applyHotspotProfile() for why that's a best-effort step, not a
+     * guarantee the router ends up with a working hotspot server.
      *
      * @return array{success: bool, steps: list<array{label: string, success: bool, error: ?string}>}
      */
@@ -357,7 +360,13 @@ class RouterOsConnectionService
                 ->equal('action', 'allow'),
         ];
 
-        return $this->runSteps($router, $steps);
+        $result = $this->runSteps($router, $steps);
+        $profileStep = $this->applyHotspotProfile($router);
+
+        $result['steps'][] = $profileStep;
+        $result['success'] = $result['success'] && $profileStep['success'];
+
+        return $result;
     }
 
     /**
@@ -433,6 +442,45 @@ class RouterOsConnectionService
         }
 
         return ['success' => $allSucceeded, 'steps' => $results];
+    }
+
+    /**
+     * Points any existing hotspot server(s) at the RADIUS-integrated profile
+     * `provisionHotspot()` creates. We deliberately never CREATE a hotspot
+     * server ourselves here -- its interface/address-pool are router-specific
+     * and normally come from MikroTik's own `/ip hotspot setup` wizard (or a
+     * router configured before this feature existed). If no hotspot server
+     * exists yet, this is a no-op reported as informational rather than a
+     * failure, since there's nothing broken -- just a manual step still
+     * needed on the router.
+     *
+     * @return array{label: string, success: bool, error: ?string}
+     */
+    private function applyHotspotProfile(Router $router, string $profile = 'saas-prof'): array
+    {
+        $label = 'Point hotspot server at "'.$profile.'"';
+
+        try {
+            $client = $this->client($router, 8);
+            $hotspots = collect($client->query(new Query('/ip/hotspot/print'))->read())
+                ->filter(fn ($row) => is_array($row) && filled($row['.id'] ?? null));
+
+            if ($hotspots->isEmpty()) {
+                return [
+                    'label' => $label,
+                    'success' => true,
+                    'error' => 'No hotspot server found on this router yet. Run "/ip hotspot setup" (or the MikroTik hotspot wizard) on the router first, then re-run this step.',
+                ];
+            }
+
+            foreach ($hotspots as $hotspot) {
+                $client->query((new Query('/ip/hotspot/set'))->equal('numbers', $hotspot['.id'])->equal('profile', $profile))->read();
+            }
+
+            return ['label' => $label, 'success' => true, 'error' => null];
+        } catch (\Throwable $e) {
+            return ['label' => $label, 'success' => false, 'error' => $e->getMessage()];
+        }
     }
 
     /**

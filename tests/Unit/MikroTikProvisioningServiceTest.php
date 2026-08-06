@@ -43,6 +43,7 @@ class MikroTikProvisioningServiceTest extends TestCase
         $this->assertStringContainsString('/radius add address=10.8.0.1 secret="radius-secret" service=hotspot,ppp', $script);
         $this->assertStringContainsString('authentication-port=1812 accounting-port=1813', $script);
         $this->assertStringContainsString('/ip hotspot walled-garden add dst-host=portal.example.com action=allow', $script);
+        $this->assertStringContainsString('/ip hotspot set [find] profile=saas-prof', $script);
     }
 
     public function test_hotspot_script_walled_garden_matches_the_shops_active_gateway(): void

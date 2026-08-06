@@ -89,6 +89,9 @@ SCRIPT;
 /radius add address={$radiusIp} secret="{$sharedSecret}" service=hotspot,ppp authentication-port={$authPort} accounting-port={$acctPort} timeout=1000ms
 /ip hotspot profile add name=saas-prof use-radius=yes login-by=http-chap,cookie,mac-cookie html-directory=flash/hotspot dns-name={$hotspotDnsName}
 /ip hotspot profile set saas-prof radius-accounting=yes
+# Points any existing hotspot server at this profile. If none exists yet, this is a no-op --
+# run "/ip hotspot setup" first (or select saas-prof as its profile), then re-run this line.
+/ip hotspot set [find] profile=saas-prof
 {$walledGardenLines}
 SCRIPT;
     }

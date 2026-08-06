@@ -181,9 +181,11 @@ class RouterOsApiProvisioningTest extends TestCase
         $result = app(RouterOsConnectionService::class)->provisionHotspot($router);
 
         $this->assertFalse($result['success']);
-        $this->assertCount(3, $result['steps']);
+        $this->assertCount(4, $result['steps']);
         $this->assertFalse($result['steps'][0]['success']);
         $this->assertNotEmpty($result['steps'][0]['error']);
+        $this->assertSame('Point hotspot server at "saas-prof"', $result['steps'][3]['label']);
+        $this->assertFalse($result['steps'][3]['success']);
     }
 
     public function test_provision_pppoe_reports_a_clear_error_when_router_is_unreachable(): void

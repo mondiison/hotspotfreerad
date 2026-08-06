@@ -141,7 +141,7 @@ HotspotFreeRAD stores the secret encrypted in the application table, and syncs i
    - RADIUS shared secret: generated random value
 4. Open the router's Script page.
 5. Review `RADIUS_SERVER_IP`, `WIREGUARD_ENDPOINT_HOST`, and `WIREGUARD_PUBLIC_KEY` in `.env`.
-6. Paste the generated script into MikroTik RouterOS terminal. Its WireGuard section already includes a private key HotspotFreeRAD generated for this router — you don't need to run `/interface wireguard print` to find one.
+6. Paste the generated script into MikroTik RouterOS terminal. Its WireGuard section already includes a private key HotspotFreeRAD generated for this router — you don't need to run `/interface wireguard print` to find one. On a genuinely new router, also run MikroTik's `/ip hotspot setup` wizard (before or after pasting the script, order doesn't matter) — the generated script wires RADIUS into whatever hotspot server already exists, but it doesn't create one from scratch. If you skip the wizard, the script's `/ip hotspot set [find] profile=saas-prof` line is a harmless no-op and customers won't see a captive portal until you run it.
 7. Wait up to 5 minutes (or run `php artisan hotspot:sync-wireguard-peers` on the Pi) for the router to appear as a peer in `sudo wg show wg-saas`. No manual peer registration needed.
 8. Confirm FreeRADIUS sees the router in the `nas` table.
 9. Test authentication with FreeRADIUS debug mode:
