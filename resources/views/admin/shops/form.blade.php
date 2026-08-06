@@ -36,69 +36,6 @@
                 <flux:error name="location_city" />
             </flux:field>
 
-            <section class="md:col-span-2 rounded-lg border border-zinc-200 bg-zinc-50 p-4">
-                <div class="mb-4">
-                    <h2 class="text-sm font-semibold text-zinc-950">Default tenant gateway</h2>
-                    <p class="mt-1 text-sm leading-6 text-zinc-600">
-                        Choose the payment gateway for this shop. Customer hotspot payments settle into the tenant-owned account configured here.
-                    </p>
-                    @if ($shop->exists)
-                        <p class="mt-2 text-xs font-medium text-zinc-500">
-                            Existing saved secrets are hidden. Leave a credential field empty when editing to keep the current value.
-                        </p>
-                        <div class="mt-3 flex flex-wrap gap-2">
-                            <flux:badge :color="$shop->hasCompleteFlutterwaveCredentials() ? 'emerald' : 'amber'" size="sm">
-                                {{ $shop->hasCompleteFlutterwaveCredentials() ? 'Payments configured' : 'Payments not configured' }}
-                            </flux:badge>
-                            <flux:badge :color="$shop->hasFlutterwaveWebhookSecret() ? 'emerald' : 'zinc'" size="sm">
-                                {{ $shop->hasFlutterwaveWebhookSecret() ? 'Webhook ready' : 'Webhook secret missing' }}
-                            </flux:badge>
-                        </div>
-                    @endif
-                </div>
-
-                <div class="grid gap-5">
-                    <flux:field>
-                        <flux:label>Payment gateway</flux:label>
-                        <flux:select name="payment_gateway">
-                            @foreach ($gatewayOptions as $key => $label)
-                                <flux:select.option value="{{ $key }}" :selected="old('payment_gateway', $shop->payment_gateway ?? 'flutterwave') === $key">{{ $label }}</flux:select.option>
-                            @endforeach
-                        </flux:select>
-                        <flux:description>Only live adapters can process online checkout. Coming-soon gateways are saved for planning.</flux:description>
-                        <flux:error name="payment_gateway" />
-                    </flux:field>
-
-                    <flux:field>
-                        <flux:label>{{ $shop->exists ? $shop->paymentGatewayName() : 'Gateway' }} client ID</flux:label>
-                        <flux:input name="flutterwave_client_id" value="{{ old('flutterwave_client_id') }}" icon="identification" placeholder="{{ $shop->exists ? 'Leave blank to keep current value' : 'Example: FLW_CLIENT_...' }}" />
-                        <flux:description>Required with client secret for tenant-owned collections.</flux:description>
-                        <flux:error name="flutterwave_client_id" />
-                    </flux:field>
-
-                    <flux:field>
-                        <flux:label>{{ $shop->exists ? $shop->paymentGatewayName() : 'Gateway' }} client secret</flux:label>
-                        <flux:input name="flutterwave_client_secret" value="{{ old('flutterwave_client_secret') }}" icon="key" placeholder="{{ $shop->exists ? 'Leave blank to keep current value' : 'Paste the matching v4 client secret' }}" viewable />
-                        <flux:description>The app uses this only on the server to request gateway access tokens.</flux:description>
-                        <flux:error name="flutterwave_client_secret" />
-                    </flux:field>
-
-                    <flux:field>
-                        <flux:label>{{ $shop->exists ? $shop->paymentGatewayName() : 'Gateway' }} hosted checkout secret key</flux:label>
-                        <flux:input name="flutterwave_secret_key" value="{{ old('flutterwave_secret_key') }}" icon="lock-closed" placeholder="{{ $shop->exists ? 'Leave blank to keep current value' : 'Example: FLWSECK_TEST-...' }}" viewable />
-                        <flux:description>Needed for Card hosted checkout. Client ID/secret still powers OPay and transfer.</flux:description>
-                        <flux:error name="flutterwave_secret_key" />
-                    </flux:field>
-
-                    <flux:field>
-                        <flux:label>Gateway webhook secret hash</flux:label>
-                        <flux:input name="flutterwave_webhook_secret" value="{{ old('flutterwave_webhook_secret') }}" icon="shield-check" placeholder="{{ $shop->exists ? 'Leave blank to keep current value' : 'Optional: tenant webhook verif-hash' }}" viewable />
-                        <flux:description>Use the webhook verification secret from this tenant's gateway dashboard.</flux:description>
-                        <flux:error name="flutterwave_webhook_secret" />
-                    </flux:field>
-                </div>
-            </section>
-
             <flux:checkbox name="is_active" value="1" :checked="(bool) old('is_active', $shop->is_active ?? true)" label="Active" />
         </div>
 
@@ -107,5 +44,13 @@
             <flux:button href="{{ route('admin.shops.index') }}" wire:navigate variant="outline">Cancel</flux:button>
         </div>
         </form>
+
+        @if ($shop->exists)
+            <livewire:admin.payment-settings-card :shop="$shop" />
+        @else
+            <div class="rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-sm leading-6 text-zinc-600">
+                Save this shop first, then reopen it here to choose the payment gateway, enter its credentials, and set Live/Test environment where the gateway supports it.
+            </div>
+        @endif
     </div>
 </x-layouts.admin>

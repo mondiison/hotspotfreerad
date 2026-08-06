@@ -51,8 +51,12 @@ class PaymentGatewayCatalog
                 'fields' => [
                     'public_key' => 'Public Key',
                     'secret_key' => 'Secret Key',
+                    'environment' => 'Environment',
                 ],
                 'secret_fields' => ['secret_key'],
+                'select_fields' => [
+                    'environment' => ['test' => 'Sandbox / Test', 'live' => 'Live'],
+                ],
                 'walled_garden_hosts' => ['*.paystack.com', '*.paystack.co'],
             ],
             self::MONNIFY => [
@@ -115,8 +119,12 @@ class PaymentGatewayCatalog
                     'publishable_key' => 'Publishable Key',
                     'secret_key' => 'Secret Key',
                     'webhook_secret' => 'Webhook Signing Secret',
+                    'environment' => 'Environment',
                 ],
                 'secret_fields' => ['secret_key', 'webhook_secret'],
+                'select_fields' => [
+                    'environment' => ['test' => 'Sandbox / Test', 'live' => 'Live'],
+                ],
                 'walled_garden_hosts' => ['*.stripe.com', '*.stripe.network'],
             ],
             self::MANUAL_BANK => [

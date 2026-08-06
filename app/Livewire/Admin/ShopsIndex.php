@@ -6,7 +6,6 @@ use App\Models\Shop;
 use App\Models\Tenant;
 use App\Services\ShopManagementService;
 use App\Support\BillingPlanLimits;
-use App\Support\PaymentGatewayCatalog;
 use App\Support\TenantAccess;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
@@ -36,16 +35,6 @@ class ShopsIndex extends Component
     public string $name = '';
 
     public string $location_city = '';
-
-    public string $payment_gateway = 'flutterwave';
-
-    public string $flutterwave_client_id = '';
-
-    public string $flutterwave_client_secret = '';
-
-    public string $flutterwave_secret_key = '';
-
-    public string $flutterwave_webhook_secret = '';
 
     public bool $is_active = true;
 
@@ -87,7 +76,6 @@ class ShopsIndex extends Component
         $this->tenant_id = (string) $shop->tenant_id;
         $this->name = (string) $shop->name;
         $this->location_city = (string) $shop->location_city;
-        $this->payment_gateway = $shop->paymentGateway();
         $this->is_active = (bool) $shop->is_active;
         $this->savedMessage = null;
         $this->showFormModal = true;
@@ -171,7 +159,9 @@ class ShopsIndex extends Component
             'tenants' => $this->tenants(),
             'billingUsage' => $this->editingShopId ? null : BillingPlanLimits::usageSummary($user, 'shops'),
             'deletingShop' => $this->deletingShopId ? Shop::find($this->deletingShopId) : null,
-            'gatewayOptions' => PaymentGatewayCatalog::gatewayOptions(),
+            'editingShop' => $this->editingShopId
+                ? Shop::with('tenant')->withCount('payments')->find($this->editingShopId)
+                : null,
         ]);
     }
 
@@ -191,13 +181,7 @@ class ShopsIndex extends Component
             'tenant_id',
             'name',
             'location_city',
-            'payment_gateway',
-            'flutterwave_client_id',
-            'flutterwave_client_secret',
-            'flutterwave_secret_key',
-            'flutterwave_webhook_secret',
         ]);
-        $this->payment_gateway = PaymentGatewayCatalog::FLUTTERWAVE;
         $this->is_active = true;
         $this->resetValidation();
     }

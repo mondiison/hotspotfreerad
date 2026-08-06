@@ -7,7 +7,6 @@ use App\Models\Shop;
 use App\Models\Tenant;
 use App\Services\ShopManagementService;
 use App\Support\BillingPlanLimits;
-use App\Support\PaymentGatewayCatalog;
 use App\Support\TenantAccess;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -52,7 +51,6 @@ class ShopController extends Controller
                 ? Tenant::orderBy('company_name')->get()
                 : Tenant::whereKey($user->tenant_id)->get(),
             'billingUsage' => BillingPlanLimits::usageSummary($user, 'shops'),
-            'gatewayOptions' => PaymentGatewayCatalog::gatewayOptions(),
         ]);
     }
 
@@ -68,13 +66,15 @@ class ShopController extends Controller
         TenantAccess::assertShop($shop, request()->user());
         $user = request()->user();
 
+        $shop->loadMissing('tenant');
+        $shop->loadCount('payments');
+
         return view('admin.shops.form', [
             'shop' => $shop,
             'tenants' => $user->isSuperAdmin()
                 ? Tenant::orderBy('company_name')->get()
                 : Tenant::whereKey($user->tenant_id)->get(),
             'billingUsage' => null,
-            'gatewayOptions' => PaymentGatewayCatalog::gatewayOptions(),
         ]);
     }
 

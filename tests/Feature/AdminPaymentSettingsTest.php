@@ -263,10 +263,41 @@ class AdminPaymentSettingsTest extends TestCase
         $this->assertArrayHasKey('secret_key', $readiness);
     }
 
-    public function test_paystack_shows_read_only_detected_environment_badge_instead_of_editable_field(): void
+    public function test_paystack_environment_dropdown_is_saved_alongside_detected_key_badge(): void
     {
         [$tenant] = $this->tenants();
         $shop = $this->shop($tenant, 'Paystack Shop', false)->load('tenant');
+        $shop->payments_count = 0;
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user);
+
+        $this->assertArrayHasKey('environment', PaymentGatewayCatalog::selectFields('paystack'));
+
+        Livewire::test(PaymentSettingsCard::class, ['shop' => $shop])
+            ->set('payment_gateway', 'paystack')
+            ->set('gateway_settings.public_key', 'pk_test_paystack')
+            ->set('gateway_settings.secret_key', 'sk_test_paystack')
+            ->set('gateway_settings.environment', 'test')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $tenant->refresh();
+        $this->assertSame('test', $tenant->payment_gateway_settings['paystack']['environment']);
+
+        Livewire::test(PaymentSettingsCard::class, ['shop' => $shop->refresh()])
+            ->assertSee('Detected: Test key')
+            ->assertDontSee("doesn't match the saved key", false);
+    }
+
+    public function test_paystack_environment_dropdown_warns_when_it_disagrees_with_the_saved_key(): void
+    {
+        [$tenant] = $this->tenants();
+        $shop = $this->shop($tenant, 'Paystack Mismatch Shop', false)->load('tenant');
         $shop->payments_count = 0;
         $user = User::factory()->create([
             'tenant_id' => $tenant->id,
@@ -280,13 +311,13 @@ class AdminPaymentSettingsTest extends TestCase
             ->set('payment_gateway', 'paystack')
             ->set('gateway_settings.public_key', 'pk_test_paystack')
             ->set('gateway_settings.secret_key', 'sk_test_paystack')
+            ->set('gateway_settings.environment', 'live')
             ->call('save')
             ->assertHasNoErrors();
 
         Livewire::test(PaymentSettingsCard::class, ['shop' => $shop->refresh()])
-            ->assertSee('Detected: Test key');
-
-        $this->assertArrayNotHasKey('environment', PaymentGatewayCatalog::selectFields('paystack'));
+            ->assertSee('Detected: Test key')
+            ->assertSee("doesn't match the saved key", false);
     }
 
     public function test_stripe_detected_environment_badge_reflects_live_key(): void

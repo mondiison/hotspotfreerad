@@ -5,10 +5,8 @@ namespace App\Services;
 use App\Models\Shop;
 use App\Models\User;
 use App\Support\BillingPlanLimits;
-use App\Support\PaymentGatewayCatalog;
 use App\Support\TenantAccess;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 
 class ShopManagementService
 {
@@ -18,11 +16,6 @@ class ShopManagementService
             'tenant_id' => ['required', 'exists:tenants,id'],
             'name' => ['required', 'string', 'max:255'],
             'location_city' => ['nullable', 'string', 'max:255'],
-            'payment_gateway' => ['nullable', 'string', Rule::in(array_keys(PaymentGatewayCatalog::onlineGateways()))],
-            'flutterwave_client_id' => ['nullable', 'string'],
-            'flutterwave_client_secret' => ['nullable', 'string'],
-            'flutterwave_secret_key' => ['nullable', 'string'],
-            'flutterwave_webhook_secret' => ['nullable', 'string'],
             'is_active' => ['nullable', 'boolean'],
         ];
     }
@@ -66,13 +59,6 @@ class ShopManagementService
 
         $data['location_city'] = filled($data['location_city'] ?? null) ? $data['location_city'] : null;
         $data['is_active'] = (bool) ($data['is_active'] ?? false);
-        $data['payment_gateway'] = $data['payment_gateway'] ?? PaymentGatewayCatalog::FLUTTERWAVE;
-
-        foreach (['flutterwave_client_id', 'flutterwave_client_secret', 'flutterwave_secret_key', 'flutterwave_webhook_secret'] as $field) {
-            if (blank($data[$field] ?? null)) {
-                unset($data[$field]);
-            }
-        }
 
         return $data;
     }

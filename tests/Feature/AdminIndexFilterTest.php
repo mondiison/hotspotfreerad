@@ -87,9 +87,6 @@ class AdminIndexFilterTest extends TestCase
             ->set('tenant_id', (string) $tenant->id)
             ->set('name', 'Livewire Shop')
             ->set('location_city', 'Abeokuta')
-            ->set('flutterwave_client_id', 'tenant-client-id')
-            ->set('flutterwave_client_secret', 'tenant-client-secret')
-            ->set('flutterwave_webhook_secret', 'tenant-webhook-secret')
             ->set('is_active', true)
             ->call('save')
             ->assertHasNoErrors()
@@ -103,10 +100,6 @@ class AdminIndexFilterTest extends TestCase
             'location_city' => 'Abeokuta',
             'is_active' => true,
         ]);
-
-        $shop = Shop::where('name', 'Livewire Shop')->firstOrFail();
-        $this->assertTrue($shop->hasCompleteFlutterwaveCredentials());
-        $this->assertTrue($shop->hasFlutterwaveWebhookSecret());
     }
 
     public function test_livewire_shop_index_edits_shop_from_flyout(): void
@@ -139,6 +132,29 @@ class AdminIndexFilterTest extends TestCase
             'location_city' => 'New City',
             'is_active' => false,
         ]);
+    }
+
+    public function test_livewire_shop_index_edit_flyout_embeds_payment_settings_card(): void
+    {
+        $tenant = $this->tenant();
+        $shop = Shop::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Gateway Shop',
+            'is_active' => true,
+            'payment_gateway' => 'squad',
+        ]);
+
+        Livewire::actingAs($this->superAdmin())
+            ->test(ShopsIndex::class)
+            ->call('create')
+            ->assertDontSee('Default tenant gateway')
+            ->assertSee('Save this shop first');
+
+        Livewire::actingAs($this->superAdmin())
+            ->test(ShopsIndex::class)
+            ->call('edit', $shop->id)
+            ->assertSee('Default tenant gateway')
+            ->assertSee('Environment');
     }
 
     public function test_livewire_shop_index_filters_without_page_reload(): void

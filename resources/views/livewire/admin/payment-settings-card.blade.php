@@ -47,25 +47,33 @@
 
     <div class="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         @foreach ($gatewayCards as $key => $gateway)
-            <button
-                type="button"
-                wire:click="$set('payment_gateway', '{{ $key }}')"
-                class="min-w-0 rounded-lg border p-4 text-left transition hover:border-zinc-400 hover:bg-zinc-50 {{ $payment_gateway === $key ? 'border-zinc-950 bg-zinc-50 ring-2 ring-zinc-950/10' : 'border-zinc-200 bg-white' }}"
-            >
-                <div class="flex items-center justify-between gap-3">
-                    <span class="flex h-10 w-28 items-center justify-start">
-                        @if ($gateway['logo_url'])
-                            <img src="{{ $gateway['logo_url'] }}" alt="{{ $gateway['name'] }} logo" class="max-h-8 max-w-28 object-contain">
-                        @else
-                            <span class="rounded-md px-2 py-1 text-xs font-semibold text-white" style="background-color: {{ $gateway['brand_color'] }}">{{ $gateway['name'] }}</span>
-                        @endif
-                    </span>
-                    <flux:badge color="{{ $gateway['status'] === 'live' ? 'green' : 'amber' }}" size="sm">{{ $gateway['status_label'] }}</flux:badge>
+            <div class="min-w-0 rounded-lg border p-3 transition {{ $payment_gateway === $key ? 'border-zinc-950 bg-zinc-50 ring-2 ring-zinc-950/10' : 'border-zinc-200 bg-white hover:border-zinc-400 hover:bg-zinc-50' }}">
+                <div class="flex items-center justify-between gap-2">
+                    <button type="button" wire:click="$set('payment_gateway', '{{ $key }}')" class="flex min-w-0 flex-1 items-center gap-2 text-left">
+                        <span class="flex h-8 w-20 shrink-0 items-center justify-start">
+                            @if ($gateway['logo_url'])
+                                <img src="{{ $gateway['logo_url'] }}" alt="{{ $gateway['name'] }} logo" class="max-h-7 max-w-20 object-contain">
+                            @else
+                                <span class="rounded-md px-2 py-1 text-xs font-semibold text-white" style="background-color: {{ $gateway['brand_color'] }}">{{ $gateway['name'] }}</span>
+                            @endif
+                        </span>
+                        <span class="truncate text-sm font-semibold text-zinc-950">{{ $gateway['name'] }}</span>
+                    </button>
+
+                    <div class="flex shrink-0 items-center gap-1">
+                        <flux:badge color="{{ $gateway['status'] === 'live' ? 'green' : 'amber' }}" size="sm">{{ $gateway['status_label'] }}</flux:badge>
+                        <flux:dropdown>
+                            <flux:button type="button" icon="information-circle" variant="ghost" size="sm" aria-label="About {{ $gateway['name'] }}" />
+                            <flux:popover class="max-w-xs space-y-2 text-sm text-zinc-600">
+                                <p class="font-semibold text-zinc-900">{{ $gateway['name'] }}</p>
+                                <p class="text-xs text-zinc-500">{{ $gateway['region'] }} · {{ $gateway['currency_label'] }}</p>
+                                <p>{{ $gateway['summary'] }}</p>
+                                <p class="text-xs text-zinc-500">{{ $gateway['webhook_note'] }}</p>
+                            </flux:popover>
+                        </flux:dropdown>
+                    </div>
                 </div>
-                <p class="mt-3 text-sm font-semibold text-zinc-950">{{ $gateway['name'] }}</p>
-                <p class="mt-1 text-xs leading-5 text-zinc-500">{{ $gateway['region'] }} · {{ $gateway['currency_label'] }}</p>
-                <p class="mt-2 line-clamp-2 text-xs leading-5 text-zinc-600">{{ $gateway['summary'] }}</p>
-            </button>
+            </div>
         @endforeach
     </div>
 
@@ -104,7 +112,14 @@
                         @endforeach
                     </flux:select>
                     @if ($field === 'environment')
-                        <flux:description>Sandbox/Test uses this gateway's test API and never moves real money. Switch to Live only once you have live credentials from {{ $activeGateway['name'] }}.</flux:description>
+                        @if ($showsDetectedEnvironment)
+                            <flux:description>{{ $activeGateway['name'] }} uses one API host for both modes, so this is saved for your own reference only -- checkout always follows whichever mode the secret key below is actually in.</flux:description>
+                            @if ($detectedEnvironment !== null && ($gateway_settings['environment'] ?? null) !== $detectedEnvironment)
+                                <p class="mt-1 text-xs font-medium text-amber-600">Heads up: this doesn't match the saved key ({{ $detectedEnvironment === 'live' ? 'Live' : 'Test' }} key detected below).</p>
+                            @endif
+                        @else
+                            <flux:description>Sandbox/Test uses this gateway's test API and never moves real money. Switch to Live only once you have live credentials from {{ $activeGateway['name'] }}.</flux:description>
+                        @endif
                     @endif
                 @else
                     <flux:input
