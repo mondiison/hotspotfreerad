@@ -54,6 +54,23 @@ Bucketing (hourly for "Today", daily for 7/30 days) happens in PHP over the fetc
 
 **Flux charts have no built-in drag-to-zoom or brush selection** (confirmed against the Flux docs) — the "Today / 7 days / 30 days" buttons are a server-refetch range picker, not a client-side zoom interaction.
 
+## Notifications & Alerts
+
+Router health alerts fire from the same `hotspot:sample-router-metrics` job that records history — after each sample, `RouterMetricSamplingService` compares it to the router's immediately preceding sample and notifies on four transitions:
+
+- Router stops responding to ping (`RouterAlertNotification::TYPE_OFFLINE`)
+- Router responds to ping again after being unreachable (`TYPE_ONLINE`)
+- CPU crosses 85% (`TYPE_HIGH_CPU`)
+- RAM crosses 85% (`TYPE_HIGH_RAM`)
+
+**Alerting is edge-triggered, not level-triggered**: a notification fires only on the transition into a bad (or recovered) state, not on every 5-minute sample while that state persists. A router stuck offline for six hours sends exactly one "offline" alert, not 72 of them. There's no separate cooldown/dedup table — the check is simply "did the previous sample have this condition." The tradeoff is that there's no periodic reminder for a still-ongoing issue; if that's needed later, it'd be a deliberate addition, not implicit in the current design.
+
+**Recipients**: every active super admin, plus the active tenant admins belonging to the router's tenant (`RouterMetricSamplingService::recipients()`).
+
+**Delivery — in-system always, email is a per-user opt-in**: every alert always creates a database notification (Admin → notification bell icon, top right of every page), which cannot be turned off. Email is a separate channel gated by each user's own `notify_by_email` preference (Profile page → Notifications → "Email me too" toggle, defaults on). `RouterAlertNotification::via()` includes `mail` only when the recipient has opted in.
+
+**Background delivery**: `RouterAlertNotification implements ShouldQueue`, so both the database write and the email send happen through Laravel's queue, not inline during the scheduled command's execution — sending an alert never blocks or slows down the sampling job. Queued jobs are processed by the persistent queue worker already documented in `docs/raspberry-pi-deployment.md` (`hotspotfreerad-worker` systemd service running `queue:work`), not by a separate cron-triggered process. That worker service is what needs to be running on the Pi for alert emails to actually go out — if it's stopped, notifications pile up in the `jobs` table until it's restarted, they don't silently disappear.
+
 ## Topology mapper
 
 **Admin → Network → Topology** (`admin/topology`). This is deliberately the organizational hierarchy — Tenant → Shop → Router, with live online/offline status from `RadiusAccountingStats` — not physical network topology discovery (LLDP/CDP neighbor walking). Real physical-topology discovery would need its own RouterOS API work and hasn't been attempted; the scoping choice here was to ship something correct and fully DB-driven (no RouterOS dependency, works even for routers with no API credentials yet) rather than a partially-working neighbor-discovery feature.

@@ -74,6 +74,18 @@ class ProfileCard extends Component
         );
     }
 
+    public function toggleEmailNotifications(): void
+    {
+        $this->user->forceFill([
+            'notify_by_email' => ! $this->user->notify_by_email,
+        ])->save();
+
+        $this->user->refresh();
+        $this->savedMessage = $this->user->notify_by_email
+            ? 'Email notifications turned on.'
+            : 'Email notifications turned off. You will still see alerts in the notification bell.';
+    }
+
     public function removeAvatar(ProfileService $profiles, SecurityActivityService $activity): void
     {
         $this->remove_avatar = true;

@@ -208,6 +208,8 @@
 
                     <div class="flex shrink-0 items-center gap-2">
                         @auth
+                            <livewire:admin.notification-bell />
+
                             <div class="relative" @keydown.escape.window="headerAccountMenuOpen = false">
                                 <button
                                     type="button"

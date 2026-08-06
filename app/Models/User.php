@@ -30,6 +30,7 @@ class User extends Authenticatable implements PasskeyUser
         'avatar_path',
         'role',
         'is_active',
+        'notify_by_email',
         'must_change_password',
         'two_factor_secret',
         'two_factor_recovery_codes',
@@ -57,6 +58,7 @@ class User extends Authenticatable implements PasskeyUser
         return [
             'email_verified_at' => 'datetime',
             'is_active' => 'boolean',
+            'notify_by_email' => 'boolean',
             'must_change_password' => 'boolean',
             'two_factor_secret' => 'encrypted',
             'two_factor_recovery_codes' => 'encrypted:array',

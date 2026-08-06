@@ -206,6 +206,16 @@
         </section>
 
         <section class="border-t border-zinc-200 pt-6">
+            <div class="flex flex-col justify-between gap-3 md:flex-row md:items-center">
+                <div>
+                    <h2 class="text-base font-semibold">Notifications</h2>
+                    <p class="mt-1 text-sm text-zinc-500">Router alerts (offline, back online, high CPU/RAM) always show in the notification bell. Email is optional.</p>
+                </div>
+                <flux:switch wire:click="toggleEmailNotifications" :checked="$user->notify_by_email" label="Email me too" />
+            </div>
+        </section>
+
+        <section class="border-t border-zinc-200 pt-6">
             <div class="flex flex-col justify-between gap-3 md:flex-row md:items-start">
                 <div>
                     <h2 class="text-base font-semibold">Passkeys</h2>
