@@ -70,6 +70,8 @@ WIREGUARD_MANAGE_PEERS=true
 
 `WIREGUARD_MANAGE_PEERS` is `false` by default everywhere (including local dev) so the sync command is a safe no-op unless explicitly turned on. Only set it to `true` on the Pi, after completing this doc.
 
+To find `WIREGUARD_ENDPOINT_HOST`, run `curl -4 ifconfig.me` on the Pi to see its current public IP. If the connection in front of the Pi doesn't give a static IP (most residential/Starlink connections don't), use a DDNS hostname instead of a raw IP so router configs don't silently break the next time the IP changes — see the CGNAT note in step 7 before assuming a public IP will work at all. If the router is on the same LAN as the Pi, use the Pi's LAN IP instead (see "Local Pi Behind The Same MikroTik" in `docs/router-onboarding.md`).
+
 ## 6. Allow the web server user to manage WireGuard peers
 
 The Laravel queue/scheduler on the Pi runs as `www-data` (see `docs/raspberry-pi-deployment.md`), which does not have permission to run `wg`/`wg-quick` by default. Grant it a narrowly scoped, passwordless sudo rule:
@@ -89,6 +91,8 @@ Confirm the real path to `wg`/`wg-quick` first with `which wg` / `which wg-quick
 ## 7. Forward the WireGuard port
 
 For routers outside the Pi's local network, forward UDP `13231` on whatever sits in front of the Pi (ISP router, Starlink router, etc.) to the Pi's LAN IP.
+
+**CGNAT warning, especially on Starlink**: standard residential Starlink (and many mobile/4G/5G home internet plans) sits behind carrier-grade NAT (CGNAT) by default — the public IP `curl -4 ifconfig.me` shows you is shared across many customers and is **not** actually forwardable, no matter how port forwarding is configured on the Starlink router/app. Remote routers will never be able to reach the Pi in that case, and this fails silently from the app's side — the router's script runs fine, `wg-saas` exists, but the peer just never shows a handshake. Signs you're behind CGNAT: the port-forwarding UI has no effect, or the IP from `ifconfig.me` doesn't match anything configurable in the router/app. If so, either buy Starlink's "Public IP" add-on (paid, gives a real static IP) or put the Pi behind a connection that isn't CGNAT'd. This only matters for routers outside the Pi's LAN — local/on-site routers are unaffected since they never leave the LAN to begin with.
 
 ## 8. Verify
 
@@ -115,4 +119,4 @@ No SSH into the Pi, no manually copying a public key off the router.
 - **Peer never appears in `sudo wg show wg-saas`** — run `php artisan hotspot:sync-wireguard-peers --dry-run` and read the `errors` it reports; it usually means the sudoers rule in step 6 isn't in place yet, or `WIREGUARD_MANAGE_PEERS` isn't `true`.
 - **`Could not read WireGuard interface "wg-saas": Unable to access: operation not permitted`** — the command was run as a user without the sudoers rule from step 6 (`WireGuardPeerSyncService` shells out through `sudo -n wg ...`/`sudo -n wg-quick ...`, never as plain `wg`, specifically so that rule is what grants access). Confirm `/etc/sudoers.d/hotspotfreerad-wireguard` exists and matches the real `wg`/`wg-quick` paths (`which wg`, `which wg-quick`), and that you're testing as the same user the scheduler/queue actually runs as (`sudo -u www-data php artisan hotspot:sync-wireguard-peers --dry-run`, not just `php artisan ...` as your own login user).
 - **Same error, but running as root (e.g. `sudo php artisan hotspot:sync-wireguard-peers`) says `... no such device`** — this means the permission problem is gone (root can always run `wg`) but the `wg-saas` interface itself was never created. Go back to steps 1–4: install `wireguard`, generate the Pi's keypair, write `/etc/wireguard/wg-saas.conf`, then `sudo systemctl enable --now wg-quick@wg-saas` and confirm `sudo wg show wg-saas` shows the interface before touching the sync command again.
-- **Router still can't reach `10.8.0.1`** — check the port-forward in step 7, and confirm the router's own script ran without errors (`/interface wireguard print` on the router should show a handshake once the Pi-side peer exists).
+- **Router still can't reach `10.8.0.1`** — check the port-forward in step 7, and confirm the router's own script ran without errors (`/interface wireguard print` on the router should show a handshake once the Pi-side peer exists). If port forwarding looks correctly configured but a handshake still never happens for any off-site router, suspect CGNAT (see step 7) — the peer will still register fine on the Pi's side (that part is purely local), it's the router's connection attempt from the outside that silently goes nowhere.
