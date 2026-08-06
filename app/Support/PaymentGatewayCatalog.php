@@ -35,6 +35,7 @@ class PaymentGatewayCatalog
                     'webhook_secret' => 'Secret Hash / Webhook Secret',
                 ],
                 'secret_fields' => ['client_secret', 'secret_key', 'webhook_secret'],
+                'walled_garden_hosts' => ['*.flutterwave.com', '*.ravepay.co'],
             ],
             self::PAYSTACK => [
                 'key' => self::PAYSTACK,
@@ -52,6 +53,7 @@ class PaymentGatewayCatalog
                     'secret_key' => 'Secret Key',
                 ],
                 'secret_fields' => ['secret_key'],
+                'walled_garden_hosts' => ['*.paystack.com', '*.paystack.co'],
             ],
             self::MONNIFY => [
                 'key' => self::MONNIFY,
@@ -70,6 +72,7 @@ class PaymentGatewayCatalog
                     'contract_code' => 'Contract Code',
                 ],
                 'secret_fields' => ['secret_key'],
+                'walled_garden_hosts' => ['*.monnify.com'],
             ],
             self::SQUAD => [
                 'key' => self::SQUAD,
@@ -87,6 +90,7 @@ class PaymentGatewayCatalog
                     'secret_key' => 'Secret Key',
                 ],
                 'secret_fields' => ['secret_key'],
+                'walled_garden_hosts' => ['*.squadco.com'],
             ],
             self::STRIPE => [
                 'key' => self::STRIPE,
@@ -105,6 +109,7 @@ class PaymentGatewayCatalog
                     'webhook_secret' => 'Webhook Signing Secret',
                 ],
                 'secret_fields' => ['secret_key', 'webhook_secret'],
+                'walled_garden_hosts' => ['*.stripe.com', '*.stripe.network'],
             ],
             self::MANUAL_BANK => [
                 'key' => self::MANUAL_BANK,
@@ -124,8 +129,26 @@ class PaymentGatewayCatalog
                     'instructions' => 'Customer Instructions',
                 ],
                 'secret_fields' => [],
+                'walled_garden_hosts' => [],
             ],
         ];
+    }
+
+    /**
+     * External hosts a hotspot customer's browser must reach to complete
+     * checkout on this gateway's hosted payment page, BEFORE the device is
+     * RADIUS-authenticated -- these need `/ip hotspot walled-garden` entries
+     * on the router or the customer can never reach the payment page at all.
+     * Best-effort based on each provider's known public checkout domains;
+     * not verified against a live checkout flow from this codebase, so treat
+     * as a starting point and confirm against real traffic if a customer
+     * reports being unable to reach checkout.
+     *
+     * @return list<string>
+     */
+    public static function walledGardenHosts(?string $gatewayKey): array
+    {
+        return (array) (self::gateway($gatewayKey ?: self::FLUTTERWAVE)['walled_garden_hosts'] ?? []);
     }
 
     public static function gateway(string $key): array

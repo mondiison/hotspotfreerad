@@ -45,6 +45,97 @@ class MikroTikProvisioningServiceTest extends TestCase
         $this->assertStringContainsString('/ip hotspot walled-garden add dst-host=portal.example.com action=allow', $script);
     }
 
+    public function test_hotspot_script_walled_garden_matches_the_shops_active_gateway(): void
+    {
+        config([
+            'app.url' => 'https://portal.example.com',
+            'services.radius.server_ip' => '10.8.0.1',
+            'services.wireguard.endpoint_host' => 'vpn.example.com',
+            'services.wireguard.endpoint_port' => 13231,
+            'services.wireguard.public_key' => 'server-public-key',
+            'services.mikrotik.hotspot_dns_name' => 'hotspot.local',
+        ]);
+
+        $tenant = Tenant::create(['company_name' => 'Demo ISP', 'owner_email' => 'owner@example.com']);
+        $shop = Shop::create(['tenant_id' => $tenant->id, 'name' => 'Demo Shop', 'payment_gateway' => 'stripe']);
+
+        $router = Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'Stripe Router',
+            'nas_identifier' => 'stripe-router',
+            'wireguard_internal_ip' => '10.8.0.32',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        $script = app(MikroTikProvisioningService::class)->generateScript($router);
+
+        $this->assertStringContainsString('/ip hotspot walled-garden add dst-host=portal.example.com action=allow', $script);
+        $this->assertStringContainsString('/ip hotspot walled-garden add dst-host=*.stripe.com action=allow', $script);
+        $this->assertStringContainsString('/ip hotspot walled-garden add dst-host=*.cloudflare.com action=allow', $script);
+        $this->assertStringNotContainsString('*.flutterwave.com', $script);
+        $this->assertStringNotContainsString('*.paystack', $script);
+    }
+
+    public function test_hotspot_script_has_no_gateway_walled_garden_entries_for_manual_bank_transfer(): void
+    {
+        config([
+            'app.url' => 'https://portal.example.com',
+            'services.radius.server_ip' => '10.8.0.1',
+            'services.wireguard.endpoint_host' => 'vpn.example.com',
+            'services.wireguard.endpoint_port' => 13231,
+            'services.wireguard.public_key' => 'server-public-key',
+            'services.mikrotik.hotspot_dns_name' => 'hotspot.local',
+        ]);
+
+        $tenant = Tenant::create(['company_name' => 'Demo ISP', 'owner_email' => 'owner@example.com']);
+        $shop = Shop::create(['tenant_id' => $tenant->id, 'name' => 'Demo Shop', 'payment_gateway' => 'manual_bank']);
+
+        $router = Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'Manual Bank Router',
+            'nas_identifier' => 'manual-bank-router',
+            'wireguard_internal_ip' => '10.8.0.33',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        $script = app(MikroTikProvisioningService::class)->generateScript($router);
+
+        $this->assertStringContainsString('/ip hotspot walled-garden add dst-host=portal.example.com action=allow', $script);
+        $this->assertStringContainsString('/ip hotspot walled-garden add dst-host=*.cloudflare.com action=allow', $script);
+        $this->assertStringNotContainsString('*.flutterwave.com', $script);
+        $this->assertStringNotContainsString('*.stripe.com', $script);
+    }
+
+    public function test_fresh_infrastructure_script_walled_garden_matches_the_shops_active_gateway(): void
+    {
+        config([
+            'app.url' => 'https://portal.example.com',
+            'services.radius.server_ip' => '10.8.0.1',
+            'services.wireguard.endpoint_host' => 'vpn.example.com',
+            'services.wireguard.endpoint_port' => 13231,
+            'services.wireguard.public_key' => 'server-public-key',
+            'services.mikrotik.hotspot_dns_name' => 'hotspot.local',
+        ]);
+
+        $tenant = Tenant::create(['company_name' => 'Demo ISP', 'owner_email' => 'owner@example.com']);
+        $shop = Shop::create(['tenant_id' => $tenant->id, 'name' => 'Demo Shop', 'payment_gateway' => 'paystack']);
+
+        $router = Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'Paystack Router',
+            'nas_identifier' => 'paystack-router',
+            'wireguard_internal_ip' => '10.8.0.34',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        $script = app(MikroTikProvisioningService::class)->generateFreshInfrastructureScript($router);
+
+        $this->assertStringContainsString('/ip hotspot walled-garden add dst-host=*.paystack.com action=allow', $script);
+        $this->assertStringContainsString('/ip hotspot walled-garden add dst-host=*.paystack.co action=allow', $script);
+        $this->assertStringContainsString('/ip hotspot walled-garden add dst-host=*.cloudflare.com action=allow', $script);
+        $this->assertStringNotContainsString('*.flutterwave.com', $script);
+    }
+
     public function test_it_generates_a_routeros_pppoe_script(): void
     {
         config([

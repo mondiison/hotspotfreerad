@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Router;
 use App\Models\TrustedWifiDevice;
+use App\Support\PaymentGatewayCatalog;
 
 class MikroTikProvisioningService
 {
@@ -77,6 +78,7 @@ SCRIPT;
         $portalUrl = $this->portalUrl();
         $portalHost = parse_url($portalUrl, PHP_URL_HOST) ?: config('services.mikrotik.hotspot_dns_name');
         $hotspotDnsName = config('services.mikrotik.hotspot_dns_name');
+        $walledGardenLines = implode("\n", $this->walledGardenLines($router, $portalHost));
 
         return <<<SCRIPT
 /system identity set name="{$nasIdentifier}"
@@ -87,7 +89,7 @@ SCRIPT;
 /radius add address={$radiusIp} secret="{$sharedSecret}" service=hotspot,ppp authentication-port={$authPort} accounting-port={$acctPort} timeout=1000ms
 /ip hotspot profile add name=saas-prof use-radius=yes login-by=http-chap,cookie,mac-cookie html-directory=flash/hotspot dns-name={$hotspotDnsName}
 /ip hotspot profile set saas-prof radius-accounting=yes
-/ip hotspot walled-garden add dst-host={$portalHost} action=allow
+{$walledGardenLines}
 SCRIPT;
     }
 
@@ -320,9 +322,7 @@ SCRIPT;
             '# DHCP for MMS Hotspot is served from vlan-hotspot. Do not attach hotspot DHCP directly to wifi1/ether ports because bridge member ports become slave interfaces.',
             '/ip hotspot profile add name=mms-hotspot-profile use-radius=yes login-by=http-chap,cookie,mac-cookie html-directory=flash/hotspot dns-name='.$hotspotDnsName.' radius-accounting=yes',
             '/ip hotspot add name=mms-hotspot interface=vlan-hotspot address-pool=pool-hotspot profile=mms-hotspot-profile disabled=no',
-            '/ip hotspot walled-garden add dst-host='.$portalHost.' action=allow',
-            '/ip hotspot walled-garden add dst-host=*.flutterwave.com action=allow',
-            '/ip hotspot walled-garden add dst-host=*.cloudflare.com action=allow',
+            ...$this->walledGardenLines($router, $portalHost),
             '',
             '/ip address add address=$staffGateway interface=vlan-staff comment="Password staff/admin SSID VLAN"',
             '/ip pool add name=pool-staff ranges=$staffPool',
@@ -606,5 +606,29 @@ HTML;
             '/user add name="'.$username.'" password="'.$password.'" group=mmsradius-api-group comment="MMS Radius monitoring"',
             '/ip service set api disabled=no port=8728 address=10.8.0.0/24',
         ];
+    }
+
+    /**
+     * Walled-garden entries so a customer's browser can reach the hotspot
+     * portal AND the shop's active payment gateway's hosted checkout page
+     * BEFORE the device is RADIUS-authenticated -- without these, the
+     * customer picks a package and pays, but the hotspot blocks the
+     * redirect to the gateway's checkout domain entirely. The gateway host
+     * list itself is per-provider, best-effort metadata in
+     * PaymentGatewayCatalog -- see the caveat there.
+     *
+     * @return list<string>
+     */
+    private function walledGardenLines(Router $router, string $portalHost): array
+    {
+        $lines = ['/ip hotspot walled-garden add dst-host='.$portalHost.' action=allow'];
+
+        foreach (PaymentGatewayCatalog::walledGardenHosts($router->shop?->paymentGateway()) as $host) {
+            $lines[] = '/ip hotspot walled-garden add dst-host='.$host.' action=allow';
+        }
+
+        $lines[] = '/ip hotspot walled-garden add dst-host=*.cloudflare.com action=allow';
+
+        return $lines;
     }
 }

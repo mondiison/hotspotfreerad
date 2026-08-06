@@ -45,6 +45,10 @@
 
             return number_format($bytes / 1073741824, $bytes % 1073741824 === 0 ? 0 : 1).' GB';
         };
+
+        $gatewayKey = $shop->paymentGateway();
+        $gatewayName = $shop->paymentGatewayName();
+        $gatewayLogoUrl = $shop->paymentGatewayLogoUrl();
     @endphp
 
     <main class="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-3 py-4 sm:px-5 sm:py-8">
@@ -182,19 +186,25 @@
                                 </div>
                                 <fieldset>
                                     <legend class="mb-2 text-xs font-medium text-zinc-500">Pay with</legend>
-                                    <div class="grid grid-cols-3 gap-2">
-                                        @foreach ([['opay', 'OPay', true, true], ['bank_transfer', 'Transfer', true, false], ['card', 'Card', true, false]] as [$methodValue, $methodLabel, $methodAvailable, $methodSelected])
-                                            <label class="cursor-pointer">
-                                                <input type="radio" name="payment_method" value="{{ $methodValue }}" class="peer sr-only" @checked($methodSelected) @disabled(! $methodAvailable)>
-                                                <span class="grid min-h-9 place-items-center rounded-md border border-zinc-200 px-2 text-center text-xs font-medium text-zinc-600 transition peer-checked:border-zinc-950 peer-checked:bg-zinc-950 peer-checked:text-white peer-disabled:cursor-not-allowed peer-disabled:bg-zinc-50 peer-disabled:text-zinc-400">
-                                                    <span>{{ $methodLabel }}</span>
-                                                    @unless ($methodAvailable)
-                                                        <span class="text-[10px] font-normal">Soon</span>
-                                                    @endunless
-                                                </span>
-                                            </label>
-                                        @endforeach
-                                    </div>
+                                    @if ($gatewayKey === \App\Support\PaymentGatewayCatalog::FLUTTERWAVE)
+                                        <div class="grid grid-cols-3 gap-2">
+                                            @foreach ([['opay', 'OPay', true], ['bank_transfer', 'Transfer', false], ['card', 'Card', false]] as [$methodValue, $methodLabel, $methodSelected])
+                                                <label class="cursor-pointer">
+                                                    <input type="radio" name="payment_method" value="{{ $methodValue }}" class="peer sr-only" @checked($methodSelected)>
+                                                    <span class="grid min-h-9 place-items-center rounded-md border border-zinc-200 px-2 text-center text-xs font-medium text-zinc-600 transition peer-checked:border-zinc-950 peer-checked:bg-zinc-950 peer-checked:text-white">
+                                                        {{ $methodLabel }}
+                                                    </span>
+                                                </label>
+                                            @endforeach
+                                        </div>
+                                    @else
+                                        <div class="flex items-center gap-2 rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2">
+                                            @if ($gatewayLogoUrl)
+                                                <img src="{{ $gatewayLogoUrl }}" alt="{{ $gatewayName }}" class="h-5 w-auto">
+                                            @endif
+                                            <span class="text-sm font-medium text-zinc-800">{{ $gatewayName }}</span>
+                                        </div>
+                                    @endif
                                 </fieldset>
                                 @if ($loginUrl)
                                     <input type="hidden" name="link-login" value="{{ $loginUrl }}">
