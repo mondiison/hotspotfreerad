@@ -60,19 +60,20 @@
                         <span class="truncate text-sm font-semibold text-zinc-950">{{ $gateway['name'] }}</span>
                     </button>
 
-                    <div class="flex shrink-0 items-center gap-1">
-                        <flux:badge color="{{ $gateway['status'] === 'live' ? 'green' : 'amber' }}" size="sm">{{ $gateway['status_label'] }}</flux:badge>
-                        <flux:dropdown>
-                            <flux:button type="button" icon="information-circle" variant="ghost" size="sm" aria-label="About {{ $gateway['name'] }}" />
-                            <flux:popover class="max-w-xs space-y-2 text-sm text-zinc-600">
-                                <p class="font-semibold text-zinc-900">{{ $gateway['name'] }}</p>
-                                <p class="text-xs text-zinc-500">{{ $gateway['region'] }} · {{ $gateway['currency_label'] }}</p>
-                                <p>{{ $gateway['summary'] }}</p>
-                                <p class="text-xs text-zinc-500">{{ $gateway['webhook_note'] }}</p>
-                            </flux:popover>
-                        </flux:dropdown>
-                    </div>
+                    <flux:dropdown class="shrink-0">
+                        <flux:button type="button" icon="information-circle" variant="ghost" size="sm" aria-label="About {{ $gateway['name'] }}" />
+                        <flux:popover class="max-w-xs space-y-2 text-sm text-zinc-600">
+                            <p class="font-semibold text-zinc-900">{{ $gateway['name'] }}</p>
+                            <p class="text-xs text-zinc-500">{{ $gateway['region'] }} · {{ $gateway['currency_label'] }}</p>
+                            <p>{{ $gateway['summary'] }}</p>
+                            <p class="text-xs text-zinc-500">{{ $gateway['webhook_note'] }}</p>
+                        </flux:popover>
+                    </flux:dropdown>
                 </div>
+
+                @if ($payment_gateway === $key)
+                    <flux:badge color="{{ $gateway['status'] === 'live' ? 'green' : 'amber' }}" size="sm" class="mt-2">{{ $gateway['status_label'] }}</flux:badge>
+                @endif
             </div>
         @endforeach
     </div>
