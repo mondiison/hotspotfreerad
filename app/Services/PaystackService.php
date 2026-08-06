@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Payment;
 use App\Services\Payments\Contracts\HotspotHostedGateway;
+use App\Support\GuestCustomerEmail;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -18,7 +19,7 @@ class PaystackService implements HotspotHostedGateway
         $response = Http::withToken($this->secretKey($payment))
             ->acceptJson()
             ->post($this->baseUrl().'/transaction/initialize', [
-                'email' => $customer['email'] ?: 'guest-'.$payment->id.'@hotspot.local',
+                'email' => GuestCustomerEmail::resolve($payment, $customer['email'] ?? null),
                 'amount' => $this->amountInSubunit($payment),
                 'currency' => $payment->currency,
                 'reference' => $payment->tx_ref,

@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Payment;
 use App\Services\Payments\Contracts\HotspotHostedGateway;
+use App\Support\GuestCustomerEmail;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -21,7 +22,7 @@ class MonnifyService implements HotspotHostedGateway
             ->post($this->baseUrl().'/api/v1/merchant/transactions/init-transaction', [
                 'amount' => (float) $payment->amount,
                 'customerName' => (string) ($customer['name'] ?? 'Hotspot Customer'),
-                'customerEmail' => $customer['email'] ?: 'guest-'.$payment->id.'@hotspot.local',
+                'customerEmail' => GuestCustomerEmail::resolve($payment, $customer['email'] ?? null),
                 'paymentReference' => $payment->tx_ref,
                 'paymentDescription' => $payment->package->name.' hotspot access',
                 'currencyCode' => $payment->currency,

@@ -149,6 +149,7 @@ POS devices should use a password-protected POS SSID, usually VLAN 50, and be re
 ## Important Operational Notes
 
 - Do not expose tenant/admin passwords. Tenant creation should send temporary password/reset flow.
+- When a hotspot customer skips the optional email field, every gateway service falls back to a synthetic `guest-{payment_id}@` address via `App\Support\GuestCustomerEmail`. Confirmed live on 2026-08-06: it previously used `@hotspot.local`, which Squad's checkout API (and likely others with strict validators) rejected outright with `"email" must be a valid email`, since `.local` isn't a real IANA-registered TLD. It now uses this app's own domain (from `APP_URL`), falling back to `example.com` in local dev where `APP_URL` has no real domain.
 - For Flux Pro composer auth, use the Flux license key, not the account password.
 - Vite build may show an existing Flux CSS warning about `[snap="mandatory" &]`; build still succeeds.
 - `APP_URL` must match the access domain/protocol. For public HTTPS, Livewire must generate HTTPS URLs to avoid mixed-content errors.

@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Payment;
 use App\Services\Payments\Contracts\HotspotHostedGateway;
+use App\Support\GuestCustomerEmail;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -20,7 +21,7 @@ class SquadService implements HotspotHostedGateway
             ->post($this->baseUrl().'/transaction/initiate', [
                 'amount' => $this->amountInKobo($payment),
                 'transaction_ref' => $payment->tx_ref,
-                'email' => $customer['email'] ?: 'guest-'.$payment->id.'@hotspot.local',
+                'email' => GuestCustomerEmail::resolve($payment, $customer['email'] ?? null),
                 'currency' => $payment->currency,
                 'callback_url' => $callbackUrl,
                 'customer_name' => (string) ($customer['name'] ?? 'Hotspot Customer'),

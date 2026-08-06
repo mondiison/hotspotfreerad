@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Payment;
 use App\Services\Payments\Contracts\HotspotHostedGateway;
+use App\Support\GuestCustomerEmail;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -26,7 +27,7 @@ class StripeService implements HotspotHostedGateway
                     'status' => 'cancelled',
                 ]),
                 'client_reference_id' => $payment->tx_ref,
-                'customer_email' => $customer['email'] ?: 'guest-'.$payment->id.'@hotspot.local',
+                'customer_email' => GuestCustomerEmail::resolve($payment, $customer['email'] ?? null),
                 'currency' => strtolower($payment->currency),
                 'line_items' => [[
                     'quantity' => 1,

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Payment;
+use App\Support\GuestCustomerEmail;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -151,7 +152,7 @@ class FlutterwaveService
                 'redirect_url' => $redirectUrl,
                 'payment_options' => 'card',
                 'customer' => [
-                    'email' => $customer['email'] ?: 'guest-'.$payment->id.'@hotspot.local',
+                    'email' => GuestCustomerEmail::resolve($payment, $customer['email'] ?? null),
                     'phonenumber' => (string) ($customer['phone'] ?? ''),
                     'name' => (string) ($customer['name'] ?? 'Hotspot Customer'),
                 ],
@@ -440,7 +441,7 @@ class FlutterwaveService
         [$countryCode, $phoneNumber] = $this->phoneParts((string) ($customer['phone'] ?? ''));
 
         return [
-            'email' => $customer['email'] ?: 'guest-'.$payment->id.'@hotspot.local',
+            'email' => GuestCustomerEmail::resolve($payment, $customer['email'] ?? null),
             'name' => [
                 'first' => $firstName,
                 'last' => $lastName,
