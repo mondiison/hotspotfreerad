@@ -23,15 +23,17 @@ Live bandwidth, Wi-Fi scanning, and topology (router status) need to talk to the
 Every router gets, on creation:
 
 - A read-only RouterOS API user (`App\Models\Router::API_USERNAME`, currently `mmsradius-api`) with a random generated password (`api_password`, encrypted at rest — see `App\Models\Router`).
-- These are baked into all three generated scripts as:
+- These are baked into all three generated scripts as (simplified; the real output uses `:if`/`else` so re-running the script updates an existing group/user in place instead of erroring on a duplicate name — see below):
   ```routeros
-  /user group add name=mmsradius-api-group policy=read,api,!local,!telnet,!ssh,!ftp,!reboot,!write,!policy,!test,!winbox,!password,!web,!sniff,!sensitive,!romon,!dude,!tikapp comment="MMS Radius read-only API access"
+  /user group add name=mmsradius-api-group policy=read,api,!local,!telnet,!ssh,!ftp,!reboot,!write,!policy,!test,!winbox,!password,!web,!sniff,!sensitive,!romon,!rest-api comment="MMS Radius read-only API access"
   /user add name="mmsradius-api" password="..." group=mmsradius-api-group comment="MMS Radius monitoring"
   /ip service set api disabled=no port=8728 address=10.8.0.0/24
   ```
 - The API service is restricted to the `10.8.0.0/24` WireGuard subnet — it is not exposed on the WAN.
 
-**Verify the exact user-group policy flags against your RouterOS version before relying on this in production.** RouterOS 7's policy flag list has shifted slightly across releases; the set above is a best-effort read-only policy, not something tested against real hardware from this codebase.
+**Policy flags confirmed against real hardware** (RouterOS 7.18.2, L009UiGS-2HaxD, 2026-08-06): `App\Services\MikroTikProvisioningService::apiUserProvisioningLines()` originally included `!dude` and `!tikapp`, neither of which RouterOS 7 recognizes (`input does not match any value of policy`) — that made the whole `/user group add` line fail, so the API user silently never got created on the router at all, and every RouterOS API feature failed with an authentication error. Fixed by cross-checking `/user group print detail where name=full` (RouterOS's own built-in group listing every valid flag) on real hardware; `!rest-api` was added in its place to also deny RouterOS 7's separate REST API surface, which this app doesn't use. If a future RouterOS release shifts the flag list again, the same `/user group print detail where name=full` check is the fastest way to find the current valid set.
+
+**Also fixed at the same time**: the group/user creation lines are now idempotent (`:if ([:len [...find...]] = 0) do={ ...add... } else={ ...set... }`) — re-pasting the script, e.g. after clicking "Regenerate credentials", now actually updates the router's password instead of erroring on a duplicate name and leaving it silently out of sync with what the app has stored (the exact failure mode a "Test connection" → "Invalid user name or password" error usually means).
 
 `App\Services\RouterOsConnectionService` wraps [`evilfreelancer/routeros-api-php`](https://github.com/EvilFreelancer/routeros-api-php) (chosen over `pear2/net_routeros` because the latter has never left beta). It requires PHP's `ext-sockets` extension — enabled by default on most Linux `php-fpm` installs, but disabled by default in XAMPP for Windows (`extension=sockets` is commented out in `php.ini` by default; uncomment it for local testing).
 

@@ -627,9 +627,22 @@ HTML;
         $username = $this->quote($router->api_username ?: 'mmsradius-api');
         $password = $this->quote($router->api_password);
 
+        // Deny-list of every policy RouterOS 7 recognizes except read+api -- confirmed
+        // against a real RouterOS 7.18.2 router's own `/user group print detail where
+        // name=full` output. Earlier revisions of this list included "dude" and
+        // "tikapp", which RouterOS 7 rejects outright ("input does not match any value
+        // of policy"), so the whole group (and therefore the API user) silently never
+        // got created. "rest-api" replaces them -- RouterOS 7 added a separate REST API
+        // surface distinct from the classic binary API this app actually uses, and it
+        // should stay denied for a read-only monitoring account.
+        $policy = 'read,api,!local,!telnet,!ssh,!ftp,!reboot,!write,!policy,!test,!winbox,!password,!web,!sniff,!sensitive,!romon,!rest-api';
+
         return [
-            '/user group add name=mmsradius-api-group policy=read,api,!local,!telnet,!ssh,!ftp,!reboot,!write,!policy,!test,!winbox,!password,!web,!sniff,!sensitive,!romon,!dude,!tikapp comment="MMS Radius read-only API access"',
-            '/user add name="'.$username.'" password="'.$password.'" group=mmsradius-api-group comment="MMS Radius monitoring"',
+            // Update-in-place if the group/user already exist (e.g. this script is
+            // being re-run after "Regenerate credentials") instead of erroring on a
+            // duplicate name and silently leaving the router with stale credentials.
+            ':if ([:len [/user group find name=mmsradius-api-group]] = 0) do={ /user group add name=mmsradius-api-group policy='.$policy.' comment="MMS Radius read-only API access" } else={ /user group set [find name=mmsradius-api-group] policy='.$policy.' comment="MMS Radius read-only API access" }',
+            ':if ([:len [/user find name="'.$username.'"]] = 0) do={ /user add name="'.$username.'" password="'.$password.'" group=mmsradius-api-group comment="MMS Radius monitoring" } else={ /user set [find name="'.$username.'"] password="'.$password.'" group=mmsradius-api-group comment="MMS Radius monitoring" }',
             '/ip service set api disabled=no port=8728 address=10.8.0.0/24',
         ];
     }

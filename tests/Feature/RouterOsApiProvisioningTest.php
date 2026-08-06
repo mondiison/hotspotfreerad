@@ -103,6 +103,47 @@ class RouterOsApiProvisioningTest extends TestCase
         $this->assertStringContainsString('/ip service set api disabled=no port=8728 address=10.8.0.0/24', $script);
     }
 
+    public function test_api_group_policy_omits_flags_routeros_7_rejects_and_denies_rest_api(): void
+    {
+        $router = Router::create([
+            'shop_id' => $this->makeShop()->id,
+            'name' => 'Policy Router',
+            'nas_identifier' => 'policy-router',
+            'wireguard_internal_ip' => '10.8.0.80',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        $script = app(MikroTikProvisioningService::class)->generateScript($router);
+
+        // Confirmed invalid on a real RouterOS 7.18.2 router ("input does not match
+        // any value of policy") -- the whole /user group add line failed silently,
+        // so the API user was never actually created.
+        $this->assertStringNotContainsString('dude', $script);
+        $this->assertStringNotContainsString('tikapp', $script);
+        $this->assertStringContainsString('!rest-api', $script);
+    }
+
+    public function test_api_user_provisioning_is_idempotent_for_regenerated_credentials(): void
+    {
+        $router = Router::create([
+            'shop_id' => $this->makeShop()->id,
+            'name' => 'Idempotent Router',
+            'nas_identifier' => 'idempotent-router',
+            'wireguard_internal_ip' => '10.8.0.81',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        $script = app(MikroTikProvisioningService::class)->generateScript($router);
+
+        // Update-in-place if the group/user already exist, rather than the plain
+        // /user group add / /user add erroring on a duplicate name and leaving a
+        // regenerated password stuck out of sync with the router.
+        $this->assertStringContainsString(':if ([:len [/user group find name=mmsradius-api-group]] = 0) do={', $script);
+        $this->assertStringContainsString('/user group set [find name=mmsradius-api-group]', $script);
+        $this->assertStringContainsString(':if ([:len [/user find name="'.Router::API_USERNAME.'"]] = 0) do={', $script);
+        $this->assertStringContainsString('/user set [find name="'.Router::API_USERNAME.'"] password="'.$router->api_password.'"', $script);
+    }
+
     public function test_connection_service_reports_a_clear_error_when_router_is_unreachable(): void
     {
         $router = Router::create([
