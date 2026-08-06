@@ -263,6 +263,76 @@ class AdminPaymentSettingsTest extends TestCase
         $this->assertArrayHasKey('secret_key', $readiness);
     }
 
+    public function test_paystack_shows_read_only_detected_environment_badge_instead_of_editable_field(): void
+    {
+        [$tenant] = $this->tenants();
+        $shop = $this->shop($tenant, 'Paystack Shop', false)->load('tenant');
+        $shop->payments_count = 0;
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user);
+
+        Livewire::test(PaymentSettingsCard::class, ['shop' => $shop])
+            ->set('payment_gateway', 'paystack')
+            ->set('gateway_settings.public_key', 'pk_test_paystack')
+            ->set('gateway_settings.secret_key', 'sk_test_paystack')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        Livewire::test(PaymentSettingsCard::class, ['shop' => $shop->refresh()])
+            ->assertSee('Detected: Test key');
+
+        $this->assertArrayNotHasKey('environment', PaymentGatewayCatalog::selectFields('paystack'));
+    }
+
+    public function test_stripe_detected_environment_badge_reflects_live_key(): void
+    {
+        [$tenant] = $this->tenants();
+        $shop = $this->shop($tenant, 'Stripe Shop', false)->load('tenant');
+        $shop->payments_count = 0;
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user);
+
+        Livewire::test(PaymentSettingsCard::class, ['shop' => $shop])
+            ->set('payment_gateway', 'stripe')
+            ->set('gateway_settings.publishable_key', 'pk_live_stripe')
+            ->set('gateway_settings.secret_key', 'sk_live_stripe')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        Livewire::test(PaymentSettingsCard::class, ['shop' => $shop->refresh()])
+            ->assertSee('Detected: Live key');
+    }
+
+    public function test_squad_keeps_editable_environment_field_without_detected_badge(): void
+    {
+        [$tenant] = $this->tenants();
+        $shop = $this->shop($tenant, 'Squad Shop', false)->load('tenant');
+        $shop->payments_count = 0;
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user);
+
+        Livewire::test(PaymentSettingsCard::class, ['shop' => $shop])
+            ->set('payment_gateway', 'squad')
+            ->assertDontSee('Detected: Live key')
+            ->assertDontSee('Detected: Test key')
+            ->assertDontSee('Environment not detected');
+    }
+
     public function test_livewire_payment_settings_card_validates_credentials_together(): void
     {
         [$tenant] = $this->tenants();

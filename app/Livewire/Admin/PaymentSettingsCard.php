@@ -92,8 +92,26 @@ class PaymentSettingsCard extends Component
             ->all();
     }
 
+    /**
+     * Gateways where live/test is determined purely by which secret key is
+     * pasted (one shared API host), so the UI shows a read-only fact derived
+     * from the saved key instead of a separately-editable setting that could
+     * disagree with it. Squad/Monnify are NOT here -- they have genuinely
+     * different API hosts per environment, so their `environment` stays a
+     * real, editable `select_fields` choice instead.
+     */
+    private const KEY_DETECTED_ENVIRONMENT_GATEWAYS = [PaymentGatewayCatalog::PAYSTACK, PaymentGatewayCatalog::STRIPE];
+
     public function render()
     {
+        $showsDetectedEnvironment = in_array($this->payment_gateway, self::KEY_DETECTED_ENVIRONMENT_GATEWAYS, true);
+        $detectedEnvironment = null;
+
+        if ($showsDetectedEnvironment) {
+            $savedSecretKey = (string) ($this->shop->paymentGatewaySettings()[$this->payment_gateway]['secret_key'] ?? '');
+            $detectedEnvironment = PaymentGatewayCatalog::detectedEnvironment($savedSecretKey);
+        }
+
         return view('livewire.admin.payment-settings-card', [
             'readiness' => PaymentGatewayCatalog::tenantReadiness($this->shop),
             'gatewayOptions' => PaymentGatewayCatalog::gatewayOptions(),
@@ -102,6 +120,8 @@ class PaymentSettingsCard extends Component
             'credentialFields' => PaymentGatewayCatalog::credentialFields($this->payment_gateway),
             'secretFieldKeys' => PaymentGatewayCatalog::secretFieldKeys($this->payment_gateway),
             'selectFields' => PaymentGatewayCatalog::selectFields($this->payment_gateway),
+            'showsDetectedEnvironment' => $showsDetectedEnvironment,
+            'detectedEnvironment' => $detectedEnvironment,
         ]);
     }
 }

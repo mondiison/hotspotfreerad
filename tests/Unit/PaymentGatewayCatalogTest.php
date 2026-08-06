@@ -27,4 +27,21 @@ class PaymentGatewayCatalogTest extends TestCase
             'unknown key falls back to flutterwave' => ['not-a-real-gateway', ['*.flutterwave.com', '*.ravepay.co']],
         ];
     }
+
+    #[DataProvider('secretKeyProvider')]
+    public function test_it_detects_environment_from_secret_key_prefix(?string $secretKey, ?string $expected): void
+    {
+        $this->assertSame($expected, PaymentGatewayCatalog::detectedEnvironment($secretKey));
+    }
+
+    public static function secretKeyProvider(): array
+    {
+        return [
+            'live prefix' => ['sk_live_abc123', 'live'],
+            'test prefix' => ['sk_test_abc123', 'test'],
+            'null key' => [null, null],
+            'blank key' => ['', null],
+            'unrecognized prefix' => ['pk_live_abc123', null],
+        ];
+    }
 }

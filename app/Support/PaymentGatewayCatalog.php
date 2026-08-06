@@ -223,6 +223,29 @@ class PaymentGatewayCatalog
         return (array) (self::gateway($gateway ?: self::FLUTTERWAVE)['select_fields'] ?? []);
     }
 
+    /**
+     * Unlike Squad/Monnify (genuinely different API base URLs per environment,
+     * so `environment` is a real, editable `select_fields` choice), Paystack
+     * and Stripe use exactly ONE API host for both modes -- the secret key
+     * itself is the only thing that determines live vs test, via the
+     * `sk_test_`/`sk_live_` prefix convention both providers share. Making
+     * this an independently-editable setting for those two would let it
+     * drift out of sync with what's actually saved (pick "Live" but the key
+     * is still a test key, or vice versa) -- a setting that can lie. This
+     * derives the true answer straight from the key instead, so the UI can
+     * show it as a read-only fact rather than a second, possibly-wrong
+     * source of truth. Returns null when the key is blank or doesn't match
+     * either known prefix.
+     */
+    public static function detectedEnvironment(?string $secretKey): ?string
+    {
+        return match (true) {
+            str_starts_with((string) $secretKey, 'sk_test_') => 'test',
+            str_starts_with((string) $secretKey, 'sk_live_') => 'live',
+            default => null,
+        };
+    }
+
     public static function implementedGatewayKeys(): array
     {
         return [self::FLUTTERWAVE, self::PAYSTACK, self::MONNIFY, self::SQUAD, self::STRIPE, self::MANUAL_BANK];

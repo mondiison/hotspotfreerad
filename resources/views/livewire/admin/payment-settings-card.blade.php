@@ -113,6 +113,18 @@
                         placeholder="Leave blank to keep saved {{ strtolower($label) }}"
                         :viewable="in_array($field, $secretFieldKeys, true)"
                     />
+                    @if ($field === 'secret_key' && $showsDetectedEnvironment)
+                        <div class="mt-1">
+                            @if ($detectedEnvironment === 'live')
+                                <flux:badge color="green" size="sm">Detected: Live key</flux:badge>
+                            @elseif ($detectedEnvironment === 'test')
+                                <flux:badge color="amber" size="sm">Detected: Test key</flux:badge>
+                            @else
+                                <flux:badge color="zinc" size="sm">Environment not detected</flux:badge>
+                            @endif
+                        </div>
+                        <flux:description>{{ $activeGateway['name'] }} uses one API host for both modes -- the saved secret key's prefix is what actually determines live vs test, so there's no separate environment setting to get out of sync.</flux:description>
+                    @endif
                 @endif
                 <flux:error name="gateway_settings.{{ $field }}" />
             </flux:field>
