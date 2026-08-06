@@ -28,6 +28,7 @@
                 <flux:select.option value="">All roles</flux:select.option>
                 <flux:select.option value="super_admin">Super admin</flux:select.option>
                 <flux:select.option value="tenant_admin">Tenant admin</flux:select.option>
+                <flux:select.option value="tenant_staff">Staff</flux:select.option>
             </flux:select>
             <flux:select wire:model.live="status">
                 <flux:select.option value="">All statuses</flux:select.option>
@@ -66,9 +67,12 @@
                         </td>
                         <td class="px-4 py-3 text-zinc-600">{{ $managedUser->tenant?->company_name ?? 'Platform' }}</td>
                         <td class="px-4 py-3">
-                            <flux:badge :color="$managedUser->isSuperAdmin() ? 'purple' : 'sky'">
+                            <flux:badge :color="$managedUser->isSuperAdmin() ? 'purple' : ($managedUser->isTenantStaff() ? 'amber' : 'sky')">
                                 {{ str($managedUser->role)->replace('_', ' ')->title() }}
                             </flux:badge>
+                            @if ($managedUser->isTenantStaff() && ! empty($managedUser->permissions))
+                                <p class="mt-1 text-xs text-zinc-500">{{ collect($managedUser->permissions)->map(fn ($key) => $permissionOptions[$key] ?? $key)->implode(', ') }}</p>
+                            @endif
                         </td>
                         <td class="px-4 py-3">
                             <div class="flex flex-wrap gap-2">
@@ -148,13 +152,14 @@
 
                     <flux:field>
                         <flux:label>Role</flux:label>
-                        <flux:select wire:model.live="user_role" :disabled="! auth()->user()->isSuperAdmin()" required>
+                        <flux:select wire:model.live="user_role" required>
                             @if (auth()->user()->isSuperAdmin())
                                 <flux:select.option value="super_admin">Super admin</flux:select.option>
                             @endif
                             <flux:select.option value="tenant_admin">Tenant admin</flux:select.option>
+                            <flux:select.option value="tenant_staff">Staff</flux:select.option>
                         </flux:select>
-                        <flux:description>Tenant admins manage only their workspace records.</flux:description>
+                        <flux:description>Tenant admins manage the whole workspace. Staff are limited to the areas checked below.</flux:description>
                         <flux:error name="role" />
                     </flux:field>
 
@@ -170,10 +175,22 @@
                     </div>
                 </div>
 
+                @if ($user_role === 'tenant_staff')
+                    <flux:checkbox.group wire:model.live="user_permissions" label="Staff access">
+                        <flux:description>Staff can only reach the areas checked here &mdash; everything else (billing, tenant/shop setup, user management, packages) stays admin-only.</flux:description>
+                        <div class="mt-2 grid gap-2 sm:grid-cols-2">
+                            @foreach ($permissionOptions as $key => $label)
+                                <flux:checkbox value="{{ $key }}" label="{{ $label }}" />
+                            @endforeach
+                        </div>
+                    </flux:checkbox.group>
+                    <flux:error name="permissions" />
+                @endif
+
                 <div class="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
                     <h2 class="text-sm font-semibold text-zinc-950">Access guide</h2>
                     <p class="mt-1 text-sm leading-6 text-zinc-600">
-                        Use Super admin for platform billing, tenant creation, and global reporting. Use Tenant admin for a business owner or staff member who should only see that tenant's shops, routers, packages, customers, sales, and expenses.
+                        Use Super admin for platform billing, tenant creation, and global reporting. Use Tenant admin for a business owner who should see everything in that tenant's workspace. Use Staff for cashiers, support, or network staff who should only reach specific areas.
                     </p>
                 </div>
 

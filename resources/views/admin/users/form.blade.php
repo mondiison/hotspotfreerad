@@ -43,6 +43,7 @@
                         <option value="super_admin" @selected(old('role', $managedUser->role) === 'super_admin')>Super admin</option>
                     @endif
                     <option value="tenant_admin" @selected(old('role', $managedUser->role ?: 'tenant_admin') === 'tenant_admin')>Tenant admin</option>
+                    <option value="tenant_staff" @selected(old('role', $managedUser->role) === 'tenant_staff')>Staff</option>
                 </flux:select>
                 <flux:error name="role" />
             </flux:field>
@@ -57,6 +58,16 @@
             <div class="md:col-span-2">
                 <flux:checkbox name="is_active" value="1" :checked="(bool) old('is_active', $managedUser->is_active ?? true)" label="Active account" :disabled="auth()->user()->is($managedUser)" />
             </div>
+
+            <flux:field class="md:col-span-2">
+                <flux:label>Staff access (only used when role is Staff)</flux:label>
+                <div class="grid gap-2 sm:grid-cols-2">
+                    @foreach (\App\Support\StaffPermissions::catalog() as $key => $label)
+                        <flux:checkbox name="permissions[]" value="{{ $key }}" :checked="in_array($key, old('permissions', $managedUser->permissions ?? []), true)" label="{{ $label }}" />
+                    @endforeach
+                </div>
+                <flux:error name="permissions" />
+            </flux:field>
         </div>
 
         <div class="mt-6 flex gap-3">

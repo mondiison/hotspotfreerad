@@ -114,7 +114,7 @@ class AdminUserManagementTest extends TestCase
                 'tenant_id' => $otherTenant->id,
                 'name' => 'New Tenant Admin',
                 'email' => 'new-admin@example.com',
-                'role' => 'super_admin',
+                'role' => 'tenant_admin',
                 'password' => 'secret-password',
                 'is_active' => 1,
             ])
@@ -361,6 +361,38 @@ class AdminUserManagementTest extends TestCase
         $this->assertDatabaseMissing('users', [
             'id' => $managedUser->id,
         ]);
+    }
+
+    public function test_livewire_user_index_creates_tenant_staff_with_permissions(): void
+    {
+        $tenant = Tenant::create([
+            'company_name' => 'Mondi Internet',
+            'owner_email' => 'owner@example.com',
+        ]);
+        $actor = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs($actor)
+            ->test(UsersIndex::class)
+            ->call('create')
+            ->set('name', 'Cashier One')
+            ->set('email', 'cashier@example.com')
+            ->set('user_role', 'tenant_staff')
+            ->set('user_permissions', ['vouchers', 'pos'])
+            ->set('password', 'secret-password')
+            ->call('save')
+            ->assertHasNoErrors()
+            ->assertSet('showFormModal', false)
+            ->assertSee('User created.');
+
+        $created = User::where('email', 'cashier@example.com')->firstOrFail();
+
+        $this->assertSame($tenant->id, $created->tenant_id);
+        $this->assertSame('tenant_staff', $created->role);
+        $this->assertSame(['vouchers', 'pos'], $created->permissions);
     }
 
     public function test_livewire_user_index_cannot_delete_self(): void

@@ -42,6 +42,14 @@ Current enforcement:
 - Tenant admins cannot view or update routers/packages belonging to another tenant's shop.
 - Tenant admins cannot create packages for shops outside their tenant.
 
+### Staff (`tenant_staff`)
+
+A third, lower-privilege role for a tenant's own employees (cashiers, support, network techs) who need day-to-day access without full tenant-admin power or a shared login. A tenant admin creates staff accounts from Organization → Users, picks "Staff" as the role, and checks the specific areas that account may reach: Vouchers, POS devices, PPPoE subscribers, Customer access, Network (routers/topology/trusted Wi-Fi), Payments, Expenses, Reports.
+
+Staff can never reach anything not in that checklist — most importantly, user management itself, tenant/shop setup, billing, packages, and platform/tenant brand settings are always admin-only, regardless of what's checked, so a staff account can't be used to create more staff or escalate its own access. This is enforced by `App\Http\Middleware\AuthorizeTenantStaff` (applied to the whole `admin.*` route group) against the route-name-to-permission map in `App\Support\StaffPermissions` — deny by default, so any new admin route needs a deliberate decision in that map before staff can ever reach it. The admin sidebar nav also hides links a staff account can't reach, via `User::canAccessRoute()`.
+
+Each permission is currently all-or-nothing per area (e.g. `vouchers` grants full voucher CRUD, not just selling) rather than split into finer view/manage/delete actions — a reasonable v1 given the codebase's existing "the row-scoping in `TenantAccess` already trusts anyone in the tenant" pattern. A finer split would be a deliberate follow-up if a real tenant asks for it, not built ahead of need.
+
 ## Tenant Public Sites
 
 Each tenant has a unique slug that can power a branded public page:

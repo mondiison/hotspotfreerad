@@ -5,6 +5,7 @@ namespace App\Livewire\Admin;
 use App\Models\User;
 use App\Services\SecurityActivityService;
 use App\Services\UserManagementService;
+use App\Support\StaffPermissions;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\Validator;
@@ -40,6 +41,8 @@ class UsersIndex extends Component
     public string $email = '';
 
     public string $user_role = 'tenant_admin';
+
+    public array $user_permissions = [];
 
     public string $password = '';
 
@@ -87,6 +90,7 @@ class UsersIndex extends Component
         $this->name = (string) $managedUser->name;
         $this->email = (string) $managedUser->email;
         $this->user_role = (string) $managedUser->role;
+        $this->user_permissions = $managedUser->permissions ?? [];
         $this->password = '';
         $this->is_active = (bool) $managedUser->is_active;
         $this->savedMessage = null;
@@ -103,6 +107,7 @@ class UsersIndex extends Component
             'name' => $this->name,
             'email' => $this->email,
             'role' => $this->user_role,
+            'permissions' => $this->user_permissions,
             'password' => $this->password,
             'is_active' => $this->is_active,
         ], $users->rules($actor, $managedUser))->validate();
@@ -209,6 +214,7 @@ class UsersIndex extends Component
             'users' => $adminUsers,
             'tenants' => $this->tenants($users),
             'deletingUser' => $this->deletingUserId ? User::find($this->deletingUserId) : null,
+            'permissionOptions' => StaffPermissions::catalog(),
         ]);
     }
 
@@ -225,6 +231,7 @@ class UsersIndex extends Component
             'name',
             'email',
             'password',
+            'user_permissions',
         ]);
         $this->user_role = 'tenant_admin';
         $this->is_active = true;
@@ -238,7 +245,7 @@ class UsersIndex extends Component
             'status' => $this->status ?: null,
             'passkey_status' => $this->passkey_status ?: null,
         ], [
-            'role' => ['nullable', Rule::in(['super_admin', 'tenant_admin'])],
+            'role' => ['nullable', Rule::in(['super_admin', 'tenant_admin', 'tenant_staff'])],
             'status' => ['nullable', Rule::in(['active', 'inactive'])],
             'passkey_status' => ['nullable', Rule::in(['registered', 'missing'])],
         ])->validate();

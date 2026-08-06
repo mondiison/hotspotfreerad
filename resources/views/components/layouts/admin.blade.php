@@ -120,7 +120,8 @@
 
                     $visibleFor = fn (array $link): bool =>
                         ! (($link['super_admin'] ?? false) && ! auth()->user()?->isSuperAdmin())
-                        && ! (($link['tenant_admin'] ?? false) && auth()->user()?->isSuperAdmin());
+                        && ! (($link['tenant_admin'] ?? false) && auth()->user()?->isSuperAdmin())
+                        && (auth()->user()?->canAccessRoute($link['route']) ?? false);
 
                     $sectionPatternFor = fn (string $route): string => $route === 'admin.dashboard'
                         ? $route
@@ -195,8 +196,8 @@
                             <div class="flex flex-wrap items-center gap-2">
                                 <h1 class="truncate text-xl font-semibold">{{ $heading ?? $title ?? 'Dashboard' }}</h1>
                                 @auth
-                                    <flux:badge :color="auth()->user()->isSuperAdmin() ? 'blue' : 'green'">
-                                        {{ auth()->user()->isSuperAdmin() ? 'Platform Admin' : 'Tenant Admin' }}
+                                    <flux:badge :color="auth()->user()->isSuperAdmin() ? 'blue' : (auth()->user()->isTenantStaff() ? 'amber' : 'green')">
+                                        {{ auth()->user()->isSuperAdmin() ? 'Platform Admin' : (auth()->user()->isTenantStaff() ? 'Staff' : 'Tenant Admin') }}
                                     </flux:badge>
                                 @endauth
                             </div>

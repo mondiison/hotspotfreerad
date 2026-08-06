@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Tenant;
 use App\Models\User;
+use App\Support\StaffPermissions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
@@ -13,13 +14,15 @@ class UserManagementService
 {
     public function rules(User $actor, ?User $managedUser = null): array
     {
-        $roles = $actor->isSuperAdmin() ? ['super_admin', 'tenant_admin'] : ['tenant_admin'];
+        $roles = $actor->isSuperAdmin() ? ['super_admin', 'tenant_admin', 'tenant_staff'] : ['tenant_admin', 'tenant_staff'];
 
         return [
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($managedUser)],
             'tenant_id' => [$actor->isSuperAdmin() ? 'nullable' : 'required', Rule::exists('tenants', 'id')],
             'role' => ['required', Rule::in($roles)],
+            'permissions' => ['nullable', 'array'],
+            'permissions.*' => [Rule::in(StaffPermissions::keys())],
             'is_active' => ['nullable', 'boolean'],
             'password' => [$managedUser ? 'nullable' : 'required', 'string', 'min:8'],
         ];
@@ -28,10 +31,7 @@ class UserManagementService
     public function validated(Request $request, ?User $managedUser = null): array
     {
         if (! $request->user()->isSuperAdmin()) {
-            $request->merge([
-                'tenant_id' => $request->user()->tenant_id,
-                'role' => 'tenant_admin',
-            ]);
+            $request->merge(['tenant_id' => $request->user()->tenant_id]);
         }
 
         return $this->normalize(
@@ -84,12 +84,15 @@ class UserManagementService
     {
         if (! $actor->isSuperAdmin()) {
             $data['tenant_id'] = $actor->tenant_id;
-            $data['role'] = 'tenant_admin';
         }
 
         if (($data['role'] ?? null) === 'super_admin') {
             $data['tenant_id'] = null;
         }
+
+        $data['permissions'] = ($data['role'] ?? null) === 'tenant_staff'
+            ? array_values(array_intersect($data['permissions'] ?? [], StaffPermissions::keys()))
+            : null;
 
         if (blank($data['password'] ?? null)) {
             unset($data['password']);

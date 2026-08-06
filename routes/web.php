@@ -31,6 +31,7 @@ use App\Http\Controllers\Auth\ResetPasswordController;
 use App\Http\Controllers\Auth\TwoFactorChallengeController;
 use App\Http\Controllers\Hotspot\PortalController;
 use App\Http\Controllers\TenantPublicSiteController;
+use App\Http\Middleware\AuthorizeTenantStaff;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Support\Facades\Route;
 
@@ -68,7 +69,7 @@ Route::post('/billing/payment/webhook', [BillingController::class, 'webhook'])
     ->withoutMiddleware([ValidateCsrfToken::class])
     ->name('billing.payment.webhook');
 
-Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
+Route::middleware(['auth', AuthorizeTenantStaff::class])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/', DashboardController::class)->name('dashboard');
     Route::get('setup', SetupCenterController::class)->name('setup.index');
     Route::get('profile', [ProfileController::class, 'edit'])->name('profile.edit');

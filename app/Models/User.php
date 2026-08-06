@@ -3,6 +3,7 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Support\StaffPermissions;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -29,6 +30,7 @@ class User extends Authenticatable implements PasskeyUser
         'email',
         'avatar_path',
         'role',
+        'permissions',
         'is_active',
         'notify_by_email',
         'must_change_password',
@@ -57,6 +59,7 @@ class User extends Authenticatable implements PasskeyUser
     {
         return [
             'email_verified_at' => 'datetime',
+            'permissions' => 'array',
             'is_active' => 'boolean',
             'notify_by_email' => 'boolean',
             'must_change_password' => 'boolean',
@@ -85,6 +88,41 @@ class User extends Authenticatable implements PasskeyUser
     public function isTenantAdmin(): bool
     {
         return $this->role === 'tenant_admin';
+    }
+
+    public function isTenantStaff(): bool
+    {
+        return $this->role === 'tenant_staff';
+    }
+
+    public function hasStaffPermission(string $permission): bool
+    {
+        return $this->isTenantStaff() && in_array($permission, $this->permissions ?? [], true);
+    }
+
+    /**
+     * Whether this user may reach the given named route. Super admins and
+     * tenant admins always can; tenant staff are gated by StaffPermissions'
+     * route map (deny by default -- a route missing from that map is
+     * unreachable for staff, not implicitly allowed).
+     */
+    public function canAccessRoute(?string $routeName): bool
+    {
+        if ($this->isSuperAdmin() || $this->isTenantAdmin()) {
+            return true;
+        }
+
+        $required = StaffPermissions::forRoute($routeName);
+
+        if ($required === true) {
+            return true;
+        }
+
+        if ($required === null) {
+            return false;
+        }
+
+        return $this->hasStaffPermission($required);
     }
 
     public function hasTwoFactorEnabled(): bool
