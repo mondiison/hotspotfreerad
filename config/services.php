@@ -47,6 +47,9 @@ return [
         'public_key' => env('WIREGUARD_PUBLIC_KEY', 'YOUR_PI_WG_PUBLIC_KEY'),
         'interface' => env('WIREGUARD_INTERFACE', 'wg-saas'),
         'manage_peers' => (bool) env('WIREGUARD_MANAGE_PEERS', false),
+        // Takes no CLI arguments (reads "public-key\nallowed-ip\n" from stdin) so the
+        // sudoers NOPASSWD rule for it needs no wildcards -- see docs/wireguard-server-setup.md.
+        'set_peer_script' => env('WIREGUARD_SET_PEER_SCRIPT', '/usr/local/sbin/hotspotfreerad-wg-set-peer'),
     ],
 
     'mikrotik' => [

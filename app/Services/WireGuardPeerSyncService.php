@@ -16,7 +16,12 @@ class WireGuardPeerSyncService
      * `wg-quick` call here runs through `sudo -n` (non-interactive, so it fails fast
      * instead of hanging a cron/queue process if the sudoers rule is missing) --
      * see docs/wireguard-server-setup.md for the one-time NOPASSWD sudoers grant
-     * this depends on.
+     * this depends on. Setting a peer's allowed-ips is the one operation that needs
+     * per-router variable arguments, which some hardened sudo builds flatly refuse
+     * to grant via a wildcarded sudoers rule ("wildcards are not allowed in command
+     * arguments") -- so that one goes through a small stdin-driven wrapper script
+     * (`services.wireguard.set_peer_script`) that itself takes no CLI arguments at
+     * all, letting its sudoers rule be argument-free too.
      *
      * @return array{enabled: bool, interface: string, binary_available: bool, desired: array<string,string>, current: array<string,string>, added: array<string,string>, updated: array<string,string>, errors: array<int,string>}
      */
@@ -73,7 +78,8 @@ class WireGuardPeerSyncService
             }
 
             try {
-                $set = Process::run(['sudo', '-n', 'wg', 'set', $interface, 'peer', $publicKey, 'allowed-ips', $allowedIp.'/32']);
+                $set = Process::input($publicKey."\n".$allowedIp."\n")
+                    ->run(['sudo', '-n', (string) config('services.wireguard.set_peer_script')]);
             } catch (\Throwable $e) {
                 $result['errors'][] = "Failed to set peer {$publicKey}: ".$e->getMessage();
 

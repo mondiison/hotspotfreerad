@@ -74,19 +74,36 @@ To find `WIREGUARD_ENDPOINT_HOST`, run `curl -4 ifconfig.me` on the Pi to see it
 
 ## 6. Allow the web server user to manage WireGuard peers
 
-The Laravel queue/scheduler on the Pi runs as `www-data` (see `docs/raspberry-pi-deployment.md`), which does not have permission to run `wg`/`wg-quick` by default. Grant it a narrowly scoped, passwordless sudo rule:
+The Laravel queue/scheduler on the Pi runs as `www-data` (see `docs/raspberry-pi-deployment.md`), which does not have permission to run `wg`/`wg-quick` by default. Grant it a narrowly scoped, passwordless sudo rule.
+
+First, create the peer-set wrapper script. Setting a peer's allowed-ips needs per-router arguments (the public key and internal IP), but some hardened `sudo` builds reject wildcarded arguments in sudoers entirely (`wildcards are not allowed in command arguments`) — so instead of a wildcarded `wg set wg-saas peer * allowed-ips *` rule, this script takes no CLI arguments at all and reads them from stdin instead, keeping its sudoers rule argument-free:
 
 ```bash
-sudo visudo -f /etc/sudoers.d/hotspotfreerad-wireguard
+sudo tee /usr/local/sbin/hotspotfreerad-wg-set-peer > /dev/null <<'EOF'
+#!/bin/sh
+set -e
+read -r PUBLIC_KEY
+read -r ALLOWED_IP
+exec wg set wg-saas peer "$PUBLIC_KEY" allowed-ips "$ALLOWED_IP/32"
+EOF
+
+sudo chmod 755 /usr/local/sbin/hotspotfreerad-wg-set-peer
 ```
 
-```text
+Then grant the sudoers rule — prefer writing it non-interactively with `tee` over `visudo`'s editor, since pasting a multi-line block into `visudo` over SSH is a common source of paste corruption that then loops you at its "What now?" prompt:
+
+```bash
+sudo tee /etc/sudoers.d/hotspotfreerad-wireguard > /dev/null <<'EOF'
 www-data ALL=(root) NOPASSWD: /usr/bin/wg show wg-saas dump
-www-data ALL=(root) NOPASSWD: /usr/bin/wg set wg-saas peer * allowed-ips *
+www-data ALL=(root) NOPASSWD: /usr/local/sbin/hotspotfreerad-wg-set-peer
 www-data ALL=(root) NOPASSWD: /usr/bin/wg-quick save wg-saas
+EOF
+
+sudo chmod 440 /etc/sudoers.d/hotspotfreerad-wireguard
+sudo visudo -c
 ```
 
-Confirm the real path to `wg`/`wg-quick` first with `which wg` / `which wg-quick` — adjust the paths above if they differ. Keep this file scoped to exactly these three commands; do not widen it to `ALL` or to other binaries.
+Confirm the real path to `wg`/`wg-quick` first with `which wg` / `which wg-quick` — edit the file above (same `tee` approach) if they differ; sudoers matches the literal path, not whatever `$PATH` would resolve. `sudo visudo -c` should report this file `parsed OK`; if it still complains about the wrapper script's line, your build may also reject sudoers entries with no arguments at all — if so, share the exact error text before changing anything further, since that would need a different workaround. Keep this file scoped to exactly these three commands; do not widen it to `ALL` or to other binaries.
 
 ## 7. Forward the WireGuard port
 
