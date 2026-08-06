@@ -252,6 +252,55 @@ class AdminIndexFilterTest extends TestCase
         ]);
     }
 
+    public function test_livewire_router_index_saves_wireguard_endpoint_override(): void
+    {
+        $shop = $this->shop();
+
+        Livewire::actingAs($this->superAdmin())
+            ->test(RoutersIndex::class)
+            ->call('create')
+            ->set('shop_id', (string) $shop->id)
+            ->set('name', 'Co-Located Router')
+            ->set('nas_identifier', 'livewire-co-located-router')
+            ->set('wireguard_internal_ip', '10.8.0.51')
+            ->set('shared_secret', 'radius-secret')
+            ->set('wireguard_endpoint_override_host', '192.168.10.250')
+            ->set('wireguard_endpoint_override_port', '13231')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $this->assertDatabaseHas('routers', [
+            'nas_identifier' => 'livewire-co-located-router',
+            'wireguard_endpoint_override_host' => '192.168.10.250',
+            'wireguard_endpoint_override_port' => 13231,
+        ]);
+    }
+
+    public function test_livewire_router_index_leaves_endpoint_override_blank_without_a_validation_error(): void
+    {
+        $shop = $this->shop();
+
+        Livewire::actingAs($this->superAdmin())
+            ->test(RoutersIndex::class)
+            ->call('create')
+            ->set('shop_id', (string) $shop->id)
+            ->set('name', 'Remote Router')
+            ->set('nas_identifier', 'livewire-remote-router')
+            ->set('wireguard_internal_ip', '10.8.0.52')
+            ->set('shared_secret', 'radius-secret')
+            // Simulates a user typing into the field then clearing it -- component
+            // property ends up as "" rather than null.
+            ->set('wireguard_endpoint_override_host', '')
+            ->set('wireguard_endpoint_override_port', '')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $router = Router::where('nas_identifier', 'livewire-remote-router')->firstOrFail();
+
+        $this->assertNull($router->wireguard_endpoint_override_host);
+        $this->assertNull($router->wireguard_endpoint_override_port);
+    }
+
     public function test_livewire_router_index_edits_router_and_keeps_blank_secret(): void
     {
         $shop = $this->shop();

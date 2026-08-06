@@ -42,6 +42,10 @@ class RoutersIndex extends Component
 
     public ?string $wireguard_public_key = null;
 
+    public ?string $wireguard_endpoint_override_host = null;
+
+    public ?string $wireguard_endpoint_override_port = null;
+
     public bool $is_online = false;
 
     public array $provisioning_settings = [];
@@ -91,6 +95,8 @@ class RoutersIndex extends Component
         $this->nas_identifier = (string) $router->nas_identifier;
         $this->wireguard_internal_ip = (string) $router->wireguard_internal_ip;
         $this->wireguard_public_key = $router->wireguard_public_key;
+        $this->wireguard_endpoint_override_host = $router->wireguard_endpoint_override_host;
+        $this->wireguard_endpoint_override_port = $router->wireguard_endpoint_override_port !== null ? (string) $router->wireguard_endpoint_override_port : null;
         $this->is_online = (bool) $router->is_online;
         $this->provisioning_settings = $this->routerProvisioningSettings($router);
         $this->shared_secret = '';
@@ -227,6 +233,12 @@ class RoutersIndex extends Component
             ? Router::findOrFail($this->editingRouterId)
             : null;
 
+        // Blank optional inputs bind as "" from HTML, not null -- normalize before
+        // validating so `nullable` short-circuits `integer`/etc. on an intentionally
+        // empty field instead of failing validation.
+        $this->wireguard_endpoint_override_host = $this->wireguard_endpoint_override_host !== '' ? $this->wireguard_endpoint_override_host : null;
+        $this->wireguard_endpoint_override_port = $this->wireguard_endpoint_override_port !== '' ? $this->wireguard_endpoint_override_port : null;
+
         $data = $this->validate($routers->rules(auth()->user(), $router));
 
         if ($router) {
@@ -319,6 +331,8 @@ class RoutersIndex extends Component
             'wireguard_internal_ip',
             'shared_secret',
             'wireguard_public_key',
+            'wireguard_endpoint_override_host',
+            'wireguard_endpoint_override_port',
             'provisioning_settings',
         ]);
         $this->is_online = false;

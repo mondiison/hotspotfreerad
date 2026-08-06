@@ -46,8 +46,9 @@ class MikroTikProvisioningService
     public function generateBootstrapScript(Router $router): string
     {
         $nasIdentifier = $router->nas_identifier;
-        $wgEndpointHost = config('services.wireguard.endpoint_host');
-        $wgEndpointPort = config('services.wireguard.endpoint_port');
+        $wgEndpoint = $this->wireguardEndpoint($router);
+        $wgEndpointHost = $wgEndpoint['host'];
+        $wgEndpointPort = $wgEndpoint['port'];
         $wgPublicKey = config('services.wireguard.public_key');
         $wgInterfaceLine = $this->wireguardInterfaceLine($router);
         $apiUserLines = implode("\n", $this->apiUserProvisioningLines($router));
@@ -70,8 +71,9 @@ SCRIPT;
         $radiusIp = config('services.radius.server_ip');
         $authPort = config('services.radius.auth_port');
         $acctPort = config('services.radius.acct_port');
-        $wgEndpointHost = config('services.wireguard.endpoint_host');
-        $wgEndpointPort = config('services.wireguard.endpoint_port');
+        $wgEndpoint = $this->wireguardEndpoint($router);
+        $wgEndpointHost = $wgEndpoint['host'];
+        $wgEndpointPort = $wgEndpoint['port'];
         $wgPublicKey = config('services.wireguard.public_key');
         $wgInterfaceLine = $this->wireguardInterfaceLine($router);
         $apiUserLines = implode("\n", $this->apiUserProvisioningLines($router));
@@ -103,8 +105,9 @@ SCRIPT;
         $radiusIp = config('services.radius.server_ip');
         $authPort = config('services.radius.auth_port');
         $acctPort = config('services.radius.acct_port');
-        $wgEndpointHost = config('services.wireguard.endpoint_host');
-        $wgEndpointPort = config('services.wireguard.endpoint_port');
+        $wgEndpoint = $this->wireguardEndpoint($router);
+        $wgEndpointHost = $wgEndpoint['host'];
+        $wgEndpointPort = $wgEndpoint['port'];
         $wgPublicKey = config('services.wireguard.public_key');
         $wgInterfaceLine = $this->wireguardInterfaceLine($router);
         $apiUserLines = implode("\n", $this->apiUserProvisioningLines($router));
@@ -136,8 +139,9 @@ SCRIPT;
         $radiusIp = config('services.radius.server_ip');
         $authPort = config('services.radius.auth_port');
         $acctPort = config('services.radius.acct_port');
-        $wgEndpointHost = config('services.wireguard.endpoint_host');
-        $wgEndpointPort = config('services.wireguard.endpoint_port');
+        $wgEndpoint = $this->wireguardEndpoint($router);
+        $wgEndpointHost = $wgEndpoint['host'];
+        $wgEndpointPort = $wgEndpoint['port'];
         $wgPublicKey = $this->quote(config('services.wireguard.public_key'));
         $portalUrl = $this->portalUrl();
         $portalHost = parse_url($portalUrl, PHP_URL_HOST) ?: config('services.mikrotik.hotspot_dns_name');
@@ -580,6 +584,25 @@ HTML;
         return filled($privateKey)
             ? '/interface wireguard add name=wg-saas listen-port=13231 mtu=1420 private-key="'.$this->quote($privateKey).'"'
             : '/interface wireguard add name=wg-saas listen-port=13231 mtu=1420';
+    }
+
+    /**
+     * The WireGuard endpoint a router's script should dial. Defaults to the
+     * app-wide public endpoint (services.wireguard.endpoint_host/port), but
+     * a router can override this -- the one case that needs it is a router
+     * physically co-located with the Pi on the same LAN, where dialing the
+     * public endpoint routes through NAT hairpin/loopback that many routers
+     * don't support for UDP and the handshake silently never completes. The
+     * override should be the Pi's LAN IP in that case.
+     *
+     * @return array{host: string, port: int}
+     */
+    private function wireguardEndpoint(Router $router): array
+    {
+        return [
+            'host' => $router->wireguard_endpoint_override_host ?: (string) config('services.wireguard.endpoint_host'),
+            'port' => (int) ($router->wireguard_endpoint_override_port ?: config('services.wireguard.endpoint_port')),
+        ];
     }
 
     /**

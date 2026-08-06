@@ -46,6 +46,70 @@ class MikroTikProvisioningServiceTest extends TestCase
         $this->assertStringContainsString('/ip hotspot set [find] profile=saas-prof', $script);
     }
 
+    public function test_scripts_use_the_routers_endpoint_override_when_set(): void
+    {
+        config([
+            'app.url' => 'https://portal.example.com',
+            'services.radius.server_ip' => '10.8.0.1',
+            'services.wireguard.endpoint_host' => 'vpn.example.com',
+            'services.wireguard.endpoint_port' => 13231,
+            'services.wireguard.public_key' => 'server-public-key',
+            'services.mikrotik.hotspot_dns_name' => 'hotspot.local',
+        ]);
+
+        $tenant = Tenant::create(['company_name' => 'Demo ISP', 'owner_email' => 'owner@example.com']);
+        $shop = Shop::create(['tenant_id' => $tenant->id, 'name' => 'Demo Shop']);
+
+        $router = Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'Co-Located Router',
+            'nas_identifier' => 'co-located-router',
+            'wireguard_internal_ip' => '10.8.0.40',
+            'shared_secret' => 'radius-secret',
+            'wireguard_endpoint_override_host' => '192.168.10.250',
+            'wireguard_endpoint_override_port' => 13231,
+        ]);
+
+        $service = app(MikroTikProvisioningService::class);
+
+        foreach ([
+            $service->generateBootstrapScript($router),
+            $service->generateScript($router),
+            $service->generatePppoeScript($router),
+        ] as $script) {
+            $this->assertStringContainsString('endpoint-address=192.168.10.250', $script);
+            $this->assertStringNotContainsString('endpoint-address=vpn.example.com', $script);
+        }
+    }
+
+    public function test_scripts_fall_back_to_the_default_endpoint_when_no_override_is_set(): void
+    {
+        config([
+            'app.url' => 'https://portal.example.com',
+            'services.radius.server_ip' => '10.8.0.1',
+            'services.wireguard.endpoint_host' => 'vpn.example.com',
+            'services.wireguard.endpoint_port' => 13231,
+            'services.wireguard.public_key' => 'server-public-key',
+            'services.mikrotik.hotspot_dns_name' => 'hotspot.local',
+        ]);
+
+        $tenant = Tenant::create(['company_name' => 'Demo ISP', 'owner_email' => 'owner@example.com']);
+        $shop = Shop::create(['tenant_id' => $tenant->id, 'name' => 'Demo Shop']);
+
+        $router = Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'Remote Router',
+            'nas_identifier' => 'remote-router',
+            'wireguard_internal_ip' => '10.8.0.41',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        $script = app(MikroTikProvisioningService::class)->generateScript($router);
+
+        $this->assertStringContainsString('endpoint-address=vpn.example.com', $script);
+        $this->assertStringContainsString('endpoint-port=13231', $script);
+    }
+
     public function test_hotspot_script_walled_garden_matches_the_shops_active_gateway(): void
     {
         config([

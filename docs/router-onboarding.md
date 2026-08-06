@@ -64,36 +64,24 @@ The generated script applies it with:
 
 ## Local Pi Behind The Same MikroTik
 
-If the Raspberry Pi is connected to the same MikroTik router you are configuring, the Pi may show two IP addresses:
+If the Raspberry Pi is physically connected to the same MikroTik router you are configuring (e.g. plugged into one of its LAN ports), that router should dial the Pi's **LAN IP**, not the public endpoint — using the public IP from inside the same network commonly fails silently, because it requires NAT hairpin/loopback support for UDP that many routers (MikroTik included) don't have. The symptom looks identical either way: the router's peer entry looks correct, but `sudo wg show wg-saas` on the Pi never shows a handshake, and `wg show` never records an endpoint for that peer at all (nothing arrives).
 
-```text
-192.168.190.244 10.8.0.1
-```
+**Set this on the router in HotspotFreeRAD** — the router's create/edit form has a **"WireGuard endpoint override"** field, blank by default. Only fill it in for a router that's on the same local network as the Pi: enter the Pi's LAN IP there (and the port, if it's not the standard `13231`). The generated bootstrap/hotspot/PPPoE/fresh-infrastructure scripts then use that address instead of the app-wide public endpoint for this one router — no manual RouterOS editing needed, and it's re-applied automatically every time the script is regenerated. Leave it blank for every other (remote) router, which is the common case.
 
-In this case:
-
-- `192.168.190.244` is the Pi's LAN IP on the MikroTik network.
-- `10.8.0.1` is the Pi's WireGuard tunnel IP.
-
-For this first local MikroTik router, use the Pi LAN IP as the WireGuard peer endpoint:
+If you've already pasted a script with the public endpoint baked in and need to fix it by hand before regenerating, the equivalent RouterOS command is:
 
 ```routeros
-/interface wireguard peers set peer1 endpoint-address=192.168.190.244 endpoint-port=13231
+/interface wireguard peers set [find] endpoint-address=<Pi's LAN IP> endpoint-port=13231
 ```
 
 Then test:
 
 ```routeros
+/ping <Pi's LAN IP>
 /ping 10.8.0.1 interface=wg-saas
 ```
 
-Using the public IP from inside the same MikroTik network can fail if the router does not support NAT loopback/hairpin for UDP traffic.
-
-For remote tenant routers outside this LAN, use the public IP or Dynamic DNS hostname:
-
-```routeros
-/interface wireguard peers set peer1 endpoint-address=YOUR_PUBLIC_IP_OR_DDNS endpoint-port=13231
-```
+The first confirms basic LAN reachability; the second confirms the tunnel itself is up once a handshake has formed.
 
 Remote routers also require the internet router to forward UDP `13231` to the Pi LAN IP.
 

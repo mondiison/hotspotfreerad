@@ -24,6 +24,8 @@ class RouterManagementService
             'nas_identifier' => ['required', 'string', 'max:255', Rule::unique('routers')->ignore($router)],
             'wireguard_internal_ip' => ['required', 'ip', Rule::unique('routers')->ignore($router)],
             'shared_secret' => [$router ? 'nullable' : 'required', 'string', 'max:255'],
+            'wireguard_endpoint_override_host' => ['nullable', 'string', 'max:255'],
+            'wireguard_endpoint_override_port' => ['nullable', 'integer', 'min:1', 'max:65535'],
             'provisioning_settings' => ['nullable', 'array'],
             'provisioning_settings.profile' => ['nullable', Rule::in(['starlink_plaza', 'small_hotspot', 'l009_builtin_wifi', 'pppoe_isp'])],
             'provisioning_settings.wan1' => ['nullable', 'string', 'max:40'],
@@ -65,6 +67,14 @@ class RouterManagementService
 
     public function validated(Request $request, ?Router $router = null): array
     {
+        // Blank optional inputs submit as "" from HTML forms, not absent -- normalize
+        // to null first so `nullable` short-circuits `integer`/etc. instead of failing
+        // validation on an intentionally-empty field.
+        $request->merge([
+            'wireguard_endpoint_override_host' => $request->filled('wireguard_endpoint_override_host') ? $request->input('wireguard_endpoint_override_host') : null,
+            'wireguard_endpoint_override_port' => $request->filled('wireguard_endpoint_override_port') ? $request->input('wireguard_endpoint_override_port') : null,
+        ]);
+
         $data = $request->validate($this->rules($request->user(), $router));
 
         if (! $router) {

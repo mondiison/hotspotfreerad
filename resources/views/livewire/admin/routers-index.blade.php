@@ -124,6 +124,17 @@
                         <flux:error name="wireguard_internal_ip" />
                     </flux:field>
 
+                    <flux:field class="md:col-span-2">
+                        <flux:label>WireGuard endpoint override (optional)</flux:label>
+                        <div class="grid gap-3 sm:grid-cols-[2fr_1fr]">
+                            <flux:input wire:model.blur="wireguard_endpoint_override_host" icon="map-pin" placeholder="Leave blank to use the default public endpoint" />
+                            <flux:input wire:model.blur="wireguard_endpoint_override_port" type="number" min="1" max="65535" placeholder="13231" />
+                        </div>
+                        <flux:description>Only set this if this router is physically on the same local network as the Pi &mdash; use the Pi's LAN IP here instead of the public endpoint. Reaching the public endpoint from inside the same LAN commonly fails silently (NAT hairpin/loopback isn't supported for UDP on many routers). Leave both blank for every other (remote) router.</flux:description>
+                        <flux:error name="wireguard_endpoint_override_host" />
+                        <flux:error name="wireguard_endpoint_override_port" />
+                    </flux:field>
+
                     <flux:field>
                         <flux:label>RADIUS shared secret</flux:label>
                         <flux:input wire:model.blur="shared_secret" icon="key" placeholder="{{ $editingRouterId ? 'Leave blank to keep current value' : 'QF9mX7vC2pL8nR4sT6wY1zA5' }}" viewable />

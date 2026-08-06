@@ -196,4 +196,67 @@ class RouterProvisioningPageTest extends TestCase
             ->assertSee('POS VLAN is disabled')
             ->assertSee('Realtime QoS and PCQ are disabled');
     }
+
+    public function test_wireguard_endpoint_override_is_saved_and_used_on_the_script_page(): void
+    {
+        config([
+            'app.url' => 'https://portal.example.com',
+            'services.radius.server_ip' => '10.8.0.1',
+            'services.wireguard.endpoint_host' => 'vpn.example.com',
+            'services.wireguard.endpoint_port' => 13231,
+            'services.wireguard.public_key' => 'server-public-key',
+        ]);
+
+        $tenant = Tenant::create(['company_name' => 'Demo ISP', 'owner_email' => 'owner@example.com']);
+        $shop = Shop::create(['tenant_id' => $tenant->id, 'name' => 'Demo Shop']);
+        $user = User::factory()->create(['role' => 'super_admin', 'is_active' => true]);
+
+        $this->actingAs($user)
+            ->post(route('admin.routers.store'), [
+                'shop_id' => $shop->id,
+                'name' => 'Co-Located Router',
+                'nas_identifier' => 'co-located-router',
+                'wireguard_internal_ip' => '10.8.0.45',
+                'shared_secret' => 'radius-secret',
+                'wireguard_endpoint_override_host' => '192.168.10.250',
+                'wireguard_endpoint_override_port' => '13231',
+            ])
+            ->assertRedirect(route('admin.routers.index'));
+
+        $router = Router::where('nas_identifier', 'co-located-router')->firstOrFail();
+
+        $this->assertSame('192.168.10.250', $router->wireguard_endpoint_override_host);
+        $this->assertSame(13231, $router->wireguard_endpoint_override_port);
+
+        $this->actingAs($user)
+            ->get(route('admin.routers.show', $router))
+            ->assertOk()
+            ->assertSee('endpoint-address=192.168.10.250', false);
+    }
+
+    public function test_blank_wireguard_endpoint_override_does_not_fail_validation(): void
+    {
+        $tenant = Tenant::create(['company_name' => 'Demo ISP', 'owner_email' => 'owner@example.com']);
+        $shop = Shop::create(['tenant_id' => $tenant->id, 'name' => 'Demo Shop']);
+        $user = User::factory()->create(['role' => 'super_admin', 'is_active' => true]);
+
+        $this->actingAs($user)
+            ->post(route('admin.routers.store'), [
+                'shop_id' => $shop->id,
+                'name' => 'Remote Router',
+                'nas_identifier' => 'remote-router-blank-override',
+                'wireguard_internal_ip' => '10.8.0.46',
+                'shared_secret' => 'radius-secret',
+                // Blank optional inputs submit as empty strings, not absent keys.
+                'wireguard_endpoint_override_host' => '',
+                'wireguard_endpoint_override_port' => '',
+            ])
+            ->assertSessionDoesntHaveErrors(['wireguard_endpoint_override_host', 'wireguard_endpoint_override_port'])
+            ->assertRedirect(route('admin.routers.index'));
+
+        $router = Router::where('nas_identifier', 'remote-router-blank-override')->firstOrFail();
+
+        $this->assertNull($router->wireguard_endpoint_override_host);
+        $this->assertNull($router->wireguard_endpoint_override_port);
+    }
 }
