@@ -14,14 +14,24 @@ class RouterCredentialsCard extends Component
     #[Locked]
     public int $routerId;
 
+    public bool $showRegenerateWireguardKeyModal = false;
+
+    public bool $showRegenerateApiCredentialsModal = false;
+
     public function mount(Router $router): void
     {
         $this->routerId = $router->id;
     }
 
+    public function confirmRegenerateWireguardKey(): void
+    {
+        $this->showRegenerateWireguardKeyModal = true;
+    }
+
     public function regenerateWireguardKey(RouterManagementService $routers): void
     {
         $router = Router::find($this->routerId);
+        $this->showRegenerateWireguardKeyModal = false;
 
         if (! $router) {
             return;
@@ -36,9 +46,15 @@ class RouterCredentialsCard extends Component
         );
     }
 
+    public function confirmRegenerateApiCredentials(): void
+    {
+        $this->showRegenerateApiCredentialsModal = true;
+    }
+
     public function regenerateApiCredentials(RouterManagementService $routers): void
     {
         $router = Router::find($this->routerId);
+        $this->showRegenerateApiCredentialsModal = false;
 
         if (! $router) {
             return;
@@ -61,9 +77,7 @@ class RouterCredentialsCard extends Component
             return;
         }
 
-        $this->testingConnection = true;
         $result = $routerOs->testConnection($router);
-        $this->testingConnection = false;
 
         Flux::toast(
             heading: $result['success'] ? 'Connected' : 'Could not connect',

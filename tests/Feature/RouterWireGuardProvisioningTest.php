@@ -166,12 +166,42 @@ class RouterWireGuardProvisioningTest extends TestCase
 
         Livewire::actingAs($user)
             ->test(RouterCredentialsCard::class, ['router' => $router])
+            ->call('confirmRegenerateWireguardKey')
+            ->assertSet('showRegenerateWireguardKeyModal', true)
             ->call('regenerateWireguardKey')
+            ->assertSet('showRegenerateWireguardKeyModal', false)
             ->assertDispatched('toast-show');
 
         $router->refresh();
 
         $this->assertNotSame($originalPublicKey, $router->wireguard_public_key);
+    }
+
+    public function test_credentials_card_cancelling_the_confirm_modal_does_not_regenerate_the_key(): void
+    {
+        $shop = $this->makeShop();
+        $user = User::factory()->create(['role' => 'super_admin', 'is_active' => true]);
+
+        $router = Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'Cancelled Key Router',
+            'nas_identifier' => 'cancelled-key-router',
+            'wireguard_internal_ip' => '10.8.0.65',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        $originalPublicKey = $router->wireguard_public_key;
+
+        Livewire::actingAs($user)
+            ->test(RouterCredentialsCard::class, ['router' => $router])
+            ->call('confirmRegenerateWireguardKey')
+            ->assertSet('showRegenerateWireguardKeyModal', true)
+            ->set('showRegenerateWireguardKeyModal', false)
+            ->assertNotDispatched('toast-show');
+
+        $router->refresh();
+
+        $this->assertSame($originalPublicKey, $router->wireguard_public_key);
     }
 
     public function test_credentials_card_regenerates_api_credentials_without_a_page_reload(): void
@@ -191,7 +221,10 @@ class RouterWireGuardProvisioningTest extends TestCase
 
         Livewire::actingAs($user)
             ->test(RouterCredentialsCard::class, ['router' => $router])
+            ->call('confirmRegenerateApiCredentials')
+            ->assertSet('showRegenerateApiCredentialsModal', true)
             ->call('regenerateApiCredentials')
+            ->assertSet('showRegenerateApiCredentialsModal', false)
             ->assertDispatched('toast-show');
 
         $router->refresh();

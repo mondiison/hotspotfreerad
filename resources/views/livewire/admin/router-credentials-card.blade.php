@@ -8,19 +8,27 @@
             <dd class="text-xs text-amber-600">Not generated yet. This router predates app-managed WireGuard keys.</dd>
         @endif
         <dd class="mt-2">
-            <button
-                type="button"
-                wire:click="regenerateWireguardKey"
-                wire:confirm="This replaces the WireGuard key MMS Radius manages for this router. You will need to re-run the WireGuard section of the script on the physical router afterward. Continue?"
-                wire:loading.attr="disabled"
-                wire:target="regenerateWireguardKey"
-                class="text-xs font-medium text-blue-600 hover:underline disabled:cursor-wait disabled:opacity-60"
-            >
-                <span wire:loading.remove wire:target="regenerateWireguardKey">{{ $router->wireguard_public_key ? 'Regenerate WireGuard key' : 'Generate WireGuard key' }}</span>
-                <span wire:loading wire:target="regenerateWireguardKey">Generating...</span>
+            <button type="button" wire:click="confirmRegenerateWireguardKey" class="text-xs font-medium text-blue-600 hover:underline">
+                {{ $router->wireguard_public_key ? 'Regenerate WireGuard key' : 'Generate WireGuard key' }}
             </button>
         </dd>
     </div>
+
+    <flux:modal wire:model.self="showRegenerateWireguardKeyModal" class="md:w-lg" :dismissible="false">
+        <div class="space-y-5">
+            <div>
+                <flux:heading size="lg">{{ $router->wireguard_public_key ? 'Regenerate' : 'Generate' }} WireGuard key</flux:heading>
+                <flux:text class="mt-2">This replaces the WireGuard key MMS Radius manages for this router. You will need to re-run the WireGuard section of the script on the physical router afterward.</flux:text>
+            </div>
+            <div class="flex justify-end gap-3">
+                <flux:button type="button" variant="ghost" wire:click="$set('showRegenerateWireguardKeyModal', false)">Cancel</flux:button>
+                <flux:button type="button" variant="primary" wire:click="regenerateWireguardKey" wire:loading.attr="disabled" wire:target="regenerateWireguardKey">
+                    <span wire:loading.remove wire:target="regenerateWireguardKey">{{ $router->wireguard_public_key ? 'Regenerate key' : 'Generate key' }}</span>
+                    <span wire:loading wire:target="regenerateWireguardKey">Generating...</span>
+                </flux:button>
+            </div>
+        </div>
+    </flux:modal>
 
     <div>
         <dt class="text-zinc-500">RouterOS API (monitoring)</dt>
@@ -41,17 +49,25 @@
                 <span wire:loading.remove wire:target="testConnection">Test connection</span>
                 <span wire:loading wire:target="testConnection">Testing...</span>
             </button>
-            <button
-                type="button"
-                wire:click="regenerateApiCredentials"
-                wire:confirm="This replaces the RouterOS API credentials MMS Radius manages for this router. You will need to re-run the script on the physical router afterward. Continue?"
-                wire:loading.attr="disabled"
-                wire:target="regenerateApiCredentials"
-                class="text-xs font-medium text-blue-600 hover:underline disabled:cursor-wait disabled:opacity-60"
-            >
-                <span wire:loading.remove wire:target="regenerateApiCredentials">{{ $router->api_username ? 'Regenerate credentials' : 'Generate credentials' }}</span>
-                <span wire:loading wire:target="regenerateApiCredentials">Generating...</span>
+            <button type="button" wire:click="confirmRegenerateApiCredentials" class="text-xs font-medium text-blue-600 hover:underline">
+                {{ $router->api_username ? 'Regenerate credentials' : 'Generate credentials' }}
             </button>
         </dd>
     </div>
+
+    <flux:modal wire:model.self="showRegenerateApiCredentialsModal" class="md:w-lg" :dismissible="false">
+        <div class="space-y-5">
+            <div>
+                <flux:heading size="lg">{{ $router->api_username ? 'Regenerate' : 'Generate' }} RouterOS API credentials</flux:heading>
+                <flux:text class="mt-2">This replaces the RouterOS API credentials MMS Radius manages for this router. You will need to re-run the script on the physical router afterward.</flux:text>
+            </div>
+            <div class="flex justify-end gap-3">
+                <flux:button type="button" variant="ghost" wire:click="$set('showRegenerateApiCredentialsModal', false)">Cancel</flux:button>
+                <flux:button type="button" variant="primary" wire:click="regenerateApiCredentials" wire:loading.attr="disabled" wire:target="regenerateApiCredentials">
+                    <span wire:loading.remove wire:target="regenerateApiCredentials">{{ $router->api_username ? 'Regenerate credentials' : 'Generate credentials' }}</span>
+                    <span wire:loading wire:target="regenerateApiCredentials">Generating...</span>
+                </flux:button>
+            </div>
+        </div>
+    </flux:modal>
 </div>
