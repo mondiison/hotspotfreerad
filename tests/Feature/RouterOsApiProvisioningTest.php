@@ -139,4 +139,93 @@ class RouterOsApiProvisioningTest extends TestCase
 
         $this->assertNotNull(session('status'));
     }
+
+    public function test_bootstrap_script_contains_only_identity_wireguard_and_api_user(): void
+    {
+        config([
+            'services.wireguard.endpoint_host' => 'vpn.example.com',
+            'services.wireguard.endpoint_port' => 13231,
+            'services.wireguard.public_key' => 'server-public-key',
+        ]);
+
+        $router = Router::create([
+            'shop_id' => $this->makeShop()->id,
+            'name' => 'Bootstrap Router',
+            'nas_identifier' => 'bootstrap-router',
+            'wireguard_internal_ip' => '10.8.0.74',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        $script = app(MikroTikProvisioningService::class)->generateBootstrapScript($router);
+
+        $this->assertStringContainsString('/system identity set name="bootstrap-router"', $script);
+        $this->assertStringContainsString('/interface wireguard peers add interface=wg-saas', $script);
+        $this->assertStringContainsString('/ip address add address=10.8.0.74/24 interface=wg-saas', $script);
+        $this->assertStringContainsString('/user add name="'.Router::API_USERNAME.'"', $script);
+
+        $this->assertStringNotContainsString('/radius add', $script);
+        $this->assertStringNotContainsString('/ip hotspot', $script);
+        $this->assertStringNotContainsString('/ppp', $script);
+    }
+
+    public function test_provision_hotspot_reports_a_clear_error_when_router_is_unreachable(): void
+    {
+        $router = Router::create([
+            'shop_id' => $this->makeShop()->id,
+            'name' => 'Unreachable Hotspot Router',
+            'nas_identifier' => 'unreachable-hotspot-router',
+            'wireguard_internal_ip' => '192.0.2.3',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        $result = app(RouterOsConnectionService::class)->provisionHotspot($router);
+
+        $this->assertFalse($result['success']);
+        $this->assertCount(3, $result['steps']);
+        $this->assertFalse($result['steps'][0]['success']);
+        $this->assertNotEmpty($result['steps'][0]['error']);
+    }
+
+    public function test_provision_pppoe_reports_a_clear_error_when_router_is_unreachable(): void
+    {
+        $router = Router::create([
+            'shop_id' => $this->makeShop()->id,
+            'name' => 'Unreachable PPPoE Router',
+            'nas_identifier' => 'unreachable-pppoe-router',
+            'wireguard_internal_ip' => '192.0.2.4',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        $result = app(RouterOsConnectionService::class)->provisionPppoe($router);
+
+        $this->assertFalse($result['success']);
+        $this->assertCount(4, $result['steps']);
+        $this->assertFalse($result['steps'][0]['success']);
+    }
+
+    public function test_provision_routes_require_api_credentials_and_redirect_with_a_status_message(): void
+    {
+        $shop = $this->makeShop();
+        $user = User::factory()->create(['role' => 'super_admin', 'is_active' => true]);
+
+        $router = Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'Provision Route Router',
+            'nas_identifier' => 'provision-route-router',
+            'wireguard_internal_ip' => '192.0.2.5',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        $this->actingAs($user)
+            ->post(route('admin.routers.provision-hotspot', $router))
+            ->assertRedirect(route('admin.routers.show', $router));
+
+        $this->assertNotNull(session('status'));
+
+        $this->actingAs($user)
+            ->post(route('admin.routers.provision-pppoe', $router))
+            ->assertRedirect(route('admin.routers.show', $router));
+
+        $this->assertNotNull(session('status'));
+    }
 }

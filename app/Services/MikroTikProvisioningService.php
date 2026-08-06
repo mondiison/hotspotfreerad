@@ -33,6 +33,33 @@ class MikroTikProvisioningService
         ];
     }
 
+    /**
+     * The minimum a brand-new router needs pasted by hand: WireGuard
+     * connectivity plus the RouterOS API user. Everything else (RADIUS
+     * client, hotspot/PPPoE profiles, walled-garden, etc.) can then be
+     * pushed live via RouterOsConnectionService::provisionHotspot()/
+     * provisionPppoe() once this has run and the router is reachable over
+     * the API -- there's no way to reach the API before this runs, since
+     * the API user itself is created by these lines.
+     */
+    public function generateBootstrapScript(Router $router): string
+    {
+        $nasIdentifier = $router->nas_identifier;
+        $wgEndpointHost = config('services.wireguard.endpoint_host');
+        $wgEndpointPort = config('services.wireguard.endpoint_port');
+        $wgPublicKey = config('services.wireguard.public_key');
+        $wgInterfaceLine = $this->wireguardInterfaceLine($router);
+        $apiUserLines = implode("\n", $this->apiUserProvisioningLines($router));
+
+        return <<<SCRIPT
+/system identity set name="{$nasIdentifier}"
+{$wgInterfaceLine}
+/interface wireguard peers add interface=wg-saas public-key="{$wgPublicKey}" endpoint-address={$wgEndpointHost} endpoint-port={$wgEndpointPort} allowed-address=10.8.0.1/32 persistent-keepalive=25s
+/ip address add address={$router->wireguard_internal_ip}/24 interface=wg-saas
+{$apiUserLines}
+SCRIPT;
+    }
+
     public function generateScript(Router $router): string
     {
         $router->loadMissing('shop');

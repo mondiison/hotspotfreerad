@@ -96,6 +96,8 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::post('routers/{router}/regenerate-wireguard-key', [RouterController::class, 'regenerateWireguardKey'])->name('routers.regenerate-wireguard-key');
     Route::post('routers/{router}/regenerate-api-credentials', [RouterController::class, 'regenerateApiCredentials'])->name('routers.regenerate-api-credentials');
     Route::post('routers/{router}/test-api-connection', [RouterController::class, 'testApiConnection'])->name('routers.test-api-connection');
+    Route::post('routers/{router}/provision-hotspot', [RouterController::class, 'provisionHotspot'])->name('routers.provision-hotspot');
+    Route::post('routers/{router}/provision-pppoe', [RouterController::class, 'provisionPppoe'])->name('routers.provision-pppoe');
     Route::get('topology', [TopologyController::class, 'index'])->name('topology.index');
     Route::resource('routers', RouterController::class);
     Route::resource('packages', PackageController::class)->except('show');

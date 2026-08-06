@@ -108,6 +108,19 @@
                 <flux:tab.panel name="overview" class="space-y-6">
                     <section class="min-w-0 overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
                         <div class="border-b border-zinc-200 px-5 py-4">
+                            <div class="flex flex-col justify-between gap-3 md:flex-row md:items-start">
+                                <div>
+                                    <h2 class="text-base font-semibold">Bootstrap Script</h2>
+                                    <p class="mt-1 text-sm text-zinc-500">The one script to paste by hand on a brand-new router: identity, WireGuard, and the RouterOS API user. Once it's applied and the router is reachable, push the rest of the hotspot or PPPoE config from the Hotspot Script / PPPoE Script tabs with one click &mdash; no more pasting required.</p>
+                                </div>
+                                <flux:badge color="blue">Paste this first</flux:badge>
+                            </div>
+                        </div>
+                        <x-script-block>{{ $bootstrapScript }}</x-script-block>
+                    </section>
+
+                    <section class="min-w-0 overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
+                        <div class="border-b border-zinc-200 px-5 py-4">
                             <h2 class="text-base font-semibold">Usage History</h2>
                             <p class="mt-1 text-sm text-zinc-500">Daily download/upload from FreeRADIUS accounting, last 30 days. A session's data is counted on the day it started.</p>
                         </div>
@@ -221,7 +234,7 @@ sudo freeradius -X</code></pre>
                                 <flux:badge color="amber">Review variables first</flux:badge>
                             </div>
                         </div>
-                        <pre class="block max-w-full overflow-x-auto p-5 text-sm leading-6 text-zinc-900"><code class="block min-w-max">{{ $freshInfrastructureScript }}</code></pre>
+                        <x-script-block>{{ $freshInfrastructureScript }}</x-script-block>
                     </section>
 
                     <section class="min-w-0 overflow-hidden rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
@@ -246,10 +259,20 @@ sudo freeradius -X</code></pre>
                 <flux:tab.panel name="hotspot" class="space-y-6">
                     <section class="min-w-0 overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
                         <div class="border-b border-zinc-200 px-5 py-4">
-                            <h2 class="text-base font-semibold">RouterOS Script</h2>
-                            <p class="mt-1 text-sm text-zinc-500">Paste this into MikroTik RouterOS terminal after confirming the config values.</p>
+                            <div class="flex flex-col justify-between gap-3 md:flex-row md:items-start">
+                                <div>
+                                    <h2 class="text-base font-semibold">RouterOS Script</h2>
+                                    <p class="mt-1 text-sm text-zinc-500">Paste this into MikroTik RouterOS terminal after confirming the config values, or apply it live over the API once the Bootstrap Script (Overview tab) has run.</p>
+                                </div>
+                                @if ($router->api_username)
+                                    <form method="POST" action="{{ route('admin.routers.provision-hotspot', $router) }}" onsubmit="return confirm('This pushes the RADIUS client, hotspot profile, and walled-garden entry to the router live over the API. Continue?');">
+                                        @csrf
+                                        <button type="submit" class="rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-zinc-50">Provision via API</button>
+                                    </form>
+                                @endif
+                            </div>
                         </div>
-                        <pre class="block max-w-full overflow-x-auto p-5 text-sm leading-6 text-zinc-900"><code class="block min-w-max">{{ $script }}</code></pre>
+                        <x-script-block>{{ $script }}</x-script-block>
                     </section>
 
                     <section class="min-w-0 overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
@@ -257,17 +280,27 @@ sudo freeradius -X</code></pre>
                             <h2 class="text-base font-semibold">MikroTik login.html</h2>
                             <p class="mt-1 text-sm text-zinc-500">Upload this file to the MikroTik hotspot folder so phones redirect to the package picker.</p>
                         </div>
-                        <pre class="block max-w-full overflow-x-auto p-5 text-sm leading-6 text-zinc-900"><code class="block min-w-max">{{ $loginTemplate }}</code></pre>
+                        <x-script-block>{{ $loginTemplate }}</x-script-block>
                     </section>
                 </flux:tab.panel>
 
                 <flux:tab.panel name="pppoe" class="space-y-6">
                     <section class="min-w-0 overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
                         <div class="border-b border-zinc-200 px-5 py-4">
-                            <h2 class="text-base font-semibold">RouterOS PPPoE Script</h2>
-                            <p class="mt-1 text-sm text-zinc-500">Use this when this router will serve PPPoE subscribers instead of, or alongside, hotspot users. Package bandwidth is applied by RADIUS, so the router profile should remain generic.</p>
+                            <div class="flex flex-col justify-between gap-3 md:flex-row md:items-start">
+                                <div>
+                                    <h2 class="text-base font-semibold">RouterOS PPPoE Script</h2>
+                                    <p class="mt-1 text-sm text-zinc-500">Use this when this router will serve PPPoE subscribers instead of, or alongside, hotspot users. Package bandwidth is applied by RADIUS, so the router profile should remain generic. Or apply it live over the API once the Bootstrap Script (Overview tab) has run.</p>
+                                </div>
+                                @if ($router->api_username)
+                                    <form method="POST" action="{{ route('admin.routers.provision-pppoe', $router) }}" onsubmit="return confirm('This pushes the RADIUS client, PPP/RADIUS settings, profile, and PPPoE server to the router live over the API. Continue?');">
+                                        @csrf
+                                        <button type="submit" class="rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-zinc-50">Provision via API</button>
+                                    </form>
+                                @endif
+                            </div>
                         </div>
-                        <pre class="block max-w-full overflow-x-auto p-5 text-sm leading-6 text-zinc-900"><code class="block min-w-max">{{ $pppoeScript }}</code></pre>
+                        <x-script-block>{{ $pppoeScript }}</x-script-block>
                     </section>
 
                     <section class="min-w-0 overflow-hidden rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
@@ -310,7 +343,7 @@ sudo freeradius -X</code></pre>
                             <h2 class="text-base font-semibold">AP / SSID / VLAN Guide</h2>
                             <p class="mt-1 text-sm text-zinc-500">Use this when configuring Ruijie, Omada, Wavlink, or any tenant access point that supports multiple SSIDs.</p>
                         </div>
-                        <pre class="block max-w-full overflow-x-auto p-5 text-sm leading-6 text-zinc-900"><code class="block min-w-max">{{ $accessPointGuide }}</code></pre>
+                        <x-script-block>{{ $accessPointGuide }}</x-script-block>
                     </section>
                 </flux:tab.panel>
             </flux:tab.group>

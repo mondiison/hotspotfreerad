@@ -9,6 +9,10 @@ use RouterOS\Query;
 
 class RouterOsConnectionService
 {
+    public function __construct(private readonly MikroTikProvisioningService $provisioning)
+    {
+    }
+
     /**
      * Short timeouts so a "Test Connection" click or a monitoring page load
      * never hangs the web request on an offline router -- fail fast instead.
@@ -202,6 +206,124 @@ class RouterOsConnectionService
         } catch (\Throwable $e) {
             return ['success' => false, 'error' => $e->getMessage()];
         }
+    }
+
+    /**
+     * Pushes the hotspot/RADIUS side of `MikroTikProvisioningService::generateScript()`
+     * live over the API, once a router already has WireGuard + API credentials
+     * from the bootstrap script. Each step runs independently -- a failure on
+     * one (e.g. the walled-garden entry already exists) doesn't stop the rest.
+     *
+     * @return array{success: bool, steps: list<array{label: string, success: bool, error: ?string}>}
+     */
+    public function provisionHotspot(Router $router): array
+    {
+        if (! $this->isConfigured($router)) {
+            return [
+                'success' => false,
+                'steps' => [['label' => 'RouterOS API credentials', 'success' => false, 'error' => 'No RouterOS API credentials generated for this router yet.']],
+            ];
+        }
+
+        $portalUrl = $this->provisioning->portalUrl();
+        $portalHost = parse_url($portalUrl, PHP_URL_HOST) ?: config('services.mikrotik.hotspot_dns_name');
+
+        $steps = [
+            'Add RADIUS client' => (new Query('/radius/add'))
+                ->equal('address', (string) config('services.radius.server_ip'))
+                ->equal('secret', (string) $router->shared_secret)
+                ->equal('service', 'hotspot,ppp')
+                ->equal('authentication-port', (string) config('services.radius.auth_port'))
+                ->equal('accounting-port', (string) config('services.radius.acct_port'))
+                ->equal('timeout', '1000ms'),
+            'Add hotspot profile' => (new Query('/ip/hotspot/profile/add'))
+                ->equal('name', 'saas-prof')
+                ->equal('use-radius', 'yes')
+                ->equal('login-by', 'http-chap,cookie,mac-cookie')
+                ->equal('html-directory', 'flash/hotspot')
+                ->equal('dns-name', (string) config('services.mikrotik.hotspot_dns_name'))
+                ->equal('radius-accounting', 'yes'),
+            'Add walled-garden entry' => (new Query('/ip/hotspot/walled-garden/add'))
+                ->equal('dst-host', (string) $portalHost)
+                ->equal('action', 'allow'),
+        ];
+
+        return $this->runSteps($router, $steps);
+    }
+
+    /**
+     * Pushes the PPPoE/RADIUS side of `MikroTikProvisioningService::generatePppoeScript()`
+     * live over the API. See provisionHotspot() for the per-step failure model.
+     *
+     * @return array{success: bool, steps: list<array{label: string, success: bool, error: ?string}>}
+     */
+    public function provisionPppoe(Router $router, string $pppoeInterface = 'bridge1'): array
+    {
+        if (! $this->isConfigured($router)) {
+            return [
+                'success' => false,
+                'steps' => [['label' => 'RouterOS API credentials', 'success' => false, 'error' => 'No RouterOS API credentials generated for this router yet.']],
+            ];
+        }
+
+        $steps = [
+            'Add RADIUS client' => (new Query('/radius/add'))
+                ->equal('address', (string) config('services.radius.server_ip'))
+                ->equal('secret', (string) $router->shared_secret)
+                ->equal('service', 'ppp')
+                ->equal('authentication-port', (string) config('services.radius.auth_port'))
+                ->equal('accounting-port', (string) config('services.radius.acct_port'))
+                ->equal('timeout', '1000ms'),
+            'Enable RADIUS for PPP' => (new Query('/ppp/aaa/set'))
+                ->equal('use-radius', 'yes')
+                ->equal('accounting', 'yes')
+                ->equal('interim-update', '5m'),
+            'Add PPPoE profile' => (new Query('/ppp/profile/add'))
+                ->equal('name', 'mms-pppoe-profile')
+                ->equal('only-one', 'yes')
+                ->equal('change-tcp-mss', 'yes'),
+            'Add PPPoE server' => (new Query('/interface/pppoe-server/server/add'))
+                ->equal('interface', $pppoeInterface)
+                ->equal('service-name', 'mms-radius')
+                ->equal('default-profile', 'mms-pppoe-profile')
+                ->equal('authentication', 'pap,chap,mschap1,mschap2')
+                ->equal('disabled', 'no'),
+        ];
+
+        return $this->runSteps($router, $steps);
+    }
+
+    /**
+     * @param  array<string, Query>  $steps
+     * @return array{success: bool, steps: list<array{label: string, success: bool, error: ?string}>}
+     */
+    private function runSteps(Router $router, array $steps): array
+    {
+        try {
+            $client = $this->client($router, 8);
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'steps' => collect($steps)->keys()->map(
+                    fn (string $label): array => ['label' => $label, 'success' => false, 'error' => $e->getMessage()]
+                )->all(),
+            ];
+        }
+
+        $results = [];
+        $allSucceeded = true;
+
+        foreach ($steps as $label => $query) {
+            try {
+                $client->query($query)->read();
+                $results[] = ['label' => $label, 'success' => true, 'error' => null];
+            } catch (\Throwable $e) {
+                $allSucceeded = false;
+                $results[] = ['label' => $label, 'success' => false, 'error' => $e->getMessage()];
+            }
+        }
+
+        return ['success' => $allSucceeded, 'steps' => $results];
     }
 
     /**

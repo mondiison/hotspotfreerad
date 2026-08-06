@@ -2,6 +2,14 @@
 
 Four related features, in increasing order of how much they depend on being able to reach the router live.
 
+## Bootstrap script + API-push provisioning
+
+Router Script page → **Overview** tab → "Bootstrap Script". A brand-new router only needs one script pasted by hand now: `MikroTikProvisioningService::generateBootstrapScript()` contains just `/system identity`, the WireGuard interface/peer/address lines, and the RouterOS API user — the minimum needed to get the router reachable over the WireGuard tunnel and API. Everything else (RADIUS client, hotspot profile, walled-garden, or the PPPoE/RADIUS/PPP-profile/PPPoE-server equivalent) is then pushed live over the API from the **Hotspot Script** / **PPPoE Script** tabs' "Provision via API" button, once `$router->api_username` exists — no more full-script re-pasting for routine setup or config changes.
+
+`RouterOsConnectionService::provisionHotspot()` / `provisionPppoe()` run each RouterOS command independently and return a per-step `{label, success, error}` report (mirroring the existing `WireGuardPeerSyncService` partial-success style) — one failed step (e.g. an entry that already exists) doesn't stop the rest, and the admin sees exactly which steps succeeded. The full multi-tab "paste the whole script" flow still exists and remains the source of truth for what gets provisioned; the API push is a convenience that mirrors it, not a separate feature.
+
+**Explicitly out of scope for this round**: pushing the "Fresh Infrastructure Script" (VLANs, bridges, DHCP, firewall, QoS queues, Wi-Fi profiles) via the API. That script is much larger and still needs to be pasted by hand — a much bigger, separate follow-up given its scale and the lack of real-hardware verification so far.
+
 ## Historical bandwidth graphs
 
 Router Script page → **Overview** tab. Built entirely from FreeRADIUS accounting (`radacct`), which already exists — no RouterOS API involved. Shows the last 30 days of daily download/upload, with a session's bytes attributed to the day it started (an approximation, not exact per-day billing).

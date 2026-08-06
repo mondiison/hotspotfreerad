@@ -76,6 +76,7 @@ class RouterController extends Controller
             'router' => $router->load('shop.tenant'),
             'dailyUsage' => $dailyUsage,
             'hasUsageHistory' => collect($dailyUsage)->contains(fn (array $day): bool => $day['download_gb'] > 0 || $day['upload_gb'] > 0),
+            'bootstrapScript' => $mikroTik->generateBootstrapScript($router),
             'script' => $mikroTik->generateScript($router),
             'pppoeScript' => $mikroTik->generatePppoeScript($router),
             'freshInfrastructureScript' => $mikroTik->generateFreshInfrastructureScript($router),
@@ -162,5 +163,33 @@ class RouterController extends Controller
                 ? 'Connected. RouterOS reports identity "'.$result['identity'].'".'
                 : 'Could not connect: '.$result['error']
         );
+    }
+
+    public function provisionHotspot(Request $request, Router $router, RouterOsConnectionService $routerOs): RedirectResponse
+    {
+        TenantAccess::assertRouter($router, $request->user());
+
+        return redirect()->route('admin.routers.show', $router)
+            ->with('status', $this->summarizeProvisioningResult($routerOs->provisionHotspot($router)));
+    }
+
+    public function provisionPppoe(Request $request, Router $router, RouterOsConnectionService $routerOs): RedirectResponse
+    {
+        TenantAccess::assertRouter($router, $request->user());
+
+        return redirect()->route('admin.routers.show', $router)
+            ->with('status', $this->summarizeProvisioningResult($routerOs->provisionPppoe($router)));
+    }
+
+    /**
+     * @param  array{success: bool, steps: list<array{label: string, success: bool, error: ?string}>}  $result
+     */
+    private function summarizeProvisioningResult(array $result): string
+    {
+        $lines = collect($result['steps'])->map(
+            fn (array $step): string => ($step['success'] ? 'OK' : 'FAILED').' - '.$step['label'].($step['error'] ? ' ('.$step['error'].')' : '')
+        );
+
+        return ($result['success'] ? 'Provisioning complete. ' : 'Provisioning finished with errors. ').$lines->implode(' | ');
     }
 }
