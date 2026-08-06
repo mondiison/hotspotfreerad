@@ -97,12 +97,12 @@
             <flux:tab.group>
                 <flux:tabs variant="segmented" scrollable>
                     <flux:tab name="overview" icon="chart-bar">Overview</flux:tab>
-                    <flux:tab name="live" icon="bolt">Live</flux:tab>
-                    <flux:tab name="insight" icon="cpu-chip">Insight</flux:tab>
                     <flux:tab name="fresh-infra" icon="sparkles">Fresh Infrastructure Script</flux:tab>
                     <flux:tab name="hotspot" icon="wifi">Hotspot Script</flux:tab>
                     <flux:tab name="pppoe" icon="signal">PPPoE Script</flux:tab>
                     <flux:tab name="ap-guide" icon="book-open">AP / SSID Guide</flux:tab>
+                    <flux:tab name="live" icon="bolt">Live</flux:tab>
+                    <flux:tab name="insight" icon="cpu-chip">Insight</flux:tab>
                 </flux:tabs>
 
                 <flux:tab.panel name="overview" class="space-y-6">
@@ -186,50 +186,6 @@
 sudo freeradius -X</code></pre>
                             </div>
                         </div>
-                    </section>
-                </flux:tab.panel>
-
-                <flux:tab.panel name="live" class="space-y-6">
-                    @if ($router->api_username)
-                        <section class="min-w-0 overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
-                            <div class="border-b border-zinc-200 px-5 py-4">
-                                <h2 class="text-base font-semibold">Live Bandwidth</h2>
-                                <p class="mt-1 text-sm text-zinc-500">Polls the RouterOS API every 5 seconds. Requires the script's RouterOS API section to be applied on the physical router.</p>
-                            </div>
-                            <div class="p-5">
-                                <livewire:admin.router-live-monitor :router="$router" :key="'live-'.$router->id" />
-                            </div>
-                        </section>
-
-                        <section class="min-w-0 overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
-                            <div class="border-b border-zinc-200 px-5 py-4">
-                                <h2 class="text-base font-semibold">Wi-Fi Scan</h2>
-                                <p class="mt-1 text-sm text-zinc-500">On-demand scan of nearby Wi-Fi networks from this router's radio.</p>
-                            </div>
-                            <div class="p-5">
-                                <livewire:admin.router-wifi-scan :router="$router" :key="'wifi-scan-'.$router->id" />
-                            </div>
-                        </section>
-
-                        <section class="min-w-0 overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
-                            <div class="border-b border-zinc-200 px-5 py-4">
-                                <h2 class="text-base font-semibold">Console</h2>
-                                <p class="mt-1 text-sm text-zinc-500">Read-only RouterOS terminal &mdash; run any <code>print</code> command against this router over the API.</p>
-                            </div>
-                            <div class="p-5">
-                                <livewire:admin.router-console :router="$router" :key="'console-'.$router->id" />
-                            </div>
-                        </section>
-                    @else
-                        <section class="min-w-0 overflow-hidden rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
-                            <p class="text-sm text-zinc-500">Live bandwidth and Wi-Fi scanning need RouterOS API credentials first. Generate them from the Router Details card, then re-run the script on this router.</p>
-                        </section>
-                    @endif
-                </flux:tab.panel>
-
-                <flux:tab.panel name="insight" class="space-y-6">
-                    <section class="min-w-0 overflow-hidden rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
-                        <livewire:admin.router-insight :router="$router" :key="'insight-'.$router->id" />
                     </section>
                 </flux:tab.panel>
 
@@ -354,6 +310,50 @@ sudo freeradius -X</code></pre>
                             <p class="mt-1 text-sm text-zinc-500">Use this when configuring Ruijie, Omada, Wavlink, or any tenant access point that supports multiple SSIDs.</p>
                         </div>
                         <x-script-block>{{ $accessPointGuide }}</x-script-block>
+                    </section>
+                </flux:tab.panel>
+
+                <flux:tab.panel name="live" class="space-y-6">
+                    @if ($router->api_username)
+                        <section class="min-w-0 overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
+                            <div class="border-b border-zinc-200 px-5 py-4">
+                                <h2 class="text-base font-semibold">Live Bandwidth</h2>
+                                <p class="mt-1 text-sm text-zinc-500">Polls the RouterOS API every 5 seconds. Requires the script's RouterOS API section to be applied on the physical router.</p>
+                            </div>
+                            <div class="p-5">
+                                <livewire:admin.router-live-monitor :router="$router" :key="'live-'.$router->id" />
+                            </div>
+                        </section>
+
+                        <section class="min-w-0 overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
+                            <div class="border-b border-zinc-200 px-5 py-4">
+                                <h2 class="text-base font-semibold">Wi-Fi Scan</h2>
+                                <p class="mt-1 text-sm text-zinc-500">On-demand scan of nearby Wi-Fi networks from this router's radio.</p>
+                            </div>
+                            <div class="p-5">
+                                <livewire:admin.router-wifi-scan :router="$router" :key="'wifi-scan-'.$router->id" />
+                            </div>
+                        </section>
+
+                        <section class="min-w-0 overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
+                            <div class="border-b border-zinc-200 px-5 py-4">
+                                <h2 class="text-base font-semibold">Console</h2>
+                                <p class="mt-1 text-sm text-zinc-500">Read-only RouterOS terminal &mdash; run any <code>print</code> command against this router over the API.</p>
+                            </div>
+                            <div class="p-5">
+                                <livewire:admin.router-console :router="$router" :key="'console-'.$router->id" />
+                            </div>
+                        </section>
+                    @else
+                        <section class="min-w-0 overflow-hidden rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+                            <p class="text-sm text-zinc-500">Live bandwidth and Wi-Fi scanning need RouterOS API credentials first. Generate them from the Router Details card, then re-run the script on this router.</p>
+                        </section>
+                    @endif
+                </flux:tab.panel>
+
+                <flux:tab.panel name="insight" class="space-y-6">
+                    <section class="min-w-0 overflow-hidden rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+                        <livewire:admin.router-insight :router="$router" :key="'insight-'.$router->id" />
                     </section>
                 </flux:tab.panel>
             </flux:tab.group>
