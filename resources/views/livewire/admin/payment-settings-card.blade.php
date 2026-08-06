@@ -97,12 +97,23 @@
         @foreach ($credentialFields as $field => $label)
             <flux:field>
                 <flux:label>{{ $label }}</flux:label>
-                <flux:input
-                    wire:model.blur="gateway_settings.{{ $field }}"
-                    icon="{{ in_array($field, $secretFieldKeys, true) ? 'key' : 'identification' }}"
-                    placeholder="Leave blank to keep saved {{ strtolower($label) }}"
-                    :viewable="in_array($field, $secretFieldKeys, true)"
-                />
+                @if (array_key_exists($field, $selectFields))
+                    <flux:select wire:model.live="gateway_settings.{{ $field }}">
+                        @foreach ($selectFields[$field] as $value => $optionLabel)
+                            <flux:select.option value="{{ $value }}">{{ $optionLabel }}</flux:select.option>
+                        @endforeach
+                    </flux:select>
+                    @if ($field === 'environment')
+                        <flux:description>Sandbox/Test uses this gateway's test API and never moves real money. Switch to Live only once you have live credentials from {{ $activeGateway['name'] }}.</flux:description>
+                    @endif
+                @else
+                    <flux:input
+                        wire:model.blur="gateway_settings.{{ $field }}"
+                        icon="{{ in_array($field, $secretFieldKeys, true) ? 'key' : 'identification' }}"
+                        placeholder="Leave blank to keep saved {{ strtolower($label) }}"
+                        :viewable="in_array($field, $secretFieldKeys, true)"
+                    />
+                @endif
                 <flux:error name="gateway_settings.{{ $field }}" />
             </flux:field>
         @endforeach

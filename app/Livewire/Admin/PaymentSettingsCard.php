@@ -35,7 +35,12 @@ class PaymentSettingsCard extends Component
     {
         $this->shop = $shop;
         $this->payment_gateway = $shop->paymentGateway();
-        $this->gateway_settings = [];
+        $this->gateway_settings = $this->defaultGatewaySettings();
+    }
+
+    public function updatedPaymentGateway(): void
+    {
+        $this->gateway_settings = $this->defaultGatewaySettings();
     }
 
     public function save(PaymentSettingsService $settings): void
@@ -56,11 +61,35 @@ class PaymentSettingsCard extends Component
             'clear_flutterwave_webhook_secret',
         ]);
         $this->payment_gateway = $this->shop->paymentGateway();
-        $this->gateway_settings = [];
+        $this->gateway_settings = $this->defaultGatewaySettings();
 
         $this->savedMessage = 'Payment settings updated for '.$this->shop->name.'.';
 
         session()->flash('status', 'Payment settings updated for '.$this->shop->name.'.');
+    }
+
+    /**
+     * Secret/credential fields always start blank (never re-displayed once
+     * saved), but select fields like Environment aren't secret and a blank
+     * dropdown is confusing UX -- pre-fill those with whatever is currently
+     * saved (defaulting to each field's first option, e.g. "test", for a
+     * gateway that's never had one saved yet).
+     */
+    private function defaultGatewaySettings(): array
+    {
+        $selectFields = PaymentGatewayCatalog::selectFields($this->payment_gateway);
+
+        if ($selectFields === []) {
+            return [];
+        }
+
+        $currentSettings = (array) ($this->shop->paymentGatewaySettings()[$this->payment_gateway] ?? []);
+
+        return collect($selectFields)
+            ->mapWithKeys(fn (array $options, string $key): array => [
+                $key => $currentSettings[$key] ?? (string) array_key_first($options),
+            ])
+            ->all();
     }
 
     public function render()
@@ -72,6 +101,7 @@ class PaymentSettingsCard extends Component
             'activeGateway' => PaymentGatewayCatalog::gateway($this->payment_gateway),
             'credentialFields' => PaymentGatewayCatalog::credentialFields($this->payment_gateway),
             'secretFieldKeys' => PaymentGatewayCatalog::secretFieldKeys($this->payment_gateway),
+            'selectFields' => PaymentGatewayCatalog::selectFields($this->payment_gateway),
         ]);
     }
 }

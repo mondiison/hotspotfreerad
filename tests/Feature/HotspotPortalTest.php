@@ -1409,6 +1409,51 @@ class HotspotPortalTest extends TestCase
         $this->assertSame('https://sandbox.sdk.monnify.com/checkout/MNFY-demo', data_get($payment->payload, 'checkout_url'));
     }
 
+    public function test_monnify_checkout_uses_the_live_base_url_when_shop_environment_is_live(): void
+    {
+        config([
+            'services.monnify.base_url' => 'https://sandbox.monnify.com',
+            'services.monnify.live_base_url' => 'https://api.monnify.com',
+        ]);
+        Http::fake([
+            'api.monnify.com/api/v1/auth/login' => Http::response([
+                'requestSuccessful' => true,
+                'responseBody' => ['accessToken' => 'MONNIFY_LIVE_TOKEN'],
+            ]),
+            'api.monnify.com/api/v1/merchant/transactions/init-transaction' => Http::response([
+                'requestSuccessful' => true,
+                'responseBody' => [
+                    'transactionReference' => 'MNFY|live|000001',
+                    'checkoutUrl' => 'https://sdk.monnify.com/checkout/MNFY-live',
+                ],
+            ]),
+        ]);
+
+        [$router, $package] = $this->routerWithPackage([
+            'payment_gateway_settings' => [
+                'monnify' => [
+                    'public_key' => 'MK_LIVE_DEMO',
+                    'secret_key' => 'MSK_LIVE_DEMO',
+                    'contract_code' => '1234567890',
+                    'environment' => 'live',
+                ],
+            ],
+        ]);
+        $router->shop->update(['payment_gateway' => 'monnify']);
+
+        $this->post(route('hotspot.pay'), [
+            'mac' => 'AA:BB:CC:DD:EE:FF',
+            'nasid' => $router->nas_identifier,
+            'package_id' => $package->id,
+            'email' => 'customer@example.com',
+            'payment_method' => 'card',
+        ])
+            ->assertRedirect('https://sdk.monnify.com/checkout/MNFY-live');
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'api.monnify.com/api/v1/auth/login')
+            && ! str_contains($request->url(), 'sandbox'));
+    }
+
     public function test_monnify_manual_verification_provisions_radius_access(): void
     {
         config(['services.monnify.base_url' => 'https://sandbox.monnify.com']);
@@ -1646,6 +1691,44 @@ class HotspotPortalTest extends TestCase
         $this->assertSame('squad', $payment->provider);
         $this->assertSame($payment->tx_ref, $payment->provider_reference);
         $this->assertSame('https://sandbox-pay.squadco.com/demo-checkout', data_get($payment->payload, 'checkout_url'));
+    }
+
+    public function test_squad_checkout_uses_the_live_base_url_when_shop_environment_is_live(): void
+    {
+        config([
+            'services.squad.base_url' => 'https://sandbox-api-d.squadco.com',
+            'services.squad.live_base_url' => 'https://api-d.squadco.com',
+        ]);
+        Http::fake([
+            'api-d.squadco.com/transaction/initiate' => fn ($request) => Http::response([
+                'status' => 200,
+                'success' => true,
+                'data' => ['checkout_url' => 'https://pay.squadco.com/live-checkout'],
+            ]),
+        ]);
+
+        [$router, $package] = $this->routerWithPackage([
+            'payment_gateway_settings' => [
+                'squad' => [
+                    'public_key' => 'live_pk_demo',
+                    'secret_key' => 'live_sk_demo',
+                    'environment' => 'live',
+                ],
+            ],
+        ]);
+        $router->shop->update(['payment_gateway' => 'squad']);
+
+        $this->post(route('hotspot.pay'), [
+            'mac' => 'AA:BB:CC:DD:EE:FF',
+            'nasid' => $router->nas_identifier,
+            'package_id' => $package->id,
+            'email' => 'customer@example.com',
+            'payment_method' => 'card',
+        ])
+            ->assertRedirect('https://pay.squadco.com/live-checkout');
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'api-d.squadco.com/transaction/initiate')
+            && ! str_contains($request->url(), 'sandbox'));
     }
 
     public function test_squad_manual_verification_provisions_radius_access(): void

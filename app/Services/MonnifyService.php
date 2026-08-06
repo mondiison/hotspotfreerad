@@ -19,7 +19,7 @@ class MonnifyService implements HotspotHostedGateway
     {
         $response = Http::withToken($this->accessToken($payment))
             ->acceptJson()
-            ->post($this->baseUrl().'/api/v1/merchant/transactions/init-transaction', [
+            ->post($this->baseUrl($payment).'/api/v1/merchant/transactions/init-transaction', [
                 'amount' => (float) $payment->amount,
                 'customerName' => (string) ($customer['name'] ?? 'Hotspot Customer'),
                 'customerEmail' => GuestCustomerEmail::resolve($payment, $customer['email'] ?? null),
@@ -65,7 +65,7 @@ class MonnifyService implements HotspotHostedGateway
 
         if ($queryByPaymentReference) {
             return $request
-                ->get($this->baseUrl().'/api/v2/merchant/transactions/query', [
+                ->get($this->baseUrl($payment).'/api/v2/merchant/transactions/query', [
                     'paymentReference' => $reference,
                 ])
                 ->throw()
@@ -73,7 +73,7 @@ class MonnifyService implements HotspotHostedGateway
         }
 
         return $request
-            ->get($this->baseUrl().'/api/v2/transactions/'.rawurlencode($reference))
+            ->get($this->baseUrl($payment).'/api/v2/transactions/'.rawurlencode($reference))
             ->throw()
             ->json();
     }
@@ -125,14 +125,15 @@ class MonnifyService implements HotspotHostedGateway
     {
         $apiKey = $this->apiKey($payment);
         $secretKey = $this->secretKey($payment);
-        $cacheKey = 'monnify:token:'.sha1($this->baseUrl().'|'.$apiKey.'|'.$secretKey);
+        $baseUrl = $this->baseUrl($payment);
+        $cacheKey = 'monnify:token:'.sha1($baseUrl.'|'.$apiKey.'|'.$secretKey);
 
-        return Cache::remember($cacheKey, now()->addMinutes(50), function () use ($apiKey, $secretKey): string {
+        return Cache::remember($cacheKey, now()->addMinutes(50), function () use ($apiKey, $secretKey, $baseUrl): string {
             $response = Http::withHeaders([
                 'Authorization' => 'Basic '.base64_encode($apiKey.':'.$secretKey),
             ])
                 ->acceptJson()
-                ->post($this->baseUrl().'/api/v1/auth/login')
+                ->post($baseUrl.'/api/v1/auth/login')
                 ->throw()
                 ->json();
 
@@ -162,8 +163,17 @@ class MonnifyService implements HotspotHostedGateway
         return trim((string) ($settings[$key] ?? ''), " \t\n\r\0\x0B\"'");
     }
 
-    private function baseUrl(): string
+    /**
+     * Per-shop, not global -- defaults to "test" (sandbox) so a shop that's
+     * never touched this setting keeps behaving exactly as it always has,
+     * rather than silently starting to hit the live API.
+     */
+    private function baseUrl(Payment $payment): string
     {
-        return rtrim((string) config('services.monnify.base_url'), '/');
+        $environment = $this->setting($payment, 'environment') ?: 'test';
+
+        return $environment === 'live'
+            ? rtrim((string) config('services.monnify.live_base_url'), '/')
+            : rtrim((string) config('services.monnify.base_url'), '/');
     }
 }

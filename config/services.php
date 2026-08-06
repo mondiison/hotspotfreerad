@@ -73,11 +73,16 @@ return [
     ],
 
     'monnify' => [
+        // Test/sandbox default -- per-shop "Environment" setting in Payment Setup
+        // picks between this and live_base_url; env vars here only change the
+        // defaults for shops that haven't explicitly saved an environment yet.
         'base_url' => env('MONNIFY_BASE_URL', 'https://sandbox.monnify.com'),
+        'live_base_url' => env('MONNIFY_LIVE_BASE_URL', 'https://api.monnify.com'),
     ],
 
     'squad' => [
         'base_url' => env('SQUAD_BASE_URL', 'https://sandbox-api-d.squadco.com'),
+        'live_base_url' => env('SQUAD_LIVE_BASE_URL', 'https://api-d.squadco.com'),
     ],
 
     'stripe' => [

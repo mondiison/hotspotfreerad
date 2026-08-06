@@ -6,6 +6,7 @@ use App\Livewire\Admin\PaymentSettingsCard;
 use App\Models\Shop;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Support\PaymentGatewayCatalog;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -188,6 +189,78 @@ class AdminPaymentSettingsTest extends TestCase
         $this->assertSame('MK_TEST_PUBLIC', $tenant->payment_gateway_settings['monnify']['public_key']);
         $this->assertSame('MK_TEST_SECRET', $tenant->payment_gateway_settings['monnify']['secret_key']);
         $this->assertSame('1234567890', $tenant->payment_gateway_settings['monnify']['contract_code']);
+    }
+
+    public function test_leaving_a_gateway_field_blank_keeps_its_saved_value_instead_of_wiping_it(): void
+    {
+        [$tenant] = $this->tenants();
+        $shop = $this->shop($tenant, 'Squad Shop', false)->load('tenant');
+        $shop->payments_count = 0;
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user);
+
+        // First save: public_key + secret_key.
+        Livewire::test(PaymentSettingsCard::class, ['shop' => $shop])
+            ->set('payment_gateway', 'squad')
+            ->set('gateway_settings.public_key', 'sq_pk_original')
+            ->set('gateway_settings.secret_key', 'sq_sk_original')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $shop->refresh();
+        $tenant->refresh();
+        $this->assertSame('sq_pk_original', $tenant->payment_gateway_settings['squad']['public_key']);
+        $this->assertSame('sq_sk_original', $tenant->payment_gateway_settings['squad']['secret_key']);
+
+        // Second save: only change environment, leave secret fields blank
+        // (as the "leave blank to keep saved value" placeholder promises).
+        Livewire::test(PaymentSettingsCard::class, ['shop' => $shop])
+            ->set('gateway_settings.environment', 'live')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $tenant->refresh();
+        $this->assertSame('sq_pk_original', $tenant->payment_gateway_settings['squad']['public_key']);
+        $this->assertSame('sq_sk_original', $tenant->payment_gateway_settings['squad']['secret_key']);
+        $this->assertSame('live', $tenant->payment_gateway_settings['squad']['environment']);
+    }
+
+    public function test_gateway_environment_only_accepts_live_or_test(): void
+    {
+        [$tenant] = $this->tenants();
+        $shop = $this->shop($tenant, 'Squad Shop', false)->load('tenant');
+        $shop->payments_count = 0;
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user);
+
+        Livewire::test(PaymentSettingsCard::class, ['shop' => $shop])
+            ->set('payment_gateway', 'squad')
+            ->set('gateway_settings.environment', 'production')
+            ->call('save')
+            ->assertHasErrors('gateway_settings.environment');
+    }
+
+    public function test_environment_is_excluded_from_gateway_readiness_badges(): void
+    {
+        [$tenant] = $this->tenants();
+        $shop = $this->shop($tenant, 'Squad Shop', false)->load('tenant');
+        $shop->update(['payment_gateway' => 'squad']);
+
+        $readiness = PaymentGatewayCatalog::tenantReadiness($shop->fresh());
+
+        $this->assertArrayNotHasKey('environment', $readiness);
+        $this->assertArrayHasKey('public_key', $readiness);
+        $this->assertArrayHasKey('secret_key', $readiness);
     }
 
     public function test_livewire_payment_settings_card_validates_credentials_together(): void

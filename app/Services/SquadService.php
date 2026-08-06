@@ -18,7 +18,7 @@ class SquadService implements HotspotHostedGateway
     {
         $response = Http::withToken($this->secretKey($payment))
             ->acceptJson()
-            ->post($this->baseUrl().'/transaction/initiate', [
+            ->post($this->baseUrl($payment).'/transaction/initiate', [
                 'amount' => $this->amountInKobo($payment),
                 'transaction_ref' => $payment->tx_ref,
                 'email' => GuestCustomerEmail::resolve($payment, $customer['email'] ?? null),
@@ -60,7 +60,7 @@ class SquadService implements HotspotHostedGateway
 
         return Http::withToken($this->secretKey($payment))
             ->acceptJson()
-            ->get($this->baseUrl().'/transaction/verify/'.rawurlencode($reference))
+            ->get($this->baseUrl($payment).'/transaction/verify/'.rawurlencode($reference))
             ->throw()
             ->json();
     }
@@ -119,9 +119,19 @@ class SquadService implements HotspotHostedGateway
         return $secretKey;
     }
 
-    private function baseUrl(): string
+    /**
+     * Per-shop, not global -- defaults to "test" (sandbox) so a shop that's
+     * never touched this setting keeps behaving exactly as it always has,
+     * rather than silently starting to hit the live API.
+     */
+    private function baseUrl(Payment $payment): string
     {
-        return rtrim((string) config('services.squad.base_url'), '/');
+        $settings = (array) ($payment->shop?->paymentGatewaySettings()['squad'] ?? []);
+        $environment = $settings['environment'] ?? 'test';
+
+        return $environment === 'live'
+            ? rtrim((string) config('services.squad.live_base_url'), '/')
+            : rtrim((string) config('services.squad.base_url'), '/');
     }
 
     private function amountInKobo(Payment $payment): int

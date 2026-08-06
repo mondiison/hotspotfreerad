@@ -70,8 +70,12 @@ class PaymentGatewayCatalog
                     'public_key' => 'API Key',
                     'secret_key' => 'Secret Key',
                     'contract_code' => 'Contract Code',
+                    'environment' => 'Environment',
                 ],
                 'secret_fields' => ['secret_key'],
+                'select_fields' => [
+                    'environment' => ['test' => 'Sandbox / Test', 'live' => 'Live'],
+                ],
                 'walled_garden_hosts' => ['*.monnify.com'],
             ],
             self::SQUAD => [
@@ -88,8 +92,12 @@ class PaymentGatewayCatalog
                 'fields' => [
                     'public_key' => 'Public Key',
                     'secret_key' => 'Secret Key',
+                    'environment' => 'Environment',
                 ],
                 'secret_fields' => ['secret_key'],
+                'select_fields' => [
+                    'environment' => ['test' => 'Sandbox / Test', 'live' => 'Live'],
+                ],
                 'walled_garden_hosts' => ['*.squadco.com'],
             ],
             self::STRIPE => [
@@ -200,6 +208,19 @@ class PaymentGatewayCatalog
     public static function secretFieldKeys(?string $gateway): array
     {
         return (array) (self::gateway($gateway ?: self::FLUTTERWAVE)['secret_fields'] ?? []);
+    }
+
+    /**
+     * Fields that render as a fixed choice (e.g. Environment: Live/Test)
+     * instead of a free-text credential input. Rare -- most gateways have
+     * none of these; `PaymentSettingsCard` renders any field listed here as
+     * a select using its option map instead of a text box.
+     *
+     * @return array<string, array<string, string>> field key => (option value => option label)
+     */
+    public static function selectFields(?string $gateway): array
+    {
+        return (array) (self::gateway($gateway ?: self::FLUTTERWAVE)['select_fields'] ?? []);
     }
 
     public static function implementedGatewayKeys(): array
@@ -351,8 +372,10 @@ class PaymentGatewayCatalog
     {
         if ($shop->paymentGateway() !== self::FLUTTERWAVE) {
             $settings = $shop->paymentGatewaySettings();
+            $selectFieldKeys = array_keys(self::selectFields($shop->paymentGateway()));
 
             return collect(self::credentialFields($shop->paymentGateway()))
+                ->reject(fn (string $label, string $key): bool => in_array($key, $selectFieldKeys, true))
                 ->map(function (string $label, string $key) use ($settings): array {
                     return [
                         'label' => $label,

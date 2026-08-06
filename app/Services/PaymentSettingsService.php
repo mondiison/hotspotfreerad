@@ -17,6 +17,7 @@ class PaymentSettingsService
             'payment_gateway' => ['nullable', 'string', Rule::in(array_keys(PaymentGatewayCatalog::onlineGateways()))],
             'gateway_settings' => ['nullable', 'array'],
             'gateway_settings.*' => ['nullable', 'string', 'max:1000'],
+            'gateway_settings.environment' => ['nullable', Rule::in(['live', 'test'])],
             'flutterwave_client_id' => ['nullable', 'string', 'required_with:flutterwave_client_secret'],
             'flutterwave_client_secret' => ['nullable', 'string', 'required_with:flutterwave_client_id'],
             'flutterwave_secret_key' => ['nullable', 'string'],
@@ -64,7 +65,11 @@ class PaymentSettingsService
 
         if ($gatewaySettings !== []) {
             $allSettings = (array) ($shop->tenant?->payment_gateway_settings ?? []);
-            $allSettings[$gateway] = $gatewaySettings;
+            // Merge into (not replace) this gateway's existing settings -- a field left
+            // blank means "keep the saved value" per the form's own placeholder text,
+            // not "delete it." Replacing wholesale would wipe e.g. a saved secret key
+            // every time an unrelated field (like Environment) is the only thing changed.
+            $allSettings[$gateway] = array_merge((array) ($allSettings[$gateway] ?? []), $gatewaySettings);
             $updates['tenant'] = ['payment_gateway_settings' => $allSettings];
         }
 
