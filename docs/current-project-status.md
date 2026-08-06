@@ -74,6 +74,7 @@ After pushing changes locally:
 ```bash
 cd /var/www/hotspotfreerad
 git pull origin main
+composer install --no-dev --optimize-autoloader
 php artisan migrate
 npm run build
 php artisan optimize:clear
@@ -82,7 +83,7 @@ php artisan route:cache
 php artisan view:cache
 ```
 
-Use `php artisan migrate` whenever new migrations are added.
+Use `php artisan migrate` whenever new migrations are added. **Always run `composer install` on every deploy, not just when you remember `composer.json` changed** — a `git pull` updates `composer.lock` but never touches `vendor/`, so any PHP dependency added since the Pi's last `composer install` silently stays missing until something on a live request tries to autoload it (e.g. `Class "ParagonIE_Sodium_Compat" not found` when `paragonie/sodium_compat` was pulled in but never installed). `composer install` is fast and a no-op when nothing changed, so there's no cost to always including it.
 
 ## Current Features
 
