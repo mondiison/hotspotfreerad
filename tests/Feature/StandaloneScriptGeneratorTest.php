@@ -104,6 +104,38 @@ class StandaloneScriptGeneratorTest extends TestCase
             });
     }
 
+    public function test_wizard_can_generate_independent_usernames_and_passwords_with_a_chosen_character_set(): void
+    {
+        $this->actingAs($this->superAdmin());
+
+        Livewire::test(StandaloneScriptGenerator::class)
+            ->set('router_identity', 'Corner Shop Router')
+            ->set('hotspot_name', 'Corner Shop Wi-Fi')
+            ->set('hotspot_network', '10.10.10.1/24')
+            ->set('mgmt_network', '10.10.20.1/24')
+            ->set('mgmt_password', 'a-strong-password')
+            ->set('profiles.0.voucher_count', 3)
+            ->set('profiles.0.voucher_username_password_same', false)
+            ->set('profiles.0.voucher_character_set', 'numeric')
+            ->call('generate')
+            ->assertHasNoErrors()
+            ->assertSet('generatedVouchers', function ($vouchers) {
+                foreach ($vouchers as $voucher) {
+                    if ($voucher['username'] === $voucher['password']) {
+                        return false;
+                    }
+
+                    if (! preg_match('/^\d+$/', $voucher['username']) || ! preg_match('/^\d+$/', $voucher['password'])) {
+                        return false;
+                    }
+                }
+
+                return count($vouchers) === 3;
+            })
+            ->assertSee('User:')
+            ->assertSee('Pass:');
+    }
+
     public function test_wizard_step_one_requires_wan_port_within_ethernet_port_count(): void
     {
         $this->actingAs($this->superAdmin());

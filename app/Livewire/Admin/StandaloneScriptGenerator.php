@@ -34,7 +34,7 @@ class StandaloneScriptGenerator extends Component
     public string $hotspot_network = '10.10.10.1/24';
 
     public array $profiles = [
-        ['name' => '1 Hour', 'download_mbps' => 5, 'upload_mbps' => 5, 'session_minutes' => 60, 'shared_users' => 1, 'voucher_count' => 10, 'voucher_prefix' => '', 'voucher_code_length' => 8],
+        ['name' => '1 Hour', 'download_mbps' => 5, 'upload_mbps' => 5, 'session_minutes' => 60, 'shared_users' => 1, 'voucher_count' => 10, 'voucher_prefix' => '', 'voucher_code_length' => 8, 'voucher_username_password_same' => true, 'voucher_character_set' => 'alnum_safe'],
     ];
 
     public string $voucher_template = 'grid';
@@ -68,7 +68,7 @@ class StandaloneScriptGenerator extends Component
 
     public function addProfile(): void
     {
-        $this->profiles[] = ['name' => '', 'download_mbps' => 5, 'upload_mbps' => 5, 'session_minutes' => 60, 'shared_users' => 1, 'voucher_count' => 10, 'voucher_prefix' => '', 'voucher_code_length' => 8];
+        $this->profiles[] = ['name' => '', 'download_mbps' => 5, 'upload_mbps' => 5, 'session_minutes' => 60, 'shared_users' => 1, 'voucher_count' => 10, 'voucher_prefix' => '', 'voucher_code_length' => 8, 'voucher_username_password_same' => true, 'voucher_character_set' => 'alnum_safe'];
     }
 
     public function removeProfile(int $index): void
@@ -158,6 +158,8 @@ class StandaloneScriptGenerator extends Component
                 'profiles.*.voucher_count' => ['required', 'integer', 'min:0', 'max:500'],
                 'profiles.*.voucher_prefix' => ['nullable', 'string', 'max:8', 'regex:/^[A-Za-z0-9-]*$/'],
                 'profiles.*.voucher_code_length' => ['required', 'integer', 'min:4', 'max:16'],
+                'profiles.*.voucher_username_password_same' => ['boolean'],
+                'profiles.*.voucher_character_set' => ['required', Rule::in(array_keys(StandaloneHotspotScriptGenerator::CHARACTER_SETS))],
             ],
             4 => [
                 'voucher_template' => ['required', Rule::in(['grid', 'receipt', 'compact'])],

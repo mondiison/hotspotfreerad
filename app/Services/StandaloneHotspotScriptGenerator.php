@@ -31,6 +31,19 @@ namespace App\Services;
 class StandaloneHotspotScriptGenerator
 {
     /**
+     * Character sets a voucher's username/password can be drawn from, mirroring
+     * MikroTik's own batch-user dialog (username-characters/password-characters).
+     * "safe" excludes characters easily confused when handwritten or misread off
+     * a receipt (0/O, 1/I/l).
+     */
+    public const CHARACTER_SETS = [
+        'alnum_safe' => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789',
+        'numeric' => '0123456789',
+        'alpha_safe' => 'ABCDEFGHJKLMNPQRSTUVWXYZ',
+        'alnum_full' => 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789',
+    ];
+
+    /**
      * @param  array{
      *     router_identity: string,
      *     hotspot_name: string,
@@ -43,9 +56,9 @@ class StandaloneHotspotScriptGenerator
      *     enable_mgmt_network: bool,
      *     mgmt_network: string,
      *     mgmt_password: string,
-     *     profiles: list<array{name: string, download_mbps: int, upload_mbps: int, session_minutes: int, shared_users: int, voucher_count: int, voucher_prefix: string, voucher_code_length: int}>,
+     *     profiles: list<array{name: string, download_mbps: int, upload_mbps: int, session_minutes: int, shared_users: int, voucher_count: int, voucher_prefix: string, voucher_code_length: int, voucher_username_password_same: bool, voucher_character_set: string}>,
      * } $config
-     * @return array{script: string, vouchers: list<array{profile: string, code: string}>}
+     * @return array{script: string, vouchers: list<array{profile: string, username: string, password: string}>}
      */
     public function generate(array $config): array
     {
@@ -249,7 +262,7 @@ class StandaloneHotspotScriptGenerator
      * that approximates the same behaviour.
      *
      * @param  list<array{name: string, download_mbps: int, upload_mbps: int, session_minutes: int, shared_users: int, voucher_count: int}>  $profiles
-     * @param  list<array{profile: string, code: string}>  $vouchers
+     * @param  list<array{profile: string, username: string, password: string}>  $vouchers
      * @return list<string>
      */
     private function userSystemLines(array $config, array $vouchers): array
@@ -261,7 +274,7 @@ class StandaloneHotspotScriptGenerator
 
     /**
      * @param  list<array{name: string, download_mbps: int, upload_mbps: int, shared_users: int}>  $profiles
-     * @param  list<array{profile: string, code: string}>  $vouchers
+     * @param  list<array{profile: string, username: string, password: string}>  $vouchers
      * @return list<string>
      */
     private function userManagerLines(array $profiles, array $vouchers): array
@@ -295,8 +308,8 @@ class StandaloneHotspotScriptGenerator
                 $slug = $this->profileIdentifier($voucher['profile']);
                 $sharedUsers = max(1, (int) ($sharedUsersByProfile[$voucher['profile']] ?? 1));
 
-                $lines[] = '/user-manager user add name="'.$voucher['code'].'" password="'.$voucher['code'].'" shared-users='.$sharedUsers;
-                $lines[] = '/user-manager user-profile add user="'.$voucher['code'].'" profile="'.$slug.'"';
+                $lines[] = '/user-manager user add name="'.$voucher['username'].'" password="'.$voucher['password'].'" shared-users='.$sharedUsers;
+                $lines[] = '/user-manager user-profile add user="'.$voucher['username'].'" profile="'.$slug.'"';
             }
         }
 
@@ -305,7 +318,7 @@ class StandaloneHotspotScriptGenerator
 
     /**
      * @param  list<array{name: string, download_mbps: int, upload_mbps: int, session_minutes: int, shared_users: int}>  $profiles
-     * @param  list<array{profile: string, code: string}>  $vouchers
+     * @param  list<array{profile: string, username: string, password: string}>  $vouchers
      * @return list<string>
      */
     private function classicHotspotLines(array $profiles, array $vouchers): array
@@ -331,7 +344,7 @@ class StandaloneHotspotScriptGenerator
             $lines[] = '# Voucher codes -- also listed on the printable sheet';
 
             foreach ($vouchers as $voucher) {
-                $lines[] = '/ip hotspot user add name="'.$voucher['code'].'" password="'.$voucher['code'].'" profile="'.$this->profileIdentifier($voucher['profile']).'"';
+                $lines[] = '/ip hotspot user add name="'.$voucher['username'].'" password="'.$voucher['password'].'" profile="'.$this->profileIdentifier($voucher['profile']).'"';
             }
         }
 
@@ -356,27 +369,31 @@ class StandaloneHotspotScriptGenerator
     }
 
     /**
-     * @param  list<array{name: string, voucher_count: int, voucher_prefix: string, voucher_code_length: int}>  $profiles
-     * @return list<array{profile: string, code: string}>
+     * @param  list<array{name: string, voucher_count: int, voucher_prefix: string, voucher_code_length: int, voucher_username_password_same: bool, voucher_character_set: string}>  $profiles
+     * @return list<array{profile: string, username: string, password: string}>
      */
     private function generateVoucherCodes(array $profiles): array
     {
         $vouchers = [];
-        $seen = [];
+        $seenUsernames = [];
 
         foreach ($profiles as $profile) {
             $prefix = (string) ($profile['voucher_prefix'] ?? '');
             $codeLength = max(4, (int) ($profile['voucher_code_length'] ?? 8));
+            $alphabet = self::CHARACTER_SETS[$profile['voucher_character_set'] ?? 'alnum_safe'] ?? self::CHARACTER_SETS['alnum_safe'];
+            $samePassword = (bool) ($profile['voucher_username_password_same'] ?? true);
 
             for ($i = 0; $i < max(0, (int) $profile['voucher_count']); $i++) {
                 do {
-                    $code = $prefix.$this->randomVoucherCode($codeLength);
-                } while (isset($seen[$code]));
+                    $username = $prefix.$this->randomVoucherCode($codeLength, $alphabet);
+                } while (isset($seenUsernames[$username]));
 
-                $seen[$code] = true;
+                $seenUsernames[$username] = true;
+
                 $vouchers[] = [
                     'profile' => $profile['name'],
-                    'code' => $code,
+                    'username' => $username,
+                    'password' => $samePassword ? $username : $this->randomVoucherCode($codeLength, $alphabet),
                 ];
             }
         }
@@ -384,9 +401,8 @@ class StandaloneHotspotScriptGenerator
         return $vouchers;
     }
 
-    private function randomVoucherCode(int $length): string
+    private function randomVoucherCode(int $length, string $alphabet): string
     {
-        $alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
         $code = '';
 
         for ($i = 0; $i < $length; $i++) {

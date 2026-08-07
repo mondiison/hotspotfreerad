@@ -183,11 +183,25 @@
                                         <flux:input type="number" min="4" max="16" wire:model.blur="profiles.{{ $index }}.voucher_code_length" />
                                         <flux:error name="profiles.{{ $index }}.voucher_code_length" />
                                     </flux:field>
-                                    <div class="flex items-end justify-end">
-                                        @if (count($profiles) > 1)
-                                            <flux:button type="button" size="sm" variant="danger" icon="trash" wire:click="removeProfile({{ $index }})">Remove</flux:button>
-                                        @endif
-                                    </div>
+                                    <flux:field>
+                                        <flux:label size="sm">Characters</flux:label>
+                                        <flux:select wire:model.blur="profiles.{{ $index }}.voucher_character_set">
+                                            <flux:select.option value="alnum_safe">Letters &amp; numbers (recommended)</flux:select.option>
+                                            <flux:select.option value="numeric">Numbers only</flux:select.option>
+                                            <flux:select.option value="alpha_safe">Letters only</flux:select.option>
+                                            <flux:select.option value="alnum_full">Letters &amp; numbers (all, case-sensitive)</flux:select.option>
+                                        </flux:select>
+                                        <flux:error name="profiles.{{ $index }}.voucher_character_set" />
+                                    </flux:field>
+                                </div>
+                                <div class="mt-3 flex items-end justify-between gap-3">
+                                    <flux:field>
+                                        <flux:checkbox wire:model.blur="profiles.{{ $index }}.voucher_username_password_same" label="Username and password are the same" />
+                                        <flux:description>Turn off to generate a different, independent password for each voucher.</flux:description>
+                                    </flux:field>
+                                    @if (count($profiles) > 1)
+                                        <flux:button type="button" size="sm" variant="danger" icon="trash" wire:click="removeProfile({{ $index }})">Remove</flux:button>
+                                    @endif
                                 </div>
                             </div>
                         @endforeach
@@ -274,7 +288,7 @@
                             <flux:label>{{ count($generatedVouchers) }} voucher {{ \Illuminate\Support\Str::plural('code', count($generatedVouchers)) }}</flux:label>
                             <flux:button type="button" size="sm" variant="primary" icon="printer" x-data @click="window.print()">Print vouchers</flux:button>
                         </div>
-                        <p class="text-xs text-zinc-500">Each code above is also created as a local hotspot user on the router (username and password both equal the code).</p>
+                        <p class="text-xs text-zinc-500">Each voucher above is also created as a local hotspot user on the router with the username and password shown on the printable sheet.</p>
                     </div>
                 @endif
             </div>
@@ -288,7 +302,12 @@
                     @foreach ($generatedVouchers as $voucher)
                         <div style="min-height: 22mm; border: 1px dashed #71717a; border-radius: 4px; padding: 2mm; break-inside: avoid; text-align: center;">
                             <div style="font-size: 8px; color: #52525b;">{{ $voucher['profile'] }}</div>
-                            <div style="margin: 3px 0; padding: 3px; border-radius: 3px; background: #111827; color: #fff; font-size: 11px; font-weight: 700; letter-spacing: .3px; overflow-wrap: anywhere;">{{ $voucher['code'] }}</div>
+                            @if ($voucher['username'] === $voucher['password'])
+                                <div style="margin: 3px 0; padding: 3px; border-radius: 3px; background: #111827; color: #fff; font-size: 11px; font-weight: 700; letter-spacing: .3px; overflow-wrap: anywhere;">{{ $voucher['username'] }}</div>
+                            @else
+                                <div style="margin-top: 3px; padding: 2px; border-radius: 3px; background: #111827; color: #fff; font-size: 9px; font-weight: 700; overflow-wrap: anywhere;">U: {{ $voucher['username'] }}</div>
+                                <div style="margin-top: 2px; padding: 2px; border-radius: 3px; background: #52525b; color: #fff; font-size: 9px; font-weight: 700; overflow-wrap: anywhere;">P: {{ $voucher['password'] }}</div>
+                            @endif
                         </div>
                     @endforeach
                 </div>
@@ -298,8 +317,16 @@
                         <div style="width: 72mm; padding: 4mm; border-bottom: 1px dashed #71717a; page-break-inside: avoid;">
                             <div style="font-size: 12px; font-weight: 700; text-transform: uppercase;">{{ $hotspot_name }}</div>
                             <div style="margin-top: 2px; font-size: 10px; color: #52525b;">{{ $voucher['profile'] }}</div>
-                            <div style="margin: 6px 0; padding: 6px; text-align: center; font-size: 20px; font-weight: 700; letter-spacing: 1px; border: 1px solid #111827; border-radius: 4px;">{{ $voucher['code'] }}</div>
-                            <div style="font-size: 9px; color: #71717a;">Connect to the "{{ $hotspot_name }}" Wi-Fi, open the portal, and enter this code as both username and password.</div>
+                            @if ($voucher['username'] === $voucher['password'])
+                                <div style="margin: 6px 0; padding: 6px; text-align: center; font-size: 20px; font-weight: 700; letter-spacing: 1px; border: 1px solid #111827; border-radius: 4px;">{{ $voucher['username'] }}</div>
+                                <div style="font-size: 9px; color: #71717a;">Connect to the "{{ $hotspot_name }}" Wi-Fi, open the portal, and enter this code as both username and password.</div>
+                            @else
+                                <div style="margin: 6px 0; font-size: 13px;">
+                                    <div style="padding: 5px; text-align: center; font-weight: 700; letter-spacing: .5px; border: 1px solid #111827; border-radius: 4px 4px 0 0;">User: {{ $voucher['username'] }}</div>
+                                    <div style="padding: 5px; text-align: center; font-weight: 700; letter-spacing: .5px; border: 1px solid #111827; border-top: none; border-radius: 0 0 4px 4px;">Pass: {{ $voucher['password'] }}</div>
+                                </div>
+                                <div style="font-size: 9px; color: #71717a;">Connect to the "{{ $hotspot_name }}" Wi-Fi, open the portal, and enter this username and password.</div>
+                            @endif
                         </div>
                     @endforeach
                 </div>
@@ -310,9 +337,14 @@
                             <div>
                                 <div style="font-size: 12px; font-weight: 700; text-transform: uppercase;">{{ $hotspot_name }}</div>
                                 <div style="margin-top: 2px; font-size: 10px; color: #52525b;">{{ $voucher['profile'] }}</div>
-                                <div style="margin: 8px 0; padding: 7px; border-radius: 4px; background: #111827; color: #fff; text-align: center; font-size: 17px; font-weight: 700; letter-spacing: .5px;">{{ $voucher['code'] }}</div>
+                                @if ($voucher['username'] === $voucher['password'])
+                                    <div style="margin: 8px 0; padding: 7px; border-radius: 4px; background: #111827; color: #fff; text-align: center; font-size: 17px; font-weight: 700; letter-spacing: .5px;">{{ $voucher['username'] }}</div>
+                                @else
+                                    <div style="margin-top: 8px; padding: 6px; border-radius: 4px 4px 0 0; background: #111827; color: #fff; text-align: center; font-size: 13px; font-weight: 700; letter-spacing: .3px;">User: {{ $voucher['username'] }}</div>
+                                    <div style="padding: 6px; border-radius: 0 0 4px 4px; background: #52525b; color: #fff; text-align: center; font-size: 13px; font-weight: 700; letter-spacing: .3px;">Pass: {{ $voucher['password'] }}</div>
+                                @endif
                             </div>
-                            <div style="font-size: 9px; color: #71717a;">Connect to Wi-Fi, open the portal, and enter this code as both username and password.</div>
+                            <div style="margin-top: 6px; font-size: 9px; color: #71717a;">Connect to Wi-Fi, open the portal, and enter this {{ $voucher['username'] === $voucher['password'] ? 'code as both username and password' : 'username and password' }}.</div>
                         </div>
                     @endforeach
                 </div>

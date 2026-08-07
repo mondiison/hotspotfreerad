@@ -56,8 +56,8 @@ class StandaloneHotspotScriptGeneratorTest extends TestCase
         ]));
 
         foreach ($result['vouchers'] as $voucher) {
-            $this->assertStringContainsString('/user-manager user add name="'.$voucher['code'].'" password="'.$voucher['code'].'" shared-users=3', $result['script']);
-            $this->assertStringContainsString('/user-manager user-profile add user="'.$voucher['code'].'" profile="daily"', $result['script']);
+            $this->assertStringContainsString('/user-manager user add name="'.$voucher['username'].'" password="'.$voucher['password'].'" shared-users=3', $result['script']);
+            $this->assertStringContainsString('/user-manager user-profile add user="'.$voucher['username'].'" profile="daily"', $result['script']);
         }
     }
 
@@ -89,7 +89,7 @@ class StandaloneHotspotScriptGeneratorTest extends TestCase
         ]));
 
         foreach ($result['vouchers'] as $voucher) {
-            $this->assertStringContainsString('/ip hotspot user add name="'.$voucher['code'].'" password="'.$voucher['code'].'" profile="daily"', $result['script']);
+            $this->assertStringContainsString('/ip hotspot user add name="'.$voucher['username'].'" password="'.$voucher['password'].'" profile="daily"', $result['script']);
         }
     }
 
@@ -223,8 +223,8 @@ class StandaloneHotspotScriptGeneratorTest extends TestCase
         $this->assertCount(5, array_filter($result['vouchers'], fn ($v) => $v['profile'] === 'Daily'));
         $this->assertCount(3, array_filter($result['vouchers'], fn ($v) => $v['profile'] === 'Weekly'));
 
-        $codes = array_column($result['vouchers'], 'code');
-        $this->assertSame($codes, array_unique($codes));
+        $usernames = array_column($result['vouchers'], 'username');
+        $this->assertSame($usernames, array_unique($usernames));
     }
 
     public function test_voucher_prefix_and_code_length_are_respected(): void
@@ -236,8 +236,64 @@ class StandaloneHotspotScriptGeneratorTest extends TestCase
         ]));
 
         foreach ($result['vouchers'] as $voucher) {
-            $this->assertStringStartsWith('DLY-', $voucher['code']);
-            $this->assertSame(10, strlen($voucher['code']));
+            $this->assertStringStartsWith('DLY-', $voucher['username']);
+            $this->assertSame(10, strlen($voucher['username']));
+        }
+    }
+
+    public function test_username_and_password_are_the_same_by_default(): void
+    {
+        $result = (new StandaloneHotspotScriptGenerator)->generate($this->config([
+            'profiles' => [
+                ['name' => 'Daily', 'download_mbps' => 5, 'upload_mbps' => 5, 'session_minutes' => 60, 'shared_users' => 1, 'voucher_count' => 3, 'voucher_prefix' => '', 'voucher_code_length' => 8, 'voucher_username_password_same' => true],
+            ],
+        ]));
+
+        foreach ($result['vouchers'] as $voucher) {
+            $this->assertSame($voucher['username'], $voucher['password']);
+        }
+    }
+
+    public function test_username_and_password_can_be_generated_independently(): void
+    {
+        $result = (new StandaloneHotspotScriptGenerator)->generate($this->config([
+            'profiles' => [
+                ['name' => 'Daily', 'download_mbps' => 5, 'upload_mbps' => 5, 'session_minutes' => 60, 'shared_users' => 1, 'voucher_count' => 5, 'voucher_prefix' => '', 'voucher_code_length' => 8, 'voucher_username_password_same' => false],
+            ],
+        ]));
+
+        $this->assertNotEmpty($result['vouchers']);
+
+        foreach ($result['vouchers'] as $voucher) {
+            $this->assertNotSame($voucher['username'], $voucher['password']);
+            $this->assertSame(8, strlen($voucher['password']));
+        }
+    }
+
+    public function test_voucher_character_set_numeric_only_produces_digits(): void
+    {
+        $result = (new StandaloneHotspotScriptGenerator)->generate($this->config([
+            'profiles' => [
+                ['name' => 'Daily', 'download_mbps' => 5, 'upload_mbps' => 5, 'session_minutes' => 60, 'shared_users' => 1, 'voucher_count' => 5, 'voucher_prefix' => '', 'voucher_code_length' => 8, 'voucher_character_set' => 'numeric', 'voucher_username_password_same' => false],
+            ],
+        ]));
+
+        foreach ($result['vouchers'] as $voucher) {
+            $this->assertMatchesRegularExpression('/^\d+$/', $voucher['username']);
+            $this->assertMatchesRegularExpression('/^\d+$/', $voucher['password']);
+        }
+    }
+
+    public function test_voucher_character_set_alpha_only_produces_letters(): void
+    {
+        $result = (new StandaloneHotspotScriptGenerator)->generate($this->config([
+            'profiles' => [
+                ['name' => 'Daily', 'download_mbps' => 5, 'upload_mbps' => 5, 'session_minutes' => 60, 'shared_users' => 1, 'voucher_count' => 5, 'voucher_prefix' => '', 'voucher_code_length' => 8, 'voucher_character_set' => 'alpha_safe'],
+            ],
+        ]));
+
+        foreach ($result['vouchers'] as $voucher) {
+            $this->assertMatchesRegularExpression('/^[A-Z]+$/', $voucher['username']);
         }
     }
 
@@ -256,7 +312,7 @@ class StandaloneHotspotScriptGeneratorTest extends TestCase
             'mgmt_network' => '10.10.20.1/24',
             'mgmt_password' => 'password123',
             'profiles' => [
-                ['name' => '1 Hour', 'download_mbps' => 5, 'upload_mbps' => 5, 'session_minutes' => 60, 'shared_users' => 1, 'voucher_count' => 2, 'voucher_prefix' => '', 'voucher_code_length' => 8],
+                ['name' => '1 Hour', 'download_mbps' => 5, 'upload_mbps' => 5, 'session_minutes' => 60, 'shared_users' => 1, 'voucher_count' => 2, 'voucher_prefix' => '', 'voucher_code_length' => 8, 'voucher_username_password_same' => true, 'voucher_character_set' => 'alnum_safe'],
             ],
         ], $overrides);
     }
