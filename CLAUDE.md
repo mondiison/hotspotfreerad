@@ -47,7 +47,9 @@ php artisan optimize:clear
 php artisan migrate
 ```
 
-Custom Artisan commands live inline in `routes/console.php` (there is no `app/Console/Commands` directory — this is a Laravel 12 skeleton app). Notable ones: `hotspot:create-super-admin`, `hotspot:create-tenant-admin`, `hotspot:sync-expired-hotspot`, `hotspot:sync-expired-pppoe`, `hotspot:sync-expired-pos`, `hotspot:prune-security-activity`, `hotspot:backfill-voucher-payments`, `hotspot:scheduler-heartbeat`, `hotspot:sync-wireguard-peers`. All but the first three are also registered on `Schedule::` in the same file (5-minute RADIUS expiry sync, 5-minute WireGuard peer sync, daily audit-log prune, per-minute scheduler heartbeat used by the Setup Center health check).
+Custom Artisan commands live inline in `routes/console.php` (there is no `app/Console/Commands` directory — this is a Laravel 12 skeleton app). Notable ones: `hotspot:create-super-admin`, `hotspot:create-tenant-admin`, `hotspot:sync-expired-hotspot`, `hotspot:sync-expired-pppoe`, `hotspot:sync-expired-pos`, `hotspot:prune-security-activity`, `hotspot:backfill-voucher-payments`, `hotspot:scheduler-heartbeat`, `hotspot:sync-wireguard-peers`, `hotspot:resync-walled-garden`. All but the first three are also registered on `Schedule::` in the same file (5-minute RADIUS expiry sync, 5-minute WireGuard peer sync, daily audit-log prune, per-minute scheduler heartbeat used by the Setup Center health check) — `hotspot:backfill-voucher-payments` and `hotspot:resync-walled-garden` are the exceptions, both on-demand-only (a one-off backfill and a manual remediation tool, respectively).
+
+`hotspot:resync-walled-garden {router?} {--all}` re-pushes a router's walled-garden allow-list live over the RouterOS API, synchronously (unlike `SyncRouterWalledGarden` below, it doesn't need a queue worker running) — useful for immediately fixing an already-provisioned router without waiting on a gateway change to trigger the automatic job, or when `QUEUE_CONNECTION=database` locally and no worker is running to drain it.
 
 ## Architecture
 

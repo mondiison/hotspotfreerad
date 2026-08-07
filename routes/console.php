@@ -13,6 +13,7 @@ use App\Services\PppoeSubscriberManagementService;
 use App\Services\PosDeviceManagementService;
 use App\Services\RadiusProvisioningService;
 use App\Services\RouterMetricSamplingService;
+use App\Services\RouterOsConnectionService;
 use App\Services\VoucherManagementService;
 use App\Services\WireGuardPeerSyncService;
 use App\Support\SchedulerHealth;
@@ -334,3 +335,52 @@ Artisan::command('hotspot:sample-router-metrics', function (RouterMetricSampling
 Schedule::command('hotspot:sample-router-metrics')
     ->everyFiveMinutes()
     ->withoutOverlapping();
+
+Artisan::command('hotspot:resync-walled-garden {router? : Router ID to resync} {--all : Resync every router with RouterOS API credentials configured}', function (RouterOsConnectionService $routerOs, ?string $router = null): int {
+    if (! $router && ! $this->option('all')) {
+        $this->error('Pass a router ID or --all.');
+
+        return Command::FAILURE;
+    }
+
+    $routers = $router
+        ? Router::where('id', $router)->get()
+        : Router::whereNotNull('api_username')->get();
+
+    if ($routers->isEmpty()) {
+        $this->info('No matching router(s) found.');
+
+        return Command::SUCCESS;
+    }
+
+    $failures = 0;
+
+    foreach ($routers as $routerModel) {
+        $label = "Router {$routerModel->id} ({$routerModel->name})";
+
+        if (! $routerOs->isConfigured($routerModel)) {
+            $this->warn("{$label}: no RouterOS API credentials configured yet, skipped.");
+
+            continue;
+        }
+
+        $result = $routerOs->syncWalledGarden($routerModel);
+
+        if ($result['success']) {
+            $this->info("{$label}: walled garden synced (gateway: {$routerModel->shop?->paymentGateway()}).");
+
+            continue;
+        }
+
+        $failures++;
+        $this->error("{$label}: sync had failures.");
+
+        foreach ($result['steps'] as $step) {
+            if (! $step['success']) {
+                $this->line("  - {$step['label']}: {$step['error']}");
+            }
+        }
+    }
+
+    return $failures > 0 ? Command::FAILURE : Command::SUCCESS;
+})->purpose('Re-push a router walled-garden allow-list live over the RouterOS API synchronously -- use when no queue worker is running or to force a resync without changing the gateway');
