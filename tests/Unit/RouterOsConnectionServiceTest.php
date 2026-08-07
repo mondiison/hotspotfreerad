@@ -110,4 +110,45 @@ class RouterOsConnectionServiceTest extends TestCase
             ],
         ];
     }
+
+    #[DataProvider('missingWalledGardenEntriesProvider')]
+    public function test_it_filters_walled_garden_entries_down_to_what_is_missing(array $entries, array $existingHosts, array $expected): void
+    {
+        $this->assertSame($expected, RouterOsConnectionService::missingWalledGardenEntries($entries, $existingHosts));
+    }
+
+    public static function missingWalledGardenEntriesProvider(): array
+    {
+        $entries = [
+            'Add walled-garden entry (portal)' => 'portal.example.com',
+            'Add walled-garden entry (*.squadco.com)' => '*.squadco.com',
+            'Add walled-garden entry (*.cloudflare.com)' => '*.cloudflare.com',
+        ];
+
+        return [
+            'nothing on the router yet -- everything is missing' => [
+                $entries,
+                [],
+                $entries,
+            ],
+            'everything already present -- nothing is missing' => [
+                $entries,
+                ['portal.example.com', '*.squadco.com', '*.cloudflare.com'],
+                [],
+            ],
+            'one entry already present is skipped, others still added' => [
+                $entries,
+                ['*.cloudflare.com'],
+                [
+                    'Add walled-garden entry (portal)' => 'portal.example.com',
+                    'Add walled-garden entry (*.squadco.com)' => '*.squadco.com',
+                ],
+            ],
+            'an unrelated existing host does not mask a missing one' => [
+                $entries,
+                ['*.some-other-gateway.com'],
+                $entries,
+            ],
+        ];
+    }
 }

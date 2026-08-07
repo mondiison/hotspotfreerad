@@ -418,8 +418,11 @@ class RouterOsConnectionService
      * allow-listed gets its connection reset outright rather than redirected --
      * this is what makes checkout unreachable after switching gateways until the
      * new gateway's host is added. Safe and cheap to re-run any time the shop's
-     * gateway changes (each step is independently idempotent via runSteps()), and
-     * is the piece `provisionHotspot()` reuses rather than duplicating.
+     * gateway changes -- lists the router's current walled-garden entries first
+     * and only sends `/add` for hosts that aren't already there, instead of
+     * unconditionally re-adding (and duplicating, since RouterOS doesn't dedupe
+     * dst-host on its own) every entry on every call. Reused as-is by
+     * `provisionHotspot()` rather than duplicated.
      *
      * @return array{success: bool, steps: list<array{label: string, success: bool, error: ?string}>}
      */
@@ -435,23 +438,70 @@ class RouterOsConnectionService
         $portalUrl = $this->provisioning->portalUrl();
         $portalHost = parse_url($portalUrl, PHP_URL_HOST) ?: config('services.mikrotik.hotspot_dns_name');
 
-        $steps = [
-            'Add walled-garden entry (portal)' => (new Query('/ip/hotspot/walled-garden/add'))
-                ->equal('dst-host', (string) $portalHost)
-                ->equal('action', 'allow'),
-        ];
+        $entries = ['Add walled-garden entry (portal)' => (string) $portalHost];
 
         foreach (PaymentGatewayCatalog::walledGardenHosts($router->shop?->paymentGateway()) as $host) {
-            $steps['Add walled-garden entry ('.$host.')'] = (new Query('/ip/hotspot/walled-garden/add'))
-                ->equal('dst-host', $host)
-                ->equal('action', 'allow');
+            $entries['Add walled-garden entry ('.$host.')'] = $host;
         }
 
-        $steps['Add walled-garden entry (*.cloudflare.com)'] = (new Query('/ip/hotspot/walled-garden/add'))
-            ->equal('dst-host', '*.cloudflare.com')
-            ->equal('action', 'allow');
+        $entries['Add walled-garden entry (*.cloudflare.com)'] = '*.cloudflare.com';
 
-        return $this->runSteps($router, $steps);
+        $existingHosts = $this->existingWalledGardenHosts($router);
+        $missingEntries = self::missingWalledGardenEntries($entries, $existingHosts);
+
+        $queries = collect($missingEntries)->map(
+            fn (string $host): Query => (new Query('/ip/hotspot/walled-garden/add'))->equal('dst-host', $host)->equal('action', 'allow')
+        )->all();
+
+        $added = $queries === [] ? ['success' => true, 'steps' => []] : $this->runSteps($router, $queries);
+        $addedByLabel = collect($added['steps'])->keyBy('label');
+
+        $steps = [];
+        foreach ($entries as $label => $host) {
+            $steps[] = array_key_exists($label, $missingEntries)
+                ? $addedByLabel[$label]
+                : ['label' => $label, 'success' => true, 'error' => 'Already present on the router, skipped.'];
+        }
+
+        return ['success' => $added['success'], 'steps' => $steps];
+    }
+
+    /**
+     * Which of `$entries` (label => dst-host) still need a live `/add` --
+     * pure filtering logic pulled out of syncWalledGarden() so it can be
+     * unit tested without a live RouterOS connection.
+     *
+     * @param  array<string,string>  $entries
+     * @param  list<string>  $existingHosts
+     * @return array<string,string>
+     */
+    public static function missingWalledGardenEntries(array $entries, array $existingHosts): array
+    {
+        return array_filter($entries, fn (string $host): bool => ! in_array($host, $existingHosts, true));
+    }
+
+    /**
+     * The dst-host values already on the router's walled garden, so
+     * syncWalledGarden() can skip re-adding ones that are already there.
+     * Falls back to an empty list -- meaning every entry gets attempted, the
+     * same behavior as before this existed -- if the router can't be reached
+     * to list them; a failed listing shouldn't block the sync itself.
+     *
+     * @return list<string>
+     */
+    private function existingWalledGardenHosts(Router $router): array
+    {
+        try {
+            $rows = $this->client($router, 8)->query(new Query('/ip/hotspot/walled-garden/print'))->read();
+
+            return collect($rows)
+                ->filter(fn ($row) => is_array($row) && filled($row['dst-host'] ?? null))
+                ->map(fn (array $row): string => (string) $row['dst-host'])
+                ->values()
+                ->all();
+        } catch (\Throwable) {
+            return [];
+        }
     }
 
     /**
