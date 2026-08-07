@@ -594,13 +594,15 @@ HTML;
     }
 
     /**
-     * Provisions a read-only RouterOS API user so MMS Radius can pull live
-     * bandwidth, Wi-Fi scan, and topology data over the same WireGuard
-     * tunnel used for RADIUS -- no separate credential setup step. The API
-     * service is restricted to the WireGuard subnet only. Verify the exact
-     * user-group policy flags against your RouterOS version before relying
-     * on this in production; policy syntax has shifted slightly across
-     * RouterOS 7 releases.
+     * Provisions a RouterOS API user so MMS Radius can both pull live
+     * bandwidth/Wi-Fi scan/topology data AND push live provisioning writes
+     * (RADIUS client, hotspot profile, walled-garden, PPPoE profile/server --
+     * see RouterOsConnectionService::provisionHotspot()/provisionPppoe()/
+     * syncWalledGarden()) over the same WireGuard tunnel used for RADIUS --
+     * no separate credential setup step. The API service is restricted to
+     * the WireGuard subnet only. Verify the exact user-group policy flags
+     * against your RouterOS version before relying on this in production;
+     * policy syntax has shifted slightly across RouterOS 7 releases.
      *
      * @return list<string>
      */
@@ -608,22 +610,34 @@ HTML;
     {
         if (blank($router->api_password)) {
             return [
-                '# No RouterOS API credentials generated yet for this router. Live monitoring, Wi-Fi scan, and topology stay unavailable until you re-save it in MMS Radius.',
+                '# No RouterOS API credentials generated yet for this router. Live monitoring, Wi-Fi scan, topology, and "Provision via API" stay unavailable until you re-save it in MMS Radius.',
             ];
         }
 
         $username = $this->quote($router->api_username ?: 'mmsradius-api');
         $password = $this->quote($router->api_password);
 
-        // Deny-list of every policy RouterOS 7 recognizes except read+api -- confirmed
-        // against a real RouterOS 7.18.2 router's own `/user group print detail where
-        // name=full` output. Earlier revisions of this list included "dude" and
-        // "tikapp", which RouterOS 7 rejects outright ("input does not match any value
-        // of policy"), so the whole group (and therefore the API user) silently never
-        // got created. "rest-api" replaces them -- RouterOS 7 added a separate REST API
-        // surface distinct from the classic binary API this app actually uses, and it
-        // should stay denied for a read-only monitoring account.
-        $policy = 'read,api,!local,!telnet,!ssh,!ftp,!reboot,!write,!policy,!test,!winbox,!password,!web,!sniff,!sensitive,!romon,!rest-api';
+        // Deny-list of every policy RouterOS 7 recognizes except read+write+api --
+        // confirmed against a real RouterOS 7.18.2 router's own `/user group print
+        // detail where name=full` output. Earlier revisions of this list included
+        // "dude" and "tikapp", which RouterOS 7 rejects outright ("input does not
+        // match any value of policy"), so the whole group (and therefore the API
+        // user) silently never got created. "rest-api" replaces them -- RouterOS 7
+        // added a separate REST API surface distinct from the classic binary API
+        // this app actually uses, and it should stay denied.
+        //
+        // "write" is REQUIRED, not optional: "Provision via API" issues genuine
+        // write commands (/radius/add, /ip/hotspot/*/add, /ip/hotspot/walled-garden/add).
+        // A prior revision of this policy denied write ("read-only monitoring
+        // account"), which meant every one of those commands was silently rejected
+        // by RouterOS -- and, compounding it, RouterOsConnectionService::runSteps()
+        // didn't check for a RouterOS `!trap` (error) response at all, so the
+        // rejection was reported back to the admin as success. Both are fixed
+        // together: this account now genuinely needs write, and runSteps() now
+        // actually detects a trap. A router bootstrapped before this fix needs its
+        // script re-run (or a fresh "Provision via API" push once the API user's
+        // policy line has been re-applied) before writes will actually take effect.
+        $policy = 'read,write,api,!local,!telnet,!ssh,!ftp,!reboot,!policy,!test,!winbox,!password,!web,!sniff,!sensitive,!romon,!rest-api';
 
         return [
             // Update-in-place if the group/user already exist (e.g. this script is

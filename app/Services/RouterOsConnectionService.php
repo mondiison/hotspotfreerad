@@ -518,7 +518,12 @@ class RouterOsConnectionService
 
         foreach ($steps as $label => $query) {
             try {
-                $client->query($query)->read();
+                $raw = $client->query($query)->read(false);
+
+                if ($trapMessage = self::extractTrapMessage($raw)) {
+                    throw new \RuntimeException($trapMessage);
+                }
+
                 $results[] = ['label' => $label, 'success' => true, 'error' => null];
             } catch (\Throwable $e) {
                 $allSucceeded = false;
@@ -527,6 +532,33 @@ class RouterOsConnectionService
         }
 
         return ['success' => $allSucceeded, 'steps' => $results];
+    }
+
+    /**
+     * RouterOS's binary API signals a rejected command with a `!trap` block
+     * (e.g. "no such command or not enough permissions to run the command")
+     * followed by a normal `!done` that closes the reply -- the client
+     * library (`evilfreelancer/routeros-api-php`) parses `!trap` and `!done`
+     * identically and never throws, so a rejected write silently looks like
+     * a success unless the raw response is inspected for `!trap` directly.
+     * Pass the raw (unparsed, `read(false)`) response here -- not the
+     * parsed one, which has already lost the `!trap`/`!done` marker.
+     *
+     * @param  list<string>  $rawResponse
+     */
+    public static function extractTrapMessage(array $rawResponse): ?string
+    {
+        if (! in_array('!trap', $rawResponse, true)) {
+            return null;
+        }
+
+        foreach ($rawResponse as $line) {
+            if (is_string($line) && str_starts_with($line, '=message=')) {
+                return substr($line, strlen('=message='));
+            }
+        }
+
+        return 'RouterOS rejected this command (insufficient permissions or invalid parameters).';
     }
 
     /**
@@ -559,7 +591,11 @@ class RouterOsConnectionService
             }
 
             foreach ($hotspots as $hotspot) {
-                $client->query((new Query('/ip/hotspot/set'))->equal('numbers', $hotspot['.id'])->equal('profile', $profile))->read();
+                $raw = $client->query((new Query('/ip/hotspot/set'))->equal('numbers', $hotspot['.id'])->equal('profile', $profile))->read(false);
+
+                if ($trapMessage = self::extractTrapMessage($raw)) {
+                    throw new \RuntimeException($trapMessage);
+                }
             }
 
             return ['label' => $label, 'success' => true, 'error' => null];

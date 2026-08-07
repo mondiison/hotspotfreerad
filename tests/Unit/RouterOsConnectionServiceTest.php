@@ -70,4 +70,44 @@ class RouterOsConnectionServiceTest extends TestCase
             'trailing slash is not doubled' => ['/system/resource/', '/system/resource/print'],
         ];
     }
+
+    #[DataProvider('trapResponseProvider')]
+    public function test_it_extracts_a_trap_message_from_a_raw_routeros_response(array $rawResponse, ?string $expected): void
+    {
+        $this->assertSame($expected, RouterOsConnectionService::extractTrapMessage($rawResponse));
+    }
+
+    public static function trapResponseProvider(): array
+    {
+        return [
+            // The client library (evilfreelancer/routeros-api-php) parses !trap and
+            // !done identically and never throws on its own -- this is what a
+            // rejected write (e.g. insufficient policy permissions) actually looks
+            // like on the wire, and what a caller must check for explicitly.
+            'permission-denied trap' => [
+                ['!trap', '=message=no such command or not enough permissions to run the command', '!done'],
+                'no such command or not enough permissions to run the command',
+            ],
+            'trap with no message line' => [
+                ['!trap', '=category=2', '!done'],
+                'RouterOS rejected this command (insufficient permissions or invalid parameters).',
+            ],
+            'clean done with no return value' => [
+                ['!done'],
+                null,
+            ],
+            'clean done with a returned id' => [
+                ['!done', '=ret=*A'],
+                null,
+            ],
+            'a normal !re row is not a trap' => [
+                ['!re', '=name=ether1', '!done'],
+                null,
+            ],
+            'empty response' => [
+                [],
+                null,
+            ],
+        ];
+    }
 }
