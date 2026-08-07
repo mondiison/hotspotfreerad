@@ -23,11 +23,21 @@
 
         @if ($step === 1)
             <div class="space-y-5 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
-                <flux:field>
-                    <flux:label>Hotspot name</flux:label>
-                    <flux:input wire:model.blur="hotspot_name" placeholder="e.g. Bebeji Hotspot" />
-                    <flux:error name="hotspot_name" />
-                </flux:field>
+                <div class="grid gap-5 md:grid-cols-2">
+                    <flux:field>
+                        <flux:label>Router identity</flux:label>
+                        <flux:input wire:model.blur="router_identity" placeholder="e.g. Bebeji-Router01" />
+                        <flux:description>Internal admin-facing label (<code>/system identity</code>). Can differ from the hotspot name customers see.</flux:description>
+                        <flux:error name="router_identity" />
+                    </flux:field>
+
+                    <flux:field>
+                        <flux:label>Hotspot name</flux:label>
+                        <flux:input wire:model.blur="hotspot_name" placeholder="e.g. Bebeji Hotspot" />
+                        <flux:description>Shown to customers as the SSID and portal branding.</flux:description>
+                        <flux:error name="hotspot_name" />
+                    </flux:field>
+                </div>
 
                 <flux:field>
                     <flux:label>RouterOS version</flux:label>
@@ -35,6 +45,7 @@
                         <flux:select.option value="7">RouterOS 7</flux:select.option>
                         <flux:select.option value="6">RouterOS 6</flux:select.option>
                     </flux:select>
+                    <flux:description>RouterOS 7 uses the built-in User Manager for vouchers (validity starts at first login). RouterOS 6 approximates this with an on-login script.</flux:description>
                     <flux:error name="ros_version" />
                 </flux:field>
 
@@ -52,10 +63,10 @@
                     </flux:field>
 
                     <flux:field>
-                        <flux:label>LAN port</flux:label>
-                        <flux:input wire:model.blur="lan_port" placeholder="ether2" />
-                        <flux:description>The port for wired hotspot clients or an external AP.</flux:description>
-                        <flux:error name="lan_port" />
+                        <flux:label>Total Ethernet ports</flux:label>
+                        <flux:input type="number" min="2" wire:model.blur="ethernet_port_count" />
+                        <flux:description>Every port except WAN is bridged into the hotspot -- e.g. a 5-port router with WAN on ether1 bridges ether2-ether5.</flux:description>
+                        <flux:error name="ethernet_port_count" />
                     </flux:field>
                 </div>
 
@@ -98,7 +109,7 @@
                         </flux:field>
                     @else
                         <div class="rounded-md border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-600">
-                            This router has no built-in wireless, so the management network needs its own wired port -- wire a dedicated cable to it rather than sharing the LAN port.
+                            This router has no built-in wireless, so the management network needs its own wired port -- wire a dedicated cable to it rather than sharing a hotspot LAN port.
                         </div>
                     @endif
                 @endif
@@ -156,15 +167,27 @@
                                         <flux:error name="profiles.{{ $index }}.shared_users" />
                                     </flux:field>
                                 </div>
-                                <div class="mt-3 flex items-end justify-between gap-3">
-                                    <flux:field class="max-w-[220px]">
+                                <div class="mt-3 grid gap-3 md:grid-cols-4">
+                                    <flux:field>
                                         <flux:label size="sm">Vouchers to generate</flux:label>
                                         <flux:input type="number" min="0" wire:model.blur="profiles.{{ $index }}.voucher_count" />
                                         <flux:error name="profiles.{{ $index }}.voucher_count" />
                                     </flux:field>
-                                    @if (count($profiles) > 1)
-                                        <flux:button type="button" size="sm" variant="danger" icon="trash" wire:click="removeProfile({{ $index }})">Remove</flux:button>
-                                    @endif
+                                    <flux:field>
+                                        <flux:label size="sm">Code prefix (optional)</flux:label>
+                                        <flux:input wire:model.blur="profiles.{{ $index }}.voucher_prefix" placeholder="e.g. DLY-" maxlength="8" />
+                                        <flux:error name="profiles.{{ $index }}.voucher_prefix" />
+                                    </flux:field>
+                                    <flux:field>
+                                        <flux:label size="sm">Code length</flux:label>
+                                        <flux:input type="number" min="4" max="16" wire:model.blur="profiles.{{ $index }}.voucher_code_length" />
+                                        <flux:error name="profiles.{{ $index }}.voucher_code_length" />
+                                    </flux:field>
+                                    <div class="flex items-end justify-end">
+                                        @if (count($profiles) > 1)
+                                            <flux:button type="button" size="sm" variant="danger" icon="trash" wire:click="removeProfile({{ $index }})">Remove</flux:button>
+                                        @endif
+                                    </div>
                                 </div>
                             </div>
                         @endforeach
@@ -183,14 +206,22 @@
                 <flux:label>Voucher print template</flux:label>
                 <flux:error name="voucher_template" />
 
-                <div class="grid gap-3 md:grid-cols-2">
+                <div class="grid gap-3 md:grid-cols-3">
                     <button
                         type="button"
                         wire:click="$set('voucher_template', 'grid')"
                         class="rounded-lg border p-4 text-left {{ $voucher_template === 'grid' ? 'border-zinc-950 bg-zinc-50 ring-2 ring-zinc-950/10' : 'border-zinc-200 hover:border-zinc-400' }}"
                     >
                         <p class="text-sm font-semibold text-zinc-950">Card grid</p>
-                        <p class="mt-1 text-xs leading-5 text-zinc-500">Dashed-border cards, several per A4 sheet -- good for cutting apart with scissors.</p>
+                        <p class="mt-1 text-xs leading-5 text-zinc-500">Dashed-border cards, 3 per row -- good for cutting apart with scissors.</p>
+                    </button>
+                    <button
+                        type="button"
+                        wire:click="$set('voucher_template', 'compact')"
+                        class="rounded-lg border p-4 text-left {{ $voucher_template === 'compact' ? 'border-zinc-950 bg-zinc-50 ring-2 ring-zinc-950/10' : 'border-zinc-200 hover:border-zinc-400' }}"
+                    >
+                        <p class="text-sm font-semibold text-zinc-950">Compact grid</p>
+                        <p class="mt-1 text-xs leading-5 text-zinc-500">Minimal text, 6 per row -- fits far more vouchers per sheet to cut printing cost.</p>
                     </button>
                     <button
                         type="button"
@@ -252,7 +283,16 @@
 
     @if ($step === 5 && $generatedVouchers !== [])
         <div class="print-only">
-            @if ($voucher_template === 'receipt')
+            @if ($voucher_template === 'compact')
+                <div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 3mm; font-family: Arial, sans-serif; color: #111827;">
+                    @foreach ($generatedVouchers as $voucher)
+                        <div style="min-height: 22mm; border: 1px dashed #71717a; border-radius: 4px; padding: 2mm; break-inside: avoid; text-align: center;">
+                            <div style="font-size: 8px; color: #52525b;">{{ $voucher['profile'] }}</div>
+                            <div style="margin: 3px 0; padding: 3px; border-radius: 3px; background: #111827; color: #fff; font-size: 11px; font-weight: 700; letter-spacing: .3px; overflow-wrap: anywhere;">{{ $voucher['code'] }}</div>
+                        </div>
+                    @endforeach
+                </div>
+            @elseif ($voucher_template === 'receipt')
                 <div style="font-family: Arial, sans-serif; color: #111827;">
                     @foreach ($generatedVouchers as $voucher)
                         <div style="width: 72mm; padding: 4mm; border-bottom: 1px dashed #71717a; page-break-inside: avoid;">

@@ -61,11 +61,12 @@ class StandaloneScriptGeneratorTest extends TestCase
 
         Livewire::test(StandaloneScriptGenerator::class)
             ->assertSet('step', 1)
+            ->set('router_identity', 'Corner Shop Router')
             ->set('hotspot_name', 'Corner Shop Wi-Fi')
             ->set('ros_version', '7')
             ->set('has_wireless', true)
             ->set('wan_port', 'ether1')
-            ->set('lan_port', 'ether2')
+            ->set('ethernet_port_count', 5)
             ->set('wireless_interface', 'wifi1')
             ->call('nextStep')
             ->assertSet('step', 2)
@@ -91,8 +92,8 @@ class StandaloneScriptGeneratorTest extends TestCase
             ->assertSee('4 voucher');
 
         Livewire::test(StandaloneScriptGenerator::class)
+            ->set('router_identity', 'Corner Shop Router')
             ->set('hotspot_name', 'Corner Shop Wi-Fi')
-            ->set('lan_port', 'ether2')
             ->set('hotspot_network', '10.10.10.1/24')
             ->set('mgmt_network', '10.10.20.1/24')
             ->set('mgmt_password', 'a-strong-password')
@@ -103,15 +104,15 @@ class StandaloneScriptGeneratorTest extends TestCase
             });
     }
 
-    public function test_wizard_step_one_requires_different_wan_and_lan_ports(): void
+    public function test_wizard_step_one_requires_wan_port_within_ethernet_port_count(): void
     {
         $this->actingAs($this->superAdmin());
 
         Livewire::test(StandaloneScriptGenerator::class)
-            ->set('wan_port', 'ether1')
-            ->set('lan_port', 'ether1')
+            ->set('wan_port', 'ether6')
+            ->set('ethernet_port_count', 5)
             ->call('nextStep')
-            ->assertHasErrors('lan_port');
+            ->assertHasErrors('ethernet_port_count');
     }
 
     public function test_wizard_requires_wireless_interface_when_router_has_wireless(): void

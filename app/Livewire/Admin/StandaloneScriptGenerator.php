@@ -11,6 +11,8 @@ class StandaloneScriptGenerator extends Component
 {
     public int $step = 1;
 
+    public string $router_identity = 'My Router';
+
     public string $hotspot_name = 'My Hotspot';
 
     public string $ros_version = '7';
@@ -19,7 +21,7 @@ class StandaloneScriptGenerator extends Component
 
     public string $wan_port = 'ether1';
 
-    public string $lan_port = 'ether2';
+    public int $ethernet_port_count = 5;
 
     public string $wireless_interface = 'wifi1';
 
@@ -32,7 +34,7 @@ class StandaloneScriptGenerator extends Component
     public string $hotspot_network = '10.10.10.1/24';
 
     public array $profiles = [
-        ['name' => '1 Hour', 'download_mbps' => 5, 'upload_mbps' => 5, 'session_minutes' => 60, 'shared_users' => 1, 'voucher_count' => 10],
+        ['name' => '1 Hour', 'download_mbps' => 5, 'upload_mbps' => 5, 'session_minutes' => 60, 'shared_users' => 1, 'voucher_count' => 10, 'voucher_prefix' => '', 'voucher_code_length' => 8],
     ];
 
     public string $voucher_template = 'grid';
@@ -66,7 +68,7 @@ class StandaloneScriptGenerator extends Component
 
     public function addProfile(): void
     {
-        $this->profiles[] = ['name' => '', 'download_mbps' => 5, 'upload_mbps' => 5, 'session_minutes' => 60, 'shared_users' => 1, 'voucher_count' => 10];
+        $this->profiles[] = ['name' => '', 'download_mbps' => 5, 'upload_mbps' => 5, 'session_minutes' => 60, 'shared_users' => 1, 'voucher_count' => 10, 'voucher_prefix' => '', 'voucher_code_length' => 8];
     }
 
     public function removeProfile(int $index): void
@@ -91,11 +93,12 @@ class StandaloneScriptGenerator extends Component
         $this->validate($this->allRules());
 
         $result = $generator->generate([
+            'router_identity' => $this->router_identity,
             'hotspot_name' => $this->hotspot_name,
             'ros_version' => $this->ros_version,
             'has_wireless' => $this->has_wireless,
             'wan_port' => $this->wan_port,
-            'lan_port' => $this->lan_port,
+            'ethernet_port_count' => $this->ethernet_port_count,
             'wireless_interface' => $this->wireless_interface,
             'hotspot_network' => $this->hotspot_network,
             'enable_mgmt_network' => $this->enable_mgmt_network,
@@ -120,11 +123,20 @@ class StandaloneScriptGenerator extends Component
     {
         return match ($step) {
             1 => [
+                'router_identity' => ['required', 'string', 'max:64'],
                 'hotspot_name' => ['required', 'string', 'max:64'],
                 'ros_version' => ['required', Rule::in(['6', '7'])],
                 'has_wireless' => ['boolean'],
-                'wan_port' => ['required', 'string', 'max:32'],
-                'lan_port' => ['required', 'string', 'max:32', 'different:wan_port'],
+                'wan_port' => ['required', 'string', 'max:32', 'regex:/^[a-zA-Z-]+\d+$/'],
+                'ethernet_port_count' => ['required', 'integer', 'min:2', 'max:64', function ($attribute, $value, $fail) {
+                    if (! preg_match('/(\d+)$/', $this->wan_port, $matches)) {
+                        return;
+                    }
+
+                    if ((int) $matches[1] > $value) {
+                        $fail('The WAN port number is higher than the total Ethernet port count.');
+                    }
+                }],
                 'wireless_interface' => ['required_if:has_wireless,true', 'nullable', 'string', 'max:32'],
             ],
             2 => [
@@ -144,9 +156,11 @@ class StandaloneScriptGenerator extends Component
                 'profiles.*.session_minutes' => ['required', 'integer', 'min:1', 'max:43200'],
                 'profiles.*.shared_users' => ['required', 'integer', 'min:1', 'max:50'],
                 'profiles.*.voucher_count' => ['required', 'integer', 'min:0', 'max:500'],
+                'profiles.*.voucher_prefix' => ['nullable', 'string', 'max:8', 'regex:/^[A-Za-z0-9-]*$/'],
+                'profiles.*.voucher_code_length' => ['required', 'integer', 'min:4', 'max:16'],
             ],
             4 => [
-                'voucher_template' => ['required', Rule::in(['grid', 'receipt'])],
+                'voucher_template' => ['required', Rule::in(['grid', 'receipt', 'compact'])],
             ],
             default => [],
         };
