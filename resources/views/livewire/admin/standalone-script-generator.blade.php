@@ -261,7 +261,10 @@
             <div class="space-y-5">
                 <div class="flex items-center justify-between">
                     <flux:heading size="lg">Script &amp; vouchers ready</flux:heading>
-                    <flux:button type="button" variant="outline" wire:click="startOver">Start over</flux:button>
+                    <div class="flex gap-2">
+                        <flux:button type="button" variant="outline" wire:click="previousStep">Back to change settings</flux:button>
+                        <flux:button type="button" variant="ghost" wire:click="startOver">Start over</flux:button>
+                    </div>
                 </div>
 
                 <div>

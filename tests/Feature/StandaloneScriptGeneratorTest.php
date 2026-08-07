@@ -104,6 +104,28 @@ class StandaloneScriptGeneratorTest extends TestCase
             });
     }
 
+    public function test_review_page_can_go_back_to_change_settings_without_losing_entered_data(): void
+    {
+        $this->actingAs($this->superAdmin());
+
+        Livewire::test(StandaloneScriptGenerator::class)
+            ->set('router_identity', 'Corner Shop Router')
+            ->set('hotspot_name', 'Corner Shop Wi-Fi')
+            ->set('hotspot_network', '10.10.10.1/24')
+            ->set('mgmt_network', '10.10.20.1/24')
+            ->set('mgmt_password', 'a-strong-password')
+            ->set('profiles.0.name', 'Daily')
+            ->set('profiles.0.voucher_count', 4)
+            ->call('generate')
+            ->assertHasNoErrors()
+            ->assertSet('step', 5)
+            ->call('previousStep')
+            ->assertSet('step', 4)
+            ->assertSet('router_identity', 'Corner Shop Router')
+            ->assertSet('profiles.0.name', 'Daily')
+            ->assertSet('profiles.0.voucher_count', 4);
+    }
+
     public function test_wizard_can_generate_independent_usernames_and_passwords_with_a_chosen_character_set(): void
     {
         $this->actingAs($this->superAdmin());
