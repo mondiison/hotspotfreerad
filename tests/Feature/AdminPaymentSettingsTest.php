@@ -2,12 +2,15 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\SyncRouterWalledGarden;
 use App\Livewire\Admin\PaymentSettingsCard;
+use App\Models\Router;
 use App\Models\Shop;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Support\PaymentGatewayCatalog;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -106,6 +109,72 @@ class AdminPaymentSettingsTest extends TestCase
             ->assertRedirect(route('admin.payment-settings.index'));
 
         $this->assertSame('monnify', $shop->refresh()->payment_gateway);
+    }
+
+    public function test_switching_gateway_dispatches_a_walled_garden_sync_for_every_shop_router(): void
+    {
+        Queue::fake();
+
+        [$tenant] = $this->tenants();
+        $shop = $this->shop($tenant, 'Multi Router Shop', false);
+        $routerOne = Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'Router One',
+            'nas_identifier' => 'multi-router-one',
+            'wireguard_internal_ip' => '10.8.0.200',
+            'shared_secret' => 'radius-secret',
+        ]);
+        $routerTwo = Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'Router Two',
+            'nas_identifier' => 'multi-router-two',
+            'wireguard_internal_ip' => '10.8.0.201',
+            'shared_secret' => 'radius-secret',
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->put(route('admin.payment-settings.update', $shop), [
+                'payment_gateway' => 'squad',
+            ])
+            ->assertRedirect(route('admin.payment-settings.index'));
+
+        Queue::assertPushed(SyncRouterWalledGarden::class, 2);
+        Queue::assertPushed(fn (SyncRouterWalledGarden $job): bool => $job->routerId() === $routerOne->id);
+        Queue::assertPushed(fn (SyncRouterWalledGarden $job): bool => $job->routerId() === $routerTwo->id);
+    }
+
+    public function test_saving_without_changing_gateway_does_not_dispatch_a_walled_garden_sync(): void
+    {
+        Queue::fake();
+
+        [$tenant] = $this->tenants();
+        $shop = $this->shop($tenant, 'Same Gateway Shop', false);
+        $shop->update(['payment_gateway' => 'squad']);
+        Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'Router One',
+            'nas_identifier' => 'same-gateway-router',
+            'wireguard_internal_ip' => '10.8.0.202',
+            'shared_secret' => 'radius-secret',
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->put(route('admin.payment-settings.update', $shop), [
+                'payment_gateway' => 'squad',
+            ])
+            ->assertRedirect(route('admin.payment-settings.index'));
+
+        Queue::assertNotPushed(SyncRouterWalledGarden::class);
     }
 
     public function test_client_credentials_must_be_saved_together(): void

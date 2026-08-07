@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Jobs\SyncRouterWalledGarden;
 use App\Models\Shop;
 use App\Models\User;
 use App\Support\PaymentGatewayCatalog;
@@ -38,6 +39,7 @@ class PaymentSettingsService
         TenantAccess::assertShop($shop, $user);
         $shop->loadMissing('tenant');
 
+        $previousGateway = $shop->payment_gateway;
         $updates = $this->updates($shop, $data);
 
         $tenantUpdates = $updates['tenant'] ?? [];
@@ -47,8 +49,19 @@ class PaymentSettingsService
 
         if ($tenantUpdates !== [] && $shop->tenant) {
             $shop->tenant->update($tenantUpdates);
+            $shopUpdated = true;
+        }
 
-            return true;
+        // The new gateway's hosted-checkout host has to be walled-garden'd on every
+        // router this shop owns, or customers hit a dead connection at checkout the
+        // moment they pick a package -- see the RouterOsConnectionService::syncWalledGarden()
+        // note for why HTTPS destinations fail closed rather than redirecting. Queued
+        // (not synchronous) since this can touch multiple routers over the network and
+        // shouldn't make the settings save wait on router reachability.
+        if (array_key_exists('payment_gateway', $updates) && $updates['payment_gateway'] !== $previousGateway) {
+            $shop->routers()->pluck('id')->each(
+                fn (int $routerId) => SyncRouterWalledGarden::dispatch($routerId)
+            );
         }
 
         return $shopUpdated;

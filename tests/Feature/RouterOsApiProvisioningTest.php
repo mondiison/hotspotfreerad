@@ -221,12 +221,39 @@ class RouterOsApiProvisioningTest extends TestCase
 
         $result = app(RouterOsConnectionService::class)->provisionHotspot($router);
 
+        // RADIUS client, hotspot profile, portal walled-garden entry, one walled-garden
+        // entry per host in the shop's active gateway's PaymentGatewayCatalog list
+        // (flutterwave by default: *.flutterwave.com, *.ravepay.co), the Cloudflare
+        // walled-garden entry, then the final "point hotspot server" step.
         $this->assertFalse($result['success']);
-        $this->assertCount(4, $result['steps']);
+        $this->assertCount(7, $result['steps']);
         $this->assertFalse($result['steps'][0]['success']);
         $this->assertNotEmpty($result['steps'][0]['error']);
-        $this->assertSame('Point hotspot server at "saas-prof"', $result['steps'][3]['label']);
-        $this->assertFalse($result['steps'][3]['success']);
+        $lastStep = $result['steps'][count($result['steps']) - 1];
+        $this->assertSame('Point hotspot server at "saas-prof"', $lastStep['label']);
+        $this->assertFalse($lastStep['success']);
+    }
+
+    public function test_provision_hotspot_walled_gardens_the_shops_active_payment_gateway(): void
+    {
+        $shop = $this->makeShop();
+        $shop->update(['payment_gateway' => 'squad']);
+
+        $router = Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'Squad Router',
+            'nas_identifier' => 'squad-router',
+            'wireguard_internal_ip' => '192.0.2.5',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        $result = app(RouterOsConnectionService::class)->provisionHotspot($router);
+
+        $labels = array_column($result['steps'], 'label');
+
+        $this->assertContains('Add walled-garden entry (*.squadco.com)', $labels);
+        $this->assertContains('Add walled-garden entry (*.cloudflare.com)', $labels);
+        $this->assertNotContains('Add walled-garden entry (*.flutterwave.com)', $labels);
     }
 
     public function test_provision_pppoe_reports_a_clear_error_when_router_is_unreachable(): void

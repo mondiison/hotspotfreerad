@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Router;
+use App\Support\PaymentGatewayCatalog;
 use RouterOS\Client;
 use RouterOS\Config;
 use RouterOS\Query;
@@ -381,9 +382,6 @@ class RouterOsConnectionService
             ];
         }
 
-        $portalUrl = $this->provisioning->portalUrl();
-        $portalHost = parse_url($portalUrl, PHP_URL_HOST) ?: config('services.mikrotik.hotspot_dns_name');
-
         $steps = [
             'Add RADIUS client' => (new Query('/radius/add'))
                 ->equal('address', (string) config('services.radius.server_ip'))
@@ -399,18 +397,61 @@ class RouterOsConnectionService
                 ->equal('html-directory', 'flash/hotspot')
                 ->equal('dns-name', (string) config('services.mikrotik.hotspot_dns_name'))
                 ->equal('radius-accounting', 'yes'),
-            'Add walled-garden entry' => (new Query('/ip/hotspot/walled-garden/add'))
+        ];
+
+        $result = $this->runSteps($router, $steps);
+        $walledGardenResult = $this->syncWalledGarden($router);
+        $profileStep = $this->applyHotspotProfile($router);
+
+        $result['steps'] = array_merge($result['steps'], $walledGardenResult['steps']);
+        $result['steps'][] = $profileStep;
+        $result['success'] = $result['success'] && $walledGardenResult['success'] && $profileStep['success'];
+
+        return $result;
+    }
+
+    /**
+     * Pushes only the walled-garden allow-list live: the portal host, the shop's
+     * *currently active* payment gateway's hosted-checkout domain(s), and Cloudflare.
+     * For HTTPS destinations RouterOS can't inject the captive portal's login
+     * redirect (it can't rewrite an encrypted response), so a host that isn't
+     * allow-listed gets its connection reset outright rather than redirected --
+     * this is what makes checkout unreachable after switching gateways until the
+     * new gateway's host is added. Safe and cheap to re-run any time the shop's
+     * gateway changes (each step is independently idempotent via runSteps()), and
+     * is the piece `provisionHotspot()` reuses rather than duplicating.
+     *
+     * @return array{success: bool, steps: list<array{label: string, success: bool, error: ?string}>}
+     */
+    public function syncWalledGarden(Router $router): array
+    {
+        if (! $this->isConfigured($router)) {
+            return [
+                'success' => false,
+                'steps' => [['label' => 'RouterOS API credentials', 'success' => false, 'error' => 'No RouterOS API credentials generated for this router yet.']],
+            ];
+        }
+
+        $portalUrl = $this->provisioning->portalUrl();
+        $portalHost = parse_url($portalUrl, PHP_URL_HOST) ?: config('services.mikrotik.hotspot_dns_name');
+
+        $steps = [
+            'Add walled-garden entry (portal)' => (new Query('/ip/hotspot/walled-garden/add'))
                 ->equal('dst-host', (string) $portalHost)
                 ->equal('action', 'allow'),
         ];
 
-        $result = $this->runSteps($router, $steps);
-        $profileStep = $this->applyHotspotProfile($router);
+        foreach (PaymentGatewayCatalog::walledGardenHosts($router->shop?->paymentGateway()) as $host) {
+            $steps['Add walled-garden entry ('.$host.')'] = (new Query('/ip/hotspot/walled-garden/add'))
+                ->equal('dst-host', $host)
+                ->equal('action', 'allow');
+        }
 
-        $result['steps'][] = $profileStep;
-        $result['success'] = $result['success'] && $profileStep['success'];
+        $steps['Add walled-garden entry (*.cloudflare.com)'] = (new Query('/ip/hotspot/walled-garden/add'))
+            ->equal('dst-host', '*.cloudflare.com')
+            ->equal('action', 'allow');
 
-        return $result;
+        return $this->runSteps($router, $steps);
     }
 
     /**
