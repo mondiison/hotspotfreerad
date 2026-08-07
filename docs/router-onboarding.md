@@ -138,23 +138,23 @@ HotspotFreeRAD stores the secret encrypted in the application table, and syncs i
 sudo freeradius -X
 ```
 
-## MikroTik L009UiGS Built-In Wi-Fi Testing
+## Built-In Wi-Fi Testing (e.g. MikroTik L009UiGS)
 
-The `L009 built-in Wi-Fi test router` infrastructure profile is useful when you want to test MMS Radius without external APs first.
+Built-in Wi-Fi is no longer a named preset tied to one board — it's an independent "This router has built-in Wi-Fi" toggle on the Hardware step of the router wizard (`admin/routers`), usable with any bandwidth/VLAN template. Testing MMS Radius on hardware with an onboard radio (e.g. an L009UiGS) without external APs first:
 
-Recommended quick-fill values:
+Recommended values for that step:
 
 | Setting | Value |
 | --- | --- |
 | WAN 1 | `ether1` |
-| WAN 2 | `ether7` |
+| WAN 2 (if used) | `ether7` |
 | AP/switch trunk | `ether2` |
-| Built-in Wi-Fi | `wifi1` |
+| Built-in Wi-Fi interface | `wifi1` |
 | Hotspot gateway | `10.5.50.1/24` |
 | Hotspot network | `10.5.50.0/24` |
 | Hotspot pool | `10.5.50.10-10.5.50.250` |
 
-In the router form, use the `L009 lab Wi-Fi` quick-fill button to populate these values automatically. The generated script will:
+Enter the total Ethernet port count on the Hardware step and pick these as the WAN 1/trunk/Pi ports from the dropdowns (or use "Advanced: type interface names manually" if your board doesn't use plain `etherN` naming). The generated script will:
 
 - create the normal WireGuard and RADIUS setup;
 - create VLANs on the LAN bridge;
@@ -162,7 +162,7 @@ In the router form, use the `L009 lab Wi-Fi` quick-fill button to populate these
 - place `wifi1` into the hotspot VLAN as an untagged access interface;
 - keep `ether2` as a tagged AP/switch trunk for later expansion.
 
-For production plaza coverage, still prefer external business APs with VLAN-per-SSID support. The L009 built-in Wi-Fi is best for lab testing, office testing, or a very small pilot zone.
+For production plaza coverage, still prefer external business APs with VLAN-per-SSID support. Built-in Wi-Fi is best for lab testing, office testing, or a very small pilot zone.
 
 ## Phone Login Test
 

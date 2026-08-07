@@ -4,11 +4,9 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Router;
-use App\Models\Shop;
 use App\Services\MikroTikProvisioningService;
 use App\Services\RouterManagementService;
 use App\Services\RouterOsConnectionService;
-use App\Support\BillingPlanLimits;
 use App\Support\RadiusAccountingStats;
 use App\Support\RouterUsageHistory;
 use App\Support\TenantAccess;
@@ -41,25 +39,9 @@ class RouterController extends Controller
         ]);
     }
 
-    public function create(): View
+    public function create(): RedirectResponse
     {
-        $user = request()->user();
-        $routerManagement = app(RouterManagementService::class);
-        $mikroTik = app(MikroTikProvisioningService::class);
-        $shops = TenantAccess::scopeShops(Shop::with('tenant'), $user)->orderBy('name')->get();
-
-        return view('admin.routers.form', [
-            'router' => new Router,
-            'shops' => $shops,
-            'provisioningSettings' => old('provisioning_settings', $routerManagement->defaultProvisioningSettings()),
-            'infrastructureProfiles' => $mikroTik->infrastructureProfiles(),
-            'billingUsage' => BillingPlanLimits::usageSummary($user, 'routers'),
-            'suggestedWireguardInternalIp' => $routerManagement->suggestedWireguardInternalIp(),
-            'suggestedSharedSecret' => $routerManagement->suggestedSharedSecret(),
-            'suggestedNasIdentifiers' => $shops->mapWithKeys(
-                fn (Shop $shop): array => [$shop->id => $routerManagement->suggestedNasIdentifier($shop)]
-            ),
-        ]);
+        return redirect()->route('admin.routers.index', ['open' => 'create']);
     }
 
     public function show(Router $router, MikroTikProvisioningService $mikroTik, RouterUsageHistory $usageHistory): View
@@ -101,24 +83,11 @@ class RouterController extends Controller
         return redirect()->route('admin.routers.index')->with('status', 'Router created and synced to RADIUS nas.');
     }
 
-    public function edit(Router $router): View
+    public function edit(Router $router): RedirectResponse
     {
         TenantAccess::assertRouter($router, request()->user());
-        $user = request()->user();
-        $routerManagement = app(RouterManagementService::class);
-        $mikroTik = app(MikroTikProvisioningService::class);
-        $provisioningSettings = array_replace(
-            $routerManagement->defaultProvisioningSettings($router->provisioning_settings['profile'] ?? null),
-            (array) $router->provisioning_settings
-        );
 
-        return view('admin.routers.form', [
-            'router' => $router,
-            'shops' => TenantAccess::scopeShops(Shop::with('tenant'), $user)->orderBy('name')->get(),
-            'provisioningSettings' => old('provisioning_settings', $provisioningSettings),
-            'infrastructureProfiles' => $mikroTik->infrastructureProfiles(),
-            'billingUsage' => null,
-        ]);
+        return redirect()->route('admin.routers.index', ['open_edit' => $router->id]);
     }
 
     public function update(Request $request, Router $router, RouterManagementService $routers): RedirectResponse

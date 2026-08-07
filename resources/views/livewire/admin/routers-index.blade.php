@@ -86,287 +86,446 @@
 
             @include('admin.partials.billing-usage', ['usage' => $billingUsage])
 
-            <form wire:submit.prevent="save" class="space-y-5">
-                <div class="grid gap-5 md:grid-cols-2">
-                    <flux:field class="md:col-span-2">
-                        <flux:label>Shop</flux:label>
-                        <flux:select wire:model.live="shop_id" required>
-                            <option value="">Select shop</option>
-                            @foreach ($shops as $shop)
-                                <option value="{{ $shop->id }}">{{ $shop->name }} / {{ $shop->tenant->company_name }}</option>
-                            @endforeach
-                        </flux:select>
-                        <flux:description>Create a tenant and shop first, then attach each MikroTik router to its shop. Selecting a shop fills in a suggested NAS identifier below.</flux:description>
-                        <flux:error name="shop_id" />
-                    </flux:field>
-
-                    <flux:field>
-                        <flux:label>Router name</flux:label>
-                        <flux:input wire:model.blur="name" icon="signal" placeholder="Main Shop Router" required />
-                        <flux:description>Dashboard label only. Example: Main Shop Router.</flux:description>
-                        <flux:error name="name" />
-                    </flux:field>
-
-                    <flux:field>
-                        <flux:label>NAS identifier</flux:label>
-                        <flux:input wire:model.blur="nas_identifier" icon="finger-print" placeholder="lagos-shop-01" required />
-                        <flux:description>Unique RouterOS identity. The generated script sets this with <code>/system identity</code>. Auto-filled from the shop name; edit if you want something else.</flux:description>
-                        <flux:error name="nas_identifier" />
-                    </flux:field>
-
-                    <flux:field>
-                        <flux:label>WireGuard internal IP</flux:label>
-                        <flux:input wire:model.blur="wireguard_internal_ip" icon="globe-alt" placeholder="10.8.0.10" required />
-                        <div class="mt-2 flex flex-wrap gap-2">
-                            <flux:button type="button" size="xs" wire:click="suggestWireguardIp">Suggest next available IP</flux:button>
-                        </div>
-                        <flux:description>Private VPN IP for this router. Pre-filled with the next unused address after <code>10.8.0.1</code> (the server).</flux:description>
-                        <flux:error name="wireguard_internal_ip" />
-                    </flux:field>
-
-                    <flux:field class="md:col-span-2">
-                        <flux:label>WireGuard endpoint override (optional)</flux:label>
-                        <div class="grid gap-3 sm:grid-cols-[2fr_1fr]">
-                            <flux:input wire:model.blur="wireguard_endpoint_override_host" icon="map-pin" placeholder="Leave blank to use the default public endpoint" />
-                            <flux:input wire:model.blur="wireguard_endpoint_override_port" type="number" min="1" max="65535" placeholder="13231" />
-                        </div>
-                        <flux:description>Only set this if this router is physically on the same local network as the Pi &mdash; use the Pi's LAN IP here instead of the public endpoint. Reaching the public endpoint from inside the same LAN commonly fails silently (NAT hairpin/loopback isn't supported for UDP on many routers). Leave both blank for every other (remote) router.</flux:description>
-                        <flux:error name="wireguard_endpoint_override_host" />
-                        <flux:error name="wireguard_endpoint_override_port" />
-                    </flux:field>
-
-                    <flux:field>
-                        <flux:label>RADIUS shared secret</flux:label>
-                        <flux:input wire:model.blur="shared_secret" icon="key" placeholder="{{ $editingRouterId ? 'Leave blank to keep current value' : 'QF9mX7vC2pL8nR4sT6wY1zA5' }}" viewable />
-                        <div class="mt-2 flex flex-wrap gap-2">
-                            <flux:button type="button" size="xs" wire:click="regenerateSharedSecret">Generate new</flux:button>
-                        </div>
-                        <flux:description>Random password shared by MikroTik and FreeRADIUS. Pre-filled with a strong random value; use a different secret per router.</flux:description>
-                        <flux:error name="shared_secret" />
-                    </flux:field>
-
-                    @if ($editingRouterId && $wireguard_public_key)
-                        <flux:field class="md:col-span-2">
-                            <flux:label>WireGuard public key</flux:label>
-                            <flux:input value="{{ $wireguard_public_key }}" icon="key" readonly copyable />
-                            <flux:description>Generated by MMS Radius and baked into this router's script. The scheduled WireGuard sync uses this to register the router as a peer on the Pi automatically &mdash; no manual copying needed.</flux:description>
-                        </flux:field>
+            <div class="flex items-center gap-2 text-sm">
+                @foreach (['Identity', 'Hardware', 'Features', 'Network plan'] as $index => $label)
+                    @php($stepNumber = $index + 1)
+                    <div class="flex items-center gap-2">
+                        <span class="flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold {{ $step >= $stepNumber ? 'bg-zinc-950 text-white' : 'bg-zinc-100 text-zinc-500' }}">{{ $stepNumber }}</span>
+                        <span class="hidden text-xs font-medium {{ $step === $stepNumber ? 'text-zinc-950' : 'text-zinc-500' }} md:inline">{{ $label }}</span>
+                    </div>
+                    @if (! $loop->last)
+                        <span class="h-px w-6 bg-zinc-200"></span>
                     @endif
-                </div>
+                @endforeach
+            </div>
 
-                <section class="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
-                    <div class="flex flex-col justify-between gap-3 md:flex-row md:items-start">
-                        <div>
-                            <p class="text-sm font-semibold text-zinc-950">Infrastructure script profile</p>
-                            <p class="mt-1 text-sm text-zinc-600">These values drive the fresh MikroTik script for VLANs, AP trunks, POS, PPPoE, and Starlink-friendly PCQ.</p>
-                        </div>
-                        <flux:badge color="blue">Flexible</flux:badge>
+            <form wire:submit.prevent="save" class="space-y-5">
+                @if ($step === 1)
+                    <div class="grid gap-5 md:grid-cols-2">
+                        <flux:field class="md:col-span-2">
+                            <flux:label>Shop</flux:label>
+                            <flux:select wire:model.live="shop_id" required>
+                                <option value="">Select shop</option>
+                                @foreach ($shops as $shop)
+                                    <option value="{{ $shop->id }}">{{ $shop->name }} / {{ $shop->tenant->company_name }}</option>
+                                @endforeach
+                            </flux:select>
+                            <flux:description>Create a tenant and shop first, then attach each MikroTik router to its shop. Selecting a shop fills in a suggested NAS identifier below.</flux:description>
+                            <flux:error name="shop_id" />
+                        </flux:field>
+
+                        <flux:field>
+                            <flux:label>Router name</flux:label>
+                            <flux:input wire:model.blur="name" icon="signal" placeholder="Main Shop Router" required />
+                            <flux:description>Dashboard label only. Example: Main Shop Router.</flux:description>
+                            <flux:error name="name" />
+                        </flux:field>
+
+                        <flux:field>
+                            <flux:label>NAS identifier</flux:label>
+                            <flux:input wire:model.blur="nas_identifier" icon="finger-print" placeholder="lagos-shop-01" required />
+                            <flux:description>Unique RouterOS identity. The generated script sets this with <code>/system identity</code>. Auto-filled from the shop name; edit if you want something else.</flux:description>
+                            <flux:error name="nas_identifier" />
+                        </flux:field>
+
+                        <flux:field>
+                            <flux:label>WireGuard internal IP</flux:label>
+                            <flux:input wire:model.blur="wireguard_internal_ip" icon="globe-alt" placeholder="10.8.0.10" required />
+                            <div class="mt-2 flex flex-wrap gap-2">
+                                <flux:button type="button" size="xs" wire:click="suggestWireguardIp">Suggest next available IP</flux:button>
+                            </div>
+                            <flux:description>Private VPN IP for this router. Pre-filled with the next unused address after <code>10.8.0.1</code> (the server).</flux:description>
+                            <flux:error name="wireguard_internal_ip" />
+                        </flux:field>
+
+                        <flux:field class="md:col-span-2">
+                            <flux:label>WireGuard endpoint override (optional)</flux:label>
+                            <div class="grid gap-3 sm:grid-cols-[2fr_1fr]">
+                                <flux:input wire:model.blur="wireguard_endpoint_override_host" icon="map-pin" placeholder="Leave blank to use the default public endpoint" />
+                                <flux:input wire:model.blur="wireguard_endpoint_override_port" type="number" min="1" max="65535" placeholder="13231" />
+                            </div>
+                            <flux:description>Only set this if this router is physically on the same local network as the Pi &mdash; use the Pi's LAN IP here instead of the public endpoint. Reaching the public endpoint from inside the same LAN commonly fails silently (NAT hairpin/loopback isn't supported for UDP on many routers). Leave both blank for every other (remote) router.</flux:description>
+                            <flux:error name="wireguard_endpoint_override_host" />
+                            <flux:error name="wireguard_endpoint_override_port" />
+                        </flux:field>
+
+                        <flux:field>
+                            <flux:label>RADIUS shared secret</flux:label>
+                            <flux:input wire:model.blur="shared_secret" icon="key" placeholder="{{ $editingRouterId ? 'Leave blank to keep current value' : 'QF9mX7vC2pL8nR4sT6wY1zA5' }}" viewable />
+                            <div class="mt-2 flex flex-wrap gap-2">
+                                <flux:button type="button" size="xs" wire:click="regenerateSharedSecret">Generate new</flux:button>
+                            </div>
+                            <flux:description>Random password shared by MikroTik and FreeRADIUS. Pre-filled with a strong random value; use a different secret per router.</flux:description>
+                            <flux:error name="shared_secret" />
+                        </flux:field>
+
+                        @if ($editingRouterId && $wireguard_public_key)
+                            <flux:field class="md:col-span-2">
+                                <flux:label>WireGuard public key</flux:label>
+                                <flux:input value="{{ $wireguard_public_key }}" icon="key" readonly copyable />
+                                <flux:description>Generated by MMS Radius and baked into this router's script. The scheduled WireGuard sync uses this to register the router as a peer on the Pi automatically &mdash; no manual copying needed.</flux:description>
+                            </flux:field>
+                        @endif
                     </div>
 
-                    <div class="mt-4 grid gap-4 md:grid-cols-3">
-                        <flux:field class="md:col-span-3">
-                            <flux:label>Profile</flux:label>
+                    <div class="flex justify-end">
+                        <flux:button type="button" variant="primary" wire:click="nextStep">Next: Hardware</flux:button>
+                    </div>
+                @endif
+
+                @if ($step === 2)
+                    <div class="space-y-5">
+                        <flux:field>
+                            <flux:checkbox wire:model.live="provisioning_settings.enable_builtin_wifi" label="This router has built-in Wi-Fi" />
+                            <flux:description>Turn on to generate an open hotspot SSID (plus optional staff/POS/management SSIDs) directly from the router's own radio. Leave off for wired-only routers relying on external access points.</flux:description>
+                        </flux:field>
+
+                        <div class="grid gap-5 md:grid-cols-2">
+                            <flux:field>
+                                <flux:label>Total Ethernet ports</flux:label>
+                                <flux:input type="number" min="2" wire:model.live="provisioning_settings.port_count" placeholder="8" :disabled="$provisioning_settings['ports_advanced_mode'] ?? false" />
+                                <flux:description>e.g. 5, 8, or more &mdash; used to build the port pickers below.</flux:description>
+                                <flux:error name="provisioning_settings.port_count" />
+                            </flux:field>
+
+                            <flux:field>
+                                <flux:checkbox wire:model.live="provisioning_settings.enable_second_wan" label="Second WAN/Starlink uplink" />
+                            </flux:field>
+                        </div>
+
+                        <flux:field>
+                            <flux:checkbox wire:model.live="provisioning_settings.ports_advanced_mode" label="Advanced: type interface names manually" />
+                            <flux:description>Turn on for non-standard interfaces (e.g. <code>sfp-sfpplus1</code>) instead of picking a port number.</flux:description>
+                        </flux:field>
+
+                        @if ($provisioning_settings['ports_advanced_mode'] ?? false)
+                            <div class="grid gap-4 md:grid-cols-2">
+                                <flux:field>
+                                    <flux:label>WAN 1</flux:label>
+                                    <flux:input wire:model.blur="provisioning_settings.wan1" placeholder="ether1" />
+                                    <flux:error name="provisioning_settings.wan1" />
+                                </flux:field>
+
+                                @if ($provisioning_settings['enable_second_wan'] ?? false)
+                                    <flux:field>
+                                        <flux:label>WAN 2</flux:label>
+                                        <flux:input wire:model.blur="provisioning_settings.wan2" placeholder="ether8" />
+                                        <flux:error name="provisioning_settings.wan2" />
+                                    </flux:field>
+                                @endif
+
+                                <flux:field>
+                                    <flux:label>AP/switch trunk</flux:label>
+                                    <flux:input wire:model.blur="provisioning_settings.trunk_port" placeholder="ether2" />
+                                    <flux:error name="provisioning_settings.trunk_port" />
+                                </flux:field>
+
+                                <flux:field>
+                                    <flux:label>Pi/management port</flux:label>
+                                    <flux:input wire:model.blur="provisioning_settings.pi_port" placeholder="ether3" />
+                                    <flux:error name="provisioning_settings.pi_port" />
+                                </flux:field>
+                            </div>
+                        @else
+                            @php($portOptions = \App\Support\RouterPortLayout::portOptions((int) ($provisioning_settings['port_count'] ?? 8)))
+                            @php($portConflicts = \App\Support\RouterPortLayout::conflictingRoles([
+                                'WAN 1' => $provisioning_settings['wan1_port_number'] ?? null,
+                                'WAN 2' => ($provisioning_settings['enable_second_wan'] ?? false) ? ($provisioning_settings['wan2_port_number'] ?? null) : null,
+                                'Trunk port' => $provisioning_settings['trunk_port_number'] ?? null,
+                                'Pi port' => $provisioning_settings['pi_port_number'] ?? null,
+                            ]))
+
+                            @if ($portConflicts !== [])
+                                <div class="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                                    @foreach ($portConflicts as $conflict)
+                                        <p>{{ $conflict }}</p>
+                                    @endforeach
+                                </div>
+                            @endif
+
+                            <div class="grid gap-4 md:grid-cols-2">
+                                <flux:field>
+                                    <flux:label>WAN 1 port</flux:label>
+                                    <flux:select wire:model.live="provisioning_settings.wan1_port_number">
+                                        @foreach ($portOptions as $number => $label)
+                                            <flux:select.option value="{{ $number }}">{{ $label }}</flux:select.option>
+                                        @endforeach
+                                    </flux:select>
+                                    <flux:error name="provisioning_settings.wan1_port_number" />
+                                </flux:field>
+
+                                @if ($provisioning_settings['enable_second_wan'] ?? false)
+                                    <flux:field>
+                                        <flux:label>WAN 2 port</flux:label>
+                                        <flux:select wire:model.live="provisioning_settings.wan2_port_number">
+                                            @foreach ($portOptions as $number => $label)
+                                                <flux:select.option value="{{ $number }}">{{ $label }}</flux:select.option>
+                                            @endforeach
+                                        </flux:select>
+                                        <flux:error name="provisioning_settings.wan2_port_number" />
+                                    </flux:field>
+                                @endif
+
+                                <flux:field>
+                                    <flux:label>AP/switch trunk port</flux:label>
+                                    <flux:select wire:model.live="provisioning_settings.trunk_port_number">
+                                        @foreach ($portOptions as $number => $label)
+                                            <flux:select.option value="{{ $number }}">{{ $label }}</flux:select.option>
+                                        @endforeach
+                                    </flux:select>
+                                    <flux:error name="provisioning_settings.trunk_port_number" />
+                                </flux:field>
+
+                                <flux:field>
+                                    <flux:label>Pi/management port</flux:label>
+                                    <flux:select wire:model.live="provisioning_settings.pi_port_number">
+                                        @foreach ($portOptions as $number => $label)
+                                            <flux:select.option value="{{ $number }}">{{ $label }}</flux:select.option>
+                                        @endforeach
+                                    </flux:select>
+                                    <flux:error name="provisioning_settings.pi_port_number" />
+                                </flux:field>
+                            </div>
+                        @endif
+                    </div>
+
+                    <div class="flex justify-between">
+                        <flux:button type="button" variant="outline" wire:click="previousStep">Back</flux:button>
+                        <flux:button type="button" variant="primary" wire:click="nextStep">Next: Features</flux:button>
+                    </div>
+                @endif
+
+                @if ($step === 3)
+                    <div class="space-y-5">
+                        <div class="grid gap-3 rounded-md border border-zinc-200 bg-zinc-50 p-3 text-sm md:grid-cols-3">
+                            <flux:checkbox wire:model.live="provisioning_settings.enable_pos" label="POS VLAN/SSID" />
+                            <flux:checkbox wire:model.live="provisioning_settings.enable_pppoe" label="PPPoE/CPE VLAN" />
+                            <flux:checkbox wire:model.live="provisioning_settings.enable_realtime_qos" label="Realtime voice/video QoS" />
+                        </div>
+
+                        <div class="grid gap-5 md:grid-cols-2">
+                            <flux:field>
+                                <flux:label>Download limit</flux:label>
+                                <flux:input wire:model.blur="provisioning_settings.download_limit" placeholder="120M" />
+                                <flux:description>Parent PCQ limit. Example: <code>120M</code>.</flux:description>
+                                <flux:error name="provisioning_settings.download_limit" />
+                            </flux:field>
+
+                            <flux:field>
+                                <flux:label>Upload limit</flux:label>
+                                <flux:input wire:model.blur="provisioning_settings.upload_limit" placeholder="20M" />
+                                <flux:description>Parent upload limit. Example: <code>20M</code>.</flux:description>
+                                <flux:error name="provisioning_settings.upload_limit" />
+                            </flux:field>
+                        </div>
+
+                        @if ($provisioning_settings['enable_builtin_wifi'] ?? false)
+                            <div class="space-y-4 rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+                                <p class="text-sm font-semibold text-zinc-950">Built-in Wi-Fi credentials</p>
+
+                                <flux:field>
+                                    <flux:label>Wireless interface</flux:label>
+                                    <flux:input wire:model.blur="provisioning_settings.builtin_wifi_interface" placeholder="wifi1" />
+                                    <flux:description>Usually <code>wifi1</code> on RouterOS 7 wifiwave2 boards.</flux:description>
+                                    <flux:error name="provisioning_settings.builtin_wifi_interface" />
+                                </flux:field>
+
+                                <flux:field>
+                                    <flux:label>Management Wi-Fi password</flux:label>
+                                    <flux:input wire:model.blur="provisioning_settings.mgmt_wifi_password" viewable />
+                                    <flux:error name="provisioning_settings.mgmt_wifi_password" />
+                                </flux:field>
+
+                                <flux:field>
+                                    <flux:label>Staff Wi-Fi password</flux:label>
+                                    <flux:input wire:model.blur="provisioning_settings.staff_wifi_password" viewable />
+                                    <flux:error name="provisioning_settings.staff_wifi_password" />
+                                </flux:field>
+
+                                @if ($provisioning_settings['enable_pos'] ?? false)
+                                    <flux:field>
+                                        <flux:label>POS Wi-Fi password</flux:label>
+                                        <flux:input wire:model.blur="provisioning_settings.pos_wifi_password" viewable />
+                                        <flux:error name="provisioning_settings.pos_wifi_password" />
+                                    </flux:field>
+                                @endif
+                            </div>
+                        @else
+                            <div class="rounded-md border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-600">
+                                No built-in Wi-Fi selected. Staff, POS, and management access will need an external access point on the AP/switch trunk port.
+                            </div>
+                        @endif
+                    </div>
+
+                    <div class="flex justify-between">
+                        <flux:button type="button" variant="outline" wire:click="previousStep">Back</flux:button>
+                        <flux:button type="button" variant="primary" wire:click="nextStep">Next: Network plan</flux:button>
+                    </div>
+                @endif
+
+                @if ($step === 4)
+                    <div class="space-y-5">
+                        <flux:field>
+                            <flux:label>Bandwidth &amp; VLAN template</flux:label>
                             <flux:select wire:model.live="provisioning_settings.profile">
                                 @foreach ($infrastructureProfiles as $key => $profile)
                                     <flux:select.option value="{{ $key }}">{{ $profile['name'] }} - {{ $profile['capacity'] }}</flux:select.option>
                                 @endforeach
                             </flux:select>
-                            <flux:description>Changing the profile loads sensible defaults. You can still edit the details below.</flux:description>
+                            <flux:description>Pre-fills bandwidth and VLAN defaults below &mdash; it no longer implies any specific hardware or Wi-Fi capability (set that on the Hardware step). Still editable after picking.</flux:description>
                             <flux:error name="provisioning_settings.profile" />
                         </flux:field>
 
-                        <flux:field>
-                            <flux:label>WAN 1</flux:label>
-                            <flux:input wire:model.blur="provisioning_settings.wan1" placeholder="ether1" />
-                            <flux:description>Main Starlink or internet uplink.</flux:description>
-                            <flux:error name="provisioning_settings.wan1" />
-                        </flux:field>
-
-                        <flux:field>
-                            <flux:label>WAN 2</flux:label>
-                            <flux:input wire:model.blur="provisioning_settings.wan2" placeholder="ether8" />
-                            <flux:description>Second Starlink/failover port.</flux:description>
-                            <flux:error name="provisioning_settings.wan2" />
-                        </flux:field>
-
-                        <flux:field>
-                            <flux:label>AP/switch trunk</flux:label>
-                            <flux:input wire:model.blur="provisioning_settings.trunk_port" placeholder="ether2" />
-                            <flux:description>Port going to APs or managed PoE switch.</flux:description>
-                            <flux:error name="provisioning_settings.trunk_port" />
-                        </flux:field>
-
-                        <flux:field>
-                            <flux:label>Pi/management port</flux:label>
-                            <flux:input wire:model.blur="provisioning_settings.pi_port" placeholder="ether3" />
-                            <flux:description>Untagged management VLAN access for the Raspberry Pi.</flux:description>
-                            <flux:error name="provisioning_settings.pi_port" />
-                        </flux:field>
-
-                        <flux:field>
-                            <flux:label>Built-in Wi-Fi</flux:label>
-                            <flux:input wire:model.blur="provisioning_settings.builtin_wifi_interface" placeholder="wifi1" />
-                            <flux:description>For L009UiGS testing, use <code>wifi1</code> as the open hotspot SSID.</flux:description>
-                            <flux:error name="provisioning_settings.builtin_wifi_interface" />
-                        </flux:field>
-
-                        <flux:field>
-                            <flux:label>Staff Wi-Fi password</flux:label>
-                            <flux:input wire:model.blur="provisioning_settings.staff_wifi_password" placeholder="MmsStaff2026!" viewable />
-                            <flux:description>Used only when built-in Wi-Fi SSIDs are generated.</flux:description>
-                            <flux:error name="provisioning_settings.staff_wifi_password" />
-                        </flux:field>
-
-                        <flux:field>
-                            <flux:label>POS Wi-Fi password</flux:label>
-                            <flux:input wire:model.blur="provisioning_settings.pos_wifi_password" placeholder="MmsPos2026!" viewable />
-                            <flux:description>Use for POS SSID testing before external AP rollout.</flux:description>
-                            <flux:error name="provisioning_settings.pos_wifi_password" />
-                        </flux:field>
-
-                        <flux:field>
-                            <flux:label>Mgmt Wi-Fi password</flux:label>
-                            <flux:input wire:model.blur="provisioning_settings.mgmt_wifi_password" placeholder="MmsMgmt2026!" viewable />
-                            <flux:description>For lab access to the management VLAN.</flux:description>
-                            <flux:error name="provisioning_settings.mgmt_wifi_password" />
-                        </flux:field>
-
-                        <flux:field>
-                            <flux:label>Download limit</flux:label>
-                            <flux:input wire:model.blur="provisioning_settings.download_limit" placeholder="120M" />
-                            <flux:description>Parent PCQ limit. Example: <code>120M</code>.</flux:description>
-                            <flux:error name="provisioning_settings.download_limit" />
-                        </flux:field>
-
-                        <flux:field>
-                            <flux:label>Upload limit</flux:label>
-                            <flux:input wire:model.blur="provisioning_settings.upload_limit" placeholder="20M" />
-                            <flux:description>Parent upload limit. Example: <code>20M</code>.</flux:description>
-                            <flux:error name="provisioning_settings.upload_limit" />
-                        </flux:field>
-
-                        <div class="grid gap-3 rounded-md border border-zinc-200 bg-white p-3 text-sm">
-                            <flux:checkbox wire:model.live="provisioning_settings.enable_builtin_wifi" label="L009 built-in Wi-Fi hotspot" />
-                            <flux:checkbox wire:model.live="provisioning_settings.enable_realtime_qos" label="Realtime voice/video QoS" />
-                            <flux:checkbox wire:model.live="provisioning_settings.enable_pos" label="POS VLAN/SSID" />
-                            <flux:checkbox wire:model.live="provisioning_settings.enable_pppoe" label="PPPoE/CPE VLAN" />
-                            <flux:checkbox wire:model.live="provisioning_settings.enable_second_wan" label="Second Starlink/WAN" />
-                        </div>
-                    </div>
-
-                    <div class="mt-4 rounded-md border border-zinc-200 bg-white p-3">
-                        <p class="text-sm font-medium text-zinc-900">Quick-fill router layout</p>
-                        <p class="mt-1 text-xs leading-5 text-zinc-500">Use a preset, then adjust any value before saving.</p>
-                        <div class="mt-3 flex flex-wrap gap-2">
-                            <flux:button type="button" size="xs" wire:click="setRouterLayoutPreset('l009_lab_wifi')">L009 lab Wi-Fi</flux:button>
-                            <flux:button type="button" size="xs" wire:click="setRouterLayoutPreset('plaza_23')">Plaza VLAN /23</flux:button>
-                            <flux:button type="button" size="xs" wire:click="setRouterLayoutPreset('small_ap_24')">Small AP /24</flux:button>
-                        </div>
-                    </div>
-
-                    <div class="mt-4 grid gap-4 md:grid-cols-5">
-                        <flux:field>
-                            <flux:label>Mgmt VLAN</flux:label>
-                            <flux:input type="number" wire:model.blur="provisioning_settings.mgmt_vlan" placeholder="10" />
-                            <flux:error name="provisioning_settings.mgmt_vlan" />
-                        </flux:field>
-
-                        <flux:field>
-                            <flux:label>Hotspot VLAN</flux:label>
-                            <flux:input type="number" wire:model.blur="provisioning_settings.hotspot_vlan" placeholder="20" />
-                            <flux:error name="provisioning_settings.hotspot_vlan" />
-                        </flux:field>
-
-                        <flux:field>
-                            <flux:label>Staff VLAN</flux:label>
-                            <flux:input type="number" wire:model.blur="provisioning_settings.staff_vlan" placeholder="30" />
-                            <flux:error name="provisioning_settings.staff_vlan" />
-                        </flux:field>
-
-                        <flux:field>
-                            <flux:label>PPPoE VLAN</flux:label>
-                            <flux:input type="number" wire:model.blur="provisioning_settings.pppoe_vlan" placeholder="40" />
-                            <flux:error name="provisioning_settings.pppoe_vlan" />
-                        </flux:field>
-
-                        <flux:field>
-                            <flux:label>POS VLAN</flux:label>
-                            <flux:input type="number" wire:model.blur="provisioning_settings.pos_vlan" placeholder="50" />
-                            <flux:error name="provisioning_settings.pos_vlan" />
-                        </flux:field>
-                    </div>
-
-                    <div class="mt-4 grid gap-4 md:grid-cols-3">
-                        <flux:field>
-                            <flux:label>Management gateway</flux:label>
-                            <flux:input wire:model.blur="provisioning_settings.mgmt_gateway" placeholder="192.168.10.1/24" />
-                            <flux:error name="provisioning_settings.mgmt_gateway" />
-                        </flux:field>
-
-                        <flux:field>
-                            <flux:label>Management network</flux:label>
-                            <flux:input wire:model.blur="provisioning_settings.mgmt_network" placeholder="192.168.10.0/24" />
-                            <flux:error name="provisioning_settings.mgmt_network" />
-                        </flux:field>
-
-                        <flux:field>
-                            <flux:label>Management DHCP pool</flux:label>
-                            <flux:input wire:model.blur="provisioning_settings.mgmt_pool" placeholder="192.168.10.10-192.168.10.250" />
-                            <flux:error name="provisioning_settings.mgmt_pool" />
-                        </flux:field>
-
-                        <flux:field>
-                            <flux:label>Hotspot gateway</flux:label>
-                            <flux:input wire:model.blur="provisioning_settings.hotspot_gateway" placeholder="10.5.50.1/23" />
-                            <flux:error name="provisioning_settings.hotspot_gateway" />
-                        </flux:field>
-
-                        <flux:field>
-                            <flux:label>Hotspot network</flux:label>
-                            <flux:input wire:model.blur="provisioning_settings.hotspot_network" placeholder="10.5.50.0/23" />
-                            <flux:error name="provisioning_settings.hotspot_network" />
-                        </flux:field>
-
-                        <flux:field>
-                            <flux:label>Hotspot DHCP pool</flux:label>
-                            <flux:input wire:model.blur="provisioning_settings.hotspot_pool" placeholder="10.5.50.10-10.5.51.250" />
-                            <flux:error name="provisioning_settings.hotspot_pool" />
-                        </flux:field>
-
-                        <div class="md:col-span-3">
-                            <div class="mt-1 flex flex-wrap gap-2">
-                                <flux:button type="button" size="xs" wire:click="setHotspotIpSize('22')">/22, about 1,000 clients</flux:button>
-                                <flux:button type="button" size="xs" wire:click="setHotspotIpSize('23')">/23, about 500 clients</flux:button>
-                                <flux:button type="button" size="xs" wire:click="setHotspotIpSize('24')">/24, about 250 clients</flux:button>
+                        <div class="rounded-md border border-zinc-200 bg-white p-3">
+                            <p class="text-sm font-medium text-zinc-900">Quick-fill bandwidth &amp; VLAN template</p>
+                            <p class="mt-1 text-xs leading-5 text-zinc-500">Use a preset, then adjust any value before saving.</p>
+                            <div class="mt-3 flex flex-wrap gap-2">
+                                <flux:button type="button" size="xs" wire:click="setRouterLayoutPreset('starlink_plaza')">Starlink plaza /23</flux:button>
+                                <flux:button type="button" size="xs" wire:click="setRouterLayoutPreset('small_ap_24')">Small hotspot /24</flux:button>
                             </div>
-                            <p class="mt-2 text-xs leading-5 text-zinc-500">Quick-fill the customer hotspot gateway, network, and DHCP pool.</p>
+                        </div>
+
+                        <div class="grid gap-4 md:grid-cols-5">
+                            <flux:field>
+                                <flux:label>Mgmt VLAN</flux:label>
+                                <flux:input type="number" wire:model.blur="provisioning_settings.mgmt_vlan" placeholder="10" />
+                                <flux:error name="provisioning_settings.mgmt_vlan" />
+                            </flux:field>
+
+                            <flux:field>
+                                <flux:label>Hotspot VLAN</flux:label>
+                                <flux:input type="number" wire:model.blur="provisioning_settings.hotspot_vlan" placeholder="20" />
+                                <flux:error name="provisioning_settings.hotspot_vlan" />
+                            </flux:field>
+
+                            <flux:field>
+                                <flux:label>Staff VLAN</flux:label>
+                                <flux:input type="number" wire:model.blur="provisioning_settings.staff_vlan" placeholder="30" />
+                                <flux:error name="provisioning_settings.staff_vlan" />
+                            </flux:field>
+
+                            @if ($provisioning_settings['enable_pppoe'] ?? false)
+                                <flux:field>
+                                    <flux:label>PPPoE VLAN</flux:label>
+                                    <flux:input type="number" wire:model.blur="provisioning_settings.pppoe_vlan" placeholder="40" />
+                                    <flux:error name="provisioning_settings.pppoe_vlan" />
+                                </flux:field>
+                            @endif
+
+                            @if ($provisioning_settings['enable_pos'] ?? false)
+                                <flux:field>
+                                    <flux:label>POS VLAN</flux:label>
+                                    <flux:input type="number" wire:model.blur="provisioning_settings.pos_vlan" placeholder="50" />
+                                    <flux:error name="provisioning_settings.pos_vlan" />
+                                </flux:field>
+                            @endif
+                        </div>
+
+                        <div class="grid gap-4 md:grid-cols-3">
+                            <flux:field>
+                                <flux:label>Management gateway</flux:label>
+                                <flux:input wire:model.blur="provisioning_settings.mgmt_gateway" placeholder="192.168.10.1/24" />
+                                <flux:error name="provisioning_settings.mgmt_gateway" />
+                            </flux:field>
+
+                            <flux:field>
+                                <flux:label>Management network</flux:label>
+                                <flux:input wire:model.blur="provisioning_settings.mgmt_network" placeholder="192.168.10.0/24" />
+                                <flux:error name="provisioning_settings.mgmt_network" />
+                            </flux:field>
+
+                            <flux:field>
+                                <flux:label>Management DHCP pool</flux:label>
+                                <flux:input wire:model.blur="provisioning_settings.mgmt_pool" placeholder="192.168.10.10-192.168.10.250" />
+                                <flux:error name="provisioning_settings.mgmt_pool" />
+                            </flux:field>
+
+                            <flux:field>
+                                <flux:label>Hotspot gateway</flux:label>
+                                <flux:input wire:model.blur="provisioning_settings.hotspot_gateway" placeholder="10.5.50.1/23" />
+                                <flux:error name="provisioning_settings.hotspot_gateway" />
+                            </flux:field>
+
+                            <flux:field>
+                                <flux:label>Hotspot network</flux:label>
+                                <flux:input wire:model.blur="provisioning_settings.hotspot_network" placeholder="10.5.50.0/23" />
+                                <flux:error name="provisioning_settings.hotspot_network" />
+                            </flux:field>
+
+                            <flux:field>
+                                <flux:label>Hotspot DHCP pool</flux:label>
+                                <flux:input wire:model.blur="provisioning_settings.hotspot_pool" placeholder="10.5.50.10-10.5.51.250" />
+                                <flux:error name="provisioning_settings.hotspot_pool" />
+                            </flux:field>
+
+                            <flux:field>
+                                <flux:label>Staff gateway</flux:label>
+                                <flux:input wire:model.blur="provisioning_settings.staff_gateway" placeholder="192.168.30.1/24" />
+                                <flux:error name="provisioning_settings.staff_gateway" />
+                            </flux:field>
+
+                            <flux:field>
+                                <flux:label>Staff network</flux:label>
+                                <flux:input wire:model.blur="provisioning_settings.staff_network" placeholder="192.168.30.0/24" />
+                                <flux:error name="provisioning_settings.staff_network" />
+                            </flux:field>
+
+                            <flux:field>
+                                <flux:label>Staff DHCP pool</flux:label>
+                                <flux:input wire:model.blur="provisioning_settings.staff_pool" placeholder="192.168.30.10-192.168.30.250" />
+                                <flux:error name="provisioning_settings.staff_pool" />
+                            </flux:field>
+
+                            @if ($provisioning_settings['enable_pos'] ?? false)
+                                <flux:field>
+                                    <flux:label>POS gateway</flux:label>
+                                    <flux:input wire:model.blur="provisioning_settings.pos_gateway" placeholder="192.168.50.1/24" />
+                                    <flux:error name="provisioning_settings.pos_gateway" />
+                                </flux:field>
+
+                                <flux:field>
+                                    <flux:label>POS network</flux:label>
+                                    <flux:input wire:model.blur="provisioning_settings.pos_network" placeholder="192.168.50.0/24" />
+                                    <flux:error name="provisioning_settings.pos_network" />
+                                </flux:field>
+
+                                <flux:field>
+                                    <flux:label>POS DHCP pool</flux:label>
+                                    <flux:input wire:model.blur="provisioning_settings.pos_pool" placeholder="192.168.50.10-192.168.50.250" />
+                                    <flux:error name="provisioning_settings.pos_pool" />
+                                </flux:field>
+                            @endif
+
+                            @if ($provisioning_settings['enable_pppoe'] ?? false)
+                                <flux:field>
+                                    <flux:label>PPPoE gateway</flux:label>
+                                    <flux:input wire:model.blur="provisioning_settings.pppoe_gateway" placeholder="172.16.40.1/24" />
+                                    <flux:error name="provisioning_settings.pppoe_gateway" />
+                                </flux:field>
+                            @endif
+
+                            <div class="md:col-span-3">
+                                <div class="mt-1 flex flex-wrap gap-2">
+                                    <flux:button type="button" size="xs" wire:click="setHotspotIpSize('22')">/22, about 1,000 clients</flux:button>
+                                    <flux:button type="button" size="xs" wire:click="setHotspotIpSize('23')">/23, about 500 clients</flux:button>
+                                    <flux:button type="button" size="xs" wire:click="setHotspotIpSize('24')">/24, about 250 clients</flux:button>
+                                </div>
+                                <p class="mt-2 text-xs leading-5 text-zinc-500">Quick-fill the customer hotspot gateway, network, and DHCP pool.</p>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="mt-4 rounded-md border border-zinc-200 bg-white p-3">
-                        <p class="text-sm font-medium text-zinc-900">Hotspot IP examples</p>
-                        <p class="mt-1 text-xs leading-5 text-zinc-500">Choose based on expected concurrent users. You can still edit the values manually after clicking.</p>
-                        <div class="mt-3 grid gap-2 text-xs text-zinc-600 sm:grid-cols-3">
-                            <div><span class="font-medium text-zinc-900">/24:</span> one small zone, about 250 usable addresses.</div>
-                            <div><span class="font-medium text-zinc-900">/23:</span> plaza starter, about 500 usable addresses.</div>
-                            <div><span class="font-medium text-zinc-900">/22:</span> larger rollout, about 1,000 usable addresses.</div>
+                    <div class="flex justify-between">
+                        <flux:button type="button" variant="outline" wire:click="previousStep">Back</flux:button>
+                        <div class="flex gap-3">
+                            <flux:button type="button" variant="ghost" wire:click="$set('showFormModal', false)">Cancel</flux:button>
+                            <flux:button type="submit" variant="primary" icon="check" wire:loading.attr="disabled" wire:target="save">
+                                <span wire:loading.remove wire:target="save">Save Router</span>
+                                <span wire:loading wire:target="save">Saving...</span>
+                            </flux:button>
                         </div>
                     </div>
-                </section>
-
-                <section class="rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-600">
-                    <p><strong class="text-zinc-900">NAS identifier:</strong> the MikroTik system identity. Example: <code>lagos-shop-01</code>.</p>
-                    <p class="mt-2"><strong class="text-zinc-900">Shared secret:</strong> generate a strong value with <code>openssl rand -base64 24</code>.</p>
-                    <p class="mt-2">After saving, open the Script page and paste the generated commands into MikroTik RouterOS terminal.</p>
-                </section>
-
-                <div class="flex justify-end gap-3">
-                    <flux:button type="button" variant="ghost" wire:click="$set('showFormModal', false)">Cancel</flux:button>
-                    <flux:button type="submit" variant="primary" icon="check" wire:loading.attr="disabled" wire:target="save">
-                        <span wire:loading.remove wire:target="save">Save Router</span>
-                        <span wire:loading wire:target="save">Saving...</span>
-                    </flux:button>
-                </div>
+                @endif
             </form>
         </div>
     </flux:modal>

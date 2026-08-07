@@ -324,7 +324,7 @@ class MikroTikProvisioningServiceTest extends TestCase
         $this->assertStringNotContainsString('/queue type add name=pcq-hotspot-down kind=pcq', $script);
     }
 
-    public function test_it_generates_l009_builtin_wifi_hotspot_script(): void
+    public function test_it_generates_builtin_wifi_hotspot_script(): void
     {
         config([
             'app.url' => 'https://mmsradius.com',
@@ -337,12 +337,17 @@ class MikroTikProvisioningServiceTest extends TestCase
             'services.mikrotik.hotspot_dns_name' => 'hotspot.local',
         ]);
 
+        // Built-in Wi-Fi is an independent toggle (not a named hardware-specific profile
+        // like the removed "l009_builtin_wifi" used to be) -- any bandwidth/VLAN template
+        // can have it on. wan2 is set explicitly since it's no longer profile-implied.
         $router = new Router([
             'nas_identifier' => 'l009-test-router',
             'wireguard_internal_ip' => '10.8.0.30',
             'shared_secret' => 'radius-secret',
             'provisioning_settings' => [
-                'profile' => 'l009_builtin_wifi',
+                'profile' => 'small_hotspot',
+                'enable_builtin_wifi' => true,
+                'wan2' => 'ether7',
                 'hotspot_gateway' => '10.5.50.1/24',
                 'hotspot_network' => '10.5.50.0/24',
                 'hotspot_pool' => '10.5.50.10-10.5.50.250',
@@ -351,7 +356,7 @@ class MikroTikProvisioningServiceTest extends TestCase
 
         $script = app(MikroTikProvisioningService::class)->generateFreshInfrastructureScript($router);
 
-        $this->assertStringContainsString('Profile: L009 built-in Wi-Fi test router', $script);
+        $this->assertStringContainsString('Profile: Small hotspot', $script);
         $this->assertStringContainsString(':global wan2 "ether7"', $script);
         $this->assertStringContainsString(':global builtinWifiInterface "wifi1"', $script);
         $this->assertStringContainsString(':global staffWifiInterface "wifi-staff"', $script);
@@ -383,7 +388,7 @@ class MikroTikProvisioningServiceTest extends TestCase
         $this->assertStringNotContainsString('/interface wifi access-list add', $script);
     }
 
-    public function test_l009_script_restricts_staff_and_mgmt_wifi_to_registered_devices(): void
+    public function test_builtin_wifi_script_restricts_staff_and_mgmt_wifi_to_registered_devices(): void
     {
         config([
             'app.url' => 'https://mmsradius.com',
@@ -403,7 +408,7 @@ class MikroTikProvisioningServiceTest extends TestCase
             'nas_identifier' => 'l009-router',
             'wireguard_internal_ip' => '10.8.0.31',
             'shared_secret' => 'radius-secret',
-            'provisioning_settings' => ['profile' => 'l009_builtin_wifi'],
+            'provisioning_settings' => ['profile' => 'small_hotspot', 'enable_builtin_wifi' => true],
         ]);
 
         $staffDevice = TrustedWifiDevice::create([
@@ -463,10 +468,7 @@ class MikroTikProvisioningServiceTest extends TestCase
     {
         $profiles = app(MikroTikProvisioningService::class)->infrastructureProfiles();
 
-        $this->assertArrayHasKey('starlink_plaza', $profiles);
-        $this->assertArrayHasKey('small_hotspot', $profiles);
-        $this->assertArrayHasKey('l009_builtin_wifi', $profiles);
-        $this->assertArrayHasKey('pppoe_isp', $profiles);
+        $this->assertSame(['starlink_plaza', 'small_hotspot', 'pppoe_isp'], array_keys($profiles));
     }
 
     public function test_login_template_uses_public_hotspot_portal_url_when_configured(): void

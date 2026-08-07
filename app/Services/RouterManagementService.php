@@ -6,8 +6,10 @@ use App\Models\Router;
 use App\Models\Shop;
 use App\Models\User;
 use App\Support\BillingPlanLimits;
+use App\Support\RouterPortLayout;
 use App\Support\TenantAccess;
 use App\Support\WireGuardKeyPair;
+use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -16,7 +18,13 @@ class RouterManagementService
 {
     public function __construct(private readonly RadiusProvisioningService $radius) {}
 
-    public function rules(User $user, ?Router $router = null): array
+    /**
+     * @param  array<string, mixed>|null  $provisioningSettings  the live/submitted provisioning_settings
+     *     array, used to cross-check port role numbers against each other and against port_count.
+     *     Both call sites (RoutersIndex::save() and validated()) already have this available at the
+     *     point they call rules(), since it's either bound Livewire component state or raw request input.
+     */
+    public function rules(User $user, ?Router $router = null, ?array $provisioningSettings = null): array
     {
         return [
             'shop_id' => ['required', TenantAccess::shopExistsRule($user)],
@@ -27,15 +35,24 @@ class RouterManagementService
             'wireguard_endpoint_override_host' => ['nullable', 'string', 'max:255'],
             'wireguard_endpoint_override_port' => ['nullable', 'integer', 'min:1', 'max:65535'],
             'provisioning_settings' => ['nullable', 'array'],
-            'provisioning_settings.profile' => ['nullable', Rule::in(['starlink_plaza', 'small_hotspot', 'l009_builtin_wifi', 'pppoe_isp'])],
+            'provisioning_settings.profile' => ['nullable', Rule::in(['starlink_plaza', 'small_hotspot', 'pppoe_isp'])],
+            'provisioning_settings.port_count' => [
+                'nullable', 'integer', 'min:2', 'max:64',
+                $this->portConflictRule($provisioningSettings ?? []),
+            ],
+            'provisioning_settings.ports_advanced_mode' => ['nullable', 'boolean'],
+            'provisioning_settings.wan1_port_number' => ['nullable', 'integer', 'min:1'],
+            'provisioning_settings.wan2_port_number' => ['nullable', 'integer', 'min:1'],
+            'provisioning_settings.trunk_port_number' => ['nullable', 'integer', 'min:1'],
+            'provisioning_settings.pi_port_number' => ['nullable', 'integer', 'min:1'],
             'provisioning_settings.wan1' => ['nullable', 'string', 'max:40'],
             'provisioning_settings.wan2' => ['nullable', 'string', 'max:40'],
             'provisioning_settings.trunk_port' => ['nullable', 'string', 'max:40'],
             'provisioning_settings.pi_port' => ['nullable', 'string', 'max:40'],
-            'provisioning_settings.builtin_wifi_interface' => ['nullable', 'string', 'max:40'],
-            'provisioning_settings.staff_wifi_password' => ['nullable', 'string', 'min:8', 'max:63'],
+            'provisioning_settings.builtin_wifi_interface' => ['required_if:provisioning_settings.enable_builtin_wifi,true', 'nullable', 'string', 'max:40'],
+            'provisioning_settings.staff_wifi_password' => ['required_if:provisioning_settings.enable_builtin_wifi,true', 'nullable', 'string', 'min:8', 'max:63'],
             'provisioning_settings.pos_wifi_password' => ['nullable', 'string', 'min:8', 'max:63'],
-            'provisioning_settings.mgmt_wifi_password' => ['nullable', 'string', 'min:8', 'max:63'],
+            'provisioning_settings.mgmt_wifi_password' => ['required_if:provisioning_settings.enable_builtin_wifi,true', 'nullable', 'string', 'min:8', 'max:63'],
             'provisioning_settings.download_limit' => ['nullable', 'string', 'max:20'],
             'provisioning_settings.upload_limit' => ['nullable', 'string', 'max:20'],
             'provisioning_settings.mgmt_vlan' => ['nullable', 'integer', 'min:1', 'max:4094'],
@@ -75,16 +92,18 @@ class RouterManagementService
             'wireguard_endpoint_override_port' => $request->filled('wireguard_endpoint_override_port') ? $request->input('wireguard_endpoint_override_port') : null,
         ]);
 
-        $data = $request->validate($this->rules($request->user(), $router));
+        $data = $request->validate($this->rules($request->user(), $router, (array) $request->input('provisioning_settings', [])));
 
         if (! $router) {
             $data += ['is_online' => false];
         }
 
-        return $this->normalize(
-            $data,
-            $router
-        );
+        // Not normalized here -- create()/update() already normalize whatever they're
+        // given (they're also called directly with raw validated data from the Livewire
+        // wizard, which doesn't route through this method at all). Normalizing here too
+        // would run it twice for the HTTP path, and derivePortInterfaceNames() isn't
+        // idempotent against its own already-defaulted output.
+        return $data;
     }
 
     public function create(array $data, User $user): Router
@@ -189,14 +208,20 @@ class RouterManagementService
 
     public function defaultProvisioningSettings(?string $profile = null): array
     {
-        $profile = in_array($profile, ['starlink_plaza', 'small_hotspot', 'l009_builtin_wifi', 'pppoe_isp'], true)
+        $profile = in_array($profile, ['starlink_plaza', 'small_hotspot', 'pppoe_isp'], true)
             ? $profile
             : 'starlink_plaza';
 
         return [
             'profile' => $profile,
+            'port_count' => 8,
+            'ports_advanced_mode' => false,
+            'wan1_port_number' => 1,
+            'wan2_port_number' => 8,
+            'trunk_port_number' => 2,
+            'pi_port_number' => 3,
             'wan1' => 'ether1',
-            'wan2' => $profile === 'l009_builtin_wifi' ? 'ether7' : 'ether8',
+            'wan2' => 'ether8',
             'trunk_port' => 'ether2',
             'pi_port' => 'ether3',
             'builtin_wifi_interface' => 'wifi1',
@@ -204,13 +229,11 @@ class RouterManagementService
             'pos_wifi_password' => 'MmsPos2026!',
             'mgmt_wifi_password' => 'MmsMgmt2026!',
             'download_limit' => match ($profile) {
-                'l009_builtin_wifi' => '80M',
                 'small_hotspot' => '80M',
                 'pppoe_isp' => '150M',
                 default => '120M',
             },
             'upload_limit' => match ($profile) {
-                'l009_builtin_wifi' => '15M',
                 'small_hotspot' => '15M',
                 'pppoe_isp' => '25M',
                 default => '20M',
@@ -233,9 +256,9 @@ class RouterManagementService
             'pos_network' => '192.168.50.0/24',
             'pos_pool' => '192.168.50.10-192.168.50.250',
             'pppoe_gateway' => '172.16.40.1/24',
-            'enable_builtin_wifi' => $profile === 'l009_builtin_wifi',
+            'enable_builtin_wifi' => false,
             'enable_pos' => true,
-            'enable_pppoe' => ! in_array($profile, ['small_hotspot', 'l009_builtin_wifi'], true),
+            'enable_pppoe' => $profile !== 'small_hotspot',
             'enable_realtime_qos' => true,
             'enable_second_wan' => false,
         ];
@@ -244,10 +267,14 @@ class RouterManagementService
     private function normalizeProvisioningSettings(array $settings): array
     {
         $settings = array_filter($settings, fn ($value): bool => $value !== null && $value !== '');
+        // Derive interface-name strings from *_port_number BEFORE merging in profile
+        // defaults below -- otherwise a defaulted (not actually submitted) port number
+        // would overwrite an explicitly-typed raw interface name like "sfp-sfpplus1".
+        $settings = $this->derivePortInterfaceNames($settings);
         $settings = $settings + ['profile' => 'starlink_plaza'];
         $settings = array_replace($this->defaultProvisioningSettings((string) $settings['profile']), $settings);
 
-        foreach (['enable_builtin_wifi', 'enable_pos', 'enable_pppoe', 'enable_realtime_qos', 'enable_second_wan'] as $field) {
+        foreach (['enable_builtin_wifi', 'enable_pos', 'enable_pppoe', 'enable_realtime_qos', 'enable_second_wan', 'ports_advanced_mode'] as $field) {
             $settings[$field] = (bool) ($settings[$field] ?? false);
         }
 
@@ -256,5 +283,69 @@ class RouterManagementService
         }
 
         return $settings;
+    }
+
+    /**
+     * Turns wan1_port_number/wan2_port_number/trunk_port_number/pi_port_number into the
+     * "etherN" strings MikroTikProvisioningService actually reads (wan1/wan2/trunk_port/
+     * pi_port) -- so that service needs no changes at all to keep consuming the same shape.
+     * Left untouched in advanced mode, where the raw strings are trusted as typed.
+     */
+    private function derivePortInterfaceNames(array $settings): array
+    {
+        if (($settings['ports_advanced_mode'] ?? false) === true) {
+            return $settings;
+        }
+
+        foreach ([
+            'wan1' => 'wan1_port_number',
+            'wan2' => 'wan2_port_number',
+            'trunk_port' => 'trunk_port_number',
+            'pi_port' => 'pi_port_number',
+        ] as $stringKey => $numberKey) {
+            if (! empty($settings[$numberKey])) {
+                $settings[$stringKey] = RouterPortLayout::interfaceName((int) $settings[$numberKey]);
+            }
+        }
+
+        return $settings;
+    }
+
+    /**
+     * Cross-field validator attached to provisioning_settings.port_count: rejects a role
+     * port number higher than the total port count, and rejects two roles sharing a port.
+     * No-ops in advanced mode (raw interface-name strings aren't port-count-bound) or when
+     * port_count itself hasn't been submitted yet.
+     */
+    private function portConflictRule(array $provisioningSettings): Closure
+    {
+        return function (string $attribute, mixed $value, Closure $fail) use ($provisioningSettings): void {
+            if (($provisioningSettings['ports_advanced_mode'] ?? false) || blank($value)) {
+                return;
+            }
+
+            $portCount = (int) $value;
+
+            $roles = [
+                'WAN 1' => $provisioningSettings['wan1_port_number'] ?? null,
+                'WAN 2' => ($provisioningSettings['enable_second_wan'] ?? false) ? ($provisioningSettings['wan2_port_number'] ?? null) : null,
+                'Trunk port' => $provisioningSettings['trunk_port_number'] ?? null,
+                'Pi port' => $provisioningSettings['pi_port_number'] ?? null,
+            ];
+
+            foreach ($roles as $role => $portNumber) {
+                if ($portNumber !== null && (int) $portNumber > $portCount) {
+                    $fail("{$role} is set to port {$portNumber}, which is higher than the total Ethernet port count ({$portCount}).");
+
+                    return;
+                }
+            }
+
+            $conflicts = RouterPortLayout::conflictingRoles($roles);
+
+            if ($conflicts !== []) {
+                $fail(implode(' ', $conflicts));
+            }
+        };
     }
 }

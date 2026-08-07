@@ -21,11 +21,6 @@ class MikroTikProvisioningService
                 'summary' => 'Simpler VLAN hotspot layout for cafes, small offices, and single-shop deployments.',
                 'capacity' => '20-100 users',
             ],
-            'l009_builtin_wifi' => [
-                'name' => 'L009 built-in Wi-Fi test router',
-                'summary' => 'MikroTik L009 profile using wifi1 as the open hotspot SSID while ether2 remains available as an AP/switch trunk.',
-                'capacity' => 'Lab/testing or small pilot before adding external APs',
-            ],
             'pppoe_isp' => [
                 'name' => 'PPPoE ISP access',
                 'summary' => 'Subscriber VLAN and PPPoE server foundation for CPE-based customers.',
@@ -438,13 +433,6 @@ HTML;
     private function profileDefaults(string $profile): array
     {
         return match ($profile) {
-            'l009_builtin_wifi' => [
-                'wan1' => 'ether1',
-                'wan2' => 'ether7',
-                'trunk_port' => 'ether2',
-                'download_limit' => '80M',
-                'upload_limit' => '15M',
-            ],
             'small_hotspot' => [
                 'wan1' => 'ether1',
                 'wan2' => 'ether8',
@@ -507,9 +495,9 @@ HTML;
             'pos_network' => '192.168.50.0/24',
             'pos_pool' => '192.168.50.10-192.168.50.250',
             'pppoe_gateway' => '172.16.40.1/24',
-            'enable_builtin_wifi' => $profile === 'l009_builtin_wifi',
+            'enable_builtin_wifi' => false,
             'enable_pos' => true,
-            'enable_pppoe' => ! in_array($profile, ['small_hotspot', 'l009_builtin_wifi'], true),
+            'enable_pppoe' => $profile !== 'small_hotspot',
             'enable_realtime_qos' => true,
             'enable_second_wan' => false,
         ];

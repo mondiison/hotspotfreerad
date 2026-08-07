@@ -8,7 +8,7 @@ The Staff and Management SSIDs are WPA2/WPA3-PSK, not open like the customer hot
 
 There are two different SSID hosting situations in this app, and the mechanism differs between them.
 
-### MikroTik built-in Wi-Fi (the `l009_builtin_wifi` lab/test profile)
+### MikroTik built-in Wi-Fi (the "This router has built-in Wi-Fi" toggle)
 
 This is the one case where HotspotFreeRAD directly controls the SSID. The router's generated script (Script page → Fresh Infrastructure Script) now includes, for each of the Staff and Management SSIDs:
 

@@ -163,12 +163,12 @@ class BillingPlanLimitTest extends TestCase
             ->assertSee('2')
             ->assertSee('You can add this item under the current platform plan.');
 
+        // admin.routers.create redirects into the Livewire wizard on the routers index
+        // page now (see RoutersWizardTest for the billing-allowance banner assertion
+        // inside that flyout) instead of rendering its own full page.
         $this->actingAs($user)
             ->get(route('admin.routers.create'))
-            ->assertOk()
-            ->assertSee('Platform allowance')
-            ->assertSee('1 routers')
-            ->assertSee('3');
+            ->assertRedirect(route('admin.routers.index', ['open' => 'create']));
 
         $this->actingAs($user)
             ->get(route('admin.packages.create'))

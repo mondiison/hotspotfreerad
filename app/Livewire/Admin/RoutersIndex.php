@@ -8,7 +8,9 @@ use App\Services\MikroTikProvisioningService;
 use App\Services\RouterManagementService;
 use App\Support\BillingPlanLimits;
 use App\Support\RadiusAccountingStats;
+use App\Support\RouterPortLayout;
 use App\Support\TenantAccess;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
@@ -21,6 +23,8 @@ class RoutersIndex extends Component
     public string $search = '';
 
     public string $status = '';
+
+    public int $step = 1;
 
     public bool $showFormModal = false;
 
@@ -61,6 +65,12 @@ class RoutersIndex extends Component
     {
         $this->search = (string) ($filters['search'] ?? '');
         $this->status = (string) ($filters['status'] ?? '');
+
+        if (request()->query('open') === 'create') {
+            $this->create();
+        } elseif (request()->query('open_edit')) {
+            $this->edit((int) request()->query('open_edit'));
+        }
     }
 
     public function updated($property): void
@@ -101,7 +111,23 @@ class RoutersIndex extends Component
         $this->provisioning_settings = $this->routerProvisioningSettings($router);
         $this->shared_secret = '';
         $this->savedMessage = null;
+        $this->step = 1;
         $this->showFormModal = true;
+    }
+
+    public function nextStep(RouterManagementService $routers): void
+    {
+        $router = $this->editingRouterId ? Router::find($this->editingRouterId) : null;
+        $rules = $routers->rules(auth()->user(), $router, $this->provisioning_settings);
+
+        $this->validate(Arr::only($rules, $this->stepFields($this->step)));
+
+        $this->step = min(4, $this->step + 1);
+    }
+
+    public function previousStep(): void
+    {
+        $this->step = max(1, $this->step - 1);
     }
 
     public function updatedShopId(string $value): void
@@ -139,62 +165,24 @@ class RoutersIndex extends Component
     public function setRouterLayoutPreset(string $preset): void
     {
         $settings = match ($preset) {
-            'l009_lab_wifi' => [
-                'profile' => 'l009_builtin_wifi',
-                'wan1' => 'ether1',
-                'wan2' => 'ether7',
-                'trunk_port' => 'ether2',
-                'pi_port' => 'ether3',
-                'builtin_wifi_interface' => 'wifi1',
-                'staff_wifi_password' => 'MmsStaff2026!',
-                'pos_wifi_password' => 'MmsPos2026!',
-                'mgmt_wifi_password' => 'MmsMgmt2026!',
-                'download_limit' => '80M',
-                'upload_limit' => '15M',
-                'hotspot_gateway' => '10.5.50.1/24',
-                'hotspot_network' => '10.5.50.0/24',
-                'hotspot_pool' => '10.5.50.10-10.5.50.250',
-                'enable_builtin_wifi' => true,
-                'enable_pos' => true,
-                'enable_pppoe' => false,
-                'enable_realtime_qos' => true,
-                'enable_second_wan' => false,
-            ],
             'small_ap_24' => [
                 'profile' => 'small_hotspot',
-                'wan1' => 'ether1',
-                'wan2' => 'ether8',
-                'trunk_port' => 'ether2',
-                'pi_port' => 'ether3',
-                'staff_wifi_password' => 'MmsStaff2026!',
-                'pos_wifi_password' => 'MmsPos2026!',
-                'mgmt_wifi_password' => 'MmsMgmt2026!',
                 'download_limit' => '80M',
                 'upload_limit' => '15M',
                 'hotspot_gateway' => '10.5.50.1/24',
                 'hotspot_network' => '10.5.50.0/24',
                 'hotspot_pool' => '10.5.50.10-10.5.50.250',
-                'enable_builtin_wifi' => false,
                 'enable_pos' => true,
                 'enable_pppoe' => false,
                 'enable_realtime_qos' => true,
             ],
             default => [
                 'profile' => 'starlink_plaza',
-                'wan1' => 'ether1',
-                'wan2' => 'ether8',
-                'trunk_port' => 'ether2',
-                'pi_port' => 'ether3',
-                'builtin_wifi_interface' => 'wifi1',
-                'staff_wifi_password' => 'MmsStaff2026!',
-                'pos_wifi_password' => 'MmsPos2026!',
-                'mgmt_wifi_password' => 'MmsMgmt2026!',
                 'download_limit' => '120M',
                 'upload_limit' => '20M',
                 'hotspot_gateway' => '10.5.50.1/23',
                 'hotspot_network' => '10.5.50.0/23',
                 'hotspot_pool' => '10.5.50.10-10.5.51.250',
-                'enable_builtin_wifi' => false,
                 'enable_pos' => true,
                 'enable_pppoe' => true,
                 'enable_realtime_qos' => true,
@@ -239,7 +227,7 @@ class RoutersIndex extends Component
         $this->wireguard_endpoint_override_host = $this->wireguard_endpoint_override_host !== '' ? $this->wireguard_endpoint_override_host : null;
         $this->wireguard_endpoint_override_port = $this->wireguard_endpoint_override_port !== '' ? $this->wireguard_endpoint_override_port : null;
 
-        $data = $this->validate($routers->rules(auth()->user(), $router));
+        $data = $this->validate($routers->rules(auth()->user(), $router, $this->provisioning_settings));
 
         if ($router) {
             $routers->update($router, $data, auth()->user());
@@ -336,6 +324,7 @@ class RoutersIndex extends Component
             'provisioning_settings',
         ]);
         $this->is_online = false;
+        $this->step = 1;
         $this->provisioning_settings = app(RouterManagementService::class)->defaultProvisioningSettings();
 
         $routers = app(RouterManagementService::class);
@@ -345,12 +334,87 @@ class RoutersIndex extends Component
         $this->resetValidation();
     }
 
+    /**
+     * Loads an existing router's saved settings and, when possible, reverse-derives
+     * wan1_port_number/wan2_port_number/trunk_port_number/pi_port_number from its
+     * saved "etherN" interface-name strings so the port-picker dropdowns open
+     * pre-selected. Every currently-seeded default is "etherN", so this succeeds
+     * for the overwhelming majority of existing routers; if any of the four
+     * doesn't cleanly parse (e.g. a manually-typed "sfp-sfpplus1"), the router
+     * opens in advanced/raw-text mode instead of guessing wrong.
+     */
     private function routerProvisioningSettings(Router $router): array
     {
-        return array_replace(
+        $settings = array_replace(
             app(RouterManagementService::class)->defaultProvisioningSettings($router->provisioning_settings['profile'] ?? null),
             (array) $router->provisioning_settings
         );
+
+        if (($settings['ports_advanced_mode'] ?? false) === true) {
+            return $settings;
+        }
+
+        $roleStringKeys = [
+            'wan1_port_number' => 'wan1',
+            'wan2_port_number' => 'wan2',
+            'trunk_port_number' => 'trunk_port',
+            'pi_port_number' => 'pi_port',
+        ];
+
+        $parsedPortNumbers = [];
+
+        foreach ($roleStringKeys as $numberKey => $stringKey) {
+            $portNumber = RouterPortLayout::portNumberFromInterfaceName($settings[$stringKey] ?? null);
+
+            if ($portNumber === null) {
+                $settings['ports_advanced_mode'] = true;
+
+                return $settings;
+            }
+
+            $parsedPortNumbers[$numberKey] = $portNumber;
+        }
+
+        $settings = array_merge($settings, $parsedPortNumbers);
+        $settings['port_count'] = max($parsedPortNumbers) + 2;
+
+        return $settings;
+    }
+
+    private function stepFields(int $step): array
+    {
+        return match ($step) {
+            1 => [
+                'shop_id', 'name', 'nas_identifier', 'wireguard_internal_ip',
+                'shared_secret', 'wireguard_endpoint_override_host', 'wireguard_endpoint_override_port',
+            ],
+            2 => [
+                'provisioning_settings.enable_builtin_wifi', 'provisioning_settings.enable_second_wan',
+                'provisioning_settings.port_count', 'provisioning_settings.ports_advanced_mode',
+                'provisioning_settings.wan1_port_number', 'provisioning_settings.wan2_port_number',
+                'provisioning_settings.trunk_port_number', 'provisioning_settings.pi_port_number',
+                'provisioning_settings.wan1', 'provisioning_settings.wan2',
+                'provisioning_settings.trunk_port', 'provisioning_settings.pi_port',
+            ],
+            3 => [
+                'provisioning_settings.enable_pos', 'provisioning_settings.enable_pppoe',
+                'provisioning_settings.enable_realtime_qos', 'provisioning_settings.download_limit',
+                'provisioning_settings.upload_limit', 'provisioning_settings.builtin_wifi_interface',
+                'provisioning_settings.staff_wifi_password', 'provisioning_settings.pos_wifi_password',
+                'provisioning_settings.mgmt_wifi_password',
+            ],
+            4 => [
+                'provisioning_settings.profile',
+                'provisioning_settings.mgmt_vlan', 'provisioning_settings.hotspot_vlan',
+                'provisioning_settings.staff_vlan', 'provisioning_settings.pppoe_vlan', 'provisioning_settings.pos_vlan',
+                'provisioning_settings.mgmt_gateway', 'provisioning_settings.mgmt_network', 'provisioning_settings.mgmt_pool',
+                'provisioning_settings.hotspot_gateway', 'provisioning_settings.hotspot_network', 'provisioning_settings.hotspot_pool',
+                'provisioning_settings.staff_gateway', 'provisioning_settings.staff_network', 'provisioning_settings.staff_pool',
+                'provisioning_settings.pos_gateway', 'provisioning_settings.pos_network', 'provisioning_settings.pos_pool',
+                'provisioning_settings.pppoe_gateway',
+            ],
+            default => [],
+        };
     }
 
     private function validateOnlyFilters(): void
