@@ -16,6 +16,7 @@ use App\Http\Controllers\Admin\SecurityActivityController;
 use App\Http\Controllers\Admin\SecurityController;
 use App\Http\Controllers\Admin\SetupCenterController;
 use App\Http\Controllers\Admin\ShopController;
+use App\Http\Controllers\Admin\StandaloneScriptGeneratorController;
 use App\Http\Controllers\Admin\SubscriptionController;
 use App\Http\Controllers\Admin\TenantBrandController;
 use App\Http\Controllers\Admin\TenantController;
@@ -78,6 +79,7 @@ Route::middleware(['auth', AuthorizeTenantStaff::class])->prefix('admin')->name(
     Route::get('security-activity-export', [SecurityActivityController::class, 'export'])->name('security-activity.export');
     Route::view('security-activity', 'admin.security-activity.index')->name('security-activity.index');
     Route::get('security', SecurityController::class)->name('security.index');
+    Route::get('tools/script-generator', StandaloneScriptGeneratorController::class)->name('tools.script-generator');
     Route::get('billing', [BillingController::class, 'index'])->name('billing.index');
     Route::get('billing/plans/create', [BillingController::class, 'createPlan'])->name('billing.plans.create');
     Route::post('billing/plans', [BillingController::class, 'storePlan'])->name('billing.plans.store');
