@@ -104,6 +104,72 @@ class StandaloneScriptGeneratorTest extends TestCase
             });
     }
 
+    public function test_super_admin_can_walk_through_the_wizard_for_a_second_wired_only_router(): void
+    {
+        $this->actingAs($this->superAdmin());
+
+        Livewire::test(StandaloneScriptGenerator::class)
+            ->assertSet('step', 1)
+            ->assertSet('has_wireless', true)
+            ->set('router_identity', 'Market-Router02')
+            ->set('hotspot_name', 'Market Free Wi-Fi')
+            ->set('ros_version', '7')
+            ->set('has_wireless', false)
+            ->set('wan_port', 'ether1')
+            ->set('ethernet_port_count', 5)
+            ->call('nextStep')
+            ->assertHasNoErrors()
+            ->assertSet('step', 2)
+            ->assertSet('wireless_interface', '')
+            ->set('enable_mgmt_network', true)
+            ->set('mgmt_network', '10.20.20.1/24')
+            ->call('nextStep')
+            ->assertHasNoErrors()
+            ->assertSet('step', 3)
+            ->set('hotspot_network', '10.20.10.1/24')
+            ->set('profiles.0.name', '1 Hour')
+            ->set('profiles.0.voucher_count', 3)
+            ->call('addProfile')
+            ->set('profiles.1.name', 'Daily')
+            ->set('profiles.1.download_mbps', 10)
+            ->set('profiles.1.upload_mbps', 3)
+            ->set('profiles.1.session_minutes', 1440)
+            ->set('profiles.1.shared_users', 1)
+            ->set('profiles.1.voucher_count', 2)
+            ->set('profiles.1.voucher_prefix', 'D-')
+            ->set('profiles.1.voucher_username_password_same', false)
+            ->set('profiles.1.voucher_character_set', 'numeric')
+            ->call('nextStep')
+            ->assertHasNoErrors()
+            ->assertSet('step', 4)
+            ->call('generate')
+            ->assertHasNoErrors()
+            ->assertSet('step', 5)
+            ->assertSee('Market Free Wi-Fi')
+            ->assertSee('5 voucher');
+
+        $component = Livewire::test(StandaloneScriptGenerator::class)
+            ->set('router_identity', 'Market-Router02')
+            ->set('hotspot_name', 'Market Free Wi-Fi')
+            ->set('has_wireless', false)
+            ->set('hotspot_network', '10.20.10.1/24')
+            ->set('enable_mgmt_network', true)
+            ->set('mgmt_network', '10.20.20.1/24')
+            ->set('profiles.0.voucher_count', 3)
+            ->call('generate')
+            ->assertHasNoErrors();
+
+        $script = $component->get('generatedScript');
+
+        $this->assertStringNotContainsString('/interface wifi', $script);
+        $this->assertStringNotContainsString('/interface wireless', $script);
+        $this->assertStringContainsString('external access point', $script);
+        $this->assertStringContainsString('Wire a dedicated port to bridge-mgmt', $script);
+        $this->assertStringContainsString('/ip service set winbox address=10.20.20.0/24', $script);
+        $this->assertStringContainsString('/interface bridge port add bridge=bridge-hotspot interface=ether2', $script);
+        $this->assertStringNotContainsString('/interface bridge port add bridge=bridge-hotspot interface=ether1', $script);
+    }
+
     public function test_review_page_can_go_back_to_change_settings_without_losing_entered_data(): void
     {
         $this->actingAs($this->superAdmin());
