@@ -58,11 +58,14 @@ class StandalonePtpScriptGenerator
         $thisIp = $subnet[$thisKey.'_ip'];
         $otherHost = $subnet[$otherKey.'_host'];
 
+        $addressInterface = $config['link_mode'] === 'bridged' ? 'bridge-ptp' : $radio['wireless_interface'];
+
         return array_merge(
             $this->headerLines($config, $radio, $isApEnd),
             $this->identityLines($radio),
             $this->wirelessLines($config, $radio, $isApEnd),
-            $this->addressingLines($thisIp, $radio['wireless_interface']),
+            $this->bridgeLines($config, $radio),
+            $this->addressingLines($thisIp, $addressInterface),
             $this->remoteRouteLines($radio, $otherHost),
         );
     }
@@ -166,6 +169,31 @@ class StandalonePtpScriptGenerator
 
         return [
             '/interface wifi security add name=ptp-sec authentication-types='.$authTypes.' passphrase="'.$this->quote($config['psk']).'"',
+        ];
+    }
+
+    /**
+     * "Bridged" link mode needs an actual RouterOS bridge interface -- setting
+     * the wireless mode to bridge/station-pseudobridge alone doesn't create
+     * one. The wireless interface becomes a bridge port, and the PTP subnet's
+     * IP address goes on the bridge (see addressingLines() call site) so a
+     * LAN port can be added to bridge-ptp later to extend the network across
+     * the link, matching StandaloneHotspotScriptGenerator's bridge-hotspot
+     * pattern. Routed mode needs none of this -- the address goes straight on
+     * the wireless interface and each end stays its own subnet.
+     *
+     * @return list<string>
+     */
+    private function bridgeLines(array $config, array $radio): array
+    {
+        if ($config['link_mode'] !== 'bridged') {
+            return [];
+        }
+
+        return [
+            '/interface bridge add name=bridge-ptp comment="PTP link bridge -- add a LAN port here to extend this network across the link"',
+            '/interface bridge port add bridge=bridge-ptp interface='.$radio['wireless_interface'],
+            '',
         ];
     }
 

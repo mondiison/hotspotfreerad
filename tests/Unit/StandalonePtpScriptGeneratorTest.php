@@ -67,6 +67,30 @@ class StandalonePtpScriptGeneratorTest extends TestCase
         $this->assertStringContainsString('mode=station-pseudobridge ', $result['script_b']);
     }
 
+    public function test_bridged_mode_creates_a_bridge_interface_and_addresses_it(): void
+    {
+        $result = (new StandalonePtpScriptGenerator)->generate($this->config([
+            'link_mode' => 'bridged',
+            'ptp_subnet' => '10.20.30.0/30',
+        ]));
+
+        $this->assertStringContainsString('/interface bridge add name=bridge-ptp', $result['script_a']);
+        $this->assertStringContainsString('/interface bridge port add bridge=bridge-ptp interface=wifi1', $result['script_a']);
+        $this->assertStringContainsString('/ip address add address=10.20.30.1/30 interface=bridge-ptp', $result['script_a']);
+        $this->assertStringNotContainsString('/ip address add address=10.20.30.1/30 interface=wifi1', $result['script_a']);
+    }
+
+    public function test_routed_mode_does_not_create_a_bridge_and_addresses_the_wireless_interface_directly(): void
+    {
+        $result = (new StandalonePtpScriptGenerator)->generate($this->config([
+            'link_mode' => 'routed',
+            'ptp_subnet' => '10.20.30.0/30',
+        ]));
+
+        $this->assertStringNotContainsString('/interface bridge', $result['script_a']);
+        $this->assertStringContainsString('/ip address add address=10.20.30.1/30 interface=wifi1', $result['script_a']);
+    }
+
     public function test_routed_mode_uses_ap_bridge_and_station_on_ros6(): void
     {
         $result = (new StandalonePtpScriptGenerator)->generate($this->config([
