@@ -164,6 +164,42 @@ class StandalonePtpGeneratorTest extends TestCase
             ->assertSet('radio_a.wireless_interface', 'wifi1');
     }
 
+    public function test_marking_the_current_ap_end_as_cpe_only_flips_the_ap_role_to_the_other_radio(): void
+    {
+        $this->actingAs($this->superAdmin());
+
+        Livewire::test(StandalonePtpGenerator::class)
+            ->assertSet('ap_end', 'radio_a')
+            ->set('radio_a.cpe_only', true)
+            ->assertSet('ap_end', 'radio_b')
+            ->set('radio_b.cpe_only', true)
+            ->assertSet('ap_end', 'radio_a');
+    }
+
+    public function test_selecting_a_cpe_only_radio_as_the_ap_end_is_rejected(): void
+    {
+        $this->actingAs($this->superAdmin());
+
+        Livewire::test(StandalonePtpGenerator::class)
+            ->set('radio_a.cpe_only', true)
+            ->set('ap_end', 'radio_a')
+            ->call('nextStep') // step 1 -> 2
+            ->call('nextStep')
+            ->assertHasErrors('ap_end');
+    }
+
+    public function test_both_radios_cpe_only_is_rejected(): void
+    {
+        $this->actingAs($this->superAdmin());
+
+        Livewire::test(StandalonePtpGenerator::class)
+            ->set('radio_a.cpe_only', true)
+            ->set('radio_b.cpe_only', true)
+            ->call('nextStep') // step 1 -> 2
+            ->call('nextStep')
+            ->assertHasErrors('radio_b.cpe_only');
+    }
+
     public function test_mixed_wpa2_wpa3_is_rejected_unless_both_radios_are_ros7(): void
     {
         $this->actingAs($this->superAdmin());

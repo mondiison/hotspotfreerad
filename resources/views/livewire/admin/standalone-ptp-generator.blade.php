@@ -68,8 +68,8 @@
             <flux:field>
                 <flux:label>Which end is the AP/master?</flux:label>
                 <flux:select wire:model="ap_end">
-                    <flux:select.option value="radio_a">Radio A ({{ $radio_a['identity'] }})</flux:select.option>
-                    <flux:select.option value="radio_b">Radio B ({{ $radio_b['identity'] }})</flux:select.option>
+                    <flux:select.option value="radio_a" :disabled="$radio_a['cpe_only']">Radio A ({{ $radio_a['identity'] }}){{ $radio_a['cpe_only'] ? ' -- CPE-only, can\'t be AP' : '' }}</flux:select.option>
+                    <flux:select.option value="radio_b" :disabled="$radio_b['cpe_only']">Radio B ({{ $radio_b['identity'] }}){{ $radio_b['cpe_only'] ? ' -- CPE-only, can\'t be AP' : '' }}</flux:select.option>
                 </flux:select>
                 <flux:description>The other radio is configured as the Station.</flux:description>
                 <flux:error name="ap_end" />
@@ -86,19 +86,32 @@
             </flux:field>
 
             <div class="grid gap-5 md:grid-cols-2">
-                <flux:field>
-                    <flux:label>Radio A wireless interface</flux:label>
-                    <flux:input wire:model.blur="radio_a.wireless_interface" placeholder="{{ $radio_a['ros_version'] === '6' ? 'wlan1' : 'wifi1' }}" />
-                    <flux:description>Check <code>/interface {{ $radio_a['ros_version'] === '6' ? 'wireless' : 'wifi' }} print</code> on the router.</flux:description>
-                    <flux:error name="radio_a.wireless_interface" />
-                </flux:field>
+                <div class="space-y-3">
+                    <flux:field>
+                        <flux:label>Radio A wireless interface</flux:label>
+                        <flux:input wire:model.blur="radio_a.wireless_interface" placeholder="{{ $radio_a['ros_version'] === '6' ? 'wlan1' : 'wifi1' }}" />
+                        <flux:description>Check <code>/interface {{ $radio_a['ros_version'] === '6' ? 'wireless' : 'wifi' }} print</code> on the router.</flux:description>
+                        <flux:error name="radio_a.wireless_interface" />
+                    </flux:field>
+                    <flux:field>
+                        <flux:checkbox wire:model.live="radio_a.cpe_only" label="This is a CPE/dish radio (can't act as AP)" />
+                        <flux:description>e.g. SXTsq, LHG, Disc, Metal -- these are client-only hardware and RouterOS rejects AP/ap-bridge mode on them.</flux:description>
+                    </flux:field>
+                </div>
 
-                <flux:field>
-                    <flux:label>Radio B wireless interface</flux:label>
-                    <flux:input wire:model.blur="radio_b.wireless_interface" placeholder="{{ $radio_b['ros_version'] === '6' ? 'wlan1' : 'wifi1' }}" />
-                    <flux:description>Check <code>/interface {{ $radio_b['ros_version'] === '6' ? 'wireless' : 'wifi' }} print</code> on the router.</flux:description>
-                    <flux:error name="radio_b.wireless_interface" />
-                </flux:field>
+                <div class="space-y-3">
+                    <flux:field>
+                        <flux:label>Radio B wireless interface</flux:label>
+                        <flux:input wire:model.blur="radio_b.wireless_interface" placeholder="{{ $radio_b['ros_version'] === '6' ? 'wlan1' : 'wifi1' }}" />
+                        <flux:description>Check <code>/interface {{ $radio_b['ros_version'] === '6' ? 'wireless' : 'wifi' }} print</code> on the router.</flux:description>
+                        <flux:error name="radio_b.wireless_interface" />
+                    </flux:field>
+                    <flux:field>
+                        <flux:checkbox wire:model.live="radio_b.cpe_only" label="This is a CPE/dish radio (can't act as AP)" />
+                        <flux:description>e.g. SXTsq, LHG, Disc, Metal -- these are client-only hardware and RouterOS rejects AP/ap-bridge mode on them.</flux:description>
+                        <flux:error name="radio_b.cpe_only" />
+                    </flux:field>
+                </div>
             </div>
 
             <div class="flex justify-between">

@@ -19,6 +19,14 @@ namespace App\Services;
  * exact behavior on `/interface wifi` (RouterOS 7) are not verified against
  * real hardware -- same "best-effort, confirm on your own gear" caveat
  * already used elsewhere in this codebase for unverified RouterOS syntax.
+ *
+ * Some MikroTik hardware -- CPE/dish-style radios like the SXTsq, LHG, Disc,
+ * or Metal -- is client-only and RouterOS rejects AP/ap-bridge mode on it
+ * outright (confirmed 2026-08-08 from a real "not supported" error on an
+ * SXTsq Lite5). This class doesn't know or care which radio is CPE-only --
+ * that constraint is enforced upstream, in the wizard's `ap_end` validation
+ * (`App\Livewire\Admin\StandalonePtpGenerator`), so an AP-mode script is
+ * simply never generated for a radio marked that way.
  */
 class StandalonePtpScriptGenerator
 {
@@ -34,8 +42,8 @@ class StandalonePtpScriptGenerator
      *     psk: string,
      *     distance_km: float,
      *     ptp_subnet: string,
-     *     radio_a: array{identity: string, ros_version: string, wireless_interface: string, add_remote_route: bool, remote_network: ?string},
-     *     radio_b: array{identity: string, ros_version: string, wireless_interface: string, add_remote_route: bool, remote_network: ?string},
+     *     radio_a: array{identity: string, ros_version: string, wireless_interface: string, cpe_only?: bool, add_remote_route: bool, remote_network: ?string},
+     *     radio_b: array{identity: string, ros_version: string, wireless_interface: string, cpe_only?: bool, add_remote_route: bool, remote_network: ?string},
      * } $config
      * @return array{script_a: string, script_b: string}
      */

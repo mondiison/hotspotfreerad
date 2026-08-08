@@ -21,6 +21,7 @@ class StandalonePtpGenerator extends Component
         'identity' => 'Radio A',
         'ros_version' => '7',
         'wireless_interface' => 'wifi1',
+        'cpe_only' => false,
         'add_remote_route' => false,
         'remote_network' => '',
     ];
@@ -29,6 +30,7 @@ class StandalonePtpGenerator extends Component
         'identity' => 'Radio B',
         'ros_version' => '7',
         'wireless_interface' => 'wifi1',
+        'cpe_only' => false,
         'add_remote_route' => false,
         'remote_network' => '',
     ];
@@ -62,6 +64,18 @@ class StandalonePtpGenerator extends Component
 
         if ($name === 'radio_b.ros_version') {
             $this->radio_b['wireless_interface'] = $value === '6' ? 'wlan1' : 'wifi1';
+        }
+
+        // A CPE/dish-style radio (e.g. SXTsq, LHG, Disc) physically can't run
+        // AP/ap-bridge mode -- RouterOS rejects the command outright. If the
+        // admin marks the current AP end as CPE-only, flip the AP role to the
+        // other radio automatically rather than leaving an invalid selection.
+        if ($name === 'radio_a.cpe_only' && $value && $this->ap_end === 'radio_a') {
+            $this->ap_end = 'radio_b';
+        }
+
+        if ($name === 'radio_b.cpe_only' && $value && $this->ap_end === 'radio_b') {
+            $this->ap_end = 'radio_a';
         }
     }
 
@@ -115,10 +129,20 @@ class StandalonePtpGenerator extends Component
                 'radio_b.ros_version' => ['required', Rule::in(['6', '7'])],
             ],
             2 => [
-                'ap_end' => ['required', Rule::in(['radio_a', 'radio_b'])],
+                'ap_end' => ['required', Rule::in(['radio_a', 'radio_b']), function ($attribute, $value, $fail) {
+                    if ($this->{$value}['cpe_only'] ?? false) {
+                        $fail('This radio is marked CPE-only and can\'t act as AP -- pick the other radio as the AP/master end.');
+                    }
+                }],
                 'link_mode' => ['required', Rule::in(['routed', 'bridged'])],
                 'radio_a.wireless_interface' => ['required', 'string', 'max:32', 'regex:/^[a-zA-Z-]+\d+$/'],
+                'radio_a.cpe_only' => ['boolean'],
                 'radio_b.wireless_interface' => ['required', 'string', 'max:32', 'regex:/^[a-zA-Z-]+\d+$/'],
+                'radio_b.cpe_only' => ['boolean', function ($attribute, $value, $fail) {
+                    if ($value && ($this->radio_a['cpe_only'] ?? false)) {
+                        $fail('Both radios can\'t be CPE-only -- at least one end needs to support AP mode.');
+                    }
+                }],
             ],
             3 => [
                 'frequency_mhz' => ['required', 'integer', 'min:2312', 'max:6000'],
