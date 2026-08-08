@@ -288,6 +288,113 @@ class StandalonePtpGeneratorTest extends TestCase
         $this->assertStringContainsString('mode=station', $scripts['script_b']);
     }
 
+    public function test_nv2_is_rejected_unless_both_radios_are_ros6(): void
+    {
+        $this->actingAs($this->superAdmin());
+
+        Livewire::test(StandalonePtpGenerator::class)
+            ->set('radio_a.ros_version', '6')
+            ->set('radio_b.ros_version', '7')
+            ->set('wireless_protocol', 'nv2')
+            ->call('nextStep') // step 1 -> 2
+            ->call('nextStep') // step 2 -> 3
+            ->call('nextStep')
+            ->assertHasErrors('wireless_protocol');
+    }
+
+    public function test_nv2_is_accepted_when_both_radios_are_ros6(): void
+    {
+        $this->actingAs($this->superAdmin());
+
+        Livewire::test(StandalonePtpGenerator::class)
+            ->set('radio_a.ros_version', '6')
+            ->set('radio_b.ros_version', '6')
+            ->set('wireless_protocol', 'nv2')
+            ->set('psk', 'supersecretpsk')
+            ->call('nextStep') // step 1 -> 2
+            ->call('nextStep') // step 2 -> 3
+            ->call('nextStep')
+            ->assertHasNoErrors();
+    }
+
+    public function test_switching_a_radio_off_ros6_resets_nv2_back_to_802_11(): void
+    {
+        $this->actingAs($this->superAdmin());
+
+        Livewire::test(StandalonePtpGenerator::class)
+            ->set('radio_a.ros_version', '6')
+            ->set('radio_b.ros_version', '6')
+            ->set('wireless_protocol', 'nv2')
+            ->assertSet('wireless_protocol', 'nv2')
+            ->set('radio_b.ros_version', '7')
+            ->assertSet('wireless_protocol', '802.11');
+    }
+
+    public function test_changing_ros_version_resets_the_band_default(): void
+    {
+        $this->actingAs($this->superAdmin());
+
+        Livewire::test(StandalonePtpGenerator::class)
+            ->assertSet('radio_a.band', '5ghz-ac')
+            ->set('radio_a.ros_version', '6')
+            ->assertSet('radio_a.band', '5ghz-a/n/ac')
+            ->set('radio_a.ros_version', '7')
+            ->assertSet('radio_a.band', '5ghz-ac');
+    }
+
+    public function test_a_ros7_only_band_is_rejected_for_a_ros6_radio(): void
+    {
+        $this->actingAs($this->superAdmin());
+
+        Livewire::test(StandalonePtpGenerator::class)
+            ->set('radio_a.ros_version', '6')
+            ->set('radio_a.band', '5ghz-ax')
+            ->call('nextStep') // step 1 -> 2
+            ->call('nextStep') // step 2 -> 3
+            ->call('nextStep')
+            ->assertHasErrors('radio_a.band');
+    }
+
+    public function test_country_is_required(): void
+    {
+        $this->actingAs($this->superAdmin());
+
+        Livewire::test(StandalonePtpGenerator::class)
+            ->set('country', '')
+            ->call('nextStep') // step 1 -> 2
+            ->call('nextStep') // step 2 -> 3
+            ->call('nextStep')
+            ->assertHasErrors('country');
+    }
+
+    public function test_live_regression_sxtsq_at_5745mhz_with_band_and_country_generates_without_error(): void
+    {
+        // Reproduces a real "bad band or frequency" rejection from a physical
+        // SXTsq Lite5 -- RouterOS 6 rejected frequency=5745 because band/country
+        // were never set alongside it. This confirms the wizard now collects
+        // both and the service emits them together on the same `set` command.
+        $this->actingAs($this->superAdmin());
+
+        $component = Livewire::test(StandalonePtpGenerator::class)
+            ->set('link_name', 'Live regression link')
+            ->set('radio_a.identity', 'SXTsq')
+            ->set('radio_a.ros_version', '6')
+            ->set('radio_a.wireless_interface', 'wlan1')
+            ->set('radio_a.band', '5ghz-a/n/ac')
+            ->set('frequency_mhz', 5745)
+            ->set('channel_width_mhz', 20)
+            ->set('country', 'no_country_set')
+            ->set('psk', 'supersecretpsk')
+            ->call('generate')
+            ->assertHasNoErrors();
+
+        $scripts = $component->get('generatedScripts');
+
+        $this->assertStringContainsString('band=5ghz-a/n/ac', $scripts['script_a']);
+        $this->assertStringContainsString('frequency=5745', $scripts['script_a']);
+        $this->assertStringContainsString('country="no_country_set"', $scripts['script_a']);
+    }
+
     public function test_mixed_wpa2_wpa3_is_rejected_unless_both_radios_are_ros7(): void
     {
         $this->actingAs($this->superAdmin());

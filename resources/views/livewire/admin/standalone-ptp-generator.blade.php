@@ -167,6 +167,67 @@
                 </flux:field>
             </div>
 
+            <div class="grid gap-5 md:grid-cols-2">
+                <flux:field>
+                    <flux:label>Country (regulatory domain)</flux:label>
+                    <flux:input wire:model.blur="country" placeholder="no_country_set" />
+                    <flux:description>Must match a RouterOS country name exactly (e.g. <code>no_country_set</code>, <code>united states3</code>). Together with band, this determines which frequencies RouterOS will actually accept -- an incorrect or missing country is the most common cause of a "bad band or frequency" rejection.</flux:description>
+                    <flux:error name="country" />
+                </flux:field>
+
+                <flux:field>
+                    <flux:label>Frequency mode</flux:label>
+                    <flux:select wire:model="frequency_mode">
+                        <flux:select.option value="regulatory-domain">Regulatory domain (recommended)</flux:select.option>
+                        <flux:select.option value="superchannel">Superchannel (bypasses country limits)</flux:select.option>
+                    </flux:select>
+                    <flux:description>Superchannel allows every channel the card supports with no regulatory floor -- only pick this if you hold the appropriate spectrum licensing for this link.</flux:description>
+                    <flux:error name="frequency_mode" />
+                </flux:field>
+            </div>
+
+            <div class="grid gap-5 md:grid-cols-2">
+                <div class="space-y-3 rounded-lg border border-zinc-100 p-4">
+                    <flux:heading size="sm">Radio A RF</flux:heading>
+                    <flux:field>
+                        <flux:label>Band</flux:label>
+                        <flux:select wire:model="radio_a.band">
+                            @foreach (($radio_a['ros_version'] === '6' ? \App\Livewire\Admin\StandalonePtpGenerator::ROS6_BANDS : \App\Livewire\Admin\StandalonePtpGenerator::ROS7_BANDS) as $value => $label)
+                                <flux:select.option value="{{ $value }}">{{ $label }}</flux:select.option>
+                            @endforeach
+                        </flux:select>
+                        <flux:description>Run <code>/interface {{ $radio_a['ros_version'] === '6' ? 'wireless info hw-info' : 'wifi print' }}</code> on the router to confirm its actual supported range before picking this.</flux:description>
+                        <flux:error name="radio_a.band" />
+                    </flux:field>
+                    <flux:field>
+                        <flux:label>Antenna gain (dBi, optional)</flux:label>
+                        <flux:input type="number" wire:model.blur="radio_a.antenna_gain_dbi" placeholder="e.g. 16" />
+                        <flux:description>Used to calculate max transmit power under your country's regulations. Leave blank to use the hardware's own calibration.</flux:description>
+                        <flux:error name="radio_a.antenna_gain_dbi" />
+                    </flux:field>
+                </div>
+
+                <div class="space-y-3 rounded-lg border border-zinc-100 p-4">
+                    <flux:heading size="sm">Radio B RF</flux:heading>
+                    <flux:field>
+                        <flux:label>Band</flux:label>
+                        <flux:select wire:model="radio_b.band">
+                            @foreach (($radio_b['ros_version'] === '6' ? \App\Livewire\Admin\StandalonePtpGenerator::ROS6_BANDS : \App\Livewire\Admin\StandalonePtpGenerator::ROS7_BANDS) as $value => $label)
+                                <flux:select.option value="{{ $value }}">{{ $label }}</flux:select.option>
+                            @endforeach
+                        </flux:select>
+                        <flux:description>Run <code>/interface {{ $radio_b['ros_version'] === '6' ? 'wireless info hw-info' : 'wifi print' }}</code> on the router to confirm its actual supported range before picking this.</flux:description>
+                        <flux:error name="radio_b.band" />
+                    </flux:field>
+                    <flux:field>
+                        <flux:label>Antenna gain (dBi, optional)</flux:label>
+                        <flux:input type="number" wire:model.blur="radio_b.antenna_gain_dbi" placeholder="e.g. 16" />
+                        <flux:description>Used to calculate max transmit power under your country's regulations. Leave blank to use the hardware's own calibration.</flux:description>
+                        <flux:error name="radio_b.antenna_gain_dbi" />
+                    </flux:field>
+                </div>
+            </div>
+
             <flux:field>
                 <flux:label>SSID</flux:label>
                 <flux:input wire:model.blur="ssid" />
@@ -187,6 +248,27 @@
                 <flux:input type="password" wire:model.blur="psk" />
                 <flux:error name="psk" />
             </flux:field>
+
+            <flux:field>
+                <flux:label>Wireless protocol</flux:label>
+                <flux:select wire:model="wireless_protocol">
+                    <flux:select.option value="802.11">802.11 (standard, works with any hardware)</flux:select.option>
+                    <flux:select.option value="nv2">NV2 (MikroTik proprietary TDMA -- RouterOS 6 legacy wireless, both ends only)</flux:select.option>
+                </flux:select>
+                <flux:description>NV2 avoids 802.11's CSMA hidden-node contention and distance-based throughput penalty -- the professional choice for a pure MikroTik-to-MikroTik link when both ends support it.</flux:description>
+                <flux:error name="wireless_protocol" />
+            </flux:field>
+
+            <div class="grid gap-5 md:grid-cols-2">
+                <flux:field>
+                    <flux:checkbox wire:model="hide_ssid" label="Hide SSID" />
+                    <flux:description>Recommended for a backhaul link -- there's no customer-facing reason to broadcast it.</flux:description>
+                </flux:field>
+                <flux:field>
+                    <flux:checkbox wire:model="skip_dfs_channels" label="Avoid DFS channels (RouterOS 7 only)" />
+                    <flux:description>DFS channels need radar detection and can force a mid-link channel change -- avoiding them improves reliability for a fixed backhaul link.</flux:description>
+                </flux:field>
+            </div>
 
             <div class="flex justify-between">
                 <flux:button type="button" variant="outline" wire:click="previousStep">Back</flux:button>

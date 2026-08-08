@@ -44,6 +44,49 @@ namespace App\Services;
  * upstream, in the wizard's `ap_end` validation
  * (`App\Livewire\Admin\StandalonePtpGenerator`), so an ap-bridge script is
  * simply never generated for a radio marked that way.
+ *
+ * `band`/`country`/`frequency_mode` (2026-08-08, from a real "bad band or
+ * frequency" rejection on live hardware) are not cosmetic -- RouterOS 6
+ * validates a requested `frequency=` against the *currently-configured*
+ * `band`/`country`/`frequency-mode`, and a factory-default interface's
+ * `country` (default `etsi`) plus an unset `band` can make an otherwise
+ * perfectly valid frequency (e.g. 5745MHz, well inside a card's own
+ * `4920-5925` hardware range per `/interface wireless info hw-info`) get
+ * rejected outright. `band`/`country`/`frequency-mode` are set in the SAME
+ * `/interface wireless set` command as `frequency=` (RouterOS validates a
+ * `set`'s properties against the resulting state, not the prior one) --
+ * confirmed against MikroTik's own documentation, not just inferred from the
+ * error. `frequency-mode=regulatory-domain` (the default here) is what
+ * actually enforces `country=`; `superchannel` bypasses it entirely (every
+ * card-supported channel, no legal regulatory floor) and is offered as an
+ * explicit opt-in only, flagged in-script as a compliance decision the
+ * operator is making deliberately, not a default.
+ *
+ * `wireless_protocol=nv2` (RouterOS 6 legacy wireless only -- the RouterOS 7
+ * `/interface wifi` package has no NV2 equivalent) is MikroTik's proprietary
+ * TDMA-based link protocol: no CSMA hidden-node contention, no distance-based
+ * throughput penalty the way standard 802.11 has, and it only works between
+ * two MikroTik radios -- which is guaranteed here, since both ends of any
+ * script this class generates are always MikroTik. Offered (not forced)
+ * when both radios are RouterOS 6, since it's a genuine interop constraint:
+ * an NV2 AP end refuses an 802.11-only station and vice versa.
+ *
+ * RouterOS 7's `/interface wifi` `station-bridge` mode (not plain `station`)
+ * is what actually supports being added as a transparent bridge port -- per
+ * MikroTik's own docs, `station-bridge` "enables support for a 4-address
+ * frame format, so the interface can be used as a bridge port," which plain
+ * `station` does not. `wirelessLines()` picks `station-bridge` for RouterOS
+ * 7 stations only when `link_mode` is `'bridged'`, mirroring RouterOS 6's
+ * existing `station`/`station-pseudobridge` split for the same L3 distinction.
+ *
+ * `antenna_gain_dbi` only emits `antenna-gain=` on RouterOS 6 -- confirmed
+ * documented there ("used to calculate maximum transmit power according to
+ * country regulations"), but the equivalent property path on RouterOS 7's
+ * `/interface wifi` package could not be confirmed from available
+ * documentation (it differs across the legacy `wifiwave2` and newer unified
+ * `wifi` packages), so it's deliberately left unset there rather than
+ * guessed -- the "don't guess unverified syntax" rule applied here means an
+ * omission, not a wrong command.
  */
 class StandalonePtpScriptGenerator
 {
@@ -60,8 +103,13 @@ class StandalonePtpScriptGenerator
      *     psk: string,
      *     distance_km: float,
      *     ptp_subnet: string,
-     *     radio_a: array{identity: string, ros_version: string, wireless_interface: string, cpe_only?: bool, lan_port?: ?string, add_remote_route: bool, remote_network: ?string},
-     *     radio_b: array{identity: string, ros_version: string, wireless_interface: string, cpe_only?: bool, lan_port?: ?string, add_remote_route: bool, remote_network: ?string},
+     *     country: string,
+     *     frequency_mode: string,
+     *     wireless_protocol: string,
+     *     hide_ssid: bool,
+     *     skip_dfs_channels: bool,
+     *     radio_a: array{identity: string, ros_version: string, wireless_interface: string, band: string, antenna_gain_dbi?: ?int, cpe_only?: bool, lan_port?: ?string, add_remote_route: bool, remote_network: ?string},
+     *     radio_b: array{identity: string, ros_version: string, wireless_interface: string, band: string, antenna_gain_dbi?: ?int, cpe_only?: bool, lan_port?: ?string, add_remote_route: bool, remote_network: ?string},
      * } $config
      * @return array{script_a: string, script_b: string}
      */
@@ -128,6 +176,8 @@ class StandalonePtpScriptGenerator
     {
         $interface = $radio['wireless_interface'];
         $ssid = $this->quote($config['ssid']);
+        $country = $this->quote($config['country']);
+        $hideSsid = $config['hide_ssid'] ? 'yes' : 'no';
         $stationMode = $config['link_mode'] === 'bridged' ? 'station-pseudobridge' : 'station';
         $distanceMeters = (int) round($config['distance_km'] * 1000);
 
@@ -135,6 +185,26 @@ class StandalonePtpScriptGenerator
             $securityLines = $this->legacySecurityLines($config);
             $apMode = $config['link_topology'] === 'ptmp' ? 'ap-bridge' : 'bridge';
             $mode = $isApEnd ? $apMode : $stationMode;
+            $useNv2 = $config['wireless_protocol'] === 'nv2';
+
+            $setLine = '/interface wireless set '.$interface
+                .' mode='.$mode
+                .' band='.$radio['band']
+                .' ssid="'.$ssid.'"'
+                .' frequency='.$config['frequency_mhz']
+                .' channel-width='.$config['channel_width_mhz'].'mhz'
+                .' country="'.$country.'"'
+                .' frequency-mode='.$config['frequency_mode']
+                .($useNv2 ? ' wireless-protocol=nv2' : '')
+                .' security-profile=ptp-sec'
+                .' hide-ssid='.$hideSsid
+                .' distance='.$distanceMeters;
+
+            if (filled($radio['antenna_gain_dbi'] ?? null)) {
+                $setLine .= ' antenna-gain='.$radio['antenna_gain_dbi'];
+            }
+
+            $setLine .= ' disabled=no';
 
             $lines = [
                 // A factory-default wireless interface is administratively disabled,
@@ -143,16 +213,24 @@ class StandalonePtpScriptGenerator
                 // command -- enable it as its own command first, don't rely on the
                 // inline disabled=no below alone (kept anyway as a second safeguard).
                 '/interface wireless enable '.$interface,
-                '/interface wireless set '.$interface
-                    .' mode='.$mode
-                    .' ssid="'.$ssid.'"'
-                    .' frequency='.$config['frequency_mhz']
-                    .' channel-width='.$config['channel_width_mhz'].'mhz'
-                    .' security-profile=ptp-sec'
-                    .' distance='.$distanceMeters
-                    .' disabled=no',
+                $setLine,
+                // band=/country=/frequency-mode= are set in the same command as
+                // frequency= deliberately -- RouterOS validates a requested frequency
+                // against the currently-configured band/country/frequency-mode, and a
+                // factory-default interface (unset band, country=etsi) can reject an
+                // otherwise-valid frequency as "bad band or frequency" if these aren't
+                // set together. Run "/interface wireless info hw-info" on the actual
+                // router first to confirm this band covers its real hardware range.
                 '# distance= auto-tunes ACK timeout for long links -- confirm this behaves as expected on your hardware/driver.',
             ];
+
+            if ($config['frequency_mode'] === 'superchannel') {
+                $lines[] = '# frequency-mode=superchannel bypasses country regulatory limits entirely (every card-supported channel, no legal floor) -- only use this if you hold the appropriate spectrum licensing for this link.';
+            }
+
+            if ($useNv2) {
+                $lines[] = '# wireless-protocol=nv2 only works between two MikroTik radios on RouterOS 6 legacy wireless -- both ends of this link must use it, never just one.';
+            }
 
             if ($isApEnd && $apMode === 'bridge') {
                 $lines[] = '# mode=bridge is the wireless (RF) master mode -- not the same as a software "/interface bridge" (see below if this link is in bridged L3 mode).';
@@ -169,23 +247,35 @@ class StandalonePtpScriptGenerator
 
         $wifiSecurityLines = $this->wifiSecurityLines($config);
         $configName = $isApEnd ? 'ptp-ap-cfg' : 'ptp-station-cfg';
-        $mode = $isApEnd ? 'ap' : 'station';
+        $mode = match (true) {
+            $isApEnd => 'ap',
+            $config['link_mode'] === 'bridged' => 'station-bridge',
+            default => 'station',
+        };
+        $skipDfs = $config['skip_dfs_channels'] ? 'all' : 'disabled';
 
         return array_merge($wifiSecurityLines, [
             '/interface wifi configuration add name='.$configName
                 .' mode='.$mode
                 .' ssid="'.$ssid.'"'
                 .' security=ptp-sec'
+                .' country="'.$country.'"'
+                .' hide-ssid='.$hideSsid
+                .' channel.band='.$radio['band']
                 .' channel.frequency='.$config['frequency_mhz']
-                .' channel.width='.$config['channel_width_mhz'].'mhz',
+                .' channel.width='.$config['channel_width_mhz'].'mhz'
+                .' channel.skip-dfs-channels='.$skipDfs,
             // Same reasoning as the RouterOS 6 branch -- enable the interface as its
             // own command before assigning it a configuration, don't rely solely on
-            // the inline disabled=no below.
+            // the inline disabled=no below. country=/channel.band= are set on the
+            // configuration object itself (not the interface) since that's where
+            // RouterOS 7's wifi package applies regulatory-domain restrictions.
             '/interface wifi enable [find default-name='.$interface.']',
             '/interface wifi set [find default-name='.$interface.'] configuration='.$configName
                 .' configuration.distance='.$distanceMeters
                 .' disabled=no',
             '# configuration.distance= auto-tunes ACK timeout for long links -- confirm this behaves as expected on your hardware/driver.',
+            '# antenna-gain is deliberately not set here -- its exact property path on RouterOS 7\'s wifi package could not be confirmed from documentation (it differs across the legacy wifiwave2 and newer unified wifi packages). Set it manually if your regulatory domain requires it.',
             '',
         ]);
     }

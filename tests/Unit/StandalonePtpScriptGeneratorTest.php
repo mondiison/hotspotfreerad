@@ -227,6 +227,128 @@ class StandalonePtpScriptGeneratorTest extends TestCase
         $this->assertStringContainsString('# No LAN port configured', $result['script_a']);
     }
 
+    public function test_ros6_sets_band_country_and_frequency_mode_in_the_same_command_as_frequency(): void
+    {
+        $result = (new StandalonePtpScriptGenerator)->generate($this->config([
+            'country' => 'no_country_set',
+            'frequency_mode' => 'regulatory-domain',
+            'radio_a' => $this->radio(['ros_version' => '6', 'wireless_interface' => 'wlan1', 'band' => '5ghz-a/n/ac']),
+        ]));
+
+        $this->assertMatchesRegularExpression(
+            '/\/interface wireless set wlan1 mode=\S+ band=5ghz-a\/n\/ac ssid="ptp-link" frequency=5745 channel-width=20mhz country="no_country_set" frequency-mode=regulatory-domain/',
+            $result['script_a']
+        );
+    }
+
+    public function test_ros7_sets_band_and_country_on_the_wifi_configuration(): void
+    {
+        $result = (new StandalonePtpScriptGenerator)->generate($this->config([
+            'country' => 'no_country_set',
+            'radio_a' => $this->radio(['ros_version' => '7', 'wireless_interface' => 'wifi1', 'band' => '5ghz-ac']),
+        ]));
+
+        $this->assertStringContainsString('country="no_country_set"', $result['script_a']);
+        $this->assertStringContainsString('channel.band=5ghz-ac', $result['script_a']);
+    }
+
+    public function test_superchannel_frequency_mode_gets_a_compliance_warning_comment(): void
+    {
+        $result = (new StandalonePtpScriptGenerator)->generate($this->config([
+            'frequency_mode' => 'superchannel',
+            'radio_a' => $this->radio(['ros_version' => '6', 'wireless_interface' => 'wlan1']),
+        ]));
+
+        $this->assertStringContainsString('frequency-mode=superchannel', $result['script_a']);
+        $this->assertStringContainsString('bypasses country regulatory limits', $result['script_a']);
+    }
+
+    public function test_nv2_wireless_protocol_is_emitted_on_ros6(): void
+    {
+        $result = (new StandalonePtpScriptGenerator)->generate($this->config([
+            'wireless_protocol' => 'nv2',
+            'radio_a' => $this->radio(['ros_version' => '6', 'wireless_interface' => 'wlan1']),
+        ]));
+
+        $this->assertStringContainsString('wireless-protocol=nv2', $result['script_a']);
+    }
+
+    public function test_802_11_is_the_default_and_emits_no_wireless_protocol_property(): void
+    {
+        $result = (new StandalonePtpScriptGenerator)->generate($this->config([
+            'wireless_protocol' => '802.11',
+            'radio_a' => $this->radio(['ros_version' => '6', 'wireless_interface' => 'wlan1']),
+        ]));
+
+        $this->assertStringNotContainsString('wireless-protocol=', $result['script_a']);
+    }
+
+    public function test_hide_ssid_true_sets_hide_ssid_yes_on_both_ros_versions(): void
+    {
+        $result = (new StandalonePtpScriptGenerator)->generate($this->config([
+            'hide_ssid' => true,
+            'radio_a' => $this->radio(['ros_version' => '6', 'wireless_interface' => 'wlan1']),
+            'radio_b' => $this->radio(['ros_version' => '7', 'wireless_interface' => 'wifi1'], 'B'),
+        ]));
+
+        $this->assertStringContainsString('hide-ssid=yes', $result['script_a']);
+        $this->assertStringContainsString('hide-ssid=yes', $result['script_b']);
+    }
+
+    public function test_skip_dfs_channels_only_appears_on_ros7(): void
+    {
+        $result = (new StandalonePtpScriptGenerator)->generate($this->config([
+            'skip_dfs_channels' => true,
+            'radio_a' => $this->radio(['ros_version' => '6', 'wireless_interface' => 'wlan1']),
+            'radio_b' => $this->radio(['ros_version' => '7', 'wireless_interface' => 'wifi1'], 'B'),
+        ]));
+
+        $this->assertStringNotContainsString('skip-dfs-channels', $result['script_a']);
+        $this->assertStringContainsString('channel.skip-dfs-channels=all', $result['script_b']);
+    }
+
+    public function test_antenna_gain_is_only_emitted_on_ros6_when_provided(): void
+    {
+        $result = (new StandalonePtpScriptGenerator)->generate($this->config([
+            'radio_a' => $this->radio(['ros_version' => '6', 'wireless_interface' => 'wlan1', 'antenna_gain_dbi' => 16]),
+            'radio_b' => $this->radio(['ros_version' => '7', 'wireless_interface' => 'wifi1', 'antenna_gain_dbi' => 16], 'B'),
+        ]));
+
+        $this->assertStringContainsString('antenna-gain=16', $result['script_a']);
+        $this->assertStringNotContainsString('antenna-gain=', $result['script_b']);
+    }
+
+    public function test_antenna_gain_is_omitted_when_not_provided(): void
+    {
+        $result = (new StandalonePtpScriptGenerator)->generate($this->config([
+            'radio_a' => $this->radio(['ros_version' => '6', 'wireless_interface' => 'wlan1', 'antenna_gain_dbi' => null]),
+        ]));
+
+        $this->assertStringNotContainsString('antenna-gain=', $result['script_a']);
+    }
+
+    public function test_ros7_station_uses_station_bridge_in_bridged_link_mode(): void
+    {
+        $result = (new StandalonePtpScriptGenerator)->generate($this->config([
+            'link_mode' => 'bridged',
+            'ap_end' => 'radio_a',
+        ]));
+
+        $this->assertStringContainsString('mode=station-bridge ', $result['script_b']);
+        $this->assertStringNotContainsString('mode=station ', $result['script_b']);
+    }
+
+    public function test_ros7_station_uses_plain_station_in_routed_link_mode(): void
+    {
+        $result = (new StandalonePtpScriptGenerator)->generate($this->config([
+            'link_mode' => 'routed',
+            'ap_end' => 'radio_a',
+        ]));
+
+        $this->assertStringContainsString('mode=station ', $result['script_b']);
+        $this->assertStringNotContainsString('station-bridge', $result['script_b']);
+    }
+
     public function test_it_never_emits_wireguard_or_platform_api_user_lines(): void
     {
         $result = (new StandalonePtpScriptGenerator)->generate($this->config());
@@ -247,6 +369,11 @@ class StandalonePtpScriptGeneratorTest extends TestCase
             'frequency_mhz' => 5745,
             'channel_width_mhz' => 20,
             'ssid' => 'ptp-link',
+            'country' => 'no_country_set',
+            'frequency_mode' => 'regulatory-domain',
+            'wireless_protocol' => '802.11',
+            'hide_ssid' => true,
+            'skip_dfs_channels' => true,
             'security_mode' => 'wpa2',
             'psk' => 'supersecretpsk',
             'distance_km' => 1.0,
@@ -258,13 +385,21 @@ class StandalonePtpScriptGeneratorTest extends TestCase
 
     private function radio(array $overrides = [], string $label = 'A'): array
     {
-        return array_merge([
+        $merged = array_merge([
             'identity' => 'Radio '.$label,
             'ros_version' => '7',
             'wireless_interface' => 'wifi1',
+            'band' => null,
+            'antenna_gain_dbi' => null,
             'lan_port' => null,
             'add_remote_route' => false,
             'remote_network' => null,
         ], $overrides);
+
+        if ($merged['band'] === null) {
+            $merged['band'] = $merged['ros_version'] === '6' ? '5ghz-a/n/ac' : '5ghz-ac';
+        }
+
+        return $merged;
     }
 }

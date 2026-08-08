@@ -9,6 +9,43 @@ use Livewire\Component;
 
 class StandalonePtpGenerator extends Component
 {
+    /**
+     * RouterOS 6 legacy /interface wireless band values, per MikroTik's own
+     * documentation. Deliberately per-radio, not a single shared value --
+     * the two ends of a link can be on different RouterOS versions, and each
+     * driver has its own distinct set of valid band strings.
+     */
+    public const ROS6_BANDS = [
+        '2ghz-b' => '2GHz-B',
+        '2ghz-b/g' => '2GHz-B/G',
+        '2ghz-b/g/n' => '2GHz-B/G/N',
+        '2ghz-onlyg' => '2GHz-G only',
+        '2ghz-onlyn' => '2GHz-N only',
+        '5ghz-a' => '5GHz-A',
+        '5ghz-a/n' => '5GHz-A/N',
+        '5ghz-onlyn' => '5GHz-N only',
+        '5ghz-a/n/ac' => '5GHz-A/N/AC',
+        '5ghz-onlyac' => '5GHz-AC only',
+        '5ghz-n/ac' => '5GHz-N/AC',
+    ];
+
+    /**
+     * RouterOS 7 /interface wifi channel.band values.
+     */
+    public const ROS7_BANDS = [
+        '2ghz-g' => '2GHz-G',
+        '2ghz-n' => '2GHz-N',
+        '2ghz-ax' => '2GHz-AX (Wi-Fi 6)',
+        '2ghz-be' => '2GHz-BE (Wi-Fi 7)',
+        '5ghz-a' => '5GHz-A',
+        '5ghz-n' => '5GHz-N',
+        '5ghz-ac' => '5GHz-AC (Wi-Fi 5)',
+        '5ghz-ax' => '5GHz-AX (Wi-Fi 6)',
+        '5ghz-be' => '5GHz-BE (Wi-Fi 7)',
+        '6ghz-ax' => '6GHz-AX (Wi-Fi 6E)',
+        '6ghz-be' => '6GHz-BE (Wi-Fi 7)',
+    ];
+
     public int $step = 1;
 
     public string $link_name = 'PTP Link';
@@ -23,6 +60,8 @@ class StandalonePtpGenerator extends Component
         'identity' => 'Radio A',
         'ros_version' => '7',
         'wireless_interface' => 'wifi1',
+        'band' => '5ghz-ac',
+        'antenna_gain_dbi' => null,
         'cpe_only' => false,
         'lan_port' => 'ether1',
         'add_remote_route' => false,
@@ -33,6 +72,8 @@ class StandalonePtpGenerator extends Component
         'identity' => 'Radio B',
         'ros_version' => '7',
         'wireless_interface' => 'wifi1',
+        'band' => '5ghz-ac',
+        'antenna_gain_dbi' => null,
         'cpe_only' => false,
         'lan_port' => 'ether1',
         'add_remote_route' => false,
@@ -44,6 +85,16 @@ class StandalonePtpGenerator extends Component
     public int $channel_width_mhz = 20;
 
     public string $ssid = 'ptp-link';
+
+    public string $country = 'no_country_set';
+
+    public string $frequency_mode = 'regulatory-domain';
+
+    public string $wireless_protocol = '802.11';
+
+    public bool $hide_ssid = true;
+
+    public bool $skip_dfs_channels = true;
 
     public string $security_mode = 'wpa2';
 
@@ -64,10 +115,21 @@ class StandalonePtpGenerator extends Component
     {
         if ($name === 'radio_a.ros_version') {
             $this->radio_a['wireless_interface'] = $value === '6' ? 'wlan1' : 'wifi1';
+            $this->radio_a['band'] = $value === '6' ? '5ghz-a/n/ac' : '5ghz-ac';
         }
 
         if ($name === 'radio_b.ros_version') {
             $this->radio_b['wireless_interface'] = $value === '6' ? 'wlan1' : 'wifi1';
+            $this->radio_b['band'] = $value === '6' ? '5ghz-a/n/ac' : '5ghz-ac';
+        }
+
+        // NV2 only works on RouterOS 6 legacy wireless, on both ends -- if a
+        // ros_version change means that's no longer true, fall back to
+        // 802.11 rather than leaving an invalid selection standing.
+        if (str_ends_with($name, '.ros_version')
+            && $this->wireless_protocol === 'nv2'
+            && ($this->radio_a['ros_version'] !== '6' || $this->radio_b['ros_version'] !== '6')) {
+            $this->wireless_protocol = '802.11';
         }
 
         // A CPE/dish-style radio (e.g. SXTsq, LHG, Disc) is on MikroTik's base
@@ -120,6 +182,11 @@ class StandalonePtpGenerator extends Component
             'frequency_mhz' => $this->frequency_mhz,
             'channel_width_mhz' => $this->channel_width_mhz,
             'ssid' => $this->ssid,
+            'country' => $this->country,
+            'frequency_mode' => $this->frequency_mode,
+            'wireless_protocol' => $this->wireless_protocol,
+            'hide_ssid' => $this->hide_ssid,
+            'skip_dfs_channels' => $this->skip_dfs_channels,
             'security_mode' => $this->security_mode,
             'psk' => $this->psk,
             'distance_km' => $this->distance_km,
@@ -169,6 +236,29 @@ class StandalonePtpGenerator extends Component
             3 => [
                 'frequency_mhz' => ['required', 'integer', 'min:2312', 'max:6000'],
                 'channel_width_mhz' => ['required', Rule::in([20, 40])],
+                'country' => ['required', 'string', 'max:64'],
+                'frequency_mode' => ['required', Rule::in(['regulatory-domain', 'superchannel'])],
+                'wireless_protocol' => ['required', Rule::in(['802.11', 'nv2']), function ($attribute, $value, $fail) {
+                    if ($value === 'nv2' && ($this->radio_a['ros_version'] !== '6' || $this->radio_b['ros_version'] !== '6')) {
+                        $fail('NV2 needs both radios on RouterOS 6 legacy wireless.');
+                    }
+                }],
+                'hide_ssid' => ['boolean'],
+                'skip_dfs_channels' => ['boolean'],
+                'radio_a.band' => ['required', function ($attribute, $value, $fail) {
+                    $valid = $this->radio_a['ros_version'] === '6' ? array_keys(self::ROS6_BANDS) : array_keys(self::ROS7_BANDS);
+                    if (! in_array($value, $valid, true)) {
+                        $fail('Select a band valid for Radio A\'s RouterOS version.');
+                    }
+                }],
+                'radio_a.antenna_gain_dbi' => ['nullable', 'integer', 'min:0', 'max:40'],
+                'radio_b.band' => ['required', function ($attribute, $value, $fail) {
+                    $valid = $this->radio_b['ros_version'] === '6' ? array_keys(self::ROS6_BANDS) : array_keys(self::ROS7_BANDS);
+                    if (! in_array($value, $valid, true)) {
+                        $fail('Select a band valid for Radio B\'s RouterOS version.');
+                    }
+                }],
+                'radio_b.antenna_gain_dbi' => ['nullable', 'integer', 'min:0', 'max:40'],
                 'ssid' => ['required', 'string', 'max:32'],
                 'security_mode' => ['required', Rule::in(['wpa2', 'wpa2_wpa3']), function ($attribute, $value, $fail) {
                     if ($value === 'wpa2_wpa3' && ($this->radio_a['ros_version'] !== '7' || $this->radio_b['ros_version'] !== '7')) {
