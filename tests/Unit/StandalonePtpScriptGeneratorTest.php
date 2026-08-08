@@ -176,6 +176,29 @@ class StandalonePtpScriptGeneratorTest extends TestCase
         $this->assertStringNotContainsString('/ip route add', $result['script_b']);
     }
 
+    public function test_a_lan_port_is_added_as_a_bridge_port_and_enabled_when_provided(): void
+    {
+        $result = (new StandalonePtpScriptGenerator)->generate($this->config([
+            'link_mode' => 'bridged',
+            'radio_a' => $this->radio(['lan_port' => 'ether1']),
+        ]));
+
+        $this->assertStringContainsString('/interface ethernet set ether1 disabled=no', $result['script_a']);
+        $this->assertStringContainsString('/interface bridge port add bridge=bridge-ptp interface=ether1', $result['script_a']);
+        $this->assertStringContainsString('/interface bridge port add bridge=bridge-ptp interface=wifi1', $result['script_a']);
+    }
+
+    public function test_no_lan_port_leaves_a_comment_instead_of_a_useless_bridge(): void
+    {
+        $result = (new StandalonePtpScriptGenerator)->generate($this->config([
+            'link_mode' => 'bridged',
+            'radio_a' => $this->radio(['lan_port' => null]),
+        ]));
+
+        $this->assertStringNotContainsString('/interface ethernet set', $result['script_a']);
+        $this->assertStringContainsString('# No LAN port configured', $result['script_a']);
+    }
+
     public function test_it_never_emits_wireguard_or_platform_api_user_lines(): void
     {
         $result = (new StandalonePtpScriptGenerator)->generate($this->config());
@@ -211,6 +234,7 @@ class StandalonePtpScriptGeneratorTest extends TestCase
             'identity' => 'Radio '.$label,
             'ros_version' => '7',
             'wireless_interface' => 'wifi1',
+            'lan_port' => null,
             'add_remote_route' => false,
             'remote_network' => null,
         ], $overrides);

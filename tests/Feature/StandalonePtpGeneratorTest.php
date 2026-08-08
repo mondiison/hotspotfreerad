@@ -135,6 +135,28 @@ class StandalonePtpGeneratorTest extends TestCase
         $this->assertStringContainsString('address=10.20.30.2/30', $scripts['script_b']);
     }
 
+    public function test_bridged_mode_includes_the_default_lan_port_in_the_bridge(): void
+    {
+        $this->actingAs($this->superAdmin());
+
+        $component = Livewire::test(StandalonePtpGenerator::class)
+            ->set('link_name', 'Tower A to Tower B')
+            ->set('radio_a.identity', 'Tower A')
+            ->set('radio_b.identity', 'Tower B')
+            ->set('ap_end', 'radio_a')
+            ->set('link_mode', 'bridged')
+            ->assertSet('radio_a.lan_port', 'ether1')
+            ->set('psk', 'supersecretpsk')
+            ->set('ptp_subnet', '10.20.30.0/30')
+            ->call('generate')
+            ->assertHasNoErrors();
+
+        $scripts = $component->get('generatedScripts');
+
+        $this->assertStringContainsString('/interface ethernet set ether1 disabled=no', $scripts['script_a']);
+        $this->assertStringContainsString('/interface bridge port add bridge=bridge-ptp interface=ether1', $scripts['script_a']);
+    }
+
     public function test_review_page_can_go_back_to_change_settings_without_losing_entered_data(): void
     {
         $this->actingAs($this->superAdmin());

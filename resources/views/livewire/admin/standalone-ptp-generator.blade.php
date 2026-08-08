@@ -87,7 +87,7 @@
 
             <flux:field>
                 <flux:label>Link mode</flux:label>
-                <flux:select wire:model="link_mode">
+                <flux:select wire:model.live="link_mode">
                     <flux:select.option value="routed">Routed -- static IP each side, no L2 bridging</flux:select.option>
                     <flux:select.option value="bridged">Bridged -- transparent link (station-pseudobridge)</flux:select.option>
                 </flux:select>
@@ -107,6 +107,14 @@
                         <flux:checkbox wire:model.live="radio_a.cpe_only" label="This is a CPE/dish radio (e.g. SXTsq, LHG, Disc, Metal)" />
                         <flux:description>Fine as a point-to-point AP end (bridge mode). Can't run the AP end of a point-to-multipoint hub (ap-bridge needs AP-capable hardware).</flux:description>
                     </flux:field>
+                    @if ($link_mode === 'bridged')
+                        <flux:field>
+                            <flux:label>LAN port to bridge in (optional)</flux:label>
+                            <flux:input wire:model.blur="radio_a.lan_port" placeholder="ether1" />
+                            <flux:description>Joins this Ethernet port to bridge-ptp so a LAN device on this end can reach across the link. Leave blank to bridge only the radio itself.</flux:description>
+                            <flux:error name="radio_a.lan_port" />
+                        </flux:field>
+                    @endif
                 </div>
 
                 <div class="space-y-3">
@@ -121,6 +129,14 @@
                         <flux:description>Fine as a point-to-point AP end (bridge mode). Can't run the AP end of a point-to-multipoint hub (ap-bridge needs AP-capable hardware).</flux:description>
                         <flux:error name="radio_b.cpe_only" />
                     </flux:field>
+                    @if ($link_mode === 'bridged')
+                        <flux:field>
+                            <flux:label>LAN port to bridge in (optional)</flux:label>
+                            <flux:input wire:model.blur="radio_b.lan_port" placeholder="ether1" />
+                            <flux:description>Joins this Ethernet port to bridge-ptp so a LAN device on this end can reach across the link. Leave blank to bridge only the radio itself.</flux:description>
+                            <flux:error name="radio_b.lan_port" />
+                        </flux:field>
+                    @endif
                 </div>
             </div>
 

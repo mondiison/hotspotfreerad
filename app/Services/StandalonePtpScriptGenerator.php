@@ -60,8 +60,8 @@ class StandalonePtpScriptGenerator
      *     psk: string,
      *     distance_km: float,
      *     ptp_subnet: string,
-     *     radio_a: array{identity: string, ros_version: string, wireless_interface: string, cpe_only?: bool, add_remote_route: bool, remote_network: ?string},
-     *     radio_b: array{identity: string, ros_version: string, wireless_interface: string, cpe_only?: bool, add_remote_route: bool, remote_network: ?string},
+     *     radio_a: array{identity: string, ros_version: string, wireless_interface: string, cpe_only?: bool, lan_port?: ?string, add_remote_route: bool, remote_network: ?string},
+     *     radio_b: array{identity: string, ros_version: string, wireless_interface: string, cpe_only?: bool, lan_port?: ?string, add_remote_route: bool, remote_network: ?string},
      * } $config
      * @return array{script_a: string, script_b: string}
      */
@@ -213,11 +213,16 @@ class StandalonePtpScriptGenerator
      * "Bridged" link mode needs an actual RouterOS bridge interface -- setting
      * the wireless mode to bridge/station-pseudobridge alone doesn't create
      * one. The wireless interface becomes a bridge port, and the PTP subnet's
-     * IP address goes on the bridge (see addressingLines() call site) so a
-     * LAN port can be added to bridge-ptp later to extend the network across
-     * the link, matching StandaloneHotspotScriptGenerator's bridge-hotspot
-     * pattern. Routed mode needs none of this -- the address goes straight on
-     * the wireless interface and each end stays its own subnet.
+     * IP address goes on the bridge (see addressingLines() call site). A
+     * bridge with only the wireless interface as a member extends nothing --
+     * `lan_port`, when given, joins a physical Ethernet port too so an actual
+     * LAN device can plug in and reach across the link (the common case on
+     * single-Ethernet-port CPE hardware like the SXTsq, where that one port
+     * is the LAN connection, not a spare). Ethernet ports are enabled by
+     * default out of the box, but `disabled=no` is set explicitly anyway --
+     * cheap insurance against a port a previous config left disabled.
+     * Routed mode needs none of this -- the address goes straight on the
+     * wireless interface and each end stays its own subnet.
      *
      * @return list<string>
      */
@@ -227,11 +232,23 @@ class StandalonePtpScriptGenerator
             return [];
         }
 
-        return [
-            '/interface bridge add name=bridge-ptp comment="PTP link bridge -- add a LAN port here to extend this network across the link"',
+        $lines = [
+            '/interface bridge add name=bridge-ptp comment="PTP link bridge"',
             '/interface bridge port add bridge=bridge-ptp interface='.$radio['wireless_interface'],
-            '',
         ];
+
+        $lanPort = $radio['lan_port'] ?? null;
+
+        if (filled($lanPort)) {
+            $lines[] = '/interface ethernet set '.$lanPort.' disabled=no';
+            $lines[] = '/interface bridge port add bridge=bridge-ptp interface='.$lanPort;
+        } else {
+            $lines[] = '# No LAN port configured -- add one to bridge-ptp (e.g. "/interface bridge port add bridge=bridge-ptp interface=ether1") so a LAN device can actually reach across this link.';
+        }
+
+        $lines[] = '';
+
+        return $lines;
     }
 
     /**

@@ -24,6 +24,7 @@ class StandalonePtpGenerator extends Component
         'ros_version' => '7',
         'wireless_interface' => 'wifi1',
         'cpe_only' => false,
+        'lan_port' => 'ether1',
         'add_remote_route' => false,
         'remote_network' => '',
     ];
@@ -33,6 +34,7 @@ class StandalonePtpGenerator extends Component
         'ros_version' => '7',
         'wireless_interface' => 'wifi1',
         'cpe_only' => false,
+        'lan_port' => 'ether1',
         'add_remote_route' => false,
         'remote_network' => '',
     ];
@@ -155,12 +157,14 @@ class StandalonePtpGenerator extends Component
                 'link_topology' => ['required', Rule::in(['ptp', 'ptmp'])],
                 'radio_a.wireless_interface' => ['required', 'string', 'max:32', 'regex:/^[a-zA-Z-]+\d+$/'],
                 'radio_a.cpe_only' => ['boolean'],
+                'radio_a.lan_port' => ['nullable', 'string', 'max:32', 'regex:/^[a-zA-Z-]+\d+$/'],
                 'radio_b.wireless_interface' => ['required', 'string', 'max:32', 'regex:/^[a-zA-Z-]+\d+$/'],
                 'radio_b.cpe_only' => ['boolean', function ($attribute, $value, $fail) {
                     if ($this->link_topology === 'ptmp' && $value && ($this->radio_a['cpe_only'] ?? false)) {
                         $fail('Both radios can\'t be CPE-only for a point-to-multipoint AP end -- at least one needs full AP support.');
                     }
                 }],
+                'radio_b.lan_port' => ['nullable', 'string', 'max:32', 'regex:/^[a-zA-Z-]+\d+$/'],
             ],
             3 => [
                 'frequency_mhz' => ['required', 'integer', 'min:2312', 'max:6000'],
