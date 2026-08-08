@@ -137,6 +137,12 @@ class StandalonePtpScriptGenerator
             $mode = $isApEnd ? $apMode : $stationMode;
 
             $lines = [
+                // A factory-default wireless interface is administratively disabled,
+                // and RouterOS 6 can reject mode=/frequency=/etc changes on a still-
+                // disabled interface even when disabled=no is in the same `set`
+                // command -- enable it as its own command first, don't rely on the
+                // inline disabled=no below alone (kept anyway as a second safeguard).
+                '/interface wireless enable '.$interface,
                 '/interface wireless set '.$interface
                     .' mode='.$mode
                     .' ssid="'.$ssid.'"'
@@ -172,6 +178,10 @@ class StandalonePtpScriptGenerator
                 .' security=ptp-sec'
                 .' channel.frequency='.$config['frequency_mhz']
                 .' channel.width='.$config['channel_width_mhz'].'mhz',
+            // Same reasoning as the RouterOS 6 branch -- enable the interface as its
+            // own command before assigning it a configuration, don't rely solely on
+            // the inline disabled=no below.
+            '/interface wifi enable [find default-name='.$interface.']',
             '/interface wifi set [find default-name='.$interface.'] configuration='.$configName
                 .' configuration.distance='.$distanceMeters
                 .' disabled=no',

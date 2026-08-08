@@ -46,6 +46,34 @@ class StandalonePtpScriptGeneratorTest extends TestCase
         $this->assertStringNotContainsString('/interface wireless ', $result['script_a']);
     }
 
+    public function test_ros6_explicitly_enables_the_wireless_interface_before_configuring_it(): void
+    {
+        $result = (new StandalonePtpScriptGenerator)->generate($this->config([
+            'radio_a' => $this->radio(['ros_version' => '6', 'wireless_interface' => 'wlan1']),
+        ]));
+
+        $enablePosition = strpos($result['script_a'], '/interface wireless enable wlan1');
+        $setPosition = strpos($result['script_a'], '/interface wireless set wlan1 mode=');
+
+        $this->assertNotFalse($enablePosition);
+        $this->assertNotFalse($setPosition);
+        $this->assertLessThan($setPosition, $enablePosition);
+    }
+
+    public function test_ros7_explicitly_enables_the_wifi_interface_before_configuring_it(): void
+    {
+        $result = (new StandalonePtpScriptGenerator)->generate($this->config([
+            'radio_a' => $this->radio(['ros_version' => '7', 'wireless_interface' => 'wifi1']),
+        ]));
+
+        $enablePosition = strpos($result['script_a'], '/interface wifi enable [find default-name=wifi1]');
+        $setPosition = strpos($result['script_a'], '/interface wifi set [find default-name=wifi1] configuration=');
+
+        $this->assertNotFalse($enablePosition);
+        $this->assertNotFalse($setPosition);
+        $this->assertLessThan($setPosition, $enablePosition);
+    }
+
     public function test_the_ap_end_gets_ap_mode_and_the_other_end_gets_station_mode(): void
     {
         $result = (new StandalonePtpScriptGenerator)->generate($this->config(['ap_end' => 'radio_a']));
