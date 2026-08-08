@@ -106,6 +106,7 @@
                                 ['label' => 'Tenants', 'route' => 'admin.tenants.index', 'icon' => 'building-storefront', 'super_admin' => true],
                                 ['label' => 'Shops', 'route' => 'admin.shops.index', 'icon' => 'building-storefront'],
                                 ['label' => 'Script Generator', 'route' => 'admin.tools.script-generator', 'icon' => 'command-line', 'super_admin' => true],
+                                ['label' => 'PTP Radio Generator', 'route' => 'admin.tools.ptp-generator', 'icon' => 'wifi', 'super_admin' => true],
                                 ['label' => 'Users', 'route' => 'admin.users.index', 'icon' => 'users'],
                                 ['label' => 'Brand', 'route' => 'admin.brand.edit', 'icon' => 'swatch', 'tenant_admin' => true],
                             ],
