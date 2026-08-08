@@ -66,10 +66,20 @@
     @if ($step === 2)
         <div class="space-y-5 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
             <flux:field>
+                <flux:label>Link topology</flux:label>
+                <flux:select wire:model.live="link_topology">
+                    <flux:select.option value="ptp">Point-to-point -- one peer only</flux:select.option>
+                    <flux:select.option value="ptmp">Point-to-multipoint -- AP end is a hub for multiple stations</flux:select.option>
+                </flux:select>
+                <flux:description>Point-to-point uses "bridge" mode on the AP end (single peer, works on CPE-class hardware). Point-to-multipoint uses "ap-bridge" (true multi-client AP, needs AP-capable hardware) -- re-run this wizard once per additional station.</flux:description>
+                <flux:error name="link_topology" />
+            </flux:field>
+
+            <flux:field>
                 <flux:label>Which end is the AP/master?</flux:label>
                 <flux:select wire:model="ap_end">
-                    <flux:select.option value="radio_a" :disabled="$radio_a['cpe_only']">Radio A ({{ $radio_a['identity'] }}){{ $radio_a['cpe_only'] ? ' -- CPE-only, can\'t be AP' : '' }}</flux:select.option>
-                    <flux:select.option value="radio_b" :disabled="$radio_b['cpe_only']">Radio B ({{ $radio_b['identity'] }}){{ $radio_b['cpe_only'] ? ' -- CPE-only, can\'t be AP' : '' }}</flux:select.option>
+                    <flux:select.option value="radio_a" :disabled="$link_topology === 'ptmp' && $radio_a['cpe_only']">Radio A ({{ $radio_a['identity'] }}){{ $link_topology === 'ptmp' && $radio_a['cpe_only'] ? ' -- CPE-only, can\'t run ap-bridge' : '' }}</flux:select.option>
+                    <flux:select.option value="radio_b" :disabled="$link_topology === 'ptmp' && $radio_b['cpe_only']">Radio B ({{ $radio_b['identity'] }}){{ $link_topology === 'ptmp' && $radio_b['cpe_only'] ? ' -- CPE-only, can\'t run ap-bridge' : '' }}</flux:select.option>
                 </flux:select>
                 <flux:description>The other radio is configured as the Station.</flux:description>
                 <flux:error name="ap_end" />
@@ -94,8 +104,8 @@
                         <flux:error name="radio_a.wireless_interface" />
                     </flux:field>
                     <flux:field>
-                        <flux:checkbox wire:model.live="radio_a.cpe_only" label="This is a CPE/dish radio (can't act as AP)" />
-                        <flux:description>e.g. SXTsq, LHG, Disc, Metal -- these are client-only hardware and RouterOS rejects AP/ap-bridge mode on them.</flux:description>
+                        <flux:checkbox wire:model.live="radio_a.cpe_only" label="This is a CPE/dish radio (e.g. SXTsq, LHG, Disc, Metal)" />
+                        <flux:description>Fine as a point-to-point AP end (bridge mode). Can't run the AP end of a point-to-multipoint hub (ap-bridge needs AP-capable hardware).</flux:description>
                     </flux:field>
                 </div>
 
@@ -107,8 +117,8 @@
                         <flux:error name="radio_b.wireless_interface" />
                     </flux:field>
                     <flux:field>
-                        <flux:checkbox wire:model.live="radio_b.cpe_only" label="This is a CPE/dish radio (can't act as AP)" />
-                        <flux:description>e.g. SXTsq, LHG, Disc, Metal -- these are client-only hardware and RouterOS rejects AP/ap-bridge mode on them.</flux:description>
+                        <flux:checkbox wire:model.live="radio_b.cpe_only" label="This is a CPE/dish radio (e.g. SXTsq, LHG, Disc, Metal)" />
+                        <flux:description>Fine as a point-to-point AP end (bridge mode). Can't run the AP end of a point-to-multipoint hub (ap-bridge needs AP-capable hardware).</flux:description>
                         <flux:error name="radio_b.cpe_only" />
                     </flux:field>
                 </div>

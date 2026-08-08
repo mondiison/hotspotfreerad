@@ -15,6 +15,8 @@ class StandalonePtpGenerator extends Component
 
     public string $link_mode = 'routed';
 
+    public string $link_topology = 'ptp';
+
     public string $ap_end = 'radio_a';
 
     public array $radio_a = [
@@ -66,16 +68,30 @@ class StandalonePtpGenerator extends Component
             $this->radio_b['wireless_interface'] = $value === '6' ? 'wlan1' : 'wifi1';
         }
 
-        // A CPE/dish-style radio (e.g. SXTsq, LHG, Disc) physically can't run
-        // AP/ap-bridge mode -- RouterOS rejects the command outright. If the
-        // admin marks the current AP end as CPE-only, flip the AP role to the
-        // other radio automatically rather than leaving an invalid selection.
-        if ($name === 'radio_a.cpe_only' && $value && $this->ap_end === 'radio_a') {
-            $this->ap_end = 'radio_b';
+        // A CPE/dish-style radio (e.g. SXTsq, LHG, Disc) is on MikroTik's base
+        // wireless license tier, which covers single-peer "bridge" mode fine
+        // but not the multi-client "ap-bridge" mode a point-to-multipoint hub
+        // needs. So this only matters for 'ptmp' topology -- in plain 'ptp'
+        // mode a CPE-only radio can still be the AP end. If the admin marks
+        // the current AP end as CPE-only while topology is 'ptmp' (or flips
+        // to 'ptmp' while the current AP end is already CPE-only), flip the
+        // AP role to the other radio automatically, unless it's CPE-only too.
+        if (in_array($name, ['radio_a.cpe_only', 'radio_b.cpe_only', 'link_topology'], true)) {
+            $this->reconcileApEndForTopology();
+        }
+    }
+
+    private function reconcileApEndForTopology(): void
+    {
+        if ($this->link_topology !== 'ptmp') {
+            return;
         }
 
-        if ($name === 'radio_b.cpe_only' && $value && $this->ap_end === 'radio_b') {
-            $this->ap_end = 'radio_a';
+        $current = $this->{$this->ap_end};
+        $otherKey = $this->ap_end === 'radio_a' ? 'radio_b' : 'radio_a';
+
+        if (($current['cpe_only'] ?? false) && ! ($this->{$otherKey}['cpe_only'] ?? false)) {
+            $this->ap_end = $otherKey;
         }
     }
 
@@ -97,6 +113,7 @@ class StandalonePtpGenerator extends Component
         $this->generatedScripts = $generator->generate([
             'link_name' => $this->link_name,
             'link_mode' => $this->link_mode,
+            'link_topology' => $this->link_topology,
             'ap_end' => $this->ap_end,
             'frequency_mhz' => $this->frequency_mhz,
             'channel_width_mhz' => $this->channel_width_mhz,
@@ -130,17 +147,18 @@ class StandalonePtpGenerator extends Component
             ],
             2 => [
                 'ap_end' => ['required', Rule::in(['radio_a', 'radio_b']), function ($attribute, $value, $fail) {
-                    if ($this->{$value}['cpe_only'] ?? false) {
-                        $fail('This radio is marked CPE-only and can\'t act as AP -- pick the other radio as the AP/master end.');
+                    if ($this->link_topology === 'ptmp' && ($this->{$value}['cpe_only'] ?? false)) {
+                        $fail('This radio is CPE-only and can\'t run AP mode for point-to-multipoint -- pick the other radio as the AP/hub end.');
                     }
                 }],
                 'link_mode' => ['required', Rule::in(['routed', 'bridged'])],
+                'link_topology' => ['required', Rule::in(['ptp', 'ptmp'])],
                 'radio_a.wireless_interface' => ['required', 'string', 'max:32', 'regex:/^[a-zA-Z-]+\d+$/'],
                 'radio_a.cpe_only' => ['boolean'],
                 'radio_b.wireless_interface' => ['required', 'string', 'max:32', 'regex:/^[a-zA-Z-]+\d+$/'],
                 'radio_b.cpe_only' => ['boolean', function ($attribute, $value, $fail) {
-                    if ($value && ($this->radio_a['cpe_only'] ?? false)) {
-                        $fail('Both radios can\'t be CPE-only -- at least one end needs to support AP mode.');
+                    if ($this->link_topology === 'ptmp' && $value && ($this->radio_a['cpe_only'] ?? false)) {
+                        $fail('Both radios can\'t be CPE-only for a point-to-multipoint AP end -- at least one needs full AP support.');
                     }
                 }],
             ],

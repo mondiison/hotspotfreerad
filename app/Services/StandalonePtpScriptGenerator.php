@@ -3,13 +3,30 @@
 namespace App\Services;
 
 /**
- * Generates MikroTik RouterOS configuration for a point-to-point (PTP)
- * wireless bridge/backhaul link -- two radios, one AP/master end and one
- * Station end, that must be configured to match (same frequency, channel
- * width, SSID, security). Deliberately self-contained, like
- * `StandaloneHotspotScriptGenerator`: no WireGuard, no HotspotFreeRAD
+ * Generates MikroTik RouterOS configuration for a point-to-point or
+ * point-to-multipoint wireless bridge/backhaul link -- two radios, one
+ * AP/master end and one Station end, that must be configured to match (same
+ * frequency, channel width, SSID, security). Deliberately self-contained,
+ * like `StandaloneHotspotScriptGenerator`: no WireGuard, no HotspotFreeRAD
  * RADIUS server, no Router/Shop/Tenant record, nothing persisted -- the
  * wizard's Livewire state holds everything and this class is stateless.
+ * Despite the "PTP" name (kept for continuity with the wizard/route), one
+ * session still only produces a script for exactly two radios -- a
+ * point-to-multipoint hub is just an AP end whose `link_topology` is
+ * `'ptmp'` instead of `'ptp'`, re-run once per station it needs to serve.
+ *
+ * `link_topology` picks the AP end's RouterOS 6 legacy-wireless master mode:
+ * `'ptp'` uses `bridge` (single-peer master mode, included in MikroTik's
+ * base/CPE wireless license tier -- works on cheaper dish hardware like the
+ * SXTsq); `'ptmp'` uses `ap-bridge` (true multi-client AP mode, gated behind
+ * a higher wireless license tier/AP-capable hardware). Using `ap-bridge` for
+ * a link that will only ever have one peer is why AP mode was rejected as
+ * "not supported" on CPE-class hardware in the first place (confirmed
+ * 2026-08-08 from a real error on an SXTsq Lite5) -- `bridge` mode is the
+ * correct single-peer choice regardless of routed vs bridged L3 addressing.
+ * RouterOS 7's wifi package has no equivalent split -- `mode=ap` covers both
+ * topologies there, since that driver doesn't have a separate single-peer
+ * master mode the way legacy wireless does.
  *
  * "Bridged" link mode uses `station-pseudobridge` rather than true
  * `station-bridge` -- pseudobridge (translational bridging) works across
@@ -20,12 +37,12 @@ namespace App\Services;
  * real hardware -- same "best-effort, confirm on your own gear" caveat
  * already used elsewhere in this codebase for unverified RouterOS syntax.
  *
- * Some MikroTik hardware -- CPE/dish-style radios like the SXTsq, LHG, Disc,
- * or Metal -- is client-only and RouterOS rejects AP/ap-bridge mode on it
- * outright (confirmed 2026-08-08 from a real "not supported" error on an
- * SXTsq Lite5). This class doesn't know or care which radio is CPE-only --
- * that constraint is enforced upstream, in the wizard's `ap_end` validation
- * (`App\Livewire\Admin\StandalonePtpGenerator`), so an AP-mode script is
+ * A CPE/dish-style radio (SXTsq, LHG, Disc, Metal, etc.) can still be the
+ * `'ptp'` AP end (bridge mode is in its base license), but not the `'ptmp'`
+ * AP end (ap-bridge needs the higher tier). This class doesn't know or care
+ * which radio is CPE-only -- that topology-dependent constraint is enforced
+ * upstream, in the wizard's `ap_end` validation
+ * (`App\Livewire\Admin\StandalonePtpGenerator`), so an ap-bridge script is
  * simply never generated for a radio marked that way.
  */
 class StandalonePtpScriptGenerator
@@ -34,6 +51,7 @@ class StandalonePtpScriptGenerator
      * @param  array{
      *     link_name: string,
      *     link_mode: string,
+     *     link_topology: string,
      *     ap_end: string,
      *     frequency_mhz: int,
      *     channel_width_mhz: int,
@@ -111,14 +129,14 @@ class StandalonePtpScriptGenerator
         $interface = $radio['wireless_interface'];
         $ssid = $this->quote($config['ssid']);
         $stationMode = $config['link_mode'] === 'bridged' ? 'station-pseudobridge' : 'station';
-        $apMode = $config['link_mode'] === 'bridged' ? 'bridge' : 'ap-bridge';
         $distanceMeters = (int) round($config['distance_km'] * 1000);
 
         if ($radio['ros_version'] === '6') {
             $securityLines = $this->legacySecurityLines($config);
+            $apMode = $config['link_topology'] === 'ptmp' ? 'ap-bridge' : 'bridge';
             $mode = $isApEnd ? $apMode : $stationMode;
 
-            return array_merge($securityLines, [
+            $lines = [
                 '/interface wireless set '.$interface
                     .' mode='.$mode
                     .' ssid="'.$ssid.'"'
@@ -128,8 +146,19 @@ class StandalonePtpScriptGenerator
                     .' distance='.$distanceMeters
                     .' disabled=no',
                 '# distance= auto-tunes ACK timeout for long links -- confirm this behaves as expected on your hardware/driver.',
-                '',
-            ]);
+            ];
+
+            if ($isApEnd && $apMode === 'bridge') {
+                $lines[] = '# mode=bridge is the wireless (RF) master mode -- not the same as a software "/interface bridge" (see below if this link is in bridged L3 mode).';
+            }
+
+            if ($isApEnd && $apMode === 'ap-bridge') {
+                $lines[] = '# mode=ap-bridge (point-to-multipoint) needs a higher wireless license tier / AP-capable hardware -- a CPE-class radio (SXTsq, LHG, etc) will reject this.';
+            }
+
+            $lines[] = '';
+
+            return array_merge($securityLines, $lines);
         }
 
         $wifiSecurityLines = $this->wifiSecurityLines($config);

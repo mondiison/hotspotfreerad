@@ -30,7 +30,7 @@ class StandalonePtpScriptGeneratorTest extends TestCase
         ]));
 
         $this->assertStringContainsString('/interface wireless security-profiles add name=ptp-sec', $result['script_a']);
-        $this->assertStringContainsString('/interface wireless set wlan1 mode=ap-bridge', $result['script_a']);
+        $this->assertStringContainsString('/interface wireless set wlan1 mode=bridge', $result['script_a']);
         $this->assertStringNotContainsString('/interface wifi', $result['script_a']);
     }
 
@@ -87,11 +87,12 @@ class StandalonePtpScriptGeneratorTest extends TestCase
             'ptp_subnet' => '10.20.30.0/30',
         ]));
 
-        $this->assertStringNotContainsString('/interface bridge', $result['script_a']);
+        $this->assertStringNotContainsString('/interface bridge add', $result['script_a']);
+        $this->assertStringNotContainsString('/interface bridge port', $result['script_a']);
         $this->assertStringContainsString('/ip address add address=10.20.30.1/30 interface=wifi1', $result['script_a']);
     }
 
-    public function test_routed_mode_uses_ap_bridge_and_station_on_ros6(): void
+    public function test_routed_mode_uses_bridge_and_station_on_ros6(): void
     {
         $result = (new StandalonePtpScriptGenerator)->generate($this->config([
             'link_mode' => 'routed',
@@ -100,8 +101,45 @@ class StandalonePtpScriptGeneratorTest extends TestCase
             'radio_b' => $this->radio(['ros_version' => '6', 'wireless_interface' => 'wlan1'], 'B'),
         ]));
 
-        $this->assertStringContainsString('mode=ap-bridge ', $result['script_a']);
+        $this->assertStringContainsString('mode=bridge ', $result['script_a']);
         $this->assertStringContainsString('mode=station ', $result['script_b']);
+    }
+
+    public function test_ptp_topology_uses_bridge_mode_on_ros6(): void
+    {
+        $result = (new StandalonePtpScriptGenerator)->generate($this->config([
+            'link_topology' => 'ptp',
+            'ap_end' => 'radio_a',
+            'radio_a' => $this->radio(['ros_version' => '6', 'wireless_interface' => 'wlan1']),
+            'radio_b' => $this->radio(['ros_version' => '6', 'wireless_interface' => 'wlan1'], 'B'),
+        ]));
+
+        $this->assertStringContainsString('mode=bridge ', $result['script_a']);
+        $this->assertStringNotContainsString('mode=ap-bridge', $result['script_a']);
+    }
+
+    public function test_ptmp_topology_uses_ap_bridge_mode_on_ros6(): void
+    {
+        $result = (new StandalonePtpScriptGenerator)->generate($this->config([
+            'link_topology' => 'ptmp',
+            'ap_end' => 'radio_a',
+            'radio_a' => $this->radio(['ros_version' => '6', 'wireless_interface' => 'wlan1']),
+            'radio_b' => $this->radio(['ros_version' => '6', 'wireless_interface' => 'wlan1'], 'B'),
+        ]));
+
+        $this->assertStringContainsString('mode=ap-bridge ', $result['script_a']);
+        $this->assertStringContainsString('needs a higher wireless license tier', $result['script_a']);
+    }
+
+    public function test_ptmp_topology_does_not_change_ros7_ap_mode(): void
+    {
+        $result = (new StandalonePtpScriptGenerator)->generate($this->config([
+            'link_topology' => 'ptmp',
+            'ap_end' => 'radio_a',
+        ]));
+
+        $this->assertStringContainsString('/interface wifi configuration add name=ptp-ap-cfg mode=ap ', $result['script_a']);
+        $this->assertStringNotContainsString('ap-bridge', $result['script_a']);
     }
 
     public function test_distance_km_is_converted_to_meters(): void
@@ -153,6 +191,7 @@ class StandalonePtpScriptGeneratorTest extends TestCase
         return array_merge([
             'link_name' => 'Test Link',
             'link_mode' => 'routed',
+            'link_topology' => 'ptp',
             'ap_end' => 'radio_a',
             'frequency_mhz' => 5745,
             'channel_width_mhz' => 20,
