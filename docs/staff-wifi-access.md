@@ -36,3 +36,7 @@ The vendor-agnostic equivalent is **RADIUS MAC authentication**, which most dece
 - **Admin → Trusted Wi-Fi** lists, adds, edits, and removes devices per shop, per network (`staff` or `mgmt`).
 - Devices can have an optional expiry (useful for contractors/temporary access) and an active/inactive toggle — either one revokes RADIUS access immediately (`radcheck` row removed) without deleting the record.
 - Every save re-syncs RADIUS via `App\Services\RadiusProvisioningService::provisionTrustedWifiDevice()` / `revokeTrustedWifiDevice()`.
+
+## Seeing what's actually connected
+
+Registering a device above requires already knowing its MAC address — until 2026-08-09 there was no way to see what's actually joined a network first. A router's Script page → **Live** tab → "Connected Devices" now shows live DHCP leases per network with a one-click "Register as trusted" action; see `docs/router-monitoring.md`'s Connected Devices section for how it works. **It is visibility only** — it does not change anything about the enforcement gaps described above (the built-in Wi-Fi access-list still isn't auto-pushed to the router; external-AP RADIUS MAC-auth still has the WireGuard LAN-routing gap noted above). A device showing up connected and a device actually being *restricted* by the allowlist are still two different things.

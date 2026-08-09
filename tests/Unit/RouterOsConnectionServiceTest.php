@@ -151,4 +151,46 @@ class RouterOsConnectionServiceTest extends TestCase
             ],
         ];
     }
+
+    public function test_it_maps_dhcp_lease_rows_into_the_expected_shape(): void
+    {
+        $rows = [
+            [
+                'mac-address' => 'AA:BB:CC:DD:EE:FF',
+                'active-address' => '10.10.10.5',
+                'address' => '10.10.10.5',
+                'host-name' => 'staff-phone',
+                'status' => 'bound',
+                'last-seen' => '2m1s',
+                'server' => 'dhcp-mgmt',
+            ],
+            [
+                'mac-address' => '11:22:33:44:55:66',
+                'address' => '10.10.10.6',
+                'status' => 'waiting',
+            ],
+            ['status' => 'bound'],
+        ];
+
+        $leases = RouterOsConnectionService::mapLeaseRows($rows, 'dhcp-mgmt');
+
+        $this->assertSame([
+            [
+                'mac_address' => 'AA:BB:CC:DD:EE:FF',
+                'ip_address' => '10.10.10.5',
+                'hostname' => 'staff-phone',
+                'status' => 'bound',
+                'last_seen' => '2m1s',
+                'server' => 'dhcp-mgmt',
+            ],
+            [
+                'mac_address' => '11:22:33:44:55:66',
+                'ip_address' => '10.10.10.6',
+                'hostname' => null,
+                'status' => 'waiting',
+                'last_seen' => null,
+                'server' => 'dhcp-mgmt',
+            ],
+        ], $leases);
+    }
 }

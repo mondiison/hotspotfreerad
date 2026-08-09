@@ -61,6 +61,14 @@ Router Script page → **Live** tab → "Wi-Fi Scan". On-demand only (not polled
 
 **This is the least-verified part of this feature set.** RouterOS's scan command normally streams results until explicitly cancelled; this reads a limited batch (`count` option) and closes the connection, expecting that to implicitly stop the scan on the router side. That has historically been a source of stuck API sessions on some RouterOS releases for similar streaming commands. Test it against real hardware — including running a second scan shortly after the first — before relying on it operationally. Also note: scanning can briefly interrupt client connections on some wireless drivers when run on an interface that's actively serving an SSID.
 
+## Connected Devices
+
+Router Script page → **Live** tab → "Connected Devices" (added 2026-08-09). Shows live DHCP leases for a router, per network (`mgmt`/`staff`/`pos`/`hotspot`), via `App\Livewire\Admin\RouterConnectedDevices` and `RouterOsConnectionService::dhcpLeases()` (`/ip/dhcp-server/lease/print`, filtered by the network's fixed DHCP server name — `dhcp-mgmt`, `dhcp-staff`, `dhcp-pos`, `dhcp-hotspot`). For `mgmt`/`staff`, each row has a "Register as trusted" button that creates a `TrustedWifiDevice` from the lease's MAC/hostname.
+
+This is deliberately DHCP-lease-based, not wireless/wifi registration-table-based. A registration-table query (`/interface/wifi/registration-table` or the legacy wireless equivalent) only shows clients associated to the *MikroTik's own* radio — useless the moment a network's actual access point is an external device (e.g. a Ruijie AP) bridged into the same VLAN, since those clients never associate to the MikroTik radio at all. DHCP leases are recorded by the router itself regardless of which physical AP handed the client its connection, as long as that AP is bridged into the router-managed network — the right data source for a design meant to survive a built-in-Wi-Fi-to-external-AP transition.
+
+**This is visibility only.** It does not change or fix anything about whether the Trusted Wi-Fi allowlist is actually enforced on the router — see `docs/staff-wifi-access.md` for the separate, still-open enforcement gaps (the MikroTik built-in Wi-Fi access-list is never auto-pushed to the router; external-AP RADIUS MAC-auth has a WireGuard LAN-routing gap). The "Register as trusted" flash message says this explicitly rather than implying the button blocks or allows anything by itself.
+
 ## Read-only console
 
 Router Script page → **Live** tab → "Console". A RouterOS terminal, scoped to read-only: type any CLI-style `print` command (e.g. `/interface print`, `/ip hotspot active print where server=hotspot1`, `/ppp active print detail`) and it runs live over the same read-only API user as the rest of this feature set, showing the returned rows as a table.

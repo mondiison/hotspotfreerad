@@ -172,6 +172,64 @@ class RouterOsConnectionService
     }
 
     /**
+     * DHCP leases for a network, optionally filtered to one DHCP server
+     * (e.g. "dhcp-mgmt"). Deliberately DHCP-based rather than reading the
+     * wireless/wifi registration-table -- a registration-table query would
+     * only ever show clients associated to the MikroTik's own radio, which
+     * is useless once a network's AP is an external device (e.g. a Ruijie
+     * AP bridged into the same VLAN) that never associates to the MikroTik
+     * radio at all. DHCP leases are recorded by the router regardless of
+     * which physical AP the client came through, as long as it's bridged
+     * into the router-managed network -- see the fixed dhcp-mgmt/dhcp-staff/
+     * dhcp-pos/dhcp-hotspot server names in MikroTikProvisioningService.
+     *
+     * @return array{success: bool, leases?: list<array{mac_address: string, ip_address: ?string, hostname: ?string, status: ?string, last_seen: ?string, server: ?string}>, error?: string}
+     */
+    public function dhcpLeases(Router $router, ?string $server = null): array
+    {
+        if (! $this->isConfigured($router)) {
+            return ['success' => false, 'error' => 'RouterOS API credentials not generated yet.'];
+        }
+
+        try {
+            $query = new Query('/ip/dhcp-server/lease/print');
+
+            if ($server !== null) {
+                $query->where('server', $server);
+            }
+
+            $response = $this->client($router)->query($query)->read();
+
+            return ['success' => true, 'leases' => self::mapLeaseRows($response, $server)];
+        } catch (\Throwable $e) {
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Pure row-mapping logic pulled out of dhcpLeases() so it can be unit
+     * tested without a live RouterOS connection.
+     *
+     * @param  list<array<string,mixed>>  $rows
+     * @return list<array{mac_address: string, ip_address: ?string, hostname: ?string, status: ?string, last_seen: ?string, server: ?string}>
+     */
+    public static function mapLeaseRows(array $rows, ?string $server = null): array
+    {
+        return collect($rows)
+            ->filter(fn ($row) => is_array($row) && filled($row['mac-address'] ?? null))
+            ->map(fn (array $row): array => [
+                'mac_address' => (string) $row['mac-address'],
+                'ip_address' => $row['active-address'] ?? $row['address'] ?? null,
+                'hostname' => $row['host-name'] ?? null,
+                'status' => $row['status'] ?? null,
+                'last_seen' => $row['last-seen'] ?? null,
+                'server' => $row['server'] ?? $server,
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
      * A read-only RouterOS "terminal" -- accepts a CLI-style `print` command
      * (e.g. "/interface print", "/ip hotspot active print where server=hotspot1")
      * and runs it as a live API query. Only `print` is accepted; this is
