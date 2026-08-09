@@ -32,16 +32,16 @@
                 wire:click="filterBy('{{ $stat['service'] }}', '{{ $stat['status'] }}')"
                 wire:loading.attr="disabled"
                 wire:target="filterBy"
-                class="rounded-lg border px-4 py-3 text-left shadow-sm transition hover:border-zinc-400 {{ $service === $stat['service'] && $status === $stat['status'] ? 'border-zinc-950 bg-zinc-950 text-white' : 'border-zinc-200 bg-white text-zinc-950' }}"
+                class="rounded-lg border px-4 py-3 text-left shadow-sm transition hover:border-zinc-400 dark:hover:border-zinc-500 {{ $service === $stat['service'] && $status === $stat['status'] ? 'border-zinc-950 bg-zinc-950 text-white dark:border-zinc-700 dark:bg-zinc-800' : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-950 dark:text-zinc-100' }}"
             >
-                <span class="block text-xs font-medium uppercase {{ $service === $stat['service'] && $status === $stat['status'] ? 'text-zinc-300' : 'text-zinc-500' }}">{{ $stat['label'] }}</span>
+                <span class="block text-xs font-medium uppercase {{ $service === $stat['service'] && $status === $stat['status'] ? 'text-zinc-300 dark:text-zinc-600' : 'text-zinc-500 dark:text-zinc-400' }}">{{ $stat['label'] }}</span>
                 <span class="mt-2 block text-2xl font-semibold">{{ number_format($stat['value']) }}</span>
-                <span class="mt-1 block text-xs {{ $service === $stat['service'] && $status === $stat['status'] ? 'text-zinc-300' : 'text-zinc-500' }}">{{ $stat['hint'] }}</span>
+                <span class="mt-1 block text-xs {{ $service === $stat['service'] && $status === $stat['status'] ? 'text-zinc-300 dark:text-zinc-600' : 'text-zinc-500 dark:text-zinc-400' }}">{{ $stat['hint'] }}</span>
             </button>
         @endforeach
     </section>
 
-    <section class="mb-4 rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
+    <section class="mb-4 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4 shadow-sm">
         <div class="grid min-w-0 gap-3 [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))] [&>*]:min-w-0">
             <div class="sm:col-span-2 xl:col-span-3">
                 <flux:input wire:model.live.debounce.350ms="search" icon="magnifying-glass" placeholder="Search package, shop, group, or speed" />
@@ -65,9 +65,9 @@
         </div>
     </section>
 
-    <div class="overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
+    <div class="overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm">
         <table class="min-w-[860px] w-full text-left text-sm">
-            <thead class="border-b border-zinc-200 bg-zinc-50 text-zinc-500">
+            <thead class="border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
                 <tr>
                     <th class="px-4 py-3 font-medium">Package</th>
                     <th class="px-4 py-3 font-medium">Service</th>
@@ -80,7 +80,7 @@
                     <th class="px-4 py-3 text-right font-medium">Actions</th>
                 </tr>
             </thead>
-            <tbody class="divide-y divide-zinc-100">
+            <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
                 @forelse ($packages as $package)
                     <tr wire:key="package-{{ $package->id }}">
                         <td class="px-4 py-3">
@@ -94,8 +94,8 @@
                                 {{ ['hotspot' => 'Hotspot', 'pppoe' => 'PPPoE', 'both' => 'Both'][$package->service_type] ?? 'Hotspot' }}
                             </flux:badge>
                         </td>
-                        <td class="px-4 py-3 text-zinc-600">{{ $package->shop->name }} / {{ $package->shop->tenant->company_name }}</td>
-                        <td class="px-4 py-3 font-mono text-xs text-zinc-600">{{ $package->radius_group_name ?: 'Pending sync' }}</td>
+                        <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $package->shop->name }} / {{ $package->shop->tenant->company_name }}</td>
+                        <td class="px-4 py-3 font-mono text-xs text-zinc-600 dark:text-zinc-400">{{ $package->radius_group_name ?: 'Pending sync' }}</td>
                         <td class="px-4 py-3">{{ $package->currency }} {{ number_format($package->price, 2) }}</td>
                         <td class="px-4 py-3">
                             @php
@@ -108,9 +108,9 @@
                             {{ $package->data_limit_bytes ? number_format($package->data_limit_bytes / 1073741824, 1).' GB' : 'Unlimited' }}
                         </td>
                         <td class="px-4 py-3">
-                            <p class="font-mono text-xs text-zinc-600">{{ $package->speed_limit_profile }}</p>
+                            <p class="font-mono text-xs text-zinc-600 dark:text-zinc-400">{{ $package->speed_limit_profile }}</p>
                             @if (in_array($package->service_type, ['pppoe', 'both'], true))
-                                <p class="mt-1 text-xs text-zinc-500">PPPoE rate limit</p>
+                                <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">PPPoE rate limit</p>
                             @endif
                         </td>
                         <td class="px-4 py-3">
@@ -124,7 +124,7 @@
                     <tr>
                         <td colspan="9" class="px-4 py-10 text-center">
                             <p class="font-medium">No packages match this view.</p>
-                            <p class="mt-1 text-sm text-zinc-500">Create internet plans with uptime, speed, and optional data caps.</p>
+                            <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Create internet plans with uptime, speed, and optional data caps.</p>
                             <flux:button type="button" variant="primary" icon="plus" class="mt-4" wire:click="create">Add Package</flux:button>
                         </td>
                     </tr>
@@ -146,13 +146,13 @@
 
             <form wire:submit.prevent="save" class="relative space-y-6">
                 <div wire:loading.flex wire:target="save" class="absolute inset-0 z-10 hidden items-center justify-center rounded-lg bg-white/70 backdrop-blur-[1px]">
-                    <div class="rounded-md border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-700 shadow-sm">
+                    <div class="rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-4 py-3 text-sm font-medium text-zinc-700 dark:text-zinc-300 shadow-sm">
                         Saving and syncing RADIUS profile...
                     </div>
                 </div>
 
                 <section>
-                    <h2 class="text-sm font-semibold uppercase text-zinc-500">Plan basics</h2>
+                    <h2 class="text-sm font-semibold uppercase text-zinc-500 dark:text-zinc-400">Plan basics</h2>
                     <div class="mt-4 grid gap-5 md:grid-cols-2">
                         <flux:field class="md:col-span-2">
                             <flux:label>Shop</flux:label>
@@ -207,11 +207,11 @@
                     </div>
                 </section>
 
-                <section class="border-t border-zinc-200 pt-6">
+                <section class="border-t border-zinc-200 dark:border-zinc-700 pt-6">
                     <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
                         <div>
-                            <h2 class="text-sm font-semibold uppercase text-zinc-500">Access rules</h2>
-                            <p class="mt-1 text-sm text-zinc-500">
+                            <h2 class="text-sm font-semibold uppercase text-zinc-500 dark:text-zinc-400">Access rules</h2>
+                            <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
                                 @if ($service_type === 'pppoe')
                                     PPPoE subscribers receive bandwidth through <code>Mikrotik-Rate-Limit</code>.
                                 @elseif ($service_type === 'both')
@@ -277,9 +277,9 @@
                     </div>
                 </section>
 
-                <section class="border-t border-zinc-200 pt-6">
-                    <h2 class="text-sm font-semibold uppercase text-zinc-500">Fair usage policy</h2>
-                    <p class="mt-1 text-sm text-zinc-500">Optional soft cap. Instead of cutting users off, throttle them after heavy usage.</p>
+                <section class="border-t border-zinc-200 dark:border-zinc-700 pt-6">
+                    <h2 class="text-sm font-semibold uppercase text-zinc-500 dark:text-zinc-400">Fair usage policy</h2>
+                    <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Optional soft cap. Instead of cutting users off, throttle them after heavy usage.</p>
                     <div class="mt-4 grid gap-5 md:grid-cols-2">
                         <flux:field>
                             <flux:label>FUP threshold</flux:label>
@@ -308,35 +308,35 @@
                     </div>
                 </section>
 
-                <div class="grid gap-4 border-t border-zinc-200 pt-6 md:grid-cols-[1fr_260px]">
+                <div class="grid gap-4 border-t border-zinc-200 dark:border-zinc-700 pt-6 md:grid-cols-[1fr_260px]">
                     <flux:checkbox wire:model.live="is_active" label="Active and visible on the captive portal" />
 
-                    <section class="rounded-lg border border-zinc-200 bg-zinc-950 p-4 text-white">
+                    <section class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-950 p-4 text-white">
                         <h2 class="text-sm font-semibold">Plan Shape</h2>
                         <dl class="mt-3 space-y-2 text-sm">
                             <div class="flex justify-between gap-4">
-                                <dt class="text-zinc-400">Service</dt>
+                                <dt class="text-zinc-400 dark:text-zinc-500">Service</dt>
                                 <dd>{{ ['hotspot' => 'Hotspot', 'pppoe' => 'PPPoE', 'both' => 'Both'][$service_type] ?? 'Hotspot' }}</dd>
                             </div>
                             <div class="flex justify-between gap-4">
-                                <dt class="text-zinc-400">Bandwidth</dt>
+                                <dt class="text-zinc-400 dark:text-zinc-500">Bandwidth</dt>
                                 <dd>{{ filled($speed_limit_profile) ? $speed_limit_profile : 'Not set' }}</dd>
                             </div>
                             <div class="flex justify-between gap-4">
-                                <dt class="text-zinc-400">Data mode</dt>
+                                <dt class="text-zinc-400 dark:text-zinc-500">Data mode</dt>
                                 <dd>{{ filled($data_limit_bytes) ? 'Hard cap' : 'Unlimited' }}</dd>
                             </div>
                             <div class="flex justify-between gap-4">
-                                <dt class="text-zinc-400">Fair use</dt>
+                                <dt class="text-zinc-400 dark:text-zinc-500">Fair use</dt>
                                 <dd>{{ filled($fup_data_threshold_bytes) ? 'Throttle enabled' : 'Off' }}</dd>
                             </div>
                         </dl>
                     </section>
                 </div>
 
-                <div class="rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-600">
-                    <p><strong class="text-zinc-950">Hard cap</strong> stops access when the data limit is reached.</p>
-                    <p class="mt-2"><strong class="text-zinc-950">FUP</strong> keeps access alive but lowers speed after the threshold.</p>
+                <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4 text-sm text-zinc-600 dark:text-zinc-400">
+                    <p><strong class="text-zinc-950 dark:text-zinc-100">Hard cap</strong> stops access when the data limit is reached.</p>
+                    <p class="mt-2"><strong class="text-zinc-950 dark:text-zinc-100">FUP</strong> keeps access alive but lowers speed after the threshold.</p>
                 </div>
 
                 <div class="flex justify-end gap-3">
@@ -358,9 +358,9 @@
             </div>
 
             @if ($deletingPackage)
-                <div class="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+                <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4">
                     <p class="font-medium">{{ $deletingPackage->name }}</p>
-                    <p class="mt-1 text-sm text-zinc-500">{{ $deletingPackage->currency }} {{ number_format($deletingPackage->price, 2) }}</p>
+                    <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{{ $deletingPackage->currency }} {{ number_format($deletingPackage->price, 2) }}</p>
                 </div>
             @endif
 

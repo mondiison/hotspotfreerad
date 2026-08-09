@@ -3,7 +3,7 @@
     :heading="$managedUser->exists ? 'Edit User' : 'Add User'"
     subheading="Create and maintain admin sign-in accounts."
 >
-    <form method="POST" action="{{ $managedUser->exists ? route('admin.users.update', $managedUser) : route('admin.users.store') }}" class="max-w-3xl rounded-lg border border-zinc-200 bg-white p-6">
+    <form method="POST" action="{{ $managedUser->exists ? route('admin.users.update', $managedUser) : route('admin.users.store') }}" class="max-w-3xl rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-6">
         @csrf
         @if ($managedUser->exists)
             @method('PUT')

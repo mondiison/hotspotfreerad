@@ -3,7 +3,7 @@
     :heading="$expense->exists ? 'Edit Expense' : 'Add Expense'"
     subheading="Record business costs that affect tenant profitability."
 >
-    <form method="POST" action="{{ $expense->exists ? route('admin.expenses.update', $expense) : route('admin.expenses.store') }}" enctype="multipart/form-data" class="max-w-4xl rounded-lg border border-zinc-200 bg-white p-6">
+    <form method="POST" action="{{ $expense->exists ? route('admin.expenses.update', $expense) : route('admin.expenses.store') }}" enctype="multipart/form-data" class="max-w-4xl rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-6">
         @csrf
         @if ($expense->exists)
             @method('PUT')
@@ -96,11 +96,11 @@
             </flux:field>
 
             @if ($expense->receipt_path)
-                <div class="md:col-span-2 rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+                <div class="md:col-span-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4">
                     <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
                         <div>
                             <p class="text-sm font-medium">Receipt attached</p>
-                            <p class="mt-1 text-xs text-zinc-500">{{ basename($expense->receipt_path) }}</p>
+                            <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ basename($expense->receipt_path) }}</p>
                         </div>
                         <flux:button href="{{ route('admin.expenses.receipt', $expense) }}" variant="outline" icon="arrow-down-tray">Download</flux:button>
                     </div>

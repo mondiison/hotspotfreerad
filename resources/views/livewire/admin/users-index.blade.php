@@ -19,7 +19,7 @@
         </flux:button>
     </div>
 
-    <section class="mb-4 rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
+    <section class="mb-4 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4 shadow-sm">
         <div class="grid min-w-0 gap-3 [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))] [&>*]:min-w-0">
             <div class="sm:col-span-2 xl:col-span-3">
                 <flux:input wire:model.live.debounce.350ms="search" icon="magnifying-glass" placeholder="Search name, email, or tenant" />
@@ -46,9 +46,9 @@
         </div>
     </section>
 
-    <div class="overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
+    <div class="overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm">
         <table class="min-w-[820px] w-full text-left text-sm">
-            <thead class="border-b border-zinc-200 bg-zinc-50 text-zinc-500">
+            <thead class="border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
                 <tr>
                     <th class="px-4 py-3 font-medium">User</th>
                     <th class="px-4 py-3 font-medium">Tenant</th>
@@ -58,20 +58,20 @@
                     <th class="px-4 py-3 text-right font-medium">Actions</th>
                 </tr>
             </thead>
-            <tbody class="divide-y divide-zinc-100">
+            <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
                 @forelse ($users as $managedUser)
                     <tr wire:key="user-{{ $managedUser->id }}">
                         <td class="px-4 py-3">
                             <p class="font-medium">{{ $managedUser->name }}</p>
-                            <p class="mt-1 text-xs text-zinc-500">{{ $managedUser->email }}</p>
+                            <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $managedUser->email }}</p>
                         </td>
-                        <td class="px-4 py-3 text-zinc-600">{{ $managedUser->tenant?->company_name ?? 'Platform' }}</td>
+                        <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $managedUser->tenant?->company_name ?? 'Platform' }}</td>
                         <td class="px-4 py-3">
                             <flux:badge :color="$managedUser->isSuperAdmin() ? 'purple' : ($managedUser->isTenantStaff() ? 'amber' : 'sky')">
                                 {{ str($managedUser->role)->replace('_', ' ')->title() }}
                             </flux:badge>
                             @if ($managedUser->isTenantStaff() && ! empty($managedUser->permissions))
-                                <p class="mt-1 text-xs text-zinc-500">{{ collect($managedUser->permissions)->map(fn ($key) => $permissionOptions[$key] ?? $key)->implode(', ') }}</p>
+                                <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ collect($managedUser->permissions)->map(fn ($key) => $permissionOptions[$key] ?? $key)->implode(', ') }}</p>
                             @endif
                         </td>
                         <td class="px-4 py-3">
@@ -104,7 +104,7 @@
                     <tr>
                         <td colspan="6" class="px-4 py-10 text-center">
                             <p class="font-medium">No users match this view.</p>
-                            <p class="mt-1 text-sm text-zinc-500">Create admin accounts for platform operators or tenant workspace managers.</p>
+                            <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Create admin accounts for platform operators or tenant workspace managers.</p>
                             <flux:button type="button" variant="primary" icon="plus" class="mt-4" wire:click="create">Add User</flux:button>
                         </td>
                     </tr>
@@ -187,9 +187,9 @@
                     <flux:error name="permissions" />
                 @endif
 
-                <div class="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
-                    <h2 class="text-sm font-semibold text-zinc-950">Access guide</h2>
-                    <p class="mt-1 text-sm leading-6 text-zinc-600">
+                <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4">
+                    <h2 class="text-sm font-semibold text-zinc-950 dark:text-zinc-100">Access guide</h2>
+                    <p class="mt-1 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
                         Use Super admin for platform billing, tenant creation, and global reporting. Use Tenant admin for a business owner who should see everything in that tenant's workspace. Use Staff for cashiers, support, or network staff who should only reach specific areas.
                     </p>
                 </div>
@@ -213,9 +213,9 @@
             </div>
 
             @if ($deletingUser)
-                <div class="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+                <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4">
                     <p class="font-medium">{{ $deletingUser->name }}</p>
-                    <p class="mt-1 text-sm text-zinc-500">{{ $deletingUser->email }}</p>
+                    <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{{ $deletingUser->email }}</p>
                 </div>
             @endif
 

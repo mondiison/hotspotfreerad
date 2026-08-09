@@ -13,7 +13,7 @@
         </flux:button>
     </div>
 
-    <section class="mb-4 rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
+    <section class="mb-4 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4 shadow-sm">
         <div class="grid min-w-0 gap-3 [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))] [&>*]:min-w-0">
             <div class="sm:col-span-2 xl:col-span-3">
                 <flux:input wire:model.live.debounce.350ms="search" icon="magnifying-glass" placeholder="Search router, NAS ID, WireGuard IP, or shop" />
@@ -29,9 +29,9 @@
         </div>
     </section>
 
-    <div class="overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
+    <div class="overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm">
         <table class="min-w-[780px] w-full text-left text-sm">
-            <thead class="border-b border-zinc-200 bg-zinc-50 text-zinc-500">
+            <thead class="border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
                 <tr>
                     <th class="px-4 py-3 font-medium">Router</th>
                     <th class="px-4 py-3 font-medium">Shop</th>
@@ -41,16 +41,16 @@
                     <th class="px-4 py-3 text-right font-medium">Actions</th>
                 </tr>
             </thead>
-            <tbody class="divide-y divide-zinc-100">
+            <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
                 @forelse ($routers as $router)
                     <tr wire:key="router-{{ $router->id }}">
                         <td class="px-4 py-3">
                             <p class="font-medium">{{ $router->name }}</p>
-                            <p class="mt-1 text-xs text-zinc-500">Last seen {{ $router->last_seen_at?->diffForHumans() ?? 'never' }}</p>
+                            <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Last seen {{ $router->last_seen_at?->diffForHumans() ?? 'never' }}</p>
                         </td>
-                        <td class="px-4 py-3 text-zinc-600">{{ $router->shop->name }} / {{ $router->shop->tenant->company_name }}</td>
-                        <td class="px-4 py-3 font-mono text-xs text-zinc-600">{{ $router->nas_identifier }}</td>
-                        <td class="px-4 py-3 font-mono text-xs text-zinc-600">{{ $router->wireguard_internal_ip }}</td>
+                        <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $router->shop->name }} / {{ $router->shop->tenant->company_name }}</td>
+                        <td class="px-4 py-3 font-mono text-xs text-zinc-600 dark:text-zinc-400">{{ $router->nas_identifier }}</td>
+                        <td class="px-4 py-3 font-mono text-xs text-zinc-600 dark:text-zinc-400">{{ $router->wireguard_internal_ip }}</td>
                         <td class="px-4 py-3">
                             <flux:badge :color="$router->is_online ? 'green' : 'zinc'">{{ $router->is_online ? 'Active/recent' : 'No recent accounting' }}</flux:badge>
                         </td>
@@ -66,7 +66,7 @@
                     <tr>
                         <td colspan="6" class="px-4 py-10 text-center">
                             <p class="font-medium">No routers match this view.</p>
-                            <p class="mt-1 text-sm text-zinc-500">Register the MikroTik router that will redirect customers to the captive portal.</p>
+                            <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Register the MikroTik router that will redirect customers to the captive portal.</p>
                             <flux:button type="button" variant="primary" icon="plus" class="mt-4" wire:click="create">Add Router</flux:button>
                         </td>
                     </tr>
@@ -90,11 +90,11 @@
                 @foreach (['Identity', 'Hardware', 'Features', 'Network plan'] as $index => $label)
                     @php($stepNumber = $index + 1)
                     <div class="flex items-center gap-2">
-                        <span class="flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold {{ $step >= $stepNumber ? 'bg-zinc-950 text-white' : 'bg-zinc-100 text-zinc-500' }}">{{ $stepNumber }}</span>
-                        <span class="hidden text-xs font-medium {{ $step === $stepNumber ? 'text-zinc-950' : 'text-zinc-500' }} md:inline">{{ $label }}</span>
+                        <span class="flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold {{ $step >= $stepNumber ? 'bg-zinc-950 text-white' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400' }}">{{ $stepNumber }}</span>
+                        <span class="hidden text-xs font-medium {{ $step === $stepNumber ? 'text-zinc-950 dark:text-zinc-100' : 'text-zinc-500 dark:text-zinc-400' }} md:inline">{{ $label }}</span>
                     </div>
                     @if (! $loop->last)
-                        <span class="h-px w-6 bg-zinc-200"></span>
+                        <span class="h-px w-6 bg-zinc-200 dark:bg-zinc-700"></span>
                     @endif
                 @endforeach
             </div>
@@ -297,7 +297,7 @@
 
                 @if ($step === 3)
                     <div class="space-y-5">
-                        <div class="grid gap-3 rounded-md border border-zinc-200 bg-zinc-50 p-3 text-sm md:grid-cols-3">
+                        <div class="grid gap-3 rounded-md border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-3 text-sm md:grid-cols-3">
                             <flux:checkbox wire:model.live="provisioning_settings.enable_pos" label="POS VLAN/SSID" />
                             <flux:checkbox wire:model.live="provisioning_settings.enable_pppoe" label="PPPoE/CPE VLAN" />
                             <flux:checkbox wire:model.live="provisioning_settings.enable_realtime_qos" label="Realtime voice/video QoS" />
@@ -320,8 +320,8 @@
                         </div>
 
                         @if ($provisioning_settings['enable_builtin_wifi'] ?? false)
-                            <div class="space-y-4 rounded-lg border border-zinc-200 bg-zinc-50 p-4">
-                                <p class="text-sm font-semibold text-zinc-950">Built-in Wi-Fi credentials</p>
+                            <div class="space-y-4 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4">
+                                <p class="text-sm font-semibold text-zinc-950 dark:text-zinc-100">Built-in Wi-Fi credentials</p>
 
                                 <flux:field>
                                     <flux:label>Wireless interface</flux:label>
@@ -351,7 +351,7 @@
                                 @endif
                             </div>
                         @else
-                            <div class="rounded-md border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-600">
+                            <div class="rounded-md border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-3 text-sm text-zinc-600 dark:text-zinc-400">
                                 No built-in Wi-Fi selected. Staff, POS, and management access will need an external access point on the AP/switch trunk port.
                             </div>
                         @endif
@@ -376,9 +376,9 @@
                             <flux:error name="provisioning_settings.profile" />
                         </flux:field>
 
-                        <div class="rounded-md border border-zinc-200 bg-white p-3">
-                            <p class="text-sm font-medium text-zinc-900">Quick-fill bandwidth &amp; VLAN template</p>
-                            <p class="mt-1 text-xs leading-5 text-zinc-500">Use a preset, then adjust any value before saving.</p>
+                        <div class="rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-3">
+                            <p class="text-sm font-medium text-zinc-900 dark:text-zinc-100">Quick-fill bandwidth &amp; VLAN template</p>
+                            <p class="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">Use a preset, then adjust any value before saving.</p>
                             <div class="mt-3 flex flex-wrap gap-2">
                                 <flux:button type="button" size="xs" wire:click="setRouterLayoutPreset('starlink_plaza')">Starlink plaza /23</flux:button>
                                 <flux:button type="button" size="xs" wire:click="setRouterLayoutPreset('small_ap_24')">Small hotspot /24</flux:button>
@@ -510,7 +510,7 @@
                                     <flux:button type="button" size="xs" wire:click="setHotspotIpSize('23')">/23, about 500 clients</flux:button>
                                     <flux:button type="button" size="xs" wire:click="setHotspotIpSize('24')">/24, about 250 clients</flux:button>
                                 </div>
-                                <p class="mt-2 text-xs leading-5 text-zinc-500">Quick-fill the customer hotspot gateway, network, and DHCP pool.</p>
+                                <p class="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">Quick-fill the customer hotspot gateway, network, and DHCP pool.</p>
                             </div>
                         </div>
                     </div>
@@ -538,9 +538,9 @@
             </div>
 
             @if ($deletingRouter)
-                <div class="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+                <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4">
                     <p class="font-medium">{{ $deletingRouter->name }}</p>
-                    <p class="mt-1 font-mono text-xs text-zinc-500">{{ $deletingRouter->nas_identifier }} / {{ $deletingRouter->wireguard_internal_ip }}</p>
+                    <p class="mt-1 font-mono text-xs text-zinc-500 dark:text-zinc-400">{{ $deletingRouter->nas_identifier }} / {{ $deletingRouter->wireguard_internal_ip }}</p>
                 </div>
             @endif
 

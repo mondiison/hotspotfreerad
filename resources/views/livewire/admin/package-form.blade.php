@@ -1,7 +1,7 @@
 <div class="grid gap-6 xl:grid-cols-[1fr_380px]">
-    <form wire:submit="save" class="relative rounded-lg border border-zinc-200 bg-white p-6">
+    <form wire:submit="save" class="relative rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-6">
         <div wire:loading.flex wire:target="save" class="absolute inset-0 z-10 hidden items-center justify-center rounded-lg bg-white/70 backdrop-blur-[1px]">
-            <div class="rounded-md border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-700 shadow-sm">
+            <div class="rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-4 py-3 text-sm font-medium text-zinc-700 dark:text-zinc-300 shadow-sm">
                 Saving and syncing RADIUS profile...
             </div>
         </div>
@@ -63,11 +63,11 @@
                 </div>
             </section>
 
-            <section class="border-t border-zinc-200 pt-6">
+            <section class="border-t border-zinc-200 dark:border-zinc-700 pt-6">
                 <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
                     <div>
                         <h2 class="text-base font-semibold">Access Rules</h2>
-                        <p class="mt-1 text-sm text-zinc-500">
+                        <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
                             @if ($service_type === 'pppoe')
                                 PPPoE bandwidth is sent to MikroTik through FreeRADIUS as <code>Mikrotik-Rate-Limit</code>.
                             @elseif ($service_type === 'both')
@@ -149,9 +149,9 @@
                 </div>
             </section>
 
-            <section class="border-t border-zinc-200 pt-6">
+            <section class="border-t border-zinc-200 dark:border-zinc-700 pt-6">
                 <h2 class="text-base font-semibold">Fair Usage Policy</h2>
-                <p class="mt-1 text-sm text-zinc-500">Optional soft cap. Instead of cutting users off, throttle them after heavy usage.</p>
+                <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Optional soft cap. Instead of cutting users off, throttle them after heavy usage.</p>
                 <div class="mt-4 grid gap-5 md:grid-cols-2">
                     <flux:field>
                         <flux:label>FUP threshold</flux:label>
@@ -180,7 +180,7 @@
                 </div>
             </section>
 
-            <div class="border-t border-zinc-200 pt-6">
+            <div class="border-t border-zinc-200 dark:border-zinc-700 pt-6">
                 <flux:checkbox wire:model.live="is_active" label="Active and visible on the captive portal" />
             </div>
         </div>
@@ -197,65 +197,65 @@
     <aside class="space-y-4">
         @include('admin.partials.billing-usage', ['usage' => $billingUsage])
 
-        <section class="rounded-lg border border-zinc-200 bg-zinc-950 p-5 text-white">
+        <section class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-950 p-5 text-white">
             <h2 class="text-base font-semibold">Plan Shape</h2>
             <dl class="mt-4 space-y-3 text-sm">
                 <div class="flex justify-between gap-4">
-                    <dt class="text-zinc-400">Visibility</dt>
+                    <dt class="text-zinc-400 dark:text-zinc-500">Visibility</dt>
                     <dd>{{ $is_active ? ($service_type === 'pppoe' ? 'PPPoE ready' : 'Portal ready') : 'Hidden' }}</dd>
                 </div>
                 <div class="flex justify-between gap-4">
-                    <dt class="text-zinc-400">Service</dt>
+                    <dt class="text-zinc-400 dark:text-zinc-500">Service</dt>
                     <dd>{{ ['hotspot' => 'Hotspot', 'pppoe' => 'PPPoE', 'both' => 'Both'][$service_type] ?? 'Hotspot' }}</dd>
                 </div>
                 <div class="flex justify-between gap-4">
-                    <dt class="text-zinc-400">Bandwidth</dt>
+                    <dt class="text-zinc-400 dark:text-zinc-500">Bandwidth</dt>
                     <dd>{{ filled($speed_limit_profile) ? $speed_limit_profile : 'Not set' }}</dd>
                 </div>
                 <div class="flex justify-between gap-4">
-                    <dt class="text-zinc-400">Data mode</dt>
+                    <dt class="text-zinc-400 dark:text-zinc-500">Data mode</dt>
                     <dd>{{ filled($data_limit_bytes) ? 'Hard cap' : 'Unlimited' }}</dd>
                 </div>
                 <div class="flex justify-between gap-4">
-                    <dt class="text-zinc-400">Fair use</dt>
+                    <dt class="text-zinc-400 dark:text-zinc-500">Fair use</dt>
                     <dd>{{ filled($fup_data_threshold_bytes) ? 'Throttle enabled' : 'Off' }}</dd>
                 </div>
             </dl>
         </section>
 
-        <section class="rounded-lg border border-zinc-200 bg-white p-5">
+        <section class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5">
             <h2 class="text-base font-semibold">Example Plans</h2>
-            <div class="mt-4 space-y-3 text-sm text-zinc-600">
-                <div class="rounded-md bg-zinc-50 p-3">
-                    <p class="font-medium text-zinc-950">Daily 5GB</p>
+            <div class="mt-4 space-y-3 text-sm text-zinc-600 dark:text-zinc-400">
+                <div class="rounded-md bg-zinc-50 dark:bg-zinc-800 p-3">
+                    <p class="font-medium text-zinc-950 dark:text-zinc-100">Daily 5GB</p>
                     <p>1 day, 5GB hard cap, 5M/5M speed.</p>
                 </div>
-                <div class="rounded-md bg-zinc-50 p-3">
-                    <p class="font-medium text-zinc-950">PPPoE Home Basic</p>
+                <div class="rounded-md bg-zinc-50 dark:bg-zinc-800 p-3">
+                    <p class="font-medium text-zinc-950 dark:text-zinc-100">PPPoE Home Basic</p>
                     <p>30 days, unlimited data, 5M/10M bandwidth.</p>
                 </div>
-                <div class="rounded-md bg-zinc-50 p-3">
-                    <p class="font-medium text-zinc-950">30-Day Fair Use</p>
+                <div class="rounded-md bg-zinc-50 dark:bg-zinc-800 p-3">
+                    <p class="font-medium text-zinc-950 dark:text-zinc-100">30-Day Fair Use</p>
                     <p>30 days, unlimited data, throttle after 20GB to 1M/1M.</p>
                 </div>
             </div>
         </section>
 
-        <section class="rounded-lg border border-zinc-200 bg-white p-5">
+        <section class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5">
             <h2 class="text-base font-semibold">Byte Cheatsheet</h2>
             <dl class="mt-4 grid grid-cols-2 gap-2 text-sm">
-                <dt class="text-zinc-500">1GB</dt><dd class="font-mono">1073741824</dd>
-                <dt class="text-zinc-500">2GB</dt><dd class="font-mono">2147483648</dd>
-                <dt class="text-zinc-500">5GB</dt><dd class="font-mono">5368709120</dd>
-                <dt class="text-zinc-500">10GB</dt><dd class="font-mono">10737418240</dd>
-                <dt class="text-zinc-500">20GB</dt><dd class="font-mono">21474836480</dd>
+                <dt class="text-zinc-500 dark:text-zinc-400">1GB</dt><dd class="font-mono">1073741824</dd>
+                <dt class="text-zinc-500 dark:text-zinc-400">2GB</dt><dd class="font-mono">2147483648</dd>
+                <dt class="text-zinc-500 dark:text-zinc-400">5GB</dt><dd class="font-mono">5368709120</dd>
+                <dt class="text-zinc-500 dark:text-zinc-400">10GB</dt><dd class="font-mono">10737418240</dd>
+                <dt class="text-zinc-500 dark:text-zinc-400">20GB</dt><dd class="font-mono">21474836480</dd>
             </dl>
         </section>
 
-        <section class="rounded-lg border border-zinc-200 bg-white p-5 text-sm text-zinc-600">
-            <h2 class="text-base font-semibold text-zinc-950">Hard Cap vs FUP</h2>
-            <p class="mt-3"><strong class="text-zinc-950">Hard cap</strong> stops access when the data limit is reached.</p>
-            <p class="mt-2"><strong class="text-zinc-950">FUP</strong> keeps access alive but lowers speed after the threshold.</p>
+        <section class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 text-sm text-zinc-600 dark:text-zinc-400">
+            <h2 class="text-base font-semibold text-zinc-950 dark:text-zinc-100">Hard Cap vs FUP</h2>
+            <p class="mt-3"><strong class="text-zinc-950 dark:text-zinc-100">Hard cap</strong> stops access when the data limit is reached.</p>
+            <p class="mt-2"><strong class="text-zinc-950 dark:text-zinc-100">FUP</strong> keeps access alive but lowers speed after the threshold.</p>
         </section>
     </aside>
 </div>

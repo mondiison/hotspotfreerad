@@ -1,34 +1,34 @@
 @if ($usage)
-    <section class="rounded-lg border {{ $usage['can_create'] ? 'border-zinc-200 bg-white' : 'border-amber-200 bg-amber-50' }} p-5">
+    <section class="rounded-lg border {{ $usage['can_create'] ? 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900' : 'border-amber-200 bg-amber-50' }} p-5">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
-                <p class="text-sm font-medium {{ $usage['can_create'] ? 'text-zinc-500' : 'text-amber-700' }}">Platform allowance</p>
-                <h2 class="mt-1 text-base font-semibold text-zinc-950">{{ $usage['plan_name'] }}</h2>
-                <p class="mt-1 text-sm {{ $usage['can_create'] ? 'text-zinc-500' : 'text-amber-700' }}">{{ $usage['message'] }}</p>
+                <p class="text-sm font-medium {{ $usage['can_create'] ? 'text-zinc-500 dark:text-zinc-400' : 'text-amber-700' }}">Platform allowance</p>
+                <h2 class="mt-1 text-base font-semibold text-zinc-950 dark:text-zinc-100">{{ $usage['plan_name'] }}</h2>
+                <p class="mt-1 text-sm {{ $usage['can_create'] ? 'text-zinc-500 dark:text-zinc-400' : 'text-amber-700' }}">{{ $usage['message'] }}</p>
             </div>
 
-            <span class="w-fit rounded-full {{ $usage['can_create'] ? 'bg-zinc-100 text-zinc-700' : 'bg-amber-100 text-amber-800' }} px-3 py-1 text-sm font-medium">
+            <span class="w-fit rounded-full {{ $usage['can_create'] ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300' : 'bg-amber-100 text-amber-800' }} px-3 py-1 text-sm font-medium">
                 {{ $usage['status'] }}
             </span>
         </div>
 
         <dl class="mt-4 grid gap-3 text-sm sm:grid-cols-3">
             <div class="rounded-md bg-white/70 p-3">
-                <dt class="text-zinc-500">Used</dt>
-                <dd class="mt-1 font-semibold text-zinc-950">{{ number_format($usage['used']) }} {{ $usage['resource_label'] }}</dd>
+                <dt class="text-zinc-500 dark:text-zinc-400">Used</dt>
+                <dd class="mt-1 font-semibold text-zinc-950 dark:text-zinc-100">{{ number_format($usage['used']) }} {{ $usage['resource_label'] }}</dd>
             </div>
             <div class="rounded-md bg-white/70 p-3">
-                <dt class="text-zinc-500">Plan limit</dt>
-                <dd class="mt-1 font-semibold text-zinc-950">{{ $usage['limit_label'] }}</dd>
+                <dt class="text-zinc-500 dark:text-zinc-400">Plan limit</dt>
+                <dd class="mt-1 font-semibold text-zinc-950 dark:text-zinc-100">{{ $usage['limit_label'] }}</dd>
             </div>
             <div class="rounded-md bg-white/70 p-3">
-                <dt class="text-zinc-500">Remaining</dt>
-                <dd class="mt-1 font-semibold text-zinc-950">{{ $usage['remaining_label'] }}</dd>
+                <dt class="text-zinc-500 dark:text-zinc-400">Remaining</dt>
+                <dd class="mt-1 font-semibold text-zinc-950 dark:text-zinc-100">{{ $usage['remaining_label'] }}</dd>
             </div>
         </dl>
 
         @if (! $usage['can_create'])
-        <a href="{{ route('admin.billing.index') }}" wire:navigate class="mt-4 inline-flex rounded-md bg-zinc-950 px-3 py-2 text-sm font-medium text-white">
+        <a href="{{ route('admin.billing.index') }}" wire:navigate class="mt-4 inline-flex rounded-md bg-zinc-950 dark:bg-zinc-100 px-3 py-2 text-sm font-medium text-white dark:text-zinc-900">
                 Manage billing
             </a>
         @endif

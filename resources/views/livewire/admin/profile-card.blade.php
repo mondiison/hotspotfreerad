@@ -1,6 +1,6 @@
-<form wire:submit="save" class="relative max-w-4xl rounded-lg border border-zinc-200 bg-white p-6 shadow-sm">
+<form wire:submit="save" class="relative max-w-4xl rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-6 shadow-sm">
     <div wire:loading.flex wire:target="save,avatar,removeAvatar" class="absolute inset-0 z-10 hidden items-center justify-center rounded-lg bg-white/70 backdrop-blur-[1px]">
-        <div class="rounded-md border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-700 shadow-sm">
+        <div class="rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-4 py-3 text-sm font-medium text-zinc-700 dark:text-zinc-300 shadow-sm">
             Saving profile...
         </div>
     </div>
@@ -16,7 +16,7 @@
             <div class="flex flex-col justify-between gap-3 md:flex-row md:items-start">
                 <div>
                     <h2 class="text-base font-semibold">Account</h2>
-                    <p class="mt-1 text-sm text-zinc-500">Update the name shown across the admin area.</p>
+                    <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Update the name shown across the admin area.</p>
                 </div>
 
                 <flux:badge :color="$user->isSuperAdmin() ? 'blue' : 'green'">
@@ -95,7 +95,7 @@
                         },
                     }"
                     x-init="$watch('capturedPreview', (value, oldValue) => { if (oldValue) URL.revokeObjectURL(oldValue) })"
-                    class="rounded-lg border border-zinc-200 bg-zinc-50 p-4"
+                    class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4"
                 >
                     <div class="mx-auto grid h-28 w-28 place-items-center overflow-hidden rounded-lg bg-zinc-950 text-2xl font-semibold text-white">
                         <template x-if="capturedPreview">
@@ -113,13 +113,13 @@
 
                     <flux:field class="mt-4">
                         <flux:label>Profile photo</flux:label>
-                        <input x-ref="avatarInput" type="file" wire:model="avatar" accept=".jpg,.jpeg,.png,.webp" capture="user" @change="if (! cameraActive) { if (capturedPreview) URL.revokeObjectURL(capturedPreview); capturedPreview = null }" class="block w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700 file:mr-3 file:rounded-md file:border-0 file:bg-zinc-950 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white hover:file:bg-zinc-800">
+                        <input x-ref="avatarInput" type="file" wire:model="avatar" accept=".jpg,.jpeg,.png,.webp" capture="user" @change="if (! cameraActive) { if (capturedPreview) URL.revokeObjectURL(capturedPreview); capturedPreview = null }" class="block w-full rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 file:mr-3 file:rounded-md file:border-0 file:bg-zinc-950 dark:file:bg-zinc-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white dark:file:text-zinc-900 hover:file:bg-zinc-800 dark:hover:file:bg-zinc-200">
                         <flux:description>Upload an image or take a camera photo. JPG, PNG, or WEBP up to 2 MB.</flux:description>
                         <flux:error name="avatar" />
                     </flux:field>
 
                     <div class="mt-3 grid gap-2">
-                        <div x-show="cameraActive" x-cloak class="overflow-hidden rounded-lg border border-zinc-200 bg-black">
+                        <div x-show="cameraActive" x-cloak class="overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 bg-black">
                             <video x-ref="video" playsinline muted class="aspect-square w-full object-cover"></video>
                         </div>
 
@@ -177,10 +177,10 @@
             </div>
         </section>
 
-        <section class="border-t border-zinc-200 pt-6">
+        <section class="border-t border-zinc-200 dark:border-zinc-700 pt-6">
             <div>
                 <h2 class="text-base font-semibold">Password</h2>
-                <p class="mt-1 text-sm text-zinc-500">Leave these fields blank if you are only updating your name.</p>
+                <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Leave these fields blank if you are only updating your name.</p>
             </div>
 
             <div class="mt-5 grid gap-5 md:grid-cols-2">
@@ -205,21 +205,21 @@
             </div>
         </section>
 
-        <section class="border-t border-zinc-200 pt-6">
+        <section class="border-t border-zinc-200 dark:border-zinc-700 pt-6">
             <div class="flex flex-col justify-between gap-3 md:flex-row md:items-center">
                 <div>
                     <h2 class="text-base font-semibold">Notifications</h2>
-                    <p class="mt-1 text-sm text-zinc-500">Router alerts (offline, back online, high CPU/RAM) always show in the notification bell. Email is optional.</p>
+                    <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Router alerts (offline, back online, high CPU/RAM) always show in the notification bell. Email is optional.</p>
                 </div>
                 <flux:switch wire:click="toggleEmailNotifications" :checked="$user->notify_by_email" label="Email me too" />
             </div>
         </section>
 
-        <section class="border-t border-zinc-200 pt-6">
+        <section class="border-t border-zinc-200 dark:border-zinc-700 pt-6">
             <div class="flex flex-col justify-between gap-3 md:flex-row md:items-start">
                 <div>
                     <h2 class="text-base font-semibold">Passkeys</h2>
-                    <p class="mt-1 text-sm text-zinc-500">Use fingerprint, face unlock, Windows Hello, or a hardware security key for quicker passwordless sign-in.</p>
+                    <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Use fingerprint, face unlock, Windows Hello, or a hardware security key for quicker passwordless sign-in.</p>
                 </div>
 
                 <flux:badge :color="$passkeyCount > 0 ? 'emerald' : 'zinc'">
@@ -227,12 +227,12 @@
                 </flux:badge>
             </div>
 
-            <div class="mt-5 rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+            <div class="mt-5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4">
                 <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
                     <div>
-                        <p class="text-sm font-medium text-zinc-900">Trusted device sign-in</p>
-                        <p class="mt-2 text-sm leading-6 text-zinc-600">Passkeys are separate from authenticator 2FA. They make sign-in smoother, while 2FA policy still controls whether admins can open protected dashboard screens.</p>
-                        <p class="mt-2 text-xs leading-5 text-zinc-500">Registration works on localhost during development and on HTTPS domains in production.</p>
+                        <p class="text-sm font-medium text-zinc-900 dark:text-zinc-100">Trusted device sign-in</p>
+                        <p class="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">Passkeys are separate from authenticator 2FA. They make sign-in smoother, while 2FA policy still controls whether admins can open protected dashboard screens.</p>
+                        <p class="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">Registration works on localhost during development and on HTTPS domains in production.</p>
                     </div>
 
                     <flux:button href="{{ route('admin.passkeys.index') }}" wire:navigate variant="outline" icon="key">
@@ -242,11 +242,11 @@
             </div>
         </section>
 
-        <section class="border-t border-zinc-200 pt-6">
+        <section class="border-t border-zinc-200 dark:border-zinc-700 pt-6">
             <div class="flex flex-col justify-between gap-3 md:flex-row md:items-start">
                 <div>
                     <h2 class="text-base font-semibold">Two-Factor Authentication</h2>
-                    <p class="mt-1 text-sm text-zinc-500">Require a one-time code from an authenticator app when signing in.</p>
+                    <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Require a one-time code from an authenticator app when signing in.</p>
                 </div>
 
                 <flux:badge :color="$user->hasTwoFactorEnabled() ? 'emerald' : 'zinc'">
@@ -291,61 +291,61 @@
 
                     <div class="mt-3 grid gap-2 font-mono text-xs sm:grid-cols-2">
                         @foreach ($plainRecoveryCodes as $code)
-                            <span class="rounded border border-amber-200 bg-white px-3 py-2">{{ $code }}</span>
+                            <span class="rounded border border-amber-200 bg-white dark:bg-zinc-900 px-3 py-2">{{ $code }}</span>
                         @endforeach
                     </div>
                 </div>
             @endif
 
             @if ($twoFactorSetupSecret && ! $user->hasTwoFactorEnabled())
-                <div class="mt-5 rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+                <div class="mt-5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4">
                     <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px]">
                         <div>
                             <p class="text-sm font-medium">Add this account to your authenticator app</p>
-                            <p class="mt-2 text-sm leading-6 text-zinc-600">Scan the QR code with Google Authenticator, Authy, Microsoft Authenticator, or 1Password. Use the setup key if the app asks for manual entry.</p>
+                            <p class="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">Scan the QR code with Google Authenticator, Authy, Microsoft Authenticator, or 1Password. Use the setup key if the app asks for manual entry.</p>
 
-                            <div class="mt-4 rounded-md border border-zinc-200 bg-white p-3">
-                                <p class="text-xs font-medium uppercase text-zinc-500">Scan QR code</p>
+                            <div class="mt-4 rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-3">
+                                <p class="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">Scan QR code</p>
                                 <div class="mt-3 flex justify-center">
-                                    <div class="[&_svg]:h-48 [&_svg]:w-48 rounded-md border border-zinc-100 bg-white p-2">
+                                    <div class="[&_svg]:h-48 [&_svg]:w-48 rounded-md border border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-2">
                                         {!! $twoFactorQrCodeSvg !!}
                                     </div>
                                 </div>
                             </div>
 
-                            <div x-data="{ copied: false }" class="mt-4 rounded-md border border-zinc-200 bg-white p-3">
+                            <div x-data="{ copied: false }" class="mt-4 rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-3">
                                 <div class="flex items-center justify-between gap-3">
-                                    <p class="text-xs font-medium uppercase text-zinc-500">Setup key</p>
+                                    <p class="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">Setup key</p>
                                     <button
                                         type="button"
-                                        class="text-xs font-medium text-zinc-600 underline decoration-zinc-300 underline-offset-4 hover:text-zinc-950"
+                                        class="text-xs font-medium text-zinc-600 dark:text-zinc-400 underline decoration-zinc-300 underline-offset-4 hover:text-zinc-950 dark:hover:text-zinc-100"
                                         @click="copied = await window.copyText(@js($twoFactorSetupSecret)); setTimeout(() => copied = false, 1800)"
                                     >
                                         <span x-show="! copied">Copy setup key</span>
                                         <span x-cloak x-show="copied">Copied</span>
                                     </button>
                                 </div>
-                                <p class="mt-2 break-all font-mono text-sm text-zinc-900">{{ $twoFactorSetupSecret }}</p>
+                                <p class="mt-2 break-all font-mono text-sm text-zinc-900 dark:text-zinc-100">{{ $twoFactorSetupSecret }}</p>
                             </div>
 
-                            <div x-data="{ copied: false }" class="mt-3 rounded-md border border-zinc-200 bg-white p-3">
+                            <div x-data="{ copied: false }" class="mt-3 rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-3">
                                 <div class="flex items-center justify-between gap-3">
-                                    <p class="text-xs font-medium uppercase text-zinc-500">Authenticator URI</p>
+                                    <p class="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">Authenticator URI</p>
                                     <button
                                         type="button"
-                                        class="text-xs font-medium text-zinc-600 underline decoration-zinc-300 underline-offset-4 hover:text-zinc-950"
+                                        class="text-xs font-medium text-zinc-600 dark:text-zinc-400 underline decoration-zinc-300 underline-offset-4 hover:text-zinc-950 dark:hover:text-zinc-100"
                                         @click="copied = await window.copyText(@js($twoFactorProvisioningUri)); setTimeout(() => copied = false, 1800)"
                                     >
                                         <span x-show="! copied">Copy URI</span>
                                         <span x-cloak x-show="copied">Copied</span>
                                     </button>
                                 </div>
-                                <p class="mt-2 break-all font-mono text-xs text-zinc-600">{{ $twoFactorProvisioningUri }}</p>
+                                <p class="mt-2 break-all font-mono text-xs text-zinc-600 dark:text-zinc-400">{{ $twoFactorProvisioningUri }}</p>
                             </div>
                         </div>
 
-                        <div class="rounded-md border border-zinc-200 bg-white p-4 text-sm text-zinc-600">
-                            <p class="font-medium text-zinc-900">Then verify</p>
+                        <div class="rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4 text-sm text-zinc-600 dark:text-zinc-400">
+                            <p class="font-medium text-zinc-900 dark:text-zinc-100">Then verify</p>
                             <p class="mt-2">Enter the 6-digit code from the app to finish enabling 2FA.</p>
 
                             <flux:field class="mt-4">
@@ -362,9 +362,9 @@
                 </div>
             @elseif ($user->hasTwoFactorEnabled())
                 <div class="mt-5 grid gap-4 lg:grid-cols-2">
-                    <div class="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+                    <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4">
                         <p class="text-sm font-medium">Recovery codes</p>
-                        <p class="mt-2 text-sm leading-6 text-zinc-600">Use one recovery code if you lose access to your authenticator app. Regenerating codes invalidates the old set.</p>
+                        <p class="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">Use one recovery code if you lose access to your authenticator app. Regenerating codes invalidates the old set.</p>
                         <flux:button type="button" wire:click="regenerateRecoveryCodes" wire:loading.attr="disabled" wire:target="regenerateRecoveryCodes" variant="outline" icon="arrow-path" class="mt-4">
                             Regenerate codes
                         </flux:button>
@@ -384,8 +384,8 @@
                     </div>
                 </div>
             @else
-                <div class="mt-5 rounded-lg border border-zinc-200 bg-zinc-50 p-4">
-                    <p class="text-sm leading-6 text-zinc-600">Recommended for every super admin and tenant admin. Setup takes about one minute and protects the account even if a password is exposed.</p>
+                <div class="mt-5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4">
+                    <p class="text-sm leading-6 text-zinc-600 dark:text-zinc-400">Recommended for every super admin and tenant admin. Setup takes about one minute and protects the account even if a password is exposed.</p>
                     <flux:button type="button" wire:click="startTwoFactorSetup" wire:loading.attr="disabled" wire:target="startTwoFactorSetup" variant="primary" icon="shield-check" class="mt-4">
                         Enable 2FA
                     </flux:button>
@@ -393,11 +393,11 @@
             @endif
         </section>
 
-        <section class="border-t border-zinc-200 pt-6">
+        <section class="border-t border-zinc-200 dark:border-zinc-700 pt-6">
             <div class="flex flex-col justify-between gap-3 md:flex-row md:items-start">
                 <div>
                     <h2 class="text-base font-semibold">Active Sessions</h2>
-                    <p class="mt-1 text-sm text-zinc-500">Review browsers currently signed in to this admin account.</p>
+                    <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Review browsers currently signed in to this admin account.</p>
                 </div>
 
                 <flux:badge color="zinc">
@@ -410,8 +410,8 @@
                     Active session management needs the database session driver. Set SESSION_DRIVER=database to enable it.
                 </div>
             @else
-                <div class="mt-5 overflow-hidden rounded-lg border border-zinc-200">
-                    <div class="divide-y divide-zinc-200 bg-white">
+                <div class="mt-5 overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700">
+                    <div class="divide-y divide-zinc-200 dark:divide-zinc-700 bg-white dark:bg-zinc-900">
                         @forelse ($activeSessions as $session)
                             <div class="flex flex-col justify-between gap-3 p-4 md:flex-row md:items-center">
                                 <div class="min-w-0">
@@ -421,25 +421,25 @@
                                             <flux:badge color="emerald" size="sm">Current session</flux:badge>
                                         @endif
                                     </div>
-                                    <p class="mt-1 text-sm text-zinc-500">{{ $session['ip_address'] }}</p>
-                                    <p class="mt-1 truncate text-xs text-zinc-400">{{ $session['user_agent'] ?: 'No user agent recorded' }}</p>
+                                    <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{{ $session['ip_address'] }}</p>
+                                    <p class="mt-1 truncate text-xs text-zinc-400 dark:text-zinc-500">{{ $session['user_agent'] ?: 'No user agent recorded' }}</p>
                                 </div>
 
-                                <div class="shrink-0 text-sm text-zinc-500">
+                                <div class="shrink-0 text-sm text-zinc-500 dark:text-zinc-400">
                                     {{ $session['last_active']->diffForHumans() }}
                                 </div>
                             </div>
                         @empty
-                            <div class="p-4 text-sm text-zinc-500">
+                            <div class="p-4 text-sm text-zinc-500 dark:text-zinc-400">
                                 No active sessions were found yet.
                             </div>
                         @endforelse
                     </div>
                 </div>
 
-                <div class="mt-5 rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+                <div class="mt-5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4">
                     <p class="text-sm font-medium">Sign out other sessions</p>
-                    <p class="mt-2 text-sm leading-6 text-zinc-600">This keeps your current browser signed in and removes every other active session for this account.</p>
+                    <p class="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">This keeps your current browser signed in and removes every other active session for this account.</p>
 
                     <div class="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
                         <flux:field>
@@ -456,11 +456,11 @@
             @endif
         </section>
 
-        <section class="border-t border-zinc-200 pt-6">
+        <section class="border-t border-zinc-200 dark:border-zinc-700 pt-6">
             <div class="flex flex-col justify-between gap-3 md:flex-row md:items-start">
                 <div>
                     <h2 class="text-base font-semibold">Security Activity</h2>
-                    <p class="mt-1 text-sm text-zinc-500">Recent sign-in and profile security events for this account.</p>
+                    <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Recent sign-in and profile security events for this account.</p>
                 </div>
 
                 <flux:badge color="zinc">
@@ -468,13 +468,13 @@
                 </flux:badge>
             </div>
 
-            <div class="mt-5 overflow-hidden rounded-lg border border-zinc-200 bg-white">
-                <div class="divide-y divide-zinc-200">
+            <div class="mt-5 overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900">
+                <div class="divide-y divide-zinc-200 dark:divide-zinc-700">
                     @forelse ($securityActivities as $activity)
                         <div class="flex flex-col justify-between gap-3 p-4 md:flex-row md:items-start">
                             <div class="min-w-0">
                                 <div class="flex flex-wrap items-center gap-2">
-                                    <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-zinc-100 text-zinc-600">
+                                    <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400">
                                         @if (str_contains($activity->action, 'two_factor'))
                                             <flux:icon.shield-check class="size-4" />
                                         @elseif (str_contains($activity->action, 'passkey'))
@@ -487,19 +487,19 @@
                                     </span>
                                     <div class="min-w-0">
                                         <p class="font-medium">{{ $activity->label }}</p>
-                                        <p class="mt-1 text-sm text-zinc-500">{{ $activity->ip_address ?: 'Unknown IP' }}</p>
+                                        <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{{ $activity->ip_address ?: 'Unknown IP' }}</p>
                                     </div>
                                 </div>
 
-                                <p class="mt-2 truncate text-xs text-zinc-400">{{ $activity->user_agent ?: 'No user agent recorded' }}</p>
+                                <p class="mt-2 truncate text-xs text-zinc-400 dark:text-zinc-500">{{ $activity->user_agent ?: 'No user agent recorded' }}</p>
                             </div>
 
-                            <div class="shrink-0 text-sm text-zinc-500">
+                            <div class="shrink-0 text-sm text-zinc-500 dark:text-zinc-400">
                                 {{ $activity->created_at->diffForHumans() }}
                             </div>
                         </div>
                     @empty
-                        <div class="p-4 text-sm text-zinc-500">
+                        <div class="p-4 text-sm text-zinc-500 dark:text-zinc-400">
                             No security activity has been recorded yet.
                         </div>
                     @endforelse

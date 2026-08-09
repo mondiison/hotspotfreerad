@@ -3,7 +3,7 @@
     :heading="$category->exists ? 'Edit Expense Category' : 'Add Expense Category'"
     subheading="Categories make expense and profit reports easier to understand."
 >
-    <form method="POST" action="{{ $category->exists ? route('admin.expense-categories.update', $category) : route('admin.expense-categories.store') }}" class="max-w-3xl rounded-lg border border-zinc-200 bg-white p-6">
+    <form method="POST" action="{{ $category->exists ? route('admin.expense-categories.update', $category) : route('admin.expense-categories.store') }}" class="max-w-3xl rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-6">
         @csrf
         @if ($category->exists)
             @method('PUT')
@@ -39,7 +39,7 @@
 
             <flux:checkbox name="is_active" value="1" :checked="(bool) old('is_active', $category->is_active ?? true)" label="Active category" />
 
-            <div class="rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-600">
+            <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4 text-sm text-zinc-600 dark:text-zinc-400">
                 @if (auth()->user()->isSuperAdmin())
                     Super admin categories become platform defaults available to every tenant.
                 @else

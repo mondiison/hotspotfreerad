@@ -3,17 +3,17 @@
         @foreach (['Link & radios', 'Roles & mode', 'RF & security', 'Distance & IPs', 'Review & generate'] as $index => $label)
             @php($stepNumber = $index + 1)
             <div class="flex items-center gap-2">
-                <span class="flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold {{ $step >= $stepNumber ? 'bg-zinc-950 text-white' : 'bg-zinc-100 text-zinc-500' }}">{{ $stepNumber }}</span>
-                <span class="hidden text-xs font-medium {{ $step === $stepNumber ? 'text-zinc-950' : 'text-zinc-500' }} md:inline">{{ $label }}</span>
+                <span class="flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold {{ $step >= $stepNumber ? 'bg-zinc-950 text-white' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400' }}">{{ $stepNumber }}</span>
+                <span class="hidden text-xs font-medium {{ $step === $stepNumber ? 'text-zinc-950 dark:text-zinc-100' : 'text-zinc-500 dark:text-zinc-400' }} md:inline">{{ $label }}</span>
             </div>
             @if (! $loop->last)
-                <span class="h-px w-6 bg-zinc-200"></span>
+                <span class="h-px w-6 bg-zinc-200 dark:bg-zinc-700"></span>
             @endif
         @endforeach
     </div>
 
     @if ($step === 1)
-        <div class="space-y-5 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+        <div class="space-y-5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
             <flux:field>
                 <flux:label>Link name</flux:label>
                 <flux:input wire:model.blur="link_name" placeholder="e.g. Tower A to Tower B" />
@@ -22,7 +22,7 @@
             </flux:field>
 
             <div class="grid gap-5 md:grid-cols-2">
-                <div class="space-y-4 rounded-lg border border-zinc-100 p-4">
+                <div class="space-y-4 rounded-lg border border-zinc-100 dark:border-zinc-800 p-4">
                     <flux:heading size="sm">Radio A</flux:heading>
                     <flux:field>
                         <flux:label>Identity</flux:label>
@@ -39,7 +39,7 @@
                     </flux:field>
                 </div>
 
-                <div class="space-y-4 rounded-lg border border-zinc-100 p-4">
+                <div class="space-y-4 rounded-lg border border-zinc-100 dark:border-zinc-800 p-4">
                     <flux:heading size="sm">Radio B</flux:heading>
                     <flux:field>
                         <flux:label>Identity</flux:label>
@@ -64,7 +64,7 @@
     @endif
 
     @if ($step === 2)
-        <div class="space-y-5 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+        <div class="space-y-5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
             <flux:field>
                 <flux:label>Link topology</flux:label>
                 <flux:select wire:model.live="link_topology">
@@ -148,7 +148,7 @@
     @endif
 
     @if ($step === 3)
-        <div class="space-y-5 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+        <div class="space-y-5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
             <div class="grid gap-5 md:grid-cols-2">
                 <flux:field>
                     <flux:label>Frequency (MHz)</flux:label>
@@ -187,7 +187,7 @@
             </div>
 
             <div class="grid gap-5 md:grid-cols-2">
-                <div class="space-y-3 rounded-lg border border-zinc-100 p-4">
+                <div class="space-y-3 rounded-lg border border-zinc-100 dark:border-zinc-800 p-4">
                     <flux:heading size="sm">Radio A RF</flux:heading>
                     <flux:field>
                         <flux:label>Band</flux:label>
@@ -207,7 +207,7 @@
                     </flux:field>
                 </div>
 
-                <div class="space-y-3 rounded-lg border border-zinc-100 p-4">
+                <div class="space-y-3 rounded-lg border border-zinc-100 dark:border-zinc-800 p-4">
                     <flux:heading size="sm">Radio B RF</flux:heading>
                     <flux:field>
                         <flux:label>Band</flux:label>
@@ -278,7 +278,7 @@
     @endif
 
     @if ($step === 4)
-        <div class="space-y-5 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+        <div class="space-y-5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
             <flux:field>
                 <flux:label>Link distance (km)</flux:label>
                 <flux:input type="number" step="0.1" wire:model.blur="distance_km" />
@@ -294,7 +294,7 @@
             </flux:field>
 
             <div class="grid gap-5 md:grid-cols-2">
-                <div class="space-y-3 rounded-lg border border-zinc-100 p-4">
+                <div class="space-y-3 rounded-lg border border-zinc-100 dark:border-zinc-800 p-4">
                     <flux:field>
                         <flux:checkbox wire:model.live="radio_a.add_remote_route" label="Add a route on Radio A to a network behind Radio B" />
                     </flux:field>
@@ -307,7 +307,7 @@
                     @endif
                 </div>
 
-                <div class="space-y-3 rounded-lg border border-zinc-100 p-4">
+                <div class="space-y-3 rounded-lg border border-zinc-100 dark:border-zinc-800 p-4">
                     <flux:field>
                         <flux:checkbox wire:model.live="radio_b.add_remote_route" label="Add a route on Radio B to a network behind Radio A" />
                     </flux:field>
@@ -351,7 +351,7 @@
                             >Download .rsc</flux:button>
                         </div>
                     </div>
-                    <div class="overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
+                    <div class="overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm">
                         <x-script-block>{{ $generatedScripts['script_a'] }}</x-script-block>
                     </div>
                 </div>
@@ -368,13 +368,13 @@
                             >Download .rsc</flux:button>
                         </div>
                     </div>
-                    <div class="overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
+                    <div class="overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm">
                         <x-script-block>{{ $generatedScripts['script_b'] }}</x-script-block>
                     </div>
                 </div>
             </div>
 
-            <p class="text-xs text-zinc-500">Paste each script into a RouterOS terminal (Winbox &gt; New Terminal, or SSH) on the matching radio. Review interface names against your hardware first.</p>
+            <p class="text-xs text-zinc-500 dark:text-zinc-400">Paste each script into a RouterOS terminal (Winbox &gt; New Terminal, or SSH) on the matching radio. Review interface names against your hardware first.</p>
         </div>
     @endif
 </div>

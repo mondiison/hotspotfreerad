@@ -1,6 +1,6 @@
 <div>
     <div class="mb-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-        <p class="text-sm text-zinc-500">Only devices registered here may join the Staff and Management SSIDs, even with the correct Wi-Fi password &mdash; the router's generated script rejects everyone else.</p>
+        <p class="text-sm text-zinc-500 dark:text-zinc-400">Only devices registered here may join the Staff and Management SSIDs, even with the correct Wi-Fi password &mdash; the router's generated script rejects everyone else.</p>
         <div class="flex flex-wrap gap-2">
             <flux:button type="button" wire:click="create" variant="primary" icon="plus" wire:loading.attr="disabled" wire:target="create">
                 Add Device
@@ -14,7 +14,7 @@
         </div>
     @endif
 
-    <section class="grid min-w-0 gap-3 rounded-lg border border-zinc-200 bg-white p-4 [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))] [&>*]:min-w-0">
+    <section class="grid min-w-0 gap-3 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4 [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))] [&>*]:min-w-0">
         <div class="sm:col-span-2 xl:col-span-3">
             <flux:input wire:model.live.debounce.350ms="search" icon="magnifying-glass" placeholder="Search device, MAC, owner, shop" />
         </div>
@@ -32,9 +32,9 @@
         Updating trusted devices...
     </div>
 
-    <div class="mt-6 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 bg-white">
+    <div class="mt-6 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900">
         <table class="min-w-[820px] w-full text-left text-sm">
-            <thead class="border-b border-zinc-200 bg-zinc-50 text-zinc-500">
+            <thead class="border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
                 <tr>
                     <th class="px-4 py-3 font-medium">Device</th>
                     <th class="px-4 py-3 font-medium">Network</th>
@@ -44,24 +44,24 @@
                     <th class="px-4 py-3 text-right font-medium">Actions</th>
                 </tr>
             </thead>
-            <tbody class="divide-y divide-zinc-100">
+            <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
                 @forelse ($devices as $device)
                     @php($isActive = $device->isCurrentlyActive())
                     <tr wire:key="trusted-wifi-device-{{ $device->id }}">
                         <td class="px-4 py-3">
                             <p class="font-medium">{{ $device->device_name }}</p>
-                            <p class="mt-1 font-mono text-xs text-zinc-500">{{ $device->mac_address }}</p>
+                            <p class="mt-1 font-mono text-xs text-zinc-500 dark:text-zinc-400">{{ $device->mac_address }}</p>
                         </td>
                         <td class="px-4 py-3">
                             <flux:badge color="{{ $device->network === 'mgmt' ? 'purple' : 'blue' }}">{{ $device->network === 'mgmt' ? 'Management' : 'Staff' }}</flux:badge>
                         </td>
                         <td class="px-4 py-3">
                             <p>{{ $device->owner_name ?: 'No owner name' }}</p>
-                            <p class="mt-1 text-xs text-zinc-500">{{ $device->notes ?: 'No notes' }}</p>
+                            <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $device->notes ?: 'No notes' }}</p>
                         </td>
                         <td class="px-4 py-3">
                             <p>{{ $device->shop?->name ?? 'Deleted shop' }}</p>
-                            <p class="mt-1 text-xs text-zinc-500">{{ $device->shop?->tenant?->company_name }}</p>
+                            <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $device->shop?->tenant?->company_name }}</p>
                         </td>
                         <td class="px-4 py-3">
                             <flux:badge :color="$isActive ? 'green' : ($device->is_active ? 'amber' : 'zinc')">
@@ -70,7 +70,7 @@
                             @if (! $device->last_provisioned_at)
                                 <flux:badge color="zinc" class="ml-1">Unsynced</flux:badge>
                             @endif
-                            <p class="mt-2 text-xs text-zinc-500">{{ $device->expires_at ? 'Expires '.$device->expires_at->format('M j, Y g:i A') : 'No expiry set' }}</p>
+                            <p class="mt-2 text-xs text-zinc-500 dark:text-zinc-400">{{ $device->expires_at ? 'Expires '.$device->expires_at->format('M j, Y g:i A') : 'No expiry set' }}</p>
                         </td>
                         <td class="px-4 py-3">
                             <div class="flex justify-end gap-2">
@@ -88,7 +88,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="6" class="px-4 py-8 text-center text-zinc-500">No trusted devices registered yet.</td>
+                        <td colspan="6" class="px-4 py-8 text-center text-zinc-500 dark:text-zinc-400">No trusted devices registered yet.</td>
                     </tr>
                 @endforelse
             </tbody>
@@ -160,7 +160,7 @@
                 <flux:checkbox wire:model.live="is_active" label="Active" />
             </div>
 
-            <section class="rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-600">
+            <section class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4 text-sm text-zinc-600 dark:text-zinc-400">
                 This does not replace the Staff/Management Wi-Fi password &mdash; it adds a second check. On the MikroTik built-in Wi-Fi profile, re-open the router's Script page after adding or removing a device so the generated access-list includes the change, then re-run that section on the router. For external APs, configure RADIUS MAC authentication on the AP against the same FreeRADIUS server; see the Wi-Fi access docs for details and current limitations.
             </section>
 
@@ -182,9 +182,9 @@
             </div>
 
             @if ($deletingDevice)
-                <div class="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+                <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4">
                     <p class="font-medium">{{ $deletingDevice->device_name }}</p>
-                    <p class="mt-1 font-mono text-xs text-zinc-500">{{ $deletingDevice->mac_address }}</p>
+                    <p class="mt-1 font-mono text-xs text-zinc-500 dark:text-zinc-400">{{ $deletingDevice->mac_address }}</p>
                 </div>
             @endif
 

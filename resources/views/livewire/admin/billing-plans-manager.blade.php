@@ -21,31 +21,31 @@
 
     <div class="grid gap-4 md:grid-cols-3">
         @foreach ($plans as $plan)
-            <section wire:key="billing-plan-{{ $plan->id }}" class="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+            <section wire:key="billing-plan-{{ $plan->id }}" class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
                 <div class="flex items-start justify-between gap-3">
                     <div>
                         <h2 class="font-semibold">{{ $plan->name }}</h2>
-                        <p class="mt-1 text-sm text-zinc-500">{{ $plan->slug }}</p>
+                        <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{{ $plan->slug }}</p>
                     </div>
                     <flux:badge :color="$plan->is_active ? 'emerald' : 'zinc'" size="sm">{{ $plan->is_active ? 'Active' : 'Hidden' }}</flux:badge>
                 </div>
                 <p class="mt-4 text-2xl font-semibold">{{ $plan->currency }} {{ number_format($plan->monthly_price, 2) }}</p>
-                <dl class="mt-4 grid grid-cols-3 gap-2 text-xs text-zinc-500">
+                <dl class="mt-4 grid grid-cols-3 gap-2 text-xs text-zinc-500 dark:text-zinc-400">
                     <div>
                         <dt>Shops</dt>
-                        <dd class="mt-1 font-medium text-zinc-950">{{ $plan->shop_limit ?? 'Unlimited' }}</dd>
+                        <dd class="mt-1 font-medium text-zinc-950 dark:text-zinc-100">{{ $plan->shop_limit ?? 'Unlimited' }}</dd>
                     </div>
                     <div>
                         <dt>Routers</dt>
-                        <dd class="mt-1 font-medium text-zinc-950">{{ $plan->router_limit ?? 'Unlimited' }}</dd>
+                        <dd class="mt-1 font-medium text-zinc-950 dark:text-zinc-100">{{ $plan->router_limit ?? 'Unlimited' }}</dd>
                     </div>
                     <div>
                         <dt>Plans</dt>
-                        <dd class="mt-1 font-medium text-zinc-950">{{ $plan->package_limit ?? 'Unlimited' }}</dd>
+                        <dd class="mt-1 font-medium text-zinc-950 dark:text-zinc-100">{{ $plan->package_limit ?? 'Unlimited' }}</dd>
                     </div>
                 </dl>
                 @if ($plan->features)
-                    <ul class="mt-4 space-y-1 text-sm text-zinc-600">
+                    <ul class="mt-4 space-y-1 text-sm text-zinc-600 dark:text-zinc-400">
                         @foreach ($plan->features as $feature)
                             <li>{{ $feature }}</li>
                         @endforeach
@@ -93,9 +93,9 @@
                         <flux:error name="currency" />
                     </flux:field>
 
-                    <section class="rounded-lg border border-zinc-200 bg-zinc-50 p-4 md:col-span-2">
-                        <h2 class="text-sm font-semibold text-zinc-950">Usage limits</h2>
-                        <p class="mt-1 text-sm leading-6 text-zinc-600">Leave a limit empty for unlimited. Example: Starter might allow 1 shop and 1 router, while Growth can allow 5 shops and 10 routers.</p>
+                    <section class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4 md:col-span-2">
+                        <h2 class="text-sm font-semibold text-zinc-950 dark:text-zinc-100">Usage limits</h2>
+                        <p class="mt-1 text-sm leading-6 text-zinc-600 dark:text-zinc-400">Leave a limit empty for unlimited. Example: Starter might allow 1 shop and 1 router, while Growth can allow 5 shops and 10 routers.</p>
 
                         <div class="mt-4 grid gap-5 md:grid-cols-3">
                             <flux:field>
@@ -130,9 +130,9 @@
                     </div>
                 </div>
 
-                <div class="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
-                    <h2 class="text-sm font-semibold text-zinc-950">Plan guide</h2>
-                    <p class="mt-1 text-sm leading-6 text-zinc-600">
+                <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4">
+                    <h2 class="text-sm font-semibold text-zinc-950 dark:text-zinc-100">Plan guide</h2>
+                    <p class="mt-1 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
                         Active plans can be purchased by tenants. Hidden plans remain available for existing subscriptions but are not offered as new choices.
                     </p>
                 </div>
@@ -156,9 +156,9 @@
             </div>
 
             @if ($deletingPlan)
-                <div class="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+                <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4">
                     <p class="font-medium">{{ $deletingPlan->name }}</p>
-                    <p class="mt-1 text-sm text-zinc-500">{{ $deletingPlan->currency }} {{ number_format($deletingPlan->monthly_price, 2) }} / month</p>
+                    <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{{ $deletingPlan->currency }} {{ number_format($deletingPlan->monthly_price, 2) }} / month</p>
                 </div>
             @endif
 

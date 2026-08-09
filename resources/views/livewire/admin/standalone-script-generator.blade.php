@@ -12,17 +12,17 @@
             @foreach (['Router basics', 'Management network', 'Hotspot & profiles', 'Voucher template', 'Review & generate'] as $index => $label)
                 @php($stepNumber = $index + 1)
                 <div class="flex items-center gap-2">
-                    <span class="flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold {{ $step >= $stepNumber ? 'bg-zinc-950 text-white' : 'bg-zinc-100 text-zinc-500' }}">{{ $stepNumber }}</span>
-                    <span class="hidden text-xs font-medium {{ $step === $stepNumber ? 'text-zinc-950' : 'text-zinc-500' }} md:inline">{{ $label }}</span>
+                    <span class="flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold {{ $step >= $stepNumber ? 'bg-zinc-950 text-white' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400' }}">{{ $stepNumber }}</span>
+                    <span class="hidden text-xs font-medium {{ $step === $stepNumber ? 'text-zinc-950 dark:text-zinc-100' : 'text-zinc-500 dark:text-zinc-400' }} md:inline">{{ $label }}</span>
                 </div>
                 @if (! $loop->last)
-                    <span class="h-px w-6 bg-zinc-200"></span>
+                    <span class="h-px w-6 bg-zinc-200 dark:bg-zinc-700"></span>
                 @endif
             @endforeach
         </div>
 
         @if ($step === 1)
-            <div class="space-y-5 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+            <div class="space-y-5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
                 <div class="grid gap-5 md:grid-cols-2">
                     <flux:field>
                         <flux:label>Router identity</flux:label>
@@ -86,7 +86,7 @@
         @endif
 
         @if ($step === 2)
-            <div class="space-y-5 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+            <div class="space-y-5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
                 <flux:field>
                     <flux:checkbox wire:model.live="enable_mgmt_network" label="Add an isolated management network" />
                     <flux:description>A separate network for administering the router, kept off-limits to hotspot customers.</flux:description>
@@ -108,7 +108,7 @@
                             <flux:error name="mgmt_password" />
                         </flux:field>
                     @else
-                        <div class="rounded-md border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-600">
+                        <div class="rounded-md border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-3 text-sm text-zinc-600 dark:text-zinc-400">
                             This router has no built-in wireless, so the management network needs its own wired port -- wire a dedicated cable to it rather than sharing a hotspot LAN port.
                         </div>
                     @endif
@@ -122,7 +122,7 @@
         @endif
 
         @if ($step === 3)
-            <div class="space-y-5 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+            <div class="space-y-5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
                 <flux:field>
                     <flux:label>Hotspot network</flux:label>
                     <flux:input wire:model.blur="hotspot_network" placeholder="10.10.10.1/24" />
@@ -139,7 +139,7 @@
 
                     <div class="space-y-4">
                         @foreach ($profiles as $index => $profile)
-                            <div class="rounded-lg border border-zinc-200 p-4" wire:key="profile-{{ $index }}">
+                            <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 p-4" wire:key="profile-{{ $index }}">
                                 <div class="grid gap-3 md:grid-cols-6">
                                     <flux:field class="md:col-span-2">
                                         <flux:label size="sm">Name</flux:label>
@@ -216,7 +216,7 @@
         @endif
 
         @if ($step === 4)
-            <div class="space-y-5 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+            <div class="space-y-5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
                 <flux:label>Voucher print template</flux:label>
                 <flux:error name="voucher_template" />
 
@@ -224,26 +224,26 @@
                     <button
                         type="button"
                         wire:click="$set('voucher_template', 'grid')"
-                        class="rounded-lg border p-4 text-left {{ $voucher_template === 'grid' ? 'border-zinc-950 bg-zinc-50 ring-2 ring-zinc-950/10' : 'border-zinc-200 hover:border-zinc-400' }}"
+                        class="rounded-lg border p-4 text-left {{ $voucher_template === 'grid' ? 'border-zinc-950 dark:border-zinc-100 bg-zinc-50 dark:bg-zinc-800 ring-2 ring-zinc-950/10 dark:ring-zinc-100/10' : 'border-zinc-200 dark:border-zinc-700 hover:border-zinc-400 dark:hover:border-zinc-500' }}"
                     >
-                        <p class="text-sm font-semibold text-zinc-950">Card grid</p>
-                        <p class="mt-1 text-xs leading-5 text-zinc-500">Dashed-border cards, 3 per row -- good for cutting apart with scissors.</p>
+                        <p class="text-sm font-semibold text-zinc-950 dark:text-zinc-100">Card grid</p>
+                        <p class="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">Dashed-border cards, 3 per row -- good for cutting apart with scissors.</p>
                     </button>
                     <button
                         type="button"
                         wire:click="$set('voucher_template', 'compact')"
-                        class="rounded-lg border p-4 text-left {{ $voucher_template === 'compact' ? 'border-zinc-950 bg-zinc-50 ring-2 ring-zinc-950/10' : 'border-zinc-200 hover:border-zinc-400' }}"
+                        class="rounded-lg border p-4 text-left {{ $voucher_template === 'compact' ? 'border-zinc-950 dark:border-zinc-100 bg-zinc-50 dark:bg-zinc-800 ring-2 ring-zinc-950/10 dark:ring-zinc-100/10' : 'border-zinc-200 dark:border-zinc-700 hover:border-zinc-400 dark:hover:border-zinc-500' }}"
                     >
-                        <p class="text-sm font-semibold text-zinc-950">Compact grid</p>
-                        <p class="mt-1 text-xs leading-5 text-zinc-500">Minimal text, 6 per row -- fits far more vouchers per sheet to cut printing cost.</p>
+                        <p class="text-sm font-semibold text-zinc-950 dark:text-zinc-100">Compact grid</p>
+                        <p class="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">Minimal text, 6 per row -- fits far more vouchers per sheet to cut printing cost.</p>
                     </button>
                     <button
                         type="button"
                         wire:click="$set('voucher_template', 'receipt')"
-                        class="rounded-lg border p-4 text-left {{ $voucher_template === 'receipt' ? 'border-zinc-950 bg-zinc-50 ring-2 ring-zinc-950/10' : 'border-zinc-200 hover:border-zinc-400' }}"
+                        class="rounded-lg border p-4 text-left {{ $voucher_template === 'receipt' ? 'border-zinc-950 dark:border-zinc-100 bg-zinc-50 dark:bg-zinc-800 ring-2 ring-zinc-950/10 dark:ring-zinc-100/10' : 'border-zinc-200 dark:border-zinc-700 hover:border-zinc-400 dark:hover:border-zinc-500' }}"
                     >
-                        <p class="text-sm font-semibold text-zinc-950">Receipt / narrow strip</p>
-                        <p class="mt-1 text-xs leading-5 text-zinc-500">One code per strip, large text -- good for 58-80mm thermal receipt printers.</p>
+                        <p class="text-sm font-semibold text-zinc-950 dark:text-zinc-100">Receipt / narrow strip</p>
+                        <p class="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">One code per strip, large text -- good for 58-80mm thermal receipt printers.</p>
                     </button>
                 </div>
 
@@ -279,10 +279,10 @@
                             >Download .rsc</flux:button>
                         </div>
                     </div>
-                    <div class="overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
+                    <div class="overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm">
                         <x-script-block>{{ $generatedScript }}</x-script-block>
                     </div>
-                    <p class="mt-2 text-xs text-zinc-500">Paste this into a RouterOS terminal (Winbox &gt; New Terminal, or SSH) on a fresh or lightly-configured router. Review port names against your hardware first.</p>
+                    <p class="mt-2 text-xs text-zinc-500 dark:text-zinc-400">Paste this into a RouterOS terminal (Winbox &gt; New Terminal, or SSH) on a fresh or lightly-configured router. Review port names against your hardware first.</p>
                 </div>
 
                 @if ($generatedVouchers !== [])
@@ -291,7 +291,7 @@
                             <flux:label>{{ count($generatedVouchers) }} voucher {{ \Illuminate\Support\Str::plural('code', count($generatedVouchers)) }}</flux:label>
                             <flux:button type="button" size="sm" variant="primary" icon="printer" x-data @click="window.print()">Print vouchers</flux:button>
                         </div>
-                        <p class="text-xs text-zinc-500">Each voucher above is also created as a local hotspot user on the router with the username and password shown on the printable sheet.</p>
+                        <p class="text-xs text-zinc-500 dark:text-zinc-400">Each voucher above is also created as a local hotspot user on the router with the username and password shown on the printable sheet.</p>
                     </div>
                 @endif
             </div>

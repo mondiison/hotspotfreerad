@@ -24,12 +24,12 @@
         <label for="{{ $fieldId }}" class="block text-sm font-medium">{{ $label }}</label>
     @endif
 
-    <div class="flex overflow-hidden rounded-md border border-zinc-300 bg-white">
+    <div class="flex overflow-hidden rounded-md border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-900">
         <input
             id="{{ $fieldId }}"
             type="color"
             value="{{ $currentValue }}"
-            class="h-10 w-14 border-0 bg-white p-1"
+            class="h-10 w-14 border-0 bg-white dark:bg-zinc-900 p-1"
             data-color-picker-swatch
             aria-label="{{ $label ?? 'Color picker' }}"
         >
@@ -44,7 +44,7 @@
             @required($attributes->has('required'))
         >
         @if ($copyable)
-            <button type="button" class="border-l border-zinc-200 px-3 text-sm font-medium text-zinc-600 hover:bg-zinc-50" data-color-picker-copy>
+            <button type="button" class="border-l border-zinc-200 dark:border-zinc-700 px-3 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800" data-color-picker-copy>
                 Copy
             </button>
         @endif
@@ -55,7 +55,7 @@
             @foreach ($swatches as $swatch)
                 <button
                     type="button"
-                    class="h-7 w-7 rounded-md border border-zinc-200 ring-offset-2 hover:ring-2 hover:ring-zinc-300"
+                    class="h-7 w-7 rounded-md border border-zinc-200 dark:border-zinc-700 ring-offset-2 hover:ring-2 hover:ring-zinc-300 dark:hover:ring-zinc-600"
                     style="background-color: {{ $swatch }}"
                     data-color-picker-preset="{{ $swatch }}"
                     aria-label="Use {{ $swatch }}"

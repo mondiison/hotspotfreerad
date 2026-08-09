@@ -17,7 +17,7 @@
 
     <div class="mb-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <div>
-            <p class="text-sm text-zinc-500">Create fixed subscriber credentials for PPPoE CPE, ONT, or customer routers.</p>
+            <p class="text-sm text-zinc-500 dark:text-zinc-400">Create fixed subscriber credentials for PPPoE CPE, ONT, or customer routers.</p>
         </div>
         <div class="flex flex-wrap gap-2">
             <flux:button href="{{ route('admin.packages.index', ['service' => 'pppoe_capable']) }}" wire:navigate variant="outline" icon="radio">
@@ -56,16 +56,16 @@
                 wire:click="$set('status', '{{ $stat['key'] }}')"
                 wire:loading.attr="disabled"
                 wire:target="status"
-                class="rounded-lg border px-4 py-3 text-left shadow-sm transition hover:border-zinc-400 {{ $status === $stat['key'] ? 'border-zinc-950 bg-zinc-950 text-white' : 'border-zinc-200 bg-white text-zinc-950' }}"
+                class="rounded-lg border px-4 py-3 text-left shadow-sm transition hover:border-zinc-400 dark:hover:border-zinc-500 {{ $status === $stat['key'] ? 'border-zinc-950 bg-zinc-950 text-white dark:border-zinc-700 dark:bg-zinc-800' : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-950 dark:text-zinc-100' }}"
             >
-                <span class="block text-xs font-medium uppercase {{ $status === $stat['key'] ? 'text-zinc-300' : 'text-zinc-500' }}">{{ $stat['label'] }}</span>
+                <span class="block text-xs font-medium uppercase {{ $status === $stat['key'] ? 'text-zinc-300 dark:text-zinc-600' : 'text-zinc-500 dark:text-zinc-400' }}">{{ $stat['label'] }}</span>
                 <span class="mt-2 block text-2xl font-semibold">{{ number_format($stat['value']) }}</span>
-                <span class="mt-1 block text-xs {{ $status === $stat['key'] ? 'text-zinc-300' : 'text-zinc-500' }}">{{ $stat['hint'] }}</span>
+                <span class="mt-1 block text-xs {{ $status === $stat['key'] ? 'text-zinc-300 dark:text-zinc-600' : 'text-zinc-500 dark:text-zinc-400' }}">{{ $stat['hint'] }}</span>
             </button>
         @endforeach
     </section>
 
-    <section class="grid min-w-0 gap-3 rounded-lg border border-zinc-200 bg-white p-4 [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))] [&>*]:min-w-0">
+    <section class="grid min-w-0 gap-3 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4 [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))] [&>*]:min-w-0">
         <div class="sm:col-span-2 xl:col-span-3">
             <flux:input wire:model.live.debounce.350ms="search" icon="magnifying-glass" placeholder="Search username, name, phone, email, shop" />
         </div>
@@ -90,9 +90,9 @@
         Loading PPPoE activity...
     </div>
 
-    <div class="mt-6 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 bg-white">
+    <div class="mt-6 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900">
         <table class="min-w-[1120px] w-full text-left text-sm">
-            <thead class="border-b border-zinc-200 bg-zinc-50 text-zinc-500">
+            <thead class="border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
                 <tr>
                     <th class="px-4 py-3 font-medium">Customer</th>
                     <th class="px-4 py-3 font-medium">Credentials</th>
@@ -103,7 +103,7 @@
                     <th class="px-4 py-3 text-right font-medium">Actions</th>
                 </tr>
             </thead>
-            <tbody class="divide-y divide-zinc-100">
+            <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
                 @forelse ($subscribers as $subscriber)
                     @php
                         $isActive = $subscriber->isCurrentlyActive();
@@ -112,19 +112,19 @@
                     <tr wire:key="pppoe-subscriber-{{ $subscriber->id }}">
                         <td class="px-4 py-3">
                             <p class="font-medium">{{ $subscriber->full_name ?: 'Unnamed customer' }}</p>
-                            <p class="mt-1 text-xs text-zinc-500">{{ $subscriber->phone ?: 'No phone' }}{{ $subscriber->email ? ' - '.$subscriber->email : '' }}</p>
+                            <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $subscriber->phone ?: 'No phone' }}{{ $subscriber->email ? ' - '.$subscriber->email : '' }}</p>
                         </td>
                         <td class="px-4 py-3">
                             <p class="font-mono text-xs font-medium">{{ $subscriber->username }}</p>
-                            <p class="mt-1 text-xs text-zinc-500">Password hidden. Edit to reset.</p>
+                            <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Password hidden. Edit to reset.</p>
                         </td>
                         <td class="px-4 py-3">
                             <p class="font-medium">{{ $subscriber->package?->name ?? 'Deleted package' }}</p>
-                            <p class="mt-1 text-xs text-zinc-500">{{ $subscriber->package?->speed_limit_profile ?: 'No speed profile' }}</p>
+                            <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $subscriber->package?->speed_limit_profile ?: 'No speed profile' }}</p>
                         </td>
                         <td class="px-4 py-3">
                             <p>{{ $subscriber->shop?->name ?? 'Deleted shop' }}</p>
-                            <p class="mt-1 text-xs text-zinc-500">{{ $subscriber->shop?->tenant?->company_name }}</p>
+                            <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $subscriber->shop?->tenant?->company_name }}</p>
                         </td>
                         <td class="px-4 py-3">
                             <flux:badge :color="$isActive ? 'green' : ($subscriber->is_active ? 'amber' : 'zinc')">
@@ -136,24 +136,24 @@
                             @if (! $subscriber->last_provisioned_at)
                                 <flux:badge color="zinc" class="ml-1">Unsynced</flux:badge>
                             @endif
-                            <p class="mt-2 text-xs text-zinc-500">
+                            <p class="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
                                 {{ $subscriber->expires_at ? 'Expires '.$subscriber->expires_at->format('M j, Y g:i A') : 'No expiry set' }}
                             </p>
-                            <p class="mt-1 text-xs text-zinc-400">
+                            <p class="mt-1 text-xs text-zinc-400 dark:text-zinc-500">
                                 {{ $subscriber->last_provisioned_at ? 'Synced '.$subscriber->last_provisioned_at->diffForHumans() : 'Not synced yet' }}
                             </p>
                         </td>
                         <td class="px-4 py-3 text-right">
                             @if ($usage['available'])
                                 <p class="font-medium">{{ $formatBytes($usage['total_bytes']) }}</p>
-                                <p class="mt-1 text-xs text-zinc-500">Down {{ $formatBytes($usage['download_bytes']) }}</p>
-                                <p class="mt-1 text-xs text-zinc-500">Up {{ $formatBytes($usage['upload_bytes']) }}</p>
-                                <p class="mt-1 text-xs text-zinc-400">
+                                <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Down {{ $formatBytes($usage['download_bytes']) }}</p>
+                                <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Up {{ $formatBytes($usage['upload_bytes']) }}</p>
+                                <p class="mt-1 text-xs text-zinc-400 dark:text-zinc-500">
                                     {{ number_format($usage['open_session_count']) }} online /
                                     {{ number_format($usage['session_count']) }} total
                                 </p>
                             @else
-                                <p class="text-xs text-zinc-500">Accounting unavailable</p>
+                                <p class="text-xs text-zinc-500 dark:text-zinc-400">Accounting unavailable</p>
                             @endif
                         </td>
                         <td class="px-4 py-3">
@@ -177,7 +177,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="7" class="px-4 py-8 text-center text-zinc-500">No PPPoE customers found.</td>
+                        <td colspan="7" class="px-4 py-8 text-center text-zinc-500 dark:text-zinc-400">No PPPoE customers found.</td>
                     </tr>
                 @endforelse
             </tbody>
@@ -286,7 +286,7 @@
                 <div class="flex flex-col justify-between gap-3 md:flex-row md:items-start">
                     <div>
                         <flux:heading level="2" size="lg">PPPoE Activity</flux:heading>
-                        <flux:text class="mt-2 text-sm text-zinc-500">
+                        <flux:text class="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
                             {{ $selectedSubscriber->username }} on {{ $selectedSubscriber->shop?->name ?? 'Deleted shop' }}
                         </flux:text>
                     </div>
@@ -304,31 +304,31 @@
                         ['label' => 'Online sessions', 'value' => number_format($usage['open_session_count'])],
                         ['label' => 'Total sessions', 'value' => number_format($usage['session_count'])],
                     ] as $stat)
-                        <div class="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
-                            <p class="text-xs font-medium uppercase text-zinc-500">{{ $stat['label'] }}</p>
+                        <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4">
+                            <p class="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">{{ $stat['label'] }}</p>
                             <p class="mt-2 text-xl font-semibold">{{ $stat['value'] }}</p>
                         </div>
                     @endforeach
                 </section>
 
-                <section class="grid gap-3 rounded-lg border border-zinc-200 bg-white p-4 text-sm md:grid-cols-2">
+                <section class="grid gap-3 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4 text-sm md:grid-cols-2">
                     <div>
-                        <p class="text-xs font-medium uppercase text-zinc-500">Customer</p>
+                        <p class="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">Customer</p>
                         <p class="mt-1 font-medium">{{ $selectedSubscriber->full_name ?: 'Unnamed customer' }}</p>
-                        <p class="mt-1 text-xs text-zinc-500">{{ $selectedSubscriber->phone ?: 'No phone' }}{{ $selectedSubscriber->email ? ' - '.$selectedSubscriber->email : '' }}</p>
+                        <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $selectedSubscriber->phone ?: 'No phone' }}{{ $selectedSubscriber->email ? ' - '.$selectedSubscriber->email : '' }}</p>
                     </div>
                     <div>
-                        <p class="text-xs font-medium uppercase text-zinc-500">Credentials</p>
+                        <p class="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">Credentials</p>
                         <p class="mt-1 font-mono text-xs font-medium">{{ $selectedSubscriber->username }}</p>
-                        <p class="mt-1 text-xs text-zinc-500">Password is hidden. Edit this customer to reset it.</p>
+                        <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Password is hidden. Edit this customer to reset it.</p>
                     </div>
                     <div>
-                        <p class="text-xs font-medium uppercase text-zinc-500">Package</p>
+                        <p class="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">Package</p>
                         <p class="mt-1 font-medium">{{ $selectedSubscriber->package?->name ?? 'Deleted package' }}</p>
-                        <p class="mt-1 text-xs text-zinc-500">{{ $selectedSubscriber->package?->speed_limit_profile ?: 'No bandwidth profile' }}</p>
+                        <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $selectedSubscriber->package?->speed_limit_profile ?: 'No bandwidth profile' }}</p>
                     </div>
                     <div>
-                        <p class="text-xs font-medium uppercase text-zinc-500">Access window</p>
+                        <p class="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">Access window</p>
                         <p class="mt-1 font-medium">
                             {{ $selectedSubscriber->starts_at ? $selectedSubscriber->starts_at->format('M j, Y g:i A') : 'No start' }}
                             -
@@ -336,24 +336,24 @@
                         </p>
                     </div>
                     <div>
-                        <p class="text-xs font-medium uppercase text-zinc-500">Last seen</p>
+                        <p class="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">Last seen</p>
                         <p class="mt-1 font-medium">{{ $usage['last_seen_at'] ? $usage['last_seen_at']->format('M j, Y g:i A') : 'No accounting yet' }}</p>
                     </div>
                     <div>
-                        <p class="text-xs font-medium uppercase text-zinc-500">Tenant</p>
+                        <p class="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">Tenant</p>
                         <p class="mt-1 font-medium">{{ $selectedSubscriber->shop?->tenant?->company_name ?? 'Unknown tenant' }}</p>
                     </div>
                 </section>
 
-                <section class="overflow-hidden rounded-lg border border-zinc-200 bg-white">
-                    <div class="border-b border-zinc-200 bg-zinc-50 px-4 py-3">
+                <section class="overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900">
+                    <div class="border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-4 py-3">
                         <h3 class="font-semibold">RADIUS accounting sessions</h3>
-                        <p class="mt-1 text-xs text-zinc-500">These are the latest FreeRADIUS records for this PPPoE username.</p>
+                        <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">These are the latest FreeRADIUS records for this PPPoE username.</p>
                     </div>
 
                     <div class="overflow-x-auto overflow-y-hidden">
                         <table class="min-w-[760px] w-full text-left text-sm">
-                            <thead class="border-b border-zinc-200 text-zinc-500">
+                            <thead class="border-b border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400">
                                 <tr>
                                     <th class="px-4 py-3 font-medium">Session</th>
                                     <th class="px-4 py-3 font-medium">Router / IP</th>
@@ -363,36 +363,36 @@
                                     <th class="px-4 py-3 font-medium">End reason</th>
                                 </tr>
                             </thead>
-                            <tbody class="divide-y divide-zinc-100">
+                            <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
                                 @forelse ($sessions as $session)
                                     <tr>
                                         <td class="px-4 py-3">
                                             <p class="font-mono text-xs font-medium">{{ $session->acctsessionid }}</p>
-                                            <p class="mt-1 font-mono text-xs text-zinc-500">{{ $session->acctuniqueid }}</p>
+                                            <p class="mt-1 font-mono text-xs text-zinc-500 dark:text-zinc-400">{{ $session->acctuniqueid }}</p>
                                         </td>
                                         <td class="px-4 py-3">
                                             <p class="font-mono text-xs">{{ $session->nasipaddress ?: 'Unknown NAS' }}</p>
-                                            <p class="mt-1 font-mono text-xs text-zinc-500">{{ $session->framedipaddress ?: 'No framed IP' }}</p>
+                                            <p class="mt-1 font-mono text-xs text-zinc-500 dark:text-zinc-400">{{ $session->framedipaddress ?: 'No framed IP' }}</p>
                                         </td>
-                                        <td class="px-4 py-3 text-zinc-600">
+                                        <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">
                                             {{ $session->acctstarttime ? \Illuminate\Support\Carbon::parse($session->acctstarttime)->format('M j, Y g:i A') : 'Unknown' }}
                                         </td>
-                                        <td class="px-4 py-3 text-zinc-600">
+                                        <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">
                                             <p>{{ $session->acctupdatetime ? \Illuminate\Support\Carbon::parse($session->acctupdatetime)->format('M j, Y g:i A') : 'No update' }}</p>
-                                            <p class="mt-1 text-xs text-zinc-500">{{ $session->acctstoptime ? 'Stopped '.\Illuminate\Support\Carbon::parse($session->acctstoptime)->format('M j, Y g:i A') : 'Still online / no stop' }}</p>
+                                            <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $session->acctstoptime ? 'Stopped '.\Illuminate\Support\Carbon::parse($session->acctstoptime)->format('M j, Y g:i A') : 'Still online / no stop' }}</p>
                                         </td>
                                         <td class="px-4 py-3 text-right">
                                             <p class="font-medium">{{ $formatBytes($session->total_bytes) }}</p>
-                                            <p class="mt-1 text-xs text-zinc-500">Down {{ $formatBytes($session->download_bytes) }}</p>
-                                            <p class="mt-1 text-xs text-zinc-500">Up {{ $formatBytes($session->upload_bytes) }}</p>
+                                            <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Down {{ $formatBytes($session->download_bytes) }}</p>
+                                            <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Up {{ $formatBytes($session->upload_bytes) }}</p>
                                         </td>
-                                        <td class="px-4 py-3 text-zinc-600">
+                                        <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">
                                             {{ $session->acctterminatecause ?: 'Not stopped' }}
                                         </td>
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="6" class="px-4 py-8 text-center text-zinc-500">
+                                        <td colspan="6" class="px-4 py-8 text-center text-zinc-500 dark:text-zinc-400">
                                             No RADIUS accounting sessions were found for this PPPoE username.
                                         </td>
                                     </tr>
@@ -439,7 +439,7 @@
                 <div class="flex flex-col justify-between gap-3 md:flex-row md:items-start">
                     <div>
                         <flux:heading level="2" size="lg">Customer Setup Note</flux:heading>
-                        <flux:text class="mt-2 text-sm text-zinc-500">
+                        <flux:text class="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
                             Share these PPPoE settings with the installer or enter them on the customer CPE/ONT.
                         </flux:text>
                     </div>
@@ -448,29 +448,29 @@
                     </flux:badge>
                 </div>
 
-                <section class="grid gap-3 rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-sm md:grid-cols-2">
+                <section class="grid gap-3 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4 text-sm md:grid-cols-2">
                     <div>
-                        <p class="text-xs font-medium uppercase text-zinc-500">WAN type</p>
+                        <p class="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">WAN type</p>
                         <p class="mt-1 font-semibold">PPPoE</p>
                     </div>
                     <div>
-                        <p class="text-xs font-medium uppercase text-zinc-500">Service name</p>
+                        <p class="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">Service name</p>
                         <p class="mt-1 font-semibold">Leave blank unless required</p>
                     </div>
                     <div>
-                        <p class="text-xs font-medium uppercase text-zinc-500">Username</p>
+                        <p class="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">Username</p>
                         <p class="mt-1 font-mono text-sm font-semibold">{{ $setupNoteSubscriber->username }}</p>
                     </div>
                     <div>
-                        <p class="text-xs font-medium uppercase text-zinc-500">Password</p>
+                        <p class="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">Password</p>
                         <p class="mt-1 font-mono text-sm font-semibold">{{ $setupNoteSubscriber->password }}</p>
                     </div>
                     <div>
-                        <p class="text-xs font-medium uppercase text-zinc-500">IP/DNS mode</p>
+                        <p class="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">IP/DNS mode</p>
                         <p class="mt-1 font-semibold">Automatic</p>
                     </div>
                     <div>
-                        <p class="text-xs font-medium uppercase text-zinc-500">Package</p>
+                        <p class="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">Package</p>
                         <p class="mt-1 font-semibold">{{ $setupNoteSubscriber->package?->name ?? 'Deleted package' }}</p>
                     </div>
                 </section>
@@ -480,7 +480,7 @@
                     <textarea
                         readonly
                         rows="12"
-                        class="w-full rounded-lg border border-zinc-200 bg-white px-3 py-3 font-mono text-xs leading-5 text-zinc-800 shadow-sm focus:border-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-200"
+                        class="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-3 font-mono text-xs leading-5 text-zinc-800 dark:text-zinc-200 shadow-sm focus:border-zinc-400 dark:focus:border-zinc-500 focus:outline-none focus:ring-2 focus:ring-zinc-200 dark:focus:ring-zinc-700"
                     >{{ $setupText }}</textarea>
                     <flux:description>Use this for MikroTik CPE, TP-Link, Huawei ONT, FiberHome, Ubiquiti, or any router with PPPoE client mode.</flux:description>
                 </flux:field>

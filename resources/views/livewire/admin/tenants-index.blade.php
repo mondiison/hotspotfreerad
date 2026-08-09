@@ -19,7 +19,7 @@
         </flux:button>
     </div>
 
-    <section class="mb-4 rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
+    <section class="mb-4 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4 shadow-sm">
         <div class="grid min-w-0 gap-3 [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))] [&>*]:min-w-0">
             <div class="sm:col-span-2 xl:col-span-3">
                 <flux:input wire:model.live.debounce.350ms="search" icon="magnifying-glass" placeholder="Search company, slug, or owner email" />
@@ -47,10 +47,10 @@
     </section>
 
     <section class="mb-4 grid gap-4 md:grid-cols-3">
-        <button type="button" wire:click="$set('two_factor_status', 'required')" class="rounded-lg border border-zinc-200 bg-white p-4 text-left shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50">
-            <span class="text-xs font-semibold uppercase text-zinc-500">2FA policy</span>
-            <span class="mt-2 block text-2xl font-semibold text-zinc-950">{{ number_format($securitySummary['required']) }}</span>
-            <span class="mt-1 block text-sm text-zinc-500">Tenants requiring owner 2FA</span>
+        <button type="button" wire:click="$set('two_factor_status', 'required')" class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4 text-left shadow-sm transition hover:border-zinc-300 dark:hover:border-zinc-600 hover:bg-zinc-50 dark:hover:bg-zinc-800">
+            <span class="text-xs font-semibold uppercase text-zinc-500 dark:text-zinc-400">2FA policy</span>
+            <span class="mt-2 block text-2xl font-semibold text-zinc-950 dark:text-zinc-100">{{ number_format($securitySummary['required']) }}</span>
+            <span class="mt-1 block text-sm text-zinc-500 dark:text-zinc-400">Tenants requiring owner 2FA</span>
         </button>
 
         <button type="button" wire:click="$set('two_factor_status', 'ready')" class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-left shadow-sm transition hover:border-emerald-300">
@@ -66,9 +66,9 @@
         </button>
     </section>
 
-    <div class="overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
+    <div class="overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm">
         <table class="min-w-[940px] w-full text-left text-sm">
-            <thead class="border-b border-zinc-200 bg-zinc-50 text-zinc-500">
+            <thead class="border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
                 <tr>
                     <th class="px-4 py-3 font-medium">Company</th>
                     <th class="px-4 py-3 font-medium">Public site</th>
@@ -79,13 +79,13 @@
                     <th class="px-4 py-3 text-right font-medium">Actions</th>
                 </tr>
             </thead>
-            <tbody class="divide-y divide-zinc-100">
+            <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
                 @forelse ($tenants as $tenant)
                     @php($ownerUser = $ownerUsers->get($tenant->id))
                     <tr wire:key="tenant-{{ $tenant->id }}">
                         <td class="px-4 py-3">
                             <p class="font-medium">{{ $tenant->company_name }}</p>
-                            <p class="mt-1 text-xs text-zinc-500">/{{ $tenant->slug }}</p>
+                            <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">/{{ $tenant->slug }}</p>
                         </td>
                         <td class="px-4 py-3">
                             @if ($tenant->public_site_enabled)
@@ -130,9 +130,9 @@
                         <td class="px-4 py-3">
                             <p class="font-medium">{{ ucfirst($tenant->subscription_plan) }}</p>
                             @if (($tenant->billing_model ?? 'subscription') === 'commission')
-                                <p class="mt-1 text-xs text-zinc-500">{{ number_format((float) $tenant->commission_rate, 2) }}% commission</p>
+                                <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ number_format((float) $tenant->commission_rate, 2) }}% commission</p>
                             @else
-                                <p class="mt-1 text-xs text-zinc-500">Subscription billing</p>
+                                <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Subscription billing</p>
                             @endif
                         </td>
                         <td class="px-4 py-3">
@@ -149,7 +149,7 @@
                     <tr>
                         <td colspan="7" class="px-4 py-10 text-center">
                             <p class="font-medium">No tenants match this view.</p>
-                            <p class="mt-1 text-sm text-zinc-500">Create a tenant to issue an admin login and public workspace slug.</p>
+                            <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Create a tenant to issue an admin login and public workspace slug.</p>
                             <flux:button type="button" variant="primary" icon="plus" class="mt-4" wire:click="create">Add Tenant</flux:button>
                         </td>
                     </tr>
@@ -169,7 +169,7 @@
 
             <form wire:submit.prevent="save" class="space-y-6">
                 <section>
-                    <h2 class="text-sm font-semibold uppercase text-zinc-500">Account</h2>
+                    <h2 class="text-sm font-semibold uppercase text-zinc-500 dark:text-zinc-400">Account</h2>
                     <div class="mt-4 grid gap-5 md:grid-cols-2">
                         <flux:field>
                             <flux:label>Company name</flux:label>
@@ -218,23 +218,23 @@
                             <flux:checkbox wire:model.live="is_active" label="Active tenant account" />
                         </div>
 
-                        <div class="md:col-span-2 rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+                        <div class="md:col-span-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4">
                             <flux:checkbox wire:model.live="require_two_factor" label="Require 2FA for tenant admins" />
-                            <p class="mt-2 text-sm leading-6 text-zinc-600">
+                            <p class="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
                                 Tenant admins must enable two-factor authentication from Profile before opening the admin dashboard. Super admins are not affected by this tenant policy.
                             </p>
 
                             @if ($editingTenantId)
-                                <div class="mt-4 rounded-lg border border-white bg-white p-3 shadow-sm">
+                                <div class="mt-4 rounded-lg border border-white bg-white dark:bg-zinc-900 p-3 shadow-sm">
                                     <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                                         <div>
-                                            <p class="text-sm font-semibold text-zinc-950">Owner 2FA readiness</p>
+                                            <p class="text-sm font-semibold text-zinc-950 dark:text-zinc-100">Owner 2FA readiness</p>
                                             @if (! $editingOwnerUser)
-                                                <p class="mt-1 text-sm leading-6 text-zinc-600">No tenant admin login matches this owner email yet. Use the reset link action after saving to create or recover access.</p>
+                                                <p class="mt-1 text-sm leading-6 text-zinc-600 dark:text-zinc-400">No tenant admin login matches this owner email yet. Use the reset link action after saving to create or recover access.</p>
                                             @elseif ($editingOwnerUser->hasTwoFactorEnabled())
-                                                <p class="mt-1 text-sm leading-6 text-zinc-600">The owner login has confirmed two-factor authentication and can satisfy this tenant policy.</p>
+                                                <p class="mt-1 text-sm leading-6 text-zinc-600 dark:text-zinc-400">The owner login has confirmed two-factor authentication and can satisfy this tenant policy.</p>
                                             @else
-                                                <p class="mt-1 text-sm leading-6 text-zinc-600">The owner login exists, but two-factor authentication is not confirmed yet. If this policy is enabled, they will be sent to Profile before using the dashboard.</p>
+                                                <p class="mt-1 text-sm leading-6 text-zinc-600 dark:text-zinc-400">The owner login exists, but two-factor authentication is not confirmed yet. If this policy is enabled, they will be sent to Profile before using the dashboard.</p>
                                             @endif
                                         </div>
 
@@ -248,7 +248,7 @@
                                     </div>
                                 </div>
                             @else
-                                <p class="mt-3 text-sm leading-6 text-zinc-600">
+                                <p class="mt-3 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
                                     New tenant owners receive their login first. If this is enabled now, their first dashboard visit will guide them through Profile and Security.
                                 </p>
                             @endif
@@ -256,11 +256,11 @@
                     </div>
                 </section>
 
-                <section class="border-t border-zinc-200 pt-6">
+                <section class="border-t border-zinc-200 dark:border-zinc-700 pt-6">
                     <div class="flex flex-col justify-between gap-2 md:flex-row md:items-start">
                         <div>
-                            <h2 class="text-sm font-semibold uppercase text-zinc-500">Public site</h2>
-                            <p class="mt-1 text-sm text-zinc-500">Each tenant can have a branded public page like {{ url('/demo-hotspot') }}.</p>
+                            <h2 class="text-sm font-semibold uppercase text-zinc-500 dark:text-zinc-400">Public site</h2>
+                            <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Each tenant can have a branded public page like {{ url('/demo-hotspot') }}.</p>
                         </div>
                     </div>
 
@@ -302,8 +302,8 @@
                     </div>
                 </section>
 
-                <section class="border-t border-zinc-200 pt-6">
-                    <h2 class="text-sm font-semibold uppercase text-zinc-500">Customer contact</h2>
+                <section class="border-t border-zinc-200 dark:border-zinc-700 pt-6">
+                    <h2 class="text-sm font-semibold uppercase text-zinc-500 dark:text-zinc-400">Customer contact</h2>
                     <div class="mt-4 grid gap-5 md:grid-cols-2">
                         <flux:field>
                             <flux:label>Contact phone</flux:label>
@@ -325,9 +325,9 @@
                     </div>
                 </section>
 
-                <div class="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
-                    <h2 class="text-sm font-semibold text-zinc-950">Owner access guide</h2>
-                    <p class="mt-1 text-sm leading-6 text-zinc-600">
+                <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4">
+                    <h2 class="text-sm font-semibold text-zinc-950 dark:text-zinc-100">Owner access guide</h2>
+                    <p class="mt-1 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
                         New tenants receive a temporary password and must change it on first login. Existing owners should use the reset link action so passwords are never exposed in admin screens.
                     </p>
                 </div>
@@ -351,9 +351,9 @@
             </div>
 
             @if ($deletingTenant)
-                <div class="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+                <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4">
                     <p class="font-medium">{{ $deletingTenant->company_name }}</p>
-                    <p class="mt-1 text-sm text-zinc-500">{{ $deletingTenant->owner_email }}</p>
+                    <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{{ $deletingTenant->owner_email }}</p>
                 </div>
             @endif
 

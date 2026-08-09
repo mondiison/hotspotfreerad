@@ -6,7 +6,7 @@
     <div class="max-w-3xl space-y-6">
         @include('admin.partials.billing-usage', ['usage' => $billingUsage ?? null])
 
-        <form method="POST" action="{{ $shop->exists ? route('admin.shops.update', $shop) : route('admin.shops.store') }}" class="rounded-lg border border-zinc-200 bg-white p-6">
+        <form method="POST" action="{{ $shop->exists ? route('admin.shops.update', $shop) : route('admin.shops.store') }}" class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-6">
         @csrf
         @if ($shop->exists)
             @method('PUT')
@@ -48,7 +48,7 @@
         @if ($shop->exists)
             <livewire:admin.payment-settings-card :shop="$shop" />
         @else
-            <div class="rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-sm leading-6 text-zinc-600">
+            <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
                 Save this shop first, then reopen it here to choose the payment gateway, enter its credentials, and set Live/Test environment where the gateway supports it.
             </div>
         @endif

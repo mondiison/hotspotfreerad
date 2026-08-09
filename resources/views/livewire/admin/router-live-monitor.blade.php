@@ -1,7 +1,7 @@
 <div wire:poll.5s="poll">
     <div class="mb-4 flex flex-col justify-between gap-3 md:flex-row md:items-center">
         <div class="flex items-center gap-2">
-            <label class="text-sm text-zinc-500">Interface</label>
+            <label class="text-sm text-zinc-500 dark:text-zinc-400">Interface</label>
             @if ($interfaces !== [])
                 <flux:select wire:model.live="interface" size="sm" class="w-56">
                     @foreach ($interfaces as $iface)
@@ -27,7 +27,7 @@
             Could not reach this router over the RouterOS API: {{ $error }}
         </div>
     @elseif (count($samples) < 2)
-        <p class="py-8 text-center text-sm text-zinc-500">Waiting for the first live samples&hellip;</p>
+        <p class="py-8 text-center text-sm text-zinc-500 dark:text-zinc-400">Waiting for the first live samples&hellip;</p>
     @else
         <flux:chart :value="$samples" class="aspect-[3/1]">
             <flux:chart.svg>
@@ -60,5 +60,5 @@
         </div>
     @endif
 
-    <p class="mt-3 text-xs text-zinc-500">Last {{ count($samples) }} of up to 30 samples (~2.5 minutes). Requires the RouterOS API credentials above to be applied on the physical router.</p>
+    <p class="mt-3 text-xs text-zinc-500 dark:text-zinc-400">Last {{ count($samples) }} of up to 30 samples (~2.5 minutes). Requires the RouterOS API credentials above to be applied on the physical router.</p>
 </div>

@@ -9,22 +9,22 @@
     @fluxAppearance
     <style>[x-cloak] { display: none !important; }</style>
 </head>
-<body class="min-h-screen bg-zinc-100 text-zinc-950 antialiased" style="--brand: #047857">
+<body class="min-h-screen bg-zinc-100 dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100 antialiased" style="--brand: #047857">
     <main class="flex min-h-screen items-center justify-center px-5 py-10 sm:px-8">
-        <section class="grid w-full max-w-6xl overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm lg:grid-cols-[1.05fr_0.95fr]">
+        <section class="grid w-full max-w-6xl overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm lg:grid-cols-[1.05fr_0.95fr]">
             <div class="hidden bg-zinc-950 p-10 text-white lg:flex lg:flex-col lg:justify-between xl:p-12">
                 <div class="flex items-center gap-3">
                     <span class="grid h-10 w-10 place-items-center rounded-lg text-sm font-semibold text-white" style="background-color: var(--brand)">HF</span>
                     <div>
                         <p class="font-semibold">HotspotFreeRAD</p>
-                        <p class="mt-1 text-xs text-zinc-400">Platform and tenant operations console</p>
+                        <p class="mt-1 text-xs text-zinc-400 dark:text-zinc-500">Platform and tenant operations console</p>
                     </div>
                 </div>
 
                 <div class="max-w-lg">
                     <p class="text-xs font-semibold uppercase tracking-wide" style="color: var(--brand)">SaaS operations</p>
                     <h1 class="mt-4 text-4xl font-semibold leading-tight xl:text-5xl">Operate tenants, billing, routers, and captive portal access from one console.</h1>
-                    <p class="mt-5 text-sm leading-6 text-zinc-300">
+                    <p class="mt-5 text-sm leading-6 text-zinc-300 dark:text-zinc-600">
                         Built for hotspot operators that need tenant separation, branded public pages, payment routing, and RADIUS-backed access control.
                     </p>
                 </div>
@@ -37,7 +37,7 @@
                     ] as $item)
                         <div class="rounded-lg border border-white/10 bg-white/[0.03] p-4">
                             <p class="text-xl font-semibold">{{ $item['value'] }}</p>
-                            <p class="mt-2 text-xs text-zinc-400">{{ $item['label'] }}</p>
+                            <p class="mt-2 text-xs text-zinc-400 dark:text-zinc-500">{{ $item['label'] }}</p>
                         </div>
                     @endforeach
                 </div>
@@ -48,16 +48,16 @@
                     <div class="mb-8">
                         <p class="text-sm font-medium" style="color: var(--brand)">Welcome back</p>
                         <h2 class="mt-2 text-3xl font-semibold">Sign in to HotspotFreeRAD</h2>
-                        <p class="mt-2 text-sm leading-6 text-zinc-600">Use your super admin or tenant admin credentials. Tenant admins are routed to their own tenant workspace after login.</p>
+                        <p class="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">Use your super admin or tenant admin credentials. Tenant admins are routed to their own tenant workspace after login.</p>
                     </div>
 
-                    <form method="POST" action="{{ route('login.store') }}" class="rounded-lg border border-zinc-200 bg-zinc-50 p-6">
+                    <form method="POST" action="{{ route('login.store') }}" class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-6">
                     @csrf
 
                     <div class="space-y-5">
                         <label class="block">
                             <span class="text-sm font-medium">Email</span>
-                            <input type="email" name="email" value="{{ old('email') }}" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2" required autofocus autocomplete="email webauthn">
+                            <input type="email" name="email" value="{{ old('email') }}" class="mt-1 w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-3 py-2" required autofocus autocomplete="email webauthn">
                             @error('email') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
                         </label>
 
@@ -66,12 +66,12 @@
                                 Password
                                 <a href="{{ route('password.request') }}" class="text-xs font-semibold hover:opacity-80" style="color: var(--brand)">Forgot password?</a>
                             </span>
-                            <input type="password" name="password" class="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2" required>
+                            <input type="password" name="password" class="mt-1 w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-3 py-2" required>
                             @error('password') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
                         </label>
 
-                        <label class="flex items-center gap-2 text-sm text-zinc-700">
-                            <input type="checkbox" name="remember" value="1" class="rounded border-zinc-300">
+                        <label class="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+                            <input type="checkbox" name="remember" value="1" class="rounded border-zinc-300 dark:border-zinc-600">
                             Remember this device
                         </label>
                     </div>
@@ -80,17 +80,17 @@
                     </form>
 
                     <div class="my-5 flex items-center gap-3">
-                        <div class="h-px flex-1 bg-zinc-200"></div>
-                        <span class="text-xs text-zinc-500">or</span>
-                        <div class="h-px flex-1 bg-zinc-200"></div>
+                        <div class="h-px flex-1 bg-zinc-200 dark:bg-zinc-700"></div>
+                        <span class="text-xs text-zinc-500 dark:text-zinc-400">or</span>
+                        <div class="h-px flex-1 bg-zinc-200 dark:bg-zinc-700"></div>
                     </div>
 
-                    <button type="button" x-bind:disabled="! supported || loading" x-on:click="verify" class="w-full rounded-md border border-zinc-200 bg-white px-4 py-2.5 text-sm font-medium text-zinc-800 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60">
+                    <button type="button" x-bind:disabled="! supported || loading" x-on:click="verify" class="w-full rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-4 py-2.5 text-sm font-medium text-zinc-800 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60">
                         <span x-show="! loading">Continue with passkey</span>
                         <span x-show="loading">Waiting for your device...</span>
                     </button>
                     <p x-cloak x-show="error" x-text="error" class="mt-2 text-center text-sm text-red-600"></p>
-                    <p x-cloak x-show="! supported" class="mt-2 text-center text-xs text-zinc-500">Passkeys are not available in this browser.</p>
+                    <p x-cloak x-show="! supported" class="mt-2 text-center text-xs text-zinc-500 dark:text-zinc-400">Passkeys are not available in this browser.</p>
                 </div>
             </div>
         </section>

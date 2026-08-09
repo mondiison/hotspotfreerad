@@ -27,7 +27,7 @@
         </flux:button>
     </section>
 
-    <section class="grid min-w-0 gap-4 rounded-lg border border-zinc-200 bg-white p-5 [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))] [&>*]:min-w-0">
+    <section class="grid min-w-0 gap-4 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))] [&>*]:min-w-0">
         <flux:field>
             <flux:label>From</flux:label>
             <flux:input type="date" wire:model.live="from" />
@@ -66,24 +66,24 @@
             ['label' => 'Average Sale', 'value' => 'NGN '.number_format($summary['average_sale'], 2), 'hint' => 'Gross sales divided by sales'],
             ['label' => 'Periods', 'value' => number_format($summary['period_count']), 'hint' => 'Grouped rows below'],
         ] as $stat)
-            <div class="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
-                <p class="text-sm font-medium text-zinc-500">{{ $stat['label'] }}</p>
+            <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
+                <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">{{ $stat['label'] }}</p>
                 <p class="mt-3 text-2xl font-semibold">{{ $stat['value'] }}</p>
-                <p class="mt-2 text-xs leading-5 text-zinc-500">{{ $stat['hint'] }}</p>
+                <p class="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{{ $stat['hint'] }}</p>
             </div>
         @endforeach
     </section>
 
     <section class="mt-6 grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-        <div class="overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
-            <div class="border-b border-zinc-200 p-5">
+        <div class="overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm">
+            <div class="border-b border-zinc-200 dark:border-zinc-700 p-5">
                 <h2 class="text-base font-semibold">Sales by {{ ucfirst($filters['group']) }}</h2>
-                <p class="mt-1 text-sm text-zinc-500">Only successful payments are counted.</p>
+                <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Only successful payments are counted.</p>
             </div>
 
             <div class="overflow-x-auto">
                 <table class="w-full min-w-[980px] text-left text-sm">
-                    <thead class="border-b border-zinc-200 bg-zinc-50 text-zinc-500">
+                    <thead class="border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
                         <tr>
                             <th class="px-4 py-3 font-medium">Period</th>
                             <th class="px-4 py-3 text-right font-medium">Sales</th>
@@ -96,7 +96,7 @@
                             <th class="px-4 py-3 text-right font-medium">Margin</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-zinc-100">
+                    <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
                         @forelse ($rows as $row)
                             <tr>
                                 <td class="px-4 py-3 font-medium">{{ $row['period'] }}</td>
@@ -110,7 +110,7 @@
                                 <td class="px-4 py-3 text-right">{{ is_null($row['profit_margin']) ? 'No sales' : $row['profit_margin'].'%' }}</td>
                             </tr>
                         @empty
-                            <tr><td colspan="9" class="px-4 py-8 text-center text-zinc-500">No successful sales in this range.</td></tr>
+                            <tr><td colspan="9" class="px-4 py-8 text-center text-zinc-500 dark:text-zinc-400">No successful sales in this range.</td></tr>
                         @endforelse
                     </tbody>
                 </table>
@@ -118,15 +118,15 @@
         </div>
 
         <div class="grid gap-6">
-            <div class="overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
-                <div class="border-b border-zinc-200 p-5">
+            <div class="overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm">
+                <div class="border-b border-zinc-200 dark:border-zinc-700 p-5">
                     <h2 class="text-base font-semibold">Sales by Shop</h2>
-                    <p class="mt-1 text-sm text-zinc-500">Best performing hotspot locations in the selected range.</p>
+                    <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Best performing hotspot locations in the selected range.</p>
                 </div>
 
                 <div class="overflow-x-auto overflow-y-hidden">
                 <table class="min-w-[720px] w-full text-left text-sm">
-                    <thead class="border-b border-zinc-200 bg-zinc-50 text-zinc-500">
+                    <thead class="border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
                         <tr>
                             <th class="px-4 py-3 font-medium">Shop</th>
                             <th class="px-4 py-3 text-right font-medium">Sales</th>
@@ -136,7 +136,7 @@
                             <th class="px-4 py-3 text-right font-medium">Tenant Net</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-zinc-100">
+                    <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
                         @forelse ($shopRows as $row)
                             <tr>
                                 <td class="px-4 py-3 font-medium">{{ $row['shop'] }}</td>
@@ -145,8 +145,8 @@
                                 <td class="px-4 py-3 text-right">
                                     <div class="ml-auto flex w-28 flex-col items-end gap-1">
                                         <span>{{ is_null($row['share']) ? 'No sales' : $row['share'].'%' }}</span>
-                                        <span class="block h-1.5 w-full overflow-hidden rounded-full bg-zinc-100">
-                                            <span class="block h-full rounded-full bg-zinc-950" style="width: {{ $row['share'] ?? 0 }}%"></span>
+                                        <span class="block h-1.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                                            <span class="block h-full rounded-full bg-zinc-950 dark:bg-zinc-100" style="width: {{ $row['share'] ?? 0 }}%"></span>
                                         </span>
                                     </div>
                                 </td>
@@ -154,22 +154,22 @@
                                 <td class="px-4 py-3 text-right">NGN {{ number_format($row['tenant_net'], 2) }}</td>
                             </tr>
                         @empty
-                            <tr><td colspan="6" class="px-4 py-8 text-center text-zinc-500">No shop sales in this range.</td></tr>
+                            <tr><td colspan="6" class="px-4 py-8 text-center text-zinc-500 dark:text-zinc-400">No shop sales in this range.</td></tr>
                         @endforelse
                     </tbody>
                 </table>
                 </div>
             </div>
 
-            <div class="overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
-                <div class="border-b border-zinc-200 p-5">
+            <div class="overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm">
+                <div class="border-b border-zinc-200 dark:border-zinc-700 p-5">
                     <h2 class="text-base font-semibold">Sales by Package</h2>
-                    <p class="mt-1 text-sm text-zinc-500">Best-selling data plans in the selected range.</p>
+                    <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Best-selling data plans in the selected range.</p>
                 </div>
 
                 <div class="overflow-x-auto">
                     <table class="w-full min-w-[760px] text-left text-sm">
-                        <thead class="border-b border-zinc-200 bg-zinc-50 text-zinc-500">
+                        <thead class="border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
                             <tr>
                                 <th class="px-4 py-3 font-medium">Package</th>
                                 <th class="px-4 py-3 font-medium">Shop</th>
@@ -180,18 +180,18 @@
                                 <th class="px-4 py-3 text-right font-medium">Tenant Net</th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-zinc-100">
+                        <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
                             @forelse ($packageRows as $row)
                                 <tr>
                                     <td class="px-4 py-3 font-medium">{{ $row['package'] }}</td>
-                                    <td class="px-4 py-3 text-zinc-600">{{ $row['shop'] }}</td>
+                                    <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $row['shop'] }}</td>
                                     <td class="px-4 py-3 text-right">{{ number_format($row['sales_count']) }}</td>
                                     <td class="px-4 py-3 text-right">NGN {{ number_format($row['average_sale'], 2) }}</td>
                                     <td class="px-4 py-3 text-right font-semibold">NGN {{ number_format($row['revenue'], 2) }}</td>
                                     <td class="px-4 py-3 text-right">
                                         <div class="ml-auto flex w-24 flex-col items-end gap-1">
                                             <span>{{ is_null($row['share']) ? 'No sales' : $row['share'].'%' }}</span>
-                                            <span class="block h-1.5 w-full overflow-hidden rounded-full bg-zinc-100">
+                                            <span class="block h-1.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
                                                 <span class="block h-full rounded-full bg-emerald-600" style="width: {{ $row['share'] ?? 0 }}%"></span>
                                             </span>
                                         </div>
@@ -199,22 +199,22 @@
                                     <td class="px-4 py-3 text-right">NGN {{ number_format($row['tenant_net'], 2) }}</td>
                                 </tr>
                             @empty
-                                <tr><td colspan="7" class="px-4 py-8 text-center text-zinc-500">No package sales in this range.</td></tr>
+                                <tr><td colspan="7" class="px-4 py-8 text-center text-zinc-500 dark:text-zinc-400">No package sales in this range.</td></tr>
                             @endforelse
                         </tbody>
                     </table>
                 </div>
             </div>
 
-            <div class="overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
-                <div class="border-b border-zinc-200 p-5">
+            <div class="overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm">
+                <div class="border-b border-zinc-200 dark:border-zinc-700 p-5">
                     <h2 class="text-base font-semibold">Expenses by Category</h2>
-                    <p class="mt-1 text-sm text-zinc-500">Costs recorded in the selected report range.</p>
+                    <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Costs recorded in the selected report range.</p>
                 </div>
 
                 <div class="overflow-x-auto overflow-y-hidden">
                 <table class="min-w-[720px] w-full text-left text-sm">
-                    <thead class="border-b border-zinc-200 bg-zinc-50 text-zinc-500">
+                    <thead class="border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
                         <tr>
                             <th class="px-4 py-3 font-medium">Category</th>
                             <th class="px-4 py-3 text-right font-medium">Count</th>
@@ -224,7 +224,7 @@
                             <th class="px-4 py-3 text-right font-medium">Usage</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-zinc-100">
+                    <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
                         @forelse ($expenseRows as $row)
                             <tr>
                                 <td class="px-4 py-3 font-medium">{{ $row['category'] }}</td>
@@ -233,19 +233,19 @@
                                 <td class="px-4 py-3 text-right">
                                     {{ is_null($row['budget']) ? 'No budget' : 'NGN '.number_format($row['budget'], 2) }}
                                 </td>
-                                <td class="px-4 py-3 text-right {{ ! is_null($row['variance']) && $row['variance'] < 0 ? 'font-semibold text-red-700' : 'text-zinc-700' }}">
+                                <td class="px-4 py-3 text-right {{ ! is_null($row['variance']) && $row['variance'] < 0 ? 'font-semibold text-red-700' : 'text-zinc-700 dark:text-zinc-300' }}">
                                     {{ is_null($row['variance']) ? 'No budget' : 'NGN '.number_format($row['variance'], 2) }}
                                 </td>
                                 <td class="px-4 py-3 text-right">
                                     @if (is_null($row['usage']))
-                                        <span class="text-zinc-500">No budget</span>
+                                        <span class="text-zinc-500 dark:text-zinc-400">No budget</span>
                                     @else
-                                        <span class="{{ $row['usage'] > 100 ? 'font-semibold text-red-700' : 'text-zinc-700' }}">{{ $row['usage'] }}%</span>
+                                        <span class="{{ $row['usage'] > 100 ? 'font-semibold text-red-700' : 'text-zinc-700 dark:text-zinc-300' }}">{{ $row['usage'] }}%</span>
                                     @endif
                                 </td>
                             </tr>
                         @empty
-                            <tr><td colspan="6" class="px-4 py-8 text-center text-zinc-500">No expenses in this range.</td></tr>
+                            <tr><td colspan="6" class="px-4 py-8 text-center text-zinc-500 dark:text-zinc-400">No expenses in this range.</td></tr>
                         @endforelse
                     </tbody>
                 </table>

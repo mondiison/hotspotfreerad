@@ -13,7 +13,7 @@
         </flux:button>
     </div>
 
-    <section class="mb-4 rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
+    <section class="mb-4 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4 shadow-sm">
         <div class="grid min-w-0 gap-3 [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))] [&>*]:min-w-0">
             <div class="sm:col-span-2 xl:col-span-3">
                 <flux:input wire:model.live.debounce.350ms="search" icon="magnifying-glass" placeholder="Search category or description" />
@@ -39,9 +39,9 @@
         </div>
     </section>
 
-    <div class="overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
+    <div class="overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm">
         <table class="min-w-[920px] w-full text-left text-sm">
-            <thead class="border-b border-zinc-200 bg-zinc-50 text-zinc-500">
+            <thead class="border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
                 <tr>
                     <th class="px-4 py-3 font-medium">Category</th>
                     <th class="px-4 py-3 font-medium">Scope</th>
@@ -53,12 +53,12 @@
                     <th class="px-4 py-3 text-right font-medium">Actions</th>
                 </tr>
             </thead>
-            <tbody class="divide-y divide-zinc-100">
+            <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
                 @forelse ($categories as $category)
                     <tr wire:key="expense-category-{{ $category->id }}">
                         <td class="px-4 py-3">
                             <p class="font-medium">{{ $category->name }}</p>
-                            <p class="mt-1 text-xs text-zinc-500">{{ $category->description ?: 'No description' }}</p>
+                            <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $category->description ?: 'No description' }}</p>
                         </td>
                         <td class="px-4 py-3">
                             @if ($category->tenant_id)
@@ -71,7 +71,7 @@
                             @if ($category->monthly_budget)
                                 NGN {{ number_format((float) $category->monthly_budget, 2) }}
                             @else
-                                <span class="text-zinc-500">No budget</span>
+                                <span class="text-zinc-500 dark:text-zinc-400">No budget</span>
                             @endif
                         </td>
                         <td class="px-4 py-3 text-right font-semibold">NGN {{ number_format((float) ($category->current_month_spent ?? 0), 2) }}</td>
@@ -79,13 +79,13 @@
                             @if ($category->monthly_budget)
                                 @php($usage = round((((float) ($category->current_month_spent ?? 0)) / (float) $category->monthly_budget) * 100, 1))
                                 <div class="ml-auto flex w-28 flex-col items-end gap-1">
-                                    <span class="{{ $usage > 100 ? 'font-semibold text-red-700' : 'text-zinc-700' }}">{{ $usage }}%</span>
-                                    <span class="block h-1.5 w-full overflow-hidden rounded-full bg-zinc-100">
-                                        <span class="block h-full rounded-full {{ $usage >= 80 ? ($usage > 100 ? 'bg-red-600' : 'bg-amber-500') : 'bg-zinc-950' }}" style="width: {{ min($usage, 100) }}%"></span>
+                                    <span class="{{ $usage > 100 ? 'font-semibold text-red-700' : 'text-zinc-700 dark:text-zinc-300' }}">{{ $usage }}%</span>
+                                    <span class="block h-1.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                                        <span class="block h-full rounded-full {{ $usage >= 80 ? ($usage > 100 ? 'bg-red-600' : 'bg-amber-500') : 'bg-zinc-950 dark:bg-zinc-100' }}" style="width: {{ min($usage, 100) }}%"></span>
                                     </span>
                                 </div>
                             @else
-                                <span class="text-zinc-500">No budget</span>
+                                <span class="text-zinc-500 dark:text-zinc-400">No budget</span>
                             @endif
                         </td>
                         <td class="px-4 py-3 text-right">{{ number_format($category->expenses_count) }}</td>
@@ -100,7 +100,7 @@
                                     <flux:button type="button" variant="danger" size="sm" icon="trash" wire:click="confirmDelete({{ $category->id }})" wire:loading.attr="disabled" wire:target="confirmDelete({{ $category->id }})">Delete</flux:button>
                                 </div>
                             @else
-                                <p class="text-right text-xs text-zinc-500">Read only</p>
+                                <p class="text-right text-xs text-zinc-500 dark:text-zinc-400">Read only</p>
                             @endif
                         </td>
                     </tr>
@@ -108,7 +108,7 @@
                     <tr>
                         <td colspan="8" class="px-4 py-10 text-center">
                             <p class="font-medium">No expense categories match this view.</p>
-                            <p class="mt-1 text-sm text-zinc-500">Adjust the filters or create a category for a new operating cost bucket.</p>
+                            <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Adjust the filters or create a category for a new operating cost bucket.</p>
                             <flux:button type="button" variant="primary" icon="plus" class="mt-4" wire:click="create">Add Category</flux:button>
                         </td>
                     </tr>
@@ -148,7 +148,7 @@
 
                 <flux:checkbox wire:model.live="is_active" label="Active category" />
 
-                <div class="rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-600">
+                <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4 text-sm text-zinc-600 dark:text-zinc-400">
                     @if (auth()->user()->isSuperAdmin())
                         Super admin categories become platform defaults available to every tenant.
                     @else
@@ -181,9 +181,9 @@
             @endif
 
             @if ($deletingCategory)
-                <div class="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+                <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4">
                     <p class="font-medium">{{ $deletingCategory->name }}</p>
-                    <p class="mt-1 text-sm text-zinc-500">{{ $deletingCategory->description ?: 'No description' }}</p>
+                    <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{{ $deletingCategory->description ?: 'No description' }}</p>
                 </div>
             @endif
 

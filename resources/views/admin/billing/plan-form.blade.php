@@ -3,7 +3,7 @@
     :heading="$plan->exists ? 'Edit Billing Plan' : 'Add Billing Plan'"
     subheading="Platform plans control how tenants subscribe to the SaaS platform."
 >
-    <form method="POST" action="{{ $plan->exists ? route('admin.billing.plans.update', $plan) : route('admin.billing.plans.store') }}" class="max-w-4xl rounded-lg border border-zinc-200 bg-white p-6">
+    <form method="POST" action="{{ $plan->exists ? route('admin.billing.plans.update', $plan) : route('admin.billing.plans.store') }}" class="max-w-4xl rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-6">
         @csrf
         @if ($plan->exists)
             @method('PUT')
@@ -35,9 +35,9 @@
                 <flux:error name="currency" />
             </flux:field>
 
-            <section class="md:col-span-2 rounded-lg border border-zinc-200 bg-zinc-50 p-4">
-                <h2 class="text-sm font-semibold text-zinc-950">Usage limits</h2>
-                <p class="mt-1 text-sm text-zinc-500">Leave a limit empty when the plan should be unlimited for that item.</p>
+            <section class="md:col-span-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4">
+                <h2 class="text-sm font-semibold text-zinc-950 dark:text-zinc-100">Usage limits</h2>
+                <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Leave a limit empty when the plan should be unlimited for that item.</p>
 
                 <div class="mt-4 grid gap-5 md:grid-cols-3">
                     <flux:field>

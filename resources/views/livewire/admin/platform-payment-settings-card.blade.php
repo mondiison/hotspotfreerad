@@ -1,6 +1,6 @@
-<form wire:submit="save" class="relative rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+<form wire:submit="save" class="relative rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
     <div wire:loading.flex wire:target="save" class="absolute inset-0 z-10 hidden items-center justify-center rounded-lg bg-white/70 backdrop-blur-[1px]">
-        <div class="rounded-md border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-700 shadow-sm">
+        <div class="rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-4 py-3 text-sm font-medium text-zinc-700 dark:text-zinc-300 shadow-sm">
             Saving platform payment settings...
         </div>
     </div>
@@ -16,7 +16,7 @@
                     {{ $snapshot['active_gateway_name'] }}
                 </flux:badge>
             </div>
-            <p class="mt-1 max-w-2xl text-sm leading-6 text-zinc-500">
+            <p class="mt-1 max-w-2xl text-sm leading-6 text-zinc-500 dark:text-zinc-400">
                 Used only for tenant subscription payments. Tenant customer collections still use each shop's selected tenant gateway.
             </p>
         </div>
@@ -42,7 +42,7 @@
             <button
                 type="button"
                 wire:click="$set('active_gateway', '{{ $key }}')"
-                class="min-w-0 rounded-lg border p-4 text-left transition hover:border-zinc-400 hover:bg-zinc-50 {{ $active_gateway === $key ? 'border-zinc-950 bg-zinc-50 ring-2 ring-zinc-950/10' : 'border-zinc-200 bg-white' }}"
+                class="min-w-0 rounded-lg border p-4 text-left transition hover:border-zinc-400 dark:hover:border-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 {{ $active_gateway === $key ? 'border-zinc-950 dark:border-zinc-100 bg-zinc-50 dark:bg-zinc-800 ring-2 ring-zinc-950/10 dark:ring-zinc-100/10' : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900' }}"
             >
                 <div class="flex items-center justify-between gap-3">
                     <span class="flex h-10 w-28 items-center justify-start">
@@ -54,9 +54,9 @@
                     </span>
                     <flux:badge color="{{ $gateway['status'] === 'live' ? 'green' : 'amber' }}" size="sm">{{ $gateway['status_label'] }}</flux:badge>
                 </div>
-                <p class="mt-3 text-sm font-semibold text-zinc-950">{{ $gateway['name'] }}</p>
-                <p class="mt-1 text-xs leading-5 text-zinc-500">{{ $gateway['region'] }} · {{ $gateway['currency_label'] }}</p>
-                <p class="mt-2 line-clamp-2 text-xs leading-5 text-zinc-600">{{ $gateway['summary'] }}</p>
+                <p class="mt-3 text-sm font-semibold text-zinc-950 dark:text-zinc-100">{{ $gateway['name'] }}</p>
+                <p class="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{{ $gateway['region'] }} · {{ $gateway['currency_label'] }}</p>
+                <p class="mt-2 line-clamp-2 text-xs leading-5 text-zinc-600 dark:text-zinc-400">{{ $gateway['summary'] }}</p>
             </button>
         @endforeach
     </div>
@@ -73,7 +73,7 @@
             <flux:error name="active_gateway" />
         </flux:field>
 
-        <div class="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+        <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4">
             <div class="flex items-center gap-3">
                 @if ($snapshot['active_gateway_logo_url'])
                     <img src="{{ $snapshot['active_gateway_logo_url'] }}" alt="{{ $snapshot['active_gateway_name'] }} logo" class="max-h-8 max-w-28 object-contain">
@@ -84,8 +84,8 @@
                     {{ $snapshot['active_gateway_implemented'] ? 'Live adapter' : 'Adapter pending' }}
                 </flux:badge>
             </div>
-            <p class="mt-3 text-sm leading-6 text-zinc-600">{{ $activeGateway['summary'] }}</p>
-            <p class="mt-2 text-xs leading-5 text-zinc-500">{{ $activeGateway['webhook_note'] }}</p>
+            <p class="mt-3 text-sm leading-6 text-zinc-600 dark:text-zinc-400">{{ $activeGateway['summary'] }}</p>
+            <p class="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{{ $activeGateway['webhook_note'] }}</p>
         </div>
 
         <flux:field>
@@ -135,13 +135,13 @@
 
     <div class="mt-4 grid gap-3 md:grid-cols-2">
         @if ($snapshot['client_id_configured'] || $snapshot['client_secret_configured'])
-            <div class="rounded-md border border-zinc-200 p-3">
+            <div class="rounded-md border border-zinc-200 dark:border-zinc-700 p-3">
                 <flux:checkbox wire:model.live="clear_client_credentials" label="Clear platform client credentials" />
             </div>
         @endif
 
         @if ($snapshot['webhook_secret_configured'])
-            <div class="rounded-md border border-zinc-200 p-3">
+            <div class="rounded-md border border-zinc-200 dark:border-zinc-700 p-3">
                 <flux:checkbox wire:model.live="clear_webhook_secret" label="Clear platform webhook secret" />
             </div>
         @endif

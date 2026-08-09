@@ -1,6 +1,6 @@
-<form wire:submit="save" class="relative rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+<form wire:submit="save" class="relative rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
     <div wire:loading.flex wire:target="save" class="absolute inset-0 z-10 hidden items-center justify-center rounded-lg bg-white/70 backdrop-blur-[1px]">
-        <div class="rounded-md border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-700 shadow-sm">
+        <div class="rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-4 py-3 text-sm font-medium text-zinc-700 dark:text-zinc-300 shadow-sm">
             Saving payment settings...
         </div>
     </div>
@@ -12,8 +12,8 @@
                 <flux:badge color="{{ $shop->is_active ? 'green' : 'zinc' }}" size="sm">{{ $shop->is_active ? 'Active shop' : 'Inactive shop' }}</flux:badge>
                 <flux:badge color="{{ $shop->paymentGatewayIsImplemented() ? 'emerald' : 'amber' }}" size="sm">{{ $shop->paymentGatewayName() }}</flux:badge>
             </div>
-            <p class="mt-1 text-sm text-zinc-500">{{ $shop->tenant->company_name }}{{ $shop->location_city ? ' - '.$shop->location_city : '' }}</p>
-            <p class="mt-1 text-xs text-zinc-500">{{ number_format($shop->payments_count) }} customer payment {{ \Illuminate\Support\Str::plural('record', $shop->payments_count) }}</p>
+            <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{{ $shop->tenant->company_name }}{{ $shop->location_city ? ' - '.$shop->location_city : '' }}</p>
+            <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ number_format($shop->payments_count) }} customer payment {{ \Illuminate\Support\Str::plural('record', $shop->payments_count) }}</p>
         </div>
 
         <div class="flex flex-wrap gap-2">
@@ -33,21 +33,21 @@
         </div>
     @endif
 
-    <div class="grid gap-3 rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-sm md:grid-cols-3">
+    <div class="grid gap-3 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4 text-sm md:grid-cols-3">
         @foreach ($readiness as $item)
             <div>
                 <div class="flex items-center gap-2">
                     <span class="h-2 w-2 rounded-full {{ $item['ready'] ? 'bg-emerald-500' : 'bg-amber-500' }}"></span>
-                    <p class="font-semibold text-zinc-950">{{ $item['label'] }}</p>
+                    <p class="font-semibold text-zinc-950 dark:text-zinc-100">{{ $item['label'] }}</p>
                 </div>
-                <p class="mt-1 text-xs leading-5 text-zinc-600">{{ $item['hint'] }}</p>
+                <p class="mt-1 text-xs leading-5 text-zinc-600 dark:text-zinc-400">{{ $item['hint'] }}</p>
             </div>
         @endforeach
     </div>
 
     <div class="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         @foreach ($gatewayCards as $key => $gateway)
-            <div class="min-w-0 rounded-lg border p-3 transition {{ $payment_gateway === $key ? 'border-zinc-950 bg-zinc-50 ring-2 ring-zinc-950/10' : 'border-zinc-200 bg-white hover:border-zinc-400 hover:bg-zinc-50' }}">
+            <div class="min-w-0 rounded-lg border p-3 transition {{ $payment_gateway === $key ? 'border-zinc-950 dark:border-zinc-100 bg-zinc-50 dark:bg-zinc-800 ring-2 ring-zinc-950/10 dark:ring-zinc-100/10' : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 hover:border-zinc-400 dark:hover:border-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800' }}">
                 <div class="flex items-center justify-between gap-2">
                     <button type="button" wire:click="$set('payment_gateway', '{{ $key }}')" class="flex min-w-0 flex-1 items-center gap-2 text-left">
                         <span class="flex h-8 w-20 shrink-0 items-center justify-start">
@@ -57,16 +57,16 @@
                                 <span class="rounded-md px-2 py-1 text-xs font-semibold text-white" style="background-color: {{ $gateway['brand_color'] }}">{{ $gateway['name'] }}</span>
                             @endif
                         </span>
-                        <span class="truncate text-sm font-semibold text-zinc-950">{{ $gateway['name'] }}</span>
+                        <span class="truncate text-sm font-semibold text-zinc-950 dark:text-zinc-100">{{ $gateway['name'] }}</span>
                     </button>
 
                     <flux:dropdown class="shrink-0">
                         <flux:button type="button" icon="information-circle" variant="ghost" size="sm" aria-label="About {{ $gateway['name'] }}" />
-                        <flux:popover class="max-w-xs space-y-2 text-sm text-zinc-600">
-                            <p class="font-semibold text-zinc-900">{{ $gateway['name'] }}</p>
-                            <p class="text-xs text-zinc-500">{{ $gateway['region'] }} · {{ $gateway['currency_label'] }}</p>
+                        <flux:popover class="max-w-xs space-y-2 text-sm text-zinc-600 dark:text-zinc-400">
+                            <p class="font-semibold text-zinc-900 dark:text-zinc-100">{{ $gateway['name'] }}</p>
+                            <p class="text-xs text-zinc-500 dark:text-zinc-400">{{ $gateway['region'] }} · {{ $gateway['currency_label'] }}</p>
                             <p>{{ $gateway['summary'] }}</p>
-                            <p class="text-xs text-zinc-500">{{ $gateway['webhook_note'] }}</p>
+                            <p class="text-xs text-zinc-500 dark:text-zinc-400">{{ $gateway['webhook_note'] }}</p>
                         </flux:popover>
                     </flux:dropdown>
                 </div>
@@ -90,7 +90,7 @@
             <flux:error name="payment_gateway" />
         </flux:field>
 
-        <div class="rounded-lg border border-zinc-200 bg-zinc-50 p-4 md:col-span-1">
+        <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4 md:col-span-1">
             <div class="flex items-center gap-3">
                 @if ($activeGateway['logo_path'] && \Illuminate\Support\Facades\File::exists(public_path($activeGateway['logo_path'])))
                     <img src="{{ asset($activeGateway['logo_path']) }}" alt="{{ $activeGateway['name'] }} logo" class="max-h-8 max-w-28 object-contain">
@@ -99,8 +99,8 @@
                 @endif
                 <flux:badge color="{{ $activeGateway['status'] === 'live' ? 'green' : 'amber' }}" size="sm">{{ $activeGateway['status'] === 'live' ? 'Live adapter' : 'Adapter pending' }}</flux:badge>
             </div>
-            <p class="mt-3 text-sm leading-6 text-zinc-600">{{ $activeGateway['summary'] }}</p>
-            <p class="mt-2 text-xs leading-5 text-zinc-500">{{ $activeGateway['webhook_note'] }}</p>
+            <p class="mt-3 text-sm leading-6 text-zinc-600 dark:text-zinc-400">{{ $activeGateway['summary'] }}</p>
+            <p class="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{{ $activeGateway['webhook_note'] }}</p>
         </div>
 
         @foreach ($credentialFields as $field => $label)
@@ -149,19 +149,19 @@
 
     <div class="mt-4 grid gap-3 md:grid-cols-2">
         @if ($shop->hasCompleteFlutterwaveCredentials())
-            <div class="rounded-md border border-zinc-200 p-3">
+            <div class="rounded-md border border-zinc-200 dark:border-zinc-700 p-3">
                 <flux:checkbox wire:model.live="clear_flutterwave_credentials" label="Clear client credentials" />
             </div>
         @endif
 
         @if ($shop->hasFlutterwaveWebhookSecret())
-            <div class="rounded-md border border-zinc-200 p-3">
+            <div class="rounded-md border border-zinc-200 dark:border-zinc-700 p-3">
                 <flux:checkbox wire:model.live="clear_flutterwave_webhook_secret" label="Clear webhook secret" />
             </div>
         @endif
 
         @if ($shop->hasFlutterwaveHostedCheckoutKey())
-            <div class="rounded-md border border-zinc-200 p-3">
+            <div class="rounded-md border border-zinc-200 dark:border-zinc-700 p-3">
                 <flux:checkbox wire:model.live="clear_flutterwave_secret_key" label="Clear card checkout secret key" />
             </div>
         @endif

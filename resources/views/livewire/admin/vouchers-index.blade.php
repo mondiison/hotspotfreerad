@@ -35,16 +35,16 @@
                 wire:click="{{ $stat['action'] ?? "filterBy('{$stat['status']}')" }}"
                 wire:loading.attr="disabled"
                 wire:target="filterBy,filterUsedThisMonth"
-                class="rounded-lg border px-4 py-3 text-left shadow-sm transition hover:border-zinc-400 {{ $isActiveStat ? 'border-zinc-950 bg-zinc-950 text-white' : 'border-zinc-200 bg-white text-zinc-950' }}"
+                class="rounded-lg border px-4 py-3 text-left shadow-sm transition hover:border-zinc-400 dark:hover:border-zinc-500 {{ $isActiveStat ? 'border-zinc-950 bg-zinc-950 text-white dark:border-zinc-700 dark:bg-zinc-800' : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-950 dark:text-zinc-100' }}"
             >
-                <span class="block text-xs font-medium uppercase {{ $isActiveStat ? 'text-zinc-300' : 'text-zinc-500' }}">{{ $stat['label'] }}</span>
+                <span class="block text-xs font-medium uppercase {{ $isActiveStat ? 'text-zinc-300 dark:text-zinc-600' : 'text-zinc-500 dark:text-zinc-400' }}">{{ $stat['label'] }}</span>
                 <span class="mt-2 block text-2xl font-semibold">{{ is_numeric($stat['value']) ? number_format($stat['value']) : $stat['value'] }}</span>
-                <span class="mt-1 block text-xs {{ $isActiveStat ? 'text-zinc-300' : 'text-zinc-500' }}">{{ $stat['hint'] }}</span>
+                <span class="mt-1 block text-xs {{ $isActiveStat ? 'text-zinc-300 dark:text-zinc-600' : 'text-zinc-500 dark:text-zinc-400' }}">{{ $stat['hint'] }}</span>
             </button>
         @endforeach
     </section>
 
-    <section class="mb-4 rounded-lg border border-zinc-200 bg-white p-4">
+    <section class="mb-4 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
         <div class="grid min-w-0 gap-3 [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))] [&>*]:min-w-0">
             <div class="sm:col-span-2 xl:col-span-3">
                 <flux:input wire:model.live.debounce.350ms="search" icon="magnifying-glass" placeholder="Search batch, shop, package, prefix" />
@@ -103,9 +103,9 @@
         Loading voucher batch...
     </div>
 
-    <div class="overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
+    <div class="overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm">
         <table class="min-w-[1120px] w-full text-left text-sm">
-            <thead class="border-b border-zinc-200 bg-zinc-50 text-zinc-500">
+            <thead class="border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
                 <tr>
                     <th class="px-4 py-3 font-medium">Batch</th>
                     <th class="px-4 py-3 font-medium">Shop</th>
@@ -118,20 +118,20 @@
                     <th class="px-4 py-3 text-right font-medium">Actions</th>
                 </tr>
             </thead>
-            <tbody class="divide-y divide-zinc-100">
+            <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
                 @forelse ($batches as $batch)
                     <tr wire:key="voucher-batch-{{ $batch->id }}">
                         <td class="px-4 py-3">
                             <p class="font-medium">{{ $batch->name }}</p>
-                            <p class="mt-1 font-mono text-xs text-zinc-500">{{ $batch->prefix ? $batch->prefix.'-' : 'No prefix' }}{{ $batch->code_length }} chars</p>
+                            <p class="mt-1 font-mono text-xs text-zinc-500 dark:text-zinc-400">{{ $batch->prefix ? $batch->prefix.'-' : 'No prefix' }}{{ $batch->code_length }} chars</p>
                         </td>
                         <td class="px-4 py-3">
                             <p>{{ $batch->shop?->name ?? 'Deleted shop' }}</p>
-                            <p class="mt-1 text-xs text-zinc-500">{{ $batch->shop?->tenant?->company_name }}</p>
+                            <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $batch->shop?->tenant?->company_name }}</p>
                         </td>
                         <td class="px-4 py-3">
                             <p>{{ $batch->package?->name ?? 'Deleted package' }}</p>
-                            <p class="mt-1 text-xs text-zinc-500">{{ $batch->package?->speed_limit_profile }} / {{ $batch->package?->limit_uptime_seconds ? round($batch->package->limit_uptime_seconds / 86400, 1).' days' : 'No time' }}</p>
+                            <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $batch->package?->speed_limit_profile }} / {{ $batch->package?->limit_uptime_seconds ? round($batch->package->limit_uptime_seconds / 86400, 1).' days' : 'No time' }}</p>
                         </td>
                         <td class="px-4 py-3 text-right">{{ number_format($batch->vouchers_count) }}</td>
                         <td class="px-4 py-3 text-right">{{ number_format($batch->sold_vouchers_count) }}</td>
@@ -156,7 +156,7 @@
                     <tr>
                         <td colspan="9" class="px-4 py-10 text-center">
                             <p class="font-medium">No voucher batches found.</p>
-                            <p class="mt-1 text-sm text-zinc-500">Generate prepaid voucher codes for walk-in hotspot customers.</p>
+                            <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Generate prepaid voucher codes for walk-in hotspot customers.</p>
                             <flux:button type="button" variant="primary" icon="plus" class="mt-4" wire:click="create">Generate Vouchers</flux:button>
                         </td>
                     </tr>
@@ -173,14 +173,14 @@
             ['title' => 'Sales by Package', 'rows' => $salesBreakdown['packages']],
             ['title' => 'Sales by Staff', 'rows' => $salesBreakdown['staff']],
         ] as $panel)
-            <div class="rounded-lg border border-zinc-200 bg-white shadow-sm">
-                <div class="border-b border-zinc-100 px-4 py-3">
+            <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm">
+                <div class="border-b border-zinc-100 dark:border-zinc-800 px-4 py-3">
                     <h2 class="text-sm font-semibold">{{ $panel['title'] }}</h2>
-                    <p class="mt-1 text-xs text-zinc-500">Based on recorded voucher sale date{{ $sold_from || $sold_to ? ' range' : 's' }}.</p>
+                    <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Based on recorded voucher sale date{{ $sold_from || $sold_to ? ' range' : 's' }}.</p>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="min-w-full text-left text-sm">
-                        <thead class="bg-zinc-50 text-xs text-zinc-500">
+                        <thead class="bg-zinc-50 dark:bg-zinc-800 text-xs text-zinc-500 dark:text-zinc-400">
                             <tr>
                                 <th class="px-4 py-3 font-medium">Name</th>
                                 <th class="px-4 py-3 text-right font-medium">Sales</th>
@@ -188,7 +188,7 @@
                                 <th class="px-4 py-3 text-right font-medium">Share</th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-zinc-100">
+                        <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
                             @forelse ($panel['rows'] as $row)
                                 <tr>
                                     <td class="px-4 py-3 font-medium">{{ $row['label'] }}</td>
@@ -198,7 +198,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="4" class="px-4 py-8 text-center text-sm text-zinc-500">No voucher sales in this range.</td>
+                                    <td colspan="4" class="px-4 py-8 text-center text-sm text-zinc-500 dark:text-zinc-400">No voucher sales in this range.</td>
                                 </tr>
                             @endforelse
                         </tbody>
@@ -289,7 +289,7 @@
                 <div class="flex flex-col justify-between gap-3 md:flex-row md:items-start">
                     <div>
                         <flux:heading level="2" size="lg">Voucher Batch</flux:heading>
-                        <flux:text class="mt-2 text-sm text-zinc-500">
+                        <flux:text class="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
                             {{ $selectedBatch->name }} / {{ $selectedBatch->shop?->name ?? 'Deleted shop' }}
                         </flux:text>
                     </div>
@@ -319,43 +319,43 @@
                         ['label' => 'Voided', 'value' => $selectedBatch->void_vouchers_count],
                         ['label' => 'Use rate', 'value' => $selectedBatch->vouchers_count > 0 ? round(($selectedBatch->used_vouchers_count / $selectedBatch->vouchers_count) * 100, 1).'%' : '0%'],
                     ] as $stat)
-                        <div class="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
-                            <p class="text-xs font-medium uppercase text-zinc-500">{{ $stat['label'] }}</p>
+                        <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4">
+                            <p class="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">{{ $stat['label'] }}</p>
                             <p class="mt-2 text-xl font-semibold">{{ is_numeric($stat['value']) ? number_format($stat['value']) : $stat['value'] }}</p>
                         </div>
                     @endforeach
                 </section>
 
-                <section class="grid gap-3 rounded-lg border border-zinc-200 bg-white p-4 text-sm md:grid-cols-2">
+                <section class="grid gap-3 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4 text-sm md:grid-cols-2">
                     <div>
-                        <p class="text-xs font-medium uppercase text-zinc-500">Package</p>
+                        <p class="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">Package</p>
                         <p class="mt-1 font-medium">{{ $selectedBatch->package?->name ?? 'Deleted package' }}</p>
-                        <p class="mt-1 text-xs text-zinc-500">{{ $selectedBatch->package?->speed_limit_profile ?: 'No bandwidth profile' }}</p>
+                        <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $selectedBatch->package?->speed_limit_profile ?: 'No bandwidth profile' }}</p>
                     </div>
                     <div>
-                        <p class="text-xs font-medium uppercase text-zinc-500">Validity</p>
+                        <p class="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">Validity</p>
                         <p class="mt-1 font-medium">{{ $selectedBatch->package?->limit_uptime_seconds ? round($selectedBatch->package->limit_uptime_seconds / 3600, 1).' hours' : 'No time limit' }}</p>
-                        <p class="mt-1 text-xs text-zinc-500">Transfer {{ $selectedBatch->package?->data_limit_bytes ? number_format($selectedBatch->package->data_limit_bytes).' bytes' : 'Unlimited' }}</p>
+                        <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Transfer {{ $selectedBatch->package?->data_limit_bytes ? number_format($selectedBatch->package->data_limit_bytes).' bytes' : 'Unlimited' }}</p>
                     </div>
                     <div>
-                        <p class="text-xs font-medium uppercase text-zinc-500">Prefix</p>
+                        <p class="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">Prefix</p>
                         <p class="mt-1 font-mono text-xs">{{ $selectedBatch->prefix ? $selectedBatch->prefix.'-' : 'None' }}{{ $selectedBatch->code_length }} chars</p>
                     </div>
                     <div>
-                        <p class="text-xs font-medium uppercase text-zinc-500">Created</p>
+                        <p class="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">Created</p>
                         <p class="mt-1 font-medium">{{ $selectedBatch->created_at?->format('M j, Y g:i A') }}</p>
                     </div>
                     @if ($selectedBatch->notes)
                         <div class="md:col-span-2">
-                            <p class="text-xs font-medium uppercase text-zinc-500">Notes</p>
-                            <p class="mt-1 text-zinc-700">{{ $selectedBatch->notes }}</p>
+                            <p class="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">Notes</p>
+                            <p class="mt-1 text-zinc-700 dark:text-zinc-300">{{ $selectedBatch->notes }}</p>
                         </div>
                     @endif
                 </section>
 
-                <div class="overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 bg-white">
+                <div class="overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900">
                     <table class="min-w-[1180px] w-full text-left text-sm">
-                        <thead class="border-b border-zinc-200 bg-zinc-50 text-zinc-500">
+                        <thead class="border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
                             <tr>
                                 <th class="px-4 py-3 font-medium">Code</th>
                                 <th class="px-4 py-3 font-medium">Status</th>
@@ -366,7 +366,7 @@
                                 <th class="px-4 py-3 text-right font-medium">Action</th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-zinc-100">
+                        <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
                             @forelse ($selectedBatch->vouchers as $voucher)
                                 <tr wire:key="voucher-detail-{{ $voucher->id }}">
                                     <td class="px-4 py-3">
@@ -380,12 +380,12 @@
                                     <td class="px-4 py-3">
                                         @if ($voucher->sold_at)
                                             <p class="font-medium">{{ $voucher->package?->currency ?? 'NGN' }} {{ number_format((float) $voucher->sale_amount, 2) }}</p>
-                                            <p class="mt-1 text-xs text-zinc-500">{{ $voucher->sold_at->format('M j, Y g:i A') }}</p>
+                                            <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $voucher->sold_at->format('M j, Y g:i A') }}</p>
                                             @if ($voucher->sale_reference)
-                                                <p class="mt-1 font-mono text-xs text-zinc-500">{{ $voucher->sale_reference }}</p>
+                                                <p class="mt-1 font-mono text-xs text-zinc-500 dark:text-zinc-400">{{ $voucher->sale_reference }}</p>
                                             @endif
                                         @else
-                                            <span class="text-zinc-400">Not sold</span>
+                                            <span class="text-zinc-400 dark:text-zinc-500">Not sold</span>
                                         @endif
                                     </td>
                                     <td class="px-4 py-3">
@@ -407,12 +407,12 @@
                                                 Reverse sale
                                             </flux:button>
                                         @else
-                                            <span class="text-xs text-zinc-400">-</span>
+                                            <span class="text-xs text-zinc-400 dark:text-zinc-500">-</span>
                                         @endif
                                     </td>
                                 </tr>
                             @empty
-                                <tr><td colspan="7" class="px-4 py-8 text-center text-zinc-500">No voucher codes found in this batch.</td></tr>
+                                <tr><td colspan="7" class="px-4 py-8 text-center text-zinc-500 dark:text-zinc-400">No voucher codes found in this batch.</td></tr>
                             @endforelse
                         </tbody>
                     </table>
@@ -425,7 +425,7 @@
         <form wire:submit="markSold" class="space-y-5">
             <div>
                 <flux:heading size="lg">Mark Voucher Sold</flux:heading>
-                <flux:text class="mt-2 text-sm text-zinc-500">
+                <flux:text class="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
                     Record a front-desk or cash sale before the customer redeems the voucher.
                 </flux:text>
             </div>
@@ -466,7 +466,7 @@
         <div class="space-y-5">
             <div>
                 <flux:heading size="lg">Reverse Voucher Sale?</flux:heading>
-                <flux:text class="mt-2 text-sm text-zinc-500">
+                <flux:text class="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
                     This clears the recorded sale amount, reference, notes, and cashier from the voucher, then returns it to unused stock.
                 </flux:text>
             </div>
@@ -491,7 +491,7 @@
         <div class="space-y-5">
             <div>
                 <flux:heading size="lg">Void Unused Vouchers?</flux:heading>
-                <flux:text class="mt-2 text-sm text-zinc-500">
+                <flux:text class="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
                     This disables every unused code in the selected batch. Already used vouchers and active customer access will not be changed.
                 </flux:text>
             </div>

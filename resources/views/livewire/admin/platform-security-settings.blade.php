@@ -6,30 +6,30 @@
     @endif
 
     <section class="grid gap-4 md:grid-cols-4">
-        <div class="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
-            <p class="text-sm text-zinc-500">Super admins</p>
+        <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
+            <p class="text-sm text-zinc-500 dark:text-zinc-400">Super admins</p>
             <p class="mt-2 text-3xl font-semibold">{{ number_format($superAdminCount) }}</p>
         </div>
 
-        <div class="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
-            <p class="text-sm text-zinc-500">2FA enabled</p>
+        <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
+            <p class="text-sm text-zinc-500 dark:text-zinc-400">2FA enabled</p>
             <p class="mt-2 text-3xl font-semibold text-emerald-700">{{ number_format($superAdminsWithTwoFactor) }}</p>
         </div>
 
-        <div class="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
-            <p class="text-sm text-zinc-500">Need setup</p>
+        <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
+            <p class="text-sm text-zinc-500 dark:text-zinc-400">Need setup</p>
             <p class="mt-2 text-3xl font-semibold {{ $superAdminsMissingTwoFactor > 0 ? 'text-amber-700' : 'text-emerald-700' }}">{{ number_format($superAdminsMissingTwoFactor) }}</p>
         </div>
 
-        <div class="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
-            <p class="text-sm text-zinc-500">Passkeys</p>
-            <p class="mt-2 text-3xl font-semibold {{ $superAdminsWithPasskeys > 0 ? 'text-emerald-700' : 'text-zinc-900' }}">{{ number_format($superAdminsWithPasskeys) }}</p>
+        <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
+            <p class="text-sm text-zinc-500 dark:text-zinc-400">Passkeys</p>
+            <p class="mt-2 text-3xl font-semibold {{ $superAdminsWithPasskeys > 0 ? 'text-emerald-700' : 'text-zinc-900 dark:text-zinc-100' }}">{{ number_format($superAdminsWithPasskeys) }}</p>
         </div>
     </section>
 
-    <form wire:submit="save" class="relative rounded-lg border border-zinc-200 bg-white p-6 shadow-sm">
+    <form wire:submit="save" class="relative rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-6 shadow-sm">
         <div wire:loading.flex wire:target="save" class="absolute inset-0 z-10 hidden items-center justify-center rounded-lg bg-white/70 backdrop-blur-[1px]">
-            <div class="rounded-md border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-700 shadow-sm">
+            <div class="rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-4 py-3 text-sm font-medium text-zinc-700 dark:text-zinc-300 shadow-sm">
                 Saving security settings...
             </div>
         </div>
@@ -37,7 +37,7 @@
         <div class="flex flex-col justify-between gap-3 md:flex-row md:items-start">
             <div>
                 <h2 class="text-base font-semibold">Admin Two-Factor Policy</h2>
-                <p class="mt-1 text-sm leading-6 text-zinc-500">Require super admins to enable authenticator-app 2FA before they can use platform administration screens. Passkeys remain optional for faster sign-in.</p>
+                <p class="mt-1 text-sm leading-6 text-zinc-500 dark:text-zinc-400">Require super admins to enable authenticator-app 2FA before they can use platform administration screens. Passkeys remain optional for faster sign-in.</p>
             </div>
 
             <flux:badge :color="$require_super_admin_two_factor ? 'emerald' : 'zinc'">
@@ -45,9 +45,9 @@
             </flux:badge>
         </div>
 
-        <div class="mt-6 rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+        <div class="mt-6 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4">
             <flux:checkbox wire:model.live="require_super_admin_two_factor" label="Require 2FA for super admins" />
-            <p class="mt-2 text-sm leading-6 text-zinc-600">Super admins without 2FA will be redirected to Profile and Security. Login still works, but dashboard access is held until 2FA is enabled.</p>
+            <p class="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">Super admins without 2FA will be redirected to Profile and Security. Login still works, but dashboard access is held until 2FA is enabled.</p>
         </div>
 
         <div class="mt-6 flex justify-end">
@@ -58,11 +58,11 @@
         </div>
     </form>
 
-    <section class="rounded-lg border border-zinc-200 bg-white p-6 shadow-sm">
+    <section class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-6 shadow-sm">
         <div class="flex flex-col justify-between gap-3 md:flex-row md:items-start">
             <div>
                 <h2 class="text-base font-semibold">Passkey Readiness</h2>
-                <p class="mt-1 text-sm leading-6 text-zinc-500">Passkeys reduce password friction for platform admins, but they need localhost or a trusted HTTPS origin. Use your live domain before asking admins to register devices.</p>
+                <p class="mt-1 text-sm leading-6 text-zinc-500 dark:text-zinc-400">Passkeys reduce password friction for platform admins, but they need localhost or a trusted HTTPS origin. Use your live domain before asking admins to register devices.</p>
             </div>
 
             <flux:badge :color="$superAdminsMissingPasskeys > 0 ? 'amber' : 'emerald'">
@@ -71,23 +71,23 @@
         </div>
 
         <div class="mt-5 grid gap-3 md:grid-cols-3">
-            <div class="rounded-md border border-zinc-200 bg-zinc-50 p-4">
-                <p class="text-xs font-medium uppercase text-zinc-500">Relying party</p>
-                <p class="mt-2 break-all text-sm font-medium text-zinc-900">{{ config('passkeys.relying_party_id') ?: 'Not configured' }}</p>
+            <div class="rounded-md border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4">
+                <p class="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">Relying party</p>
+                <p class="mt-2 break-all text-sm font-medium text-zinc-900 dark:text-zinc-100">{{ config('passkeys.relying_party_id') ?: 'Not configured' }}</p>
             </div>
 
-            <div class="rounded-md border border-zinc-200 bg-zinc-50 p-4 md:col-span-2">
-                <p class="text-xs font-medium uppercase text-zinc-500">Allowed origins</p>
-                <p class="mt-2 break-all text-sm font-medium text-zinc-900">{{ implode(', ', config('passkeys.allowed_origins', [])) ?: 'Not configured' }}</p>
+            <div class="rounded-md border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4 md:col-span-2">
+                <p class="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">Allowed origins</p>
+                <p class="mt-2 break-all text-sm font-medium text-zinc-900 dark:text-zinc-100">{{ implode(', ', config('passkeys.allowed_origins', [])) ?: 'Not configured' }}</p>
             </div>
         </div>
     </section>
 
-    <section class="overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
-        <div class="flex flex-col justify-between gap-3 border-b border-zinc-200 bg-zinc-50 px-5 py-4 md:flex-row md:items-center">
+    <section class="overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm">
+        <div class="flex flex-col justify-between gap-3 border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-5 py-4 md:flex-row md:items-center">
             <div>
                 <h2 class="text-base font-semibold">Super Admin Compliance</h2>
-                <p class="mt-1 text-sm text-zinc-500">Use this before enabling enforcement so every platform admin is ready.</p>
+                <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Use this before enabling enforcement so every platform admin is ready.</p>
             </div>
 
             <flux:badge :color="$superAdminsMissingTwoFactor > 0 ? 'amber' : 'emerald'">
@@ -97,7 +97,7 @@
 
         <div class="overflow-x-auto overflow-y-hidden">
             <table class="min-w-[640px] w-full text-left text-sm">
-                <thead class="border-b border-zinc-200 text-zinc-500">
+                <thead class="border-b border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400">
                     <tr>
                         <th class="px-5 py-3 font-medium">Admin</th>
                         <th class="px-5 py-3 font-medium">2FA</th>
@@ -105,12 +105,12 @@
                         <th class="px-5 py-3 font-medium">Last updated</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-zinc-100">
+                <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
                     @forelse ($superAdmins as $admin)
                         <tr>
                             <td class="px-5 py-3">
                                 <p class="font-medium">{{ $admin->name }}</p>
-                                <p class="mt-1 text-xs text-zinc-500">{{ $admin->email }}</p>
+                                <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $admin->email }}</p>
                             </td>
                             <td class="px-5 py-3">
                                 <flux:badge :color="$admin->hasTwoFactorEnabled() ? 'emerald' : 'amber'">
@@ -122,13 +122,13 @@
                                     {{ $admin->passkeys_count > 0 ? $admin->passkeys_count.' registered' : 'No passkeys' }}
                                 </flux:badge>
                             </td>
-                            <td class="px-5 py-3 text-zinc-500">
+                            <td class="px-5 py-3 text-zinc-500 dark:text-zinc-400">
                                 {{ $admin->two_factor_confirmed_at?->diffForHumans() ?? 'Not enabled' }}
                             </td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="4" class="px-5 py-8 text-center text-zinc-500">
+                            <td colspan="4" class="px-5 py-8 text-center text-zinc-500 dark:text-zinc-400">
                                 No super admin accounts found.
                             </td>
                         </tr>

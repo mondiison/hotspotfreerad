@@ -13,7 +13,7 @@
         </flux:button>
     </div>
 
-    <section class="mb-4 rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
+    <section class="mb-4 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4 shadow-sm">
         <div class="grid min-w-0 gap-3 [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))] [&>*]:min-w-0">
             <div class="sm:col-span-2 xl:col-span-3">
                 <flux:input wire:model.live.debounce.350ms="search" icon="magnifying-glass" placeholder="Search shop, city, or tenant" />
@@ -34,9 +34,9 @@
         </div>
     </section>
 
-    <div class="overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
+    <div class="overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm">
         <table class="min-w-[760px] w-full text-left text-sm">
-            <thead class="border-b border-zinc-200 bg-zinc-50 text-zinc-500">
+            <thead class="border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
                 <tr>
                     <th class="px-4 py-3 font-medium">Shop</th>
                     <th class="px-4 py-3 font-medium">Tenant</th>
@@ -46,22 +46,22 @@
                     <th class="px-4 py-3 text-right font-medium">Actions</th>
                 </tr>
             </thead>
-            <tbody class="divide-y divide-zinc-100">
+            <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
                 @forelse ($shops as $shop)
                     <tr wire:key="shop-{{ $shop->id }}">
                         <td class="px-4 py-3">
                             <p class="font-medium">{{ $shop->name }}</p>
-                            <p class="mt-1 text-xs text-zinc-500">{{ $shop->routers_count ?? 0 }} routers / {{ $shop->packages_count ?? 0 }} packages</p>
+                            <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $shop->routers_count ?? 0 }} routers / {{ $shop->packages_count ?? 0 }} packages</p>
                         </td>
-                        <td class="px-4 py-3 text-zinc-600">{{ $shop->tenant->company_name }}</td>
-                        <td class="px-4 py-3 text-zinc-600">{{ $shop->location_city ?: 'Not set' }}</td>
+                        <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $shop->tenant->company_name }}</td>
+                        <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $shop->location_city ?: 'Not set' }}</td>
                         <td class="px-4 py-3">
                             @if ($shop->hasCompleteFlutterwaveCredentials())
                                 <flux:badge color="emerald">Configured</flux:badge>
-                                <p class="mt-2 text-xs text-zinc-500">{{ $shop->hasFlutterwaveWebhookSecret() ? 'Webhook secret saved' : 'Webhook secret missing' }}</p>
+                                <p class="mt-2 text-xs text-zinc-500 dark:text-zinc-400">{{ $shop->hasFlutterwaveWebhookSecret() ? 'Webhook secret saved' : 'Webhook secret missing' }}</p>
                             @else
                                 <flux:badge color="amber">Not configured</flux:badge>
-                                <p class="mt-2 text-xs text-zinc-500">Customer payments disabled</p>
+                                <p class="mt-2 text-xs text-zinc-500 dark:text-zinc-400">Customer payments disabled</p>
                             @endif
                         </td>
                         <td class="px-4 py-3">
@@ -78,7 +78,7 @@
                     <tr>
                         <td colspan="6" class="px-4 py-10 text-center">
                             <p class="font-medium">No shops match this view.</p>
-                            <p class="mt-1 text-sm text-zinc-500">Create a shop for each hotspot location or clear the filters.</p>
+                            <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Create a shop for each hotspot location or clear the filters.</p>
                             <flux:button type="button" variant="primary" icon="plus" class="mt-4" wire:click="create">Add Shop</flux:button>
                         </td>
                     </tr>
@@ -138,7 +138,7 @@
             @if ($editingShop)
                 <livewire:admin.payment-settings-card :shop="$editingShop" :key="'shop-modal-payment-settings-'.$editingShop->id" />
             @else
-                <div class="rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-sm leading-6 text-zinc-600">
+                <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
                     Save this shop first, then reopen it here to choose the payment gateway, enter its credentials, and set Live/Test environment where the gateway supports it.
                 </div>
             @endif
@@ -153,9 +153,9 @@
             </div>
 
             @if ($deletingShop)
-                <div class="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+                <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4">
                     <p class="font-medium">{{ $deletingShop->name }}</p>
-                    <p class="mt-1 text-sm text-zinc-500">{{ $deletingShop->location_city ?: 'No city set' }}</p>
+                    <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{{ $deletingShop->location_city ?: 'No city set' }}</p>
                 </div>
             @endif
 

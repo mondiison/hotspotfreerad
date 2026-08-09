@@ -18,7 +18,7 @@
         @endif
     </div>
 
-    <div class="mb-6 flex flex-wrap gap-2 rounded-lg border border-zinc-200 bg-white p-2 shadow-sm">
+    <div class="mb-6 flex flex-wrap gap-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-2 shadow-sm">
         <flux:button type="button" wire:click="showExpenses" variant="{{ $tab === 'expenses' ? 'primary' : 'ghost' }}" icon="receipt-percent">
             Expenses
         </flux:button>
@@ -41,10 +41,10 @@
                 ['label' => 'Overdue', 'value' => number_format($summary['overdue_count']), 'hint' => 'Recurring schedules past due'],
                 ['label' => 'Categories', 'value' => number_format($summary['category_count']), 'hint' => 'Expense groups used'],
             ] as $stat)
-                <div class="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
-                    <p class="text-sm font-medium text-zinc-500">{{ $stat['label'] }}</p>
+                <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
+                    <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">{{ $stat['label'] }}</p>
                     <p class="mt-3 text-2xl font-semibold">{{ $stat['value'] }}</p>
-                    <p class="mt-2 text-xs leading-5 text-zinc-500">{{ $stat['hint'] }}</p>
+                    <p class="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{{ $stat['hint'] }}</p>
                 </div>
             @endforeach
         </section>
@@ -61,7 +61,7 @@
             </flux:button>
         </section>
 
-        <section class="mt-6 rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
+        <section class="mt-6 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4 shadow-sm">
             <div class="grid min-w-0 gap-3 [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))] [&>*]:min-w-0">
                 <flux:input type="date" wire:model.live="from" />
                 <flux:input type="date" wire:model.live="to" />
@@ -85,9 +85,9 @@
         </section>
 
         <section class="mt-6 grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-            <div class="overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
+            <div class="overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm">
                 <table class="min-w-[820px] w-full text-left text-sm">
-                    <thead class="border-b border-zinc-200 bg-zinc-50 text-zinc-500">
+                    <thead class="border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
                         <tr>
                             <th class="px-4 py-3 font-medium">Expense</th>
                             <th class="px-4 py-3 font-medium">Category</th>
@@ -96,15 +96,15 @@
                             <th class="px-4 py-3 text-right font-medium">Actions</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-zinc-100">
+                    <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
                         @forelse ($expenses as $expense)
                             <tr wire:key="expense-{{ $expense->id }}">
                                 <td class="px-4 py-3">
                                     <p class="font-medium">{{ $expense->title }}</p>
-                                    <p class="mt-1 text-xs text-zinc-500">{{ $expense->incurred_on->toFormattedDateString() }}{{ $expense->vendor ? ' - '.$expense->vendor : '' }}</p>
+                                    <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $expense->incurred_on->toFormattedDateString() }}{{ $expense->vendor ? ' - '.$expense->vendor : '' }}</p>
                                     @if ($expense->is_recurring)
                                         <p class="mt-1 text-xs font-medium text-blue-700">Recurring</p>
-                                        <p class="mt-1 text-xs text-zinc-500">
+                                        <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
                                             {{ $expense->recurring_frequency ? str($expense->recurring_frequency)->title() : 'Frequency not set' }}
                                             @if ($expense->next_due_on)
                                                 - due {{ $expense->next_due_on->toFormattedDateString() }}
@@ -112,11 +112,11 @@
                                         </p>
                                     @endif
                                     @if ($expense->receipt_path)
-                                        <a href="{{ route('admin.expenses.receipt', $expense) }}" class="mt-1 inline-flex text-xs font-medium text-zinc-950 underline decoration-zinc-300 underline-offset-4">Receipt attached</a>
+                                        <a href="{{ route('admin.expenses.receipt', $expense) }}" class="mt-1 inline-flex text-xs font-medium text-zinc-950 dark:text-zinc-100 underline decoration-zinc-300 underline-offset-4">Receipt attached</a>
                                     @endif
                                 </td>
                                 <td class="px-4 py-3">{{ $expense->category?->name ?? 'Uncategorized' }}</td>
-                                <td class="px-4 py-3 text-zinc-600">{{ $expense->tenant?->company_name }}</td>
+                                <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $expense->tenant?->company_name }}</td>
                                 <td class="px-4 py-3 text-right font-semibold">{{ $expense->currency }} {{ number_format($expense->amount, 2) }}</td>
                                 <td class="px-4 py-3">
                                     <div class="flex justify-end gap-2">
@@ -132,7 +132,7 @@
                             <tr>
                                 <td colspan="5" class="px-4 py-10 text-center">
                                     <p class="font-medium">No expenses match this view.</p>
-                                    <p class="mt-1 text-sm text-zinc-500">Record operating costs like subscriptions, maintenance, equipment, personnel, rent, and utilities.</p>
+                                    <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Record operating costs like subscriptions, maintenance, equipment, personnel, rent, and utilities.</p>
                                     <flux:button type="button" variant="primary" icon="plus" class="mt-4" wire:click="create">Add Expense</flux:button>
                                 </td>
                             </tr>
@@ -141,14 +141,14 @@
                 </table>
             </div>
 
-            <div class="overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
-                <div class="border-b border-zinc-200 p-5">
+            <div class="overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm">
+                <div class="border-b border-zinc-200 dark:border-zinc-700 p-5">
                     <h2 class="text-base font-semibold">Spend by Category</h2>
-                    <p class="mt-1 text-sm text-zinc-500">Largest operating costs in the selected range.</p>
+                    <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Largest operating costs in the selected range.</p>
                 </div>
                 <div class="overflow-x-auto overflow-y-hidden">
                 <table class="min-w-[720px] w-full text-left text-sm">
-                    <thead class="border-b border-zinc-200 bg-zinc-50 text-zinc-500">
+                    <thead class="border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
                         <tr>
                             <th class="px-4 py-3 font-medium">Category</th>
                             <th class="px-4 py-3 text-right font-medium">Count</th>
@@ -158,26 +158,26 @@
                             <th class="px-4 py-3 text-right font-medium">Usage</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-zinc-100">
+                    <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
                         @forelse ($categoryRows as $row)
                             <tr>
                                 <td class="px-4 py-3 font-medium">{{ $row['category'] }}</td>
                                 <td class="px-4 py-3 text-right">{{ number_format($row['count']) }}</td>
                                 <td class="px-4 py-3 text-right font-semibold">NGN {{ number_format($row['amount'], 2) }}</td>
                                 <td class="px-4 py-3 text-right">{{ is_null($row['budget']) ? 'No budget' : 'NGN '.number_format($row['budget'], 2) }}</td>
-                                <td class="px-4 py-3 text-right {{ ! is_null($row['variance']) && $row['variance'] < 0 ? 'font-semibold text-red-700' : 'text-zinc-700' }}">
+                                <td class="px-4 py-3 text-right {{ ! is_null($row['variance']) && $row['variance'] < 0 ? 'font-semibold text-red-700' : 'text-zinc-700 dark:text-zinc-300' }}">
                                     {{ is_null($row['variance']) ? 'No budget' : 'NGN '.number_format($row['variance'], 2) }}
                                 </td>
                                 <td class="px-4 py-3 text-right">
                                     @if (is_null($row['usage']))
-                                        <span class="text-zinc-500">No budget</span>
+                                        <span class="text-zinc-500 dark:text-zinc-400">No budget</span>
                                     @else
-                                        <span class="{{ $row['usage'] > 100 ? 'font-semibold text-red-700' : 'text-zinc-700' }}">{{ $row['usage'] }}%</span>
+                                        <span class="{{ $row['usage'] > 100 ? 'font-semibold text-red-700' : 'text-zinc-700 dark:text-zinc-300' }}">{{ $row['usage'] }}%</span>
                                     @endif
                                 </td>
                             </tr>
                         @empty
-                            <tr><td colspan="6" class="px-4 py-8 text-center text-zinc-500">No category spend yet.</td></tr>
+                            <tr><td colspan="6" class="px-4 py-8 text-center text-zinc-500 dark:text-zinc-400">No category spend yet.</td></tr>
                         @endforelse
                     </tbody>
                 </table>
@@ -283,11 +283,11 @@
                     </flux:field>
 
                     @if ($editingExpense?->receipt_path)
-                        <div class="rounded-lg border border-zinc-200 bg-zinc-50 p-4 md:col-span-2">
+                        <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4 md:col-span-2">
                             <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
                                 <div>
                                     <p class="text-sm font-medium">Receipt attached</p>
-                                    <p class="mt-1 text-xs text-zinc-500">{{ basename($editingExpense->receipt_path) }}</p>
+                                    <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ basename($editingExpense->receipt_path) }}</p>
                                 </div>
                                 <flux:button href="{{ route('admin.expenses.receipt', $editingExpense) }}" variant="outline" icon="arrow-down-tray">Download</flux:button>
                             </div>
@@ -304,9 +304,9 @@
                     </flux:field>
                 </div>
 
-                <div class="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
-                    <h2 class="text-sm font-semibold text-zinc-950">Expense guide</h2>
-                    <p class="mt-1 text-sm leading-6 text-zinc-600">
+                <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4">
+                    <h2 class="text-sm font-semibold text-zinc-950 dark:text-zinc-100">Expense guide</h2>
+                    <p class="mt-1 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
                         Use recurring schedules for predictable monthly costs. Use categories and budgets to make profit reports and dashboard warnings more useful.
                     </p>
                 </div>
@@ -330,9 +330,9 @@
             </div>
 
             @if ($deletingExpense)
-                <div class="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+                <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4">
                     <p class="font-medium">{{ $deletingExpense->title }}</p>
-                    <p class="mt-1 text-sm text-zinc-500">{{ $deletingExpense->currency }} {{ number_format($deletingExpense->amount, 2) }}</p>
+                    <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{{ $deletingExpense->currency }} {{ number_format($deletingExpense->amount, 2) }}</p>
                 </div>
             @endif
 

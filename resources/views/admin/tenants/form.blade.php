@@ -3,7 +3,7 @@
     :heading="$tenant->exists ? 'Edit Tenant' : 'Add Tenant'"
     subheading="Tenant records group shops, routers, packages, and billing settings."
 >
-    <form method="POST" action="{{ $tenant->exists ? route('admin.tenants.update', $tenant) : route('admin.tenants.store') }}" class="max-w-4xl rounded-lg border border-zinc-200 bg-white p-6">
+    <form method="POST" action="{{ $tenant->exists ? route('admin.tenants.update', $tenant) : route('admin.tenants.store') }}" class="max-w-4xl rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-6">
         @csrf
         @if ($tenant->exists)
             @method('PUT')
@@ -11,7 +11,7 @@
 
         <div class="grid gap-6">
             <section>
-                <h2 class="text-sm font-semibold uppercase tracking-wide text-zinc-500">Account</h2>
+                <h2 class="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Account</h2>
                 <div class="mt-4 grid gap-5 md:grid-cols-2">
                     <flux:field>
                         <flux:label>Company name</flux:label>
@@ -62,11 +62,11 @@
                 </div>
             </section>
 
-            <section class="border-t border-zinc-200 pt-6">
+            <section class="border-t border-zinc-200 dark:border-zinc-700 pt-6">
                 <div class="flex flex-col justify-between gap-2 md:flex-row md:items-start">
                     <div>
-                        <h2 class="text-sm font-semibold uppercase tracking-wide text-zinc-500">Public site</h2>
-                        <p class="mt-1 text-sm text-zinc-500">This gives each tenant a simple branded page like <span class="font-medium text-zinc-700">{{ url('/demo-hotspot') }}</span>.</p>
+                        <h2 class="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Public site</h2>
+                        <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">This gives each tenant a simple branded page like <span class="font-medium text-zinc-700 dark:text-zinc-300">{{ url('/demo-hotspot') }}</span>.</p>
                     </div>
 
                     @if ($tenant->exists && $tenant->slug)
@@ -113,8 +113,8 @@
                 </div>
             </section>
 
-            <section class="border-t border-zinc-200 pt-6">
-                <h2 class="text-sm font-semibold uppercase tracking-wide text-zinc-500">Customer contact</h2>
+            <section class="border-t border-zinc-200 dark:border-zinc-700 pt-6">
+                <h2 class="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Customer contact</h2>
                 <div class="mt-4 grid gap-5 md:grid-cols-2">
                     <flux:field>
                         <flux:label>Contact phone</flux:label>
@@ -144,11 +144,11 @@
     </form>
 
     @if ($tenant->exists)
-        <section class="mt-6 max-w-4xl rounded-lg border border-zinc-200 bg-white p-6">
+        <section class="mt-6 max-w-4xl rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-6">
             <div class="flex flex-col justify-between gap-4 md:flex-row md:items-center">
                 <div>
-                    <h2 class="text-sm font-semibold uppercase tracking-wide text-zinc-500">Tenant Admin Access</h2>
-                    <p class="mt-2 text-sm text-zinc-600">Send a password reset link to {{ $tenant->owner_email }}. This avoids exposing the tenant admin password inside the platform.</p>
+                    <h2 class="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Tenant Admin Access</h2>
+                    <p class="mt-2 text-sm text-zinc-600 dark:text-zinc-400">Send a password reset link to {{ $tenant->owner_email }}. This avoids exposing the tenant admin password inside the platform.</p>
                 </div>
 
                 <form method="POST" action="{{ route('admin.tenants.owner-reset-link', $tenant) }}">

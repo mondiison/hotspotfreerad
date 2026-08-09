@@ -23,10 +23,10 @@
     @endphp
 
     @if ($tenantWorkspaceSummary)
-        <section class="mb-6 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+        <section class="mb-6 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
             <div class="flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
                 <div class="min-w-0">
-                    <p class="text-sm font-medium text-zinc-500">Tenant Workspace</p>
+                    <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">Tenant Workspace</p>
                     <div class="mt-2 flex flex-wrap items-center gap-2">
                         <h2 class="truncate text-2xl font-semibold">{{ $tenantWorkspaceSummary['company_name'] }}</h2>
                         <flux:badge :color="$tenantWorkspaceSummary['public_site_enabled'] ? 'green' : 'zinc'">
@@ -36,8 +36,8 @@
                             {{ $tenantWorkspaceSummary['security']['label'] }}
                         </flux:badge>
                     </div>
-                    <p class="mt-2 text-sm text-zinc-500">/{{ $tenantWorkspaceSummary['slug'] }} - {{ $tenantWorkspaceSummary['owner_email'] }}</p>
-                    <p class="mt-2 max-w-2xl text-sm leading-6 text-zinc-600">{{ $tenantWorkspaceSummary['security']['description'] }}</p>
+                    <p class="mt-2 text-sm text-zinc-500 dark:text-zinc-400">/{{ $tenantWorkspaceSummary['slug'] }} - {{ $tenantWorkspaceSummary['owner_email'] }}</p>
+                    <p class="mt-2 max-w-2xl text-sm leading-6 text-zinc-600 dark:text-zinc-400">{{ $tenantWorkspaceSummary['security']['description'] }}</p>
                 </div>
 
                 <div class="flex flex-wrap gap-2">
@@ -51,10 +51,10 @@
     @endif
 
     @if ($tenantLaunchChecklist)
-        <section class="mb-6 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+        <section class="mb-6 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
             <div class="flex flex-col justify-between gap-3 md:flex-row md:items-end">
                 <div>
-                    <p class="text-sm font-medium text-zinc-500">Launch Checklist</p>
+                    <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">Launch Checklist</p>
                     <h2 class="mt-2 text-xl font-semibold">Tenant setup path</h2>
                 </div>
                 <flux:badge color="zinc">{{ collect($tenantLaunchChecklist)->where('complete', true)->count() }} / {{ count($tenantLaunchChecklist) }} complete</flux:badge>
@@ -62,17 +62,17 @@
 
             <div class="mt-5 grid gap-3 lg:grid-cols-5">
                 @foreach ($tenantLaunchChecklist as $item)
-                    <article class="flex min-h-44 flex-col rounded-lg border border-zinc-200 p-4">
+                    <article class="flex min-h-44 flex-col rounded-lg border border-zinc-200 dark:border-zinc-700 p-4">
                         <div class="flex items-start justify-between gap-3">
-                            <span class="flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold {{ $item['complete'] ? 'bg-emerald-50 text-emerald-700' : 'bg-zinc-100 text-zinc-500' }}">
+                            <span class="flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold {{ $item['complete'] ? 'bg-emerald-50 text-emerald-700' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400' }}">
                                 {{ $item['complete'] ? 'OK' : $loop->iteration }}
                             </span>
                             <flux:badge :color="$item['complete'] ? 'green' : 'amber'">{{ $item['complete'] ? 'Done' : 'Next' }}</flux:badge>
                         </div>
 
                         <h3 class="mt-4 text-sm font-semibold">{{ $item['label'] }}</h3>
-                        <p class="mt-2 flex-1 text-xs leading-5 text-zinc-500">{{ $item['detail'] }}</p>
-                        <p class="mt-3 text-xs leading-5 text-zinc-600">{{ $item['status'] }}</p>
+                        <p class="mt-2 flex-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{{ $item['detail'] }}</p>
+                        <p class="mt-3 text-xs leading-5 text-zinc-600 dark:text-zinc-400">{{ $item['status'] }}</p>
 
                         <flux:button href="{{ route($item['route']) }}" wire:navigate variant="{{ $item['complete'] ? 'outline' : 'primary' }}" size="sm" class="mt-4">
                             {{ $item['action'] }}
@@ -100,42 +100,42 @@
             ['label' => 'Expenses', 'value' => 'NGN '.number_format($totalExpenses, 2), 'hint' => 'Recorded operating costs'],
             ['label' => 'Estimated Profit', 'value' => 'NGN '.number_format($estimatedProfit, 2), 'hint' => 'Tenant net sales minus expenses'],
         ] as $stat)
-            <div class="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
-                <p class="text-sm font-medium text-zinc-500">{{ $stat['label'] }}</p>
+            <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
+                <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">{{ $stat['label'] }}</p>
                 <p class="mt-3 text-3xl font-semibold">{{ is_numeric($stat['value']) ? number_format($stat['value']) : $stat['value'] }}</p>
-                <p class="mt-2 text-xs leading-5 text-zinc-500">{{ $stat['hint'] }}</p>
+                <p class="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{{ $stat['hint'] }}</p>
             </div>
         @endforeach
     </section>
 
-    <section class="mt-6 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+    <section class="mt-6 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
         <div class="flex flex-col justify-between gap-4 md:flex-row md:items-center">
             <div>
-                <p class="text-sm font-medium text-zinc-500">Scheduler Health</p>
+                <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">Scheduler Health</p>
                 <div class="mt-2 flex flex-wrap items-center gap-2">
                     <h2 class="text-xl font-semibold">{{ $schedulerHealth['label'] }}</h2>
                     <flux:badge :color="$schedulerHealth['is_healthy'] ? 'green' : ($schedulerHealth['last_run_at'] ? 'amber' : 'zinc')">
                         {{ $schedulerHealth['is_healthy'] ? 'Cron active' : 'Check cron' }}
                     </flux:badge>
                 </div>
-                <p class="mt-2 text-sm leading-6 text-zinc-600">{{ $schedulerHealth['description'] }}</p>
-                <p class="mt-1 text-xs text-zinc-500">
+                <p class="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">{{ $schedulerHealth['description'] }}</p>
+                <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
                     {{ $schedulerHealth['last_run_at'] ? 'Last heartbeat '.$schedulerHealth['last_run_at']->diffForHumans().' at '.$schedulerHealth['last_run_at']->format('M j, Y g:i A') : 'Run php artisan schedule:run or wait for cron to check in.' }}
                 </p>
             </div>
 
-            <div class="rounded-lg border border-zinc-200 bg-zinc-50 p-4 font-mono text-xs leading-5 text-zinc-700">
+            <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4 font-mono text-xs leading-5 text-zinc-700 dark:text-zinc-300">
                 * * * * * cd /var/www/hotspotfreerad && php artisan schedule:run &gt;&gt; /dev/null 2&gt;&amp;1
             </div>
         </div>
     </section>
 
-    <section class="mt-6 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+    <section class="mt-6 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
         <div class="flex flex-col justify-between gap-3 md:flex-row md:items-center">
             <div>
-                <p class="text-sm font-medium text-zinc-500">POS Access Desk</p>
+                <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">POS Access Desk</p>
                 <h2 class="mt-1 text-xl font-semibold">{{ number_format($posSummary['total']) }} POS terminal{{ $posSummary['total'] === 1 ? '' : 's' }}</h2>
-                <p class="mt-1 text-sm text-zinc-500">Password Wi-Fi devices managed by MAC address, renewal date, package, and RADIUS sync.</p>
+                <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Password Wi-Fi devices managed by MAC address, renewal date, package, and RADIUS sync.</p>
             </div>
 
             <div class="flex flex-wrap gap-2">
@@ -154,17 +154,17 @@
                 ['label' => 'Unsynced', 'value' => $posSummary['unsynced'], 'href' => route('admin.pos-devices.index', ['status' => 'unsynced']), 'hint' => 'Not pushed to RADIUS'],
                 ['label' => 'Disabled', 'value' => $posSummary['disabled'], 'href' => route('admin.pos-devices.index', ['status' => 'disabled']), 'hint' => 'Blocked from access'],
             ] as $stat)
-                <a href="{{ $stat['href'] }}" wire:navigate class="rounded-lg border border-zinc-200 p-4 transition hover:border-zinc-400">
-                    <p class="text-sm font-medium text-zinc-500">{{ $stat['label'] }}</p>
+                <a href="{{ $stat['href'] }}" wire:navigate class="rounded-lg border border-zinc-200 dark:border-zinc-700 p-4 transition hover:border-zinc-400 dark:hover:border-zinc-500">
+                    <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">{{ $stat['label'] }}</p>
                     <p class="mt-3 text-2xl font-semibold">{{ is_numeric($stat['value']) ? number_format($stat['value']) : $stat['value'] }}</p>
-                    <p class="mt-2 text-xs leading-5 text-zinc-500">{{ $stat['hint'] }}</p>
+                    <p class="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{{ $stat['hint'] }}</p>
                 </a>
             @endforeach
         </div>
 
-        <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200">
+        <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 dark:border-zinc-700">
             <table class="min-w-[760px] w-full text-left text-sm">
-                <thead class="bg-zinc-50 text-zinc-500">
+                <thead class="bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
                     <tr>
                         <th class="px-4 py-3 font-medium">Renewal Queue</th>
                         <th class="px-4 py-3 font-medium">Package</th>
@@ -172,26 +172,26 @@
                         <th class="px-4 py-3 font-medium">Expires</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-zinc-100">
+                <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
                     @forelse ($posSummary['renewal_queue'] as $device)
                         <tr>
                             <td class="px-4 py-3">
                                 <p class="font-medium">{{ $device->device_name }}</p>
-                                <p class="mt-1 font-mono text-xs text-zinc-500">{{ $device->mac_address }}</p>
+                                <p class="mt-1 font-mono text-xs text-zinc-500 dark:text-zinc-400">{{ $device->mac_address }}</p>
                             </td>
                             <td class="px-4 py-3">
                                 <p>{{ $device->package?->name ?? 'Deleted package' }}</p>
-                                <p class="mt-1 text-xs text-zinc-500">{{ $device->package?->speed_limit_profile ?: 'No speed profile' }}</p>
+                                <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $device->package?->speed_limit_profile ?: 'No speed profile' }}</p>
                             </td>
                             <td class="px-4 py-3">
                                 <p>{{ $device->shop?->name ?? 'Deleted shop' }}</p>
-                                <p class="mt-1 text-xs text-zinc-500">{{ $device->shop?->tenant?->company_name }}</p>
+                                <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $device->shop?->tenant?->company_name }}</p>
                             </td>
-                            <td class="px-4 py-3 text-zinc-600">{{ $device->expires_at?->format('M j, Y g:i A') }}</td>
+                            <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $device->expires_at?->format('M j, Y g:i A') }}</td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="4" class="px-4 py-8 text-center text-zinc-500">No POS renewals due in the next 7 days.</td>
+                            <td colspan="4" class="px-4 py-8 text-center text-zinc-500 dark:text-zinc-400">No POS renewals due in the next 7 days.</td>
                         </tr>
                     @endforelse
                 </tbody>
@@ -199,12 +199,12 @@
         </div>
     </section>
 
-    <section class="mt-6 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+    <section class="mt-6 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
         <div class="flex flex-col justify-between gap-3 md:flex-row md:items-center">
             <div>
-                <p class="text-sm font-medium text-zinc-500">PPPoE Service Desk</p>
+                <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">PPPoE Service Desk</p>
                 <h2 class="mt-1 text-xl font-semibold">{{ number_format($pppoeSummary['total']) }} fixed subscriber{{ $pppoeSummary['total'] === 1 ? '' : 's' }}</h2>
-                <p class="mt-1 text-sm text-zinc-500">Renewal, sync, and online-session snapshot for PPPoE customers.</p>
+                <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Renewal, sync, and online-session snapshot for PPPoE customers.</p>
             </div>
 
             <div class="flex flex-wrap gap-2">
@@ -223,17 +223,17 @@
                 ['label' => 'Unsynced', 'value' => $pppoeSummary['unsynced'], 'href' => route('admin.pppoe-subscribers.index', ['status' => 'unsynced']), 'hint' => 'Not pushed to RADIUS'],
                 ['label' => 'Disabled', 'value' => $pppoeSummary['disabled'], 'href' => route('admin.pppoe-subscribers.index', ['status' => 'disabled']), 'hint' => 'Blocked from access'],
             ] as $stat)
-                <a href="{{ $stat['href'] }}" wire:navigate class="rounded-lg border border-zinc-200 p-4 transition hover:border-zinc-400">
-                    <p class="text-sm font-medium text-zinc-500">{{ $stat['label'] }}</p>
+                <a href="{{ $stat['href'] }}" wire:navigate class="rounded-lg border border-zinc-200 dark:border-zinc-700 p-4 transition hover:border-zinc-400 dark:hover:border-zinc-500">
+                    <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">{{ $stat['label'] }}</p>
                     <p class="mt-3 text-2xl font-semibold">{{ is_numeric($stat['value']) ? number_format($stat['value']) : $stat['value'] }}</p>
-                    <p class="mt-2 text-xs leading-5 text-zinc-500">{{ $stat['hint'] }}</p>
+                    <p class="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{{ $stat['hint'] }}</p>
                 </a>
             @endforeach
         </div>
 
-        <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200">
+        <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 dark:border-zinc-700">
             <table class="min-w-[760px] w-full text-left text-sm">
-                <thead class="bg-zinc-50 text-zinc-500">
+                <thead class="bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
                     <tr>
                         <th class="px-4 py-3 font-medium">Renewal Queue</th>
                         <th class="px-4 py-3 font-medium">Package</th>
@@ -241,26 +241,26 @@
                         <th class="px-4 py-3 font-medium">Expires</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-zinc-100">
+                <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
                     @forelse ($pppoeSummary['renewal_queue'] as $subscriber)
                         <tr>
                             <td class="px-4 py-3">
                                 <p class="font-medium">{{ $subscriber->full_name ?: $subscriber->username }}</p>
-                                <p class="mt-1 font-mono text-xs text-zinc-500">{{ $subscriber->username }}</p>
+                                <p class="mt-1 font-mono text-xs text-zinc-500 dark:text-zinc-400">{{ $subscriber->username }}</p>
                             </td>
                             <td class="px-4 py-3">
                                 <p>{{ $subscriber->package?->name ?? 'Deleted package' }}</p>
-                                <p class="mt-1 text-xs text-zinc-500">{{ $subscriber->package?->speed_limit_profile ?: 'No speed profile' }}</p>
+                                <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $subscriber->package?->speed_limit_profile ?: 'No speed profile' }}</p>
                             </td>
                             <td class="px-4 py-3">
                                 <p>{{ $subscriber->shop?->name ?? 'Deleted shop' }}</p>
-                                <p class="mt-1 text-xs text-zinc-500">{{ $subscriber->shop?->tenant?->company_name }}</p>
+                                <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $subscriber->shop?->tenant?->company_name }}</p>
                             </td>
-                            <td class="px-4 py-3 text-zinc-600">{{ $subscriber->expires_at?->format('M j, Y g:i A') }}</td>
+                            <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $subscriber->expires_at?->format('M j, Y g:i A') }}</td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="4" class="px-4 py-8 text-center text-zinc-500">No PPPoE renewals due in the next 7 days.</td>
+                            <td colspan="4" class="px-4 py-8 text-center text-zinc-500 dark:text-zinc-400">No PPPoE renewals due in the next 7 days.</td>
                         </tr>
                     @endforelse
                 </tbody>
@@ -268,12 +268,12 @@
         </div>
     </section>
 
-    <section class="mt-6 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+    <section class="mt-6 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
         <div class="flex flex-col justify-between gap-3 md:flex-row md:items-center">
             <div>
-                <p class="text-sm font-medium text-zinc-500">Security Attention</p>
+                <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">Security Attention</p>
                 <h2 class="mt-1 text-xl font-semibold">{{ number_format($securityAttention['count']) }} event{{ $securityAttention['count'] === 1 ? '' : 's' }} in the last 30 days</h2>
-                <p class="mt-1 text-sm text-zinc-500">Failed 2FA, blocked tenant access, password changes, reset links, and disabled 2FA.</p>
+                <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Failed 2FA, blocked tenant access, password changes, reset links, and disabled 2FA.</p>
             </div>
 
             <flux:button href="{{ route('admin.security-activity.index', ['attention' => '1']) }}" wire:navigate variant="outline" size="sm" icon="shield-exclamation">
@@ -290,15 +290,15 @@
                         class="inline-flex items-center gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-1.5 text-sm font-medium text-rose-700 hover:bg-rose-100"
                     >
                         <span>{{ $reason['label'] }}</span>
-                        <span class="rounded bg-white px-1.5 py-0.5 text-xs">{{ number_format($reason['count']) }}</span>
+                        <span class="rounded bg-white dark:bg-zinc-900 px-1.5 py-0.5 text-xs">{{ number_format($reason['count']) }}</span>
                     </a>
                 @endforeach
             </div>
         @endif
 
-        <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200">
+        <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 dark:border-zinc-700">
             <table class="min-w-[680px] w-full text-left text-sm">
-                <thead class="bg-zinc-50 text-zinc-500">
+                <thead class="bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
                     <tr>
                         <th class="px-4 py-3 font-medium">Event</th>
                         <th class="px-4 py-3 font-medium">Admin</th>
@@ -306,23 +306,23 @@
                         <th class="px-4 py-3 font-medium">When</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-zinc-100">
+                <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
                     @forelse ($securityAttention['events'] as $activity)
                         <tr>
                             <td class="px-4 py-3">
-                                <p class="font-medium text-zinc-950">{{ $activity->label }}</p>
-                                <p class="mt-1 text-xs text-zinc-500">{{ str($activity->action)->replace('_', ' ')->title() }}</p>
+                                <p class="font-medium text-zinc-950 dark:text-zinc-100">{{ $activity->label }}</p>
+                                <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ str($activity->action)->replace('_', ' ')->title() }}</p>
                             </td>
                             <td class="px-4 py-3">
                                 <p class="font-medium">{{ $activity->user?->name ?? 'Deleted user' }}</p>
-                                <p class="mt-1 text-xs text-zinc-500">{{ $activity->user?->email ?? '-' }}</p>
+                                <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $activity->user?->email ?? '-' }}</p>
                             </td>
-                            <td class="px-4 py-3 text-zinc-600">{{ $activity->tenant?->company_name ?? 'Platform' }}</td>
-                            <td class="px-4 py-3 text-zinc-600">{{ $activity->created_at->diffForHumans() }}</td>
+                            <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $activity->tenant?->company_name ?? 'Platform' }}</td>
+                            <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $activity->created_at->diffForHumans() }}</td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="4" class="px-4 py-8 text-center text-zinc-500">No security attention events in the last 30 days.</td>
+                            <td colspan="4" class="px-4 py-8 text-center text-zinc-500 dark:text-zinc-400">No security attention events in the last 30 days.</td>
                         </tr>
                     @endforelse
                 </tbody>
@@ -330,10 +330,10 @@
         </div>
     </section>
 
-    <section class="mt-6 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+    <section class="mt-6 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
         <div class="flex flex-col justify-between gap-3 md:flex-row md:items-center">
             <div>
-                <p class="text-sm font-medium text-zinc-500">This Month Finance</p>
+                <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">This Month Finance</p>
                 <h2 class="mt-1 text-xl font-semibold">{{ $monthFinanceSummary['period'] }} performance</h2>
             </div>
 
@@ -368,21 +368,21 @@
                 ['label' => 'Profit', 'value' => 'NGN '.number_format($monthFinanceSummary['profit'], 2), 'hint' => 'Tenant net sales minus expenses'],
                 ['label' => 'Margin', 'value' => is_null($monthFinanceSummary['margin']) ? 'No sales' : $monthFinanceSummary['margin'].'%', 'hint' => 'Profit as a share of tenant net sales'],
             ] as $monthlyStat)
-                <article class="rounded-lg border border-zinc-200 p-4">
-                    <p class="text-sm font-medium text-zinc-500">{{ $monthlyStat['label'] }}</p>
+                <article class="rounded-lg border border-zinc-200 dark:border-zinc-700 p-4">
+                    <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">{{ $monthlyStat['label'] }}</p>
                     <p class="mt-3 text-2xl font-semibold">{{ $monthlyStat['value'] }}</p>
-                    <p class="mt-2 text-xs leading-5 text-zinc-500">{{ $monthlyStat['hint'] }}</p>
+                    <p class="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{{ $monthlyStat['hint'] }}</p>
                 </article>
             @endforeach
         </div>
     </section>
 
-    <section class="mt-6 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+    <section class="mt-6 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
         <div class="flex flex-col justify-between gap-3 md:flex-row md:items-center">
             <div>
-                <p class="text-sm font-medium text-zinc-500">Payment Health</p>
+                <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">Payment Health</p>
                 <h2 class="mt-1 text-xl font-semibold">{{ $paymentHealth['period'] }} checkout flow</h2>
-                <p class="mt-1 text-sm text-zinc-500">Attempts are counted by checkout creation date, so pending and failed payments do not inflate sales.</p>
+                <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Attempts are counted by checkout creation date, so pending and failed payments do not inflate sales.</p>
             </div>
 
             <div class="flex flex-wrap gap-2">
@@ -409,19 +409,19 @@
                 ['label' => 'Pending', 'value' => number_format($paymentHealth['pending_count']), 'hint' => 'NGN '.number_format($paymentHealth['pending_value'], 2).' awaiting callback/webhook'],
                 ['label' => 'Needs Attention', 'value' => number_format($paymentHealth['attention_count']), 'hint' => 'NGN '.number_format($paymentHealth['attention_value'], 2).' pending or failed'],
             ] as $stat)
-                <article class="rounded-lg border border-zinc-200 p-4">
-                    <p class="text-sm font-medium text-zinc-500">{{ $stat['label'] }}</p>
+                <article class="rounded-lg border border-zinc-200 dark:border-zinc-700 p-4">
+                    <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">{{ $stat['label'] }}</p>
                     <p class="mt-3 text-2xl font-semibold">{{ $stat['value'] }}</p>
-                    <p class="mt-2 text-xs leading-5 text-zinc-500">{{ $stat['hint'] }}</p>
+                    <p class="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{{ $stat['hint'] }}</p>
                 </article>
             @endforeach
         </div>
     </section>
 
-    <section class="mt-6 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+    <section class="mt-6 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
         <div class="flex flex-col justify-between gap-3 md:flex-row md:items-center">
             <div>
-                <p class="text-sm font-medium text-zinc-500">Top Packages</p>
+                <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">Top Packages</p>
                 <h2 class="mt-1 text-xl font-semibold">{{ $monthFinanceSummary['period'] }} best sellers</h2>
             </div>
             <flux:button href="{{ route('admin.payments.index', ['status' => 'successful']) }}" wire:navigate variant="outline" size="sm" icon="credit-card">
@@ -429,9 +429,9 @@
             </flux:button>
         </div>
 
-        <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200">
+        <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 dark:border-zinc-700">
             <table class="min-w-[760px] w-full text-left text-sm">
-                <thead class="bg-zinc-50 text-zinc-500">
+                <thead class="bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
                     <tr>
                         <th class="px-4 py-3 font-medium">Package</th>
                         <th class="px-4 py-3 font-medium">Shop</th>
@@ -441,26 +441,26 @@
                         <th class="px-4 py-3 text-right font-medium">Share</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-zinc-100">
+                <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
                     @forelse ($topPackages as $row)
                         <tr>
                             <td class="px-4 py-3 font-medium">{{ $row['package'] }}</td>
-                            <td class="px-4 py-3 text-zinc-600">{{ $row['shop'] }}</td>
+                            <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $row['shop'] }}</td>
                             <td class="px-4 py-3 text-right">{{ number_format($row['sales_count']) }}</td>
                             <td class="px-4 py-3 text-right font-semibold">NGN {{ number_format($row['gross_sales'], 2) }}</td>
                             <td class="px-4 py-3 text-right">NGN {{ number_format($row['tenant_net'], 2) }}</td>
                             <td class="px-4 py-3 text-right">
                                 <div class="ml-auto flex w-28 flex-col items-end gap-1">
                                     <span>{{ is_null($row['share']) ? 'No sales' : $row['share'].'%' }}</span>
-                                    <span class="block h-1.5 w-full overflow-hidden rounded-full bg-zinc-100">
-                                        <span class="block h-full rounded-full bg-zinc-950" style="width: {{ $row['share'] ?? 0 }}%"></span>
+                                    <span class="block h-1.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                                        <span class="block h-full rounded-full bg-zinc-950 dark:bg-zinc-100" style="width: {{ $row['share'] ?? 0 }}%"></span>
                                     </span>
                                 </div>
                             </td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="6" class="px-4 py-8 text-center text-zinc-500">No successful package sales this month.</td>
+                            <td colspan="6" class="px-4 py-8 text-center text-zinc-500 dark:text-zinc-400">No successful package sales this month.</td>
                         </tr>
                     @endforelse
                 </tbody>
@@ -468,10 +468,10 @@
         </div>
     </section>
 
-    <section class="mt-6 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+    <section class="mt-6 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
         <div class="flex flex-col justify-between gap-3 md:flex-row md:items-center">
             <div>
-                <p class="text-sm font-medium text-zinc-500">Top Locations</p>
+                <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">Top Locations</p>
                 <h2 class="mt-1 text-xl font-semibold">{{ $monthFinanceSummary['period'] }} shop performance</h2>
             </div>
             <flux:button href="{{ route('admin.shops.index') }}" wire:navigate variant="outline" size="sm" icon="building-storefront">
@@ -479,9 +479,9 @@
             </flux:button>
         </div>
 
-        <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200">
+        <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 dark:border-zinc-700">
             <table class="min-w-[820px] w-full text-left text-sm">
-                <thead class="bg-zinc-50 text-zinc-500">
+                <thead class="bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
                     <tr>
                         <th class="px-4 py-3 font-medium">Shop</th>
                         <th class="px-4 py-3 font-medium">Tenant</th>
@@ -492,11 +492,11 @@
                         <th class="px-4 py-3 text-right font-medium">Share</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-zinc-100">
+                <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
                     @forelse ($topShops as $row)
                         <tr>
                             <td class="px-4 py-3 font-medium">{{ $row['shop'] }}</td>
-                            <td class="px-4 py-3 text-zinc-600">{{ $row['tenant'] ?: 'Current tenant' }}</td>
+                            <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $row['tenant'] ?: 'Current tenant' }}</td>
                             <td class="px-4 py-3 text-right">{{ number_format($row['sales_count']) }}</td>
                             <td class="px-4 py-3 text-right">{{ number_format($row['active_access_count']) }}</td>
                             <td class="px-4 py-3 text-right font-semibold">NGN {{ number_format($row['gross_sales'], 2) }}</td>
@@ -504,15 +504,15 @@
                             <td class="px-4 py-3 text-right">
                                 <div class="ml-auto flex w-28 flex-col items-end gap-1">
                                     <span>{{ is_null($row['share']) ? 'No sales' : $row['share'].'%' }}</span>
-                                    <span class="block h-1.5 w-full overflow-hidden rounded-full bg-zinc-100">
-                                        <span class="block h-full rounded-full bg-zinc-950" style="width: {{ $row['share'] ?? 0 }}%"></span>
+                                    <span class="block h-1.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                                        <span class="block h-full rounded-full bg-zinc-950 dark:bg-zinc-100" style="width: {{ $row['share'] ?? 0 }}%"></span>
                                     </span>
                                 </div>
                             </td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="7" class="px-4 py-8 text-center text-zinc-500">No successful shop sales this month.</td>
+                            <td colspan="7" class="px-4 py-8 text-center text-zinc-500 dark:text-zinc-400">No successful shop sales this month.</td>
                         </tr>
                     @endforelse
                 </tbody>
@@ -520,7 +520,7 @@
         </div>
     </section>
 
-    <section class="mt-6 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+    <section class="mt-6 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
         @php
             $financeTrendMax = max(1, (float) collect($financeTrend)
                 ->flatMap(fn (array $row) => [(float) $row['sales'], (float) $row['expenses'], abs((float) $row['profit'])])
@@ -528,7 +528,7 @@
         @endphp
         <div class="flex flex-col justify-between gap-3 md:flex-row md:items-center">
             <div>
-                <p class="text-sm font-medium text-zinc-500">Finance Trend</p>
+                <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">Finance Trend</p>
                 <h2 class="mt-1 text-xl font-semibold">Last 6 months</h2>
             </div>
             <flux:button href="{{ route('admin.reports.sales', ['preset' => 'this_year', 'group' => 'month']) }}" wire:navigate variant="outline" size="sm" icon="chart-bar">
@@ -536,9 +536,9 @@
             </flux:button>
         </div>
 
-        <div class="mt-5 rounded-lg border border-zinc-200 bg-zinc-50 p-4" aria-label="Finance trend chart">
-            <div class="flex items-center gap-4 text-xs text-zinc-500">
-                <span class="inline-flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-sm bg-zinc-950"></span>Gross</span>
+        <div class="mt-5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4" aria-label="Finance trend chart">
+            <div class="flex items-center gap-4 text-xs text-zinc-500 dark:text-zinc-400">
+                <span class="inline-flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-sm bg-zinc-950 dark:bg-zinc-100"></span>Gross</span>
                 <span class="inline-flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-sm bg-amber-500"></span>Expense</span>
                 <span class="inline-flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-sm bg-emerald-600"></span>Profit</span>
             </div>
@@ -552,19 +552,19 @@
                     @endphp
                     <div class="flex min-w-0 flex-col items-center gap-2">
                         <div class="flex h-32 w-full items-end justify-center gap-1">
-                            <span class="w-3 rounded-t-sm bg-zinc-950" title="Gross sales: NGN {{ number_format($row['sales'], 2) }}" style="height: {{ $salesHeight }}%"></span>
+                            <span class="w-3 rounded-t-sm bg-zinc-950 dark:bg-zinc-100" title="Gross sales: NGN {{ number_format($row['sales'], 2) }}" style="height: {{ $salesHeight }}%"></span>
                             <span class="w-3 rounded-t-sm bg-amber-500" title="Expenses: NGN {{ number_format($row['expenses'], 2) }}" style="height: {{ $expenseHeight }}%"></span>
                             <span class="w-3 rounded-t-sm {{ $row['profit'] < 0 ? 'bg-red-600' : 'bg-emerald-600' }}" title="Profit: NGN {{ number_format($row['profit'], 2) }}" style="height: {{ $profitHeight }}%"></span>
                         </div>
-                        <span class="truncate text-xs font-medium text-zinc-600">{{ str($row['label'])->before(' ') }}</span>
+                        <span class="truncate text-xs font-medium text-zinc-600 dark:text-zinc-400">{{ str($row['label'])->before(' ') }}</span>
                     </div>
                 @endforeach
             </div>
         </div>
 
-        <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200">
+        <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 dark:border-zinc-700">
             <table class="min-w-[860px] w-full text-left text-sm">
-                <thead class="bg-zinc-50 text-zinc-500">
+                <thead class="bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
                     <tr>
                         <th class="px-4 py-3 font-medium">Month</th>
                         <th class="px-4 py-3 text-right font-medium">Gross Sales</th>
@@ -575,14 +575,14 @@
                         <th class="px-4 py-3 text-right font-medium">Action</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-zinc-100">
+                <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
                     @foreach ($financeTrend as $row)
                         <tr>
                             <td class="px-4 py-3 font-medium">{{ $row['label'] }}</td>
                             <td class="px-4 py-3 text-right font-semibold">NGN {{ number_format($row['sales'], 2) }}</td>
                             <td class="px-4 py-3 text-right">NGN {{ number_format($row['net'], 2) }}</td>
                             <td class="px-4 py-3 text-right">NGN {{ number_format($row['expenses'], 2) }}</td>
-                            <td class="px-4 py-3 text-right {{ $row['profit'] < 0 ? 'font-semibold text-red-700' : 'font-semibold text-zinc-950' }}">NGN {{ number_format($row['profit'], 2) }}</td>
+                            <td class="px-4 py-3 text-right {{ $row['profit'] < 0 ? 'font-semibold text-red-700' : 'font-semibold text-zinc-950 dark:text-zinc-100' }}">NGN {{ number_format($row['profit'], 2) }}</td>
                             <td class="px-4 py-3 text-right">{{ is_null($row['margin']) ? 'No sales' : $row['margin'].'%' }}</td>
                             <td class="px-4 py-3 text-right">
                                 <flux:button
@@ -638,12 +638,12 @@
             </div>
 
             @if ($budgetWatch->isEmpty())
-                <div class="mt-5 rounded-lg border border-emerald-200 bg-white p-4">
+                <div class="mt-5 rounded-lg border border-emerald-200 bg-white dark:bg-zinc-900 p-4">
                     <p class="text-sm font-medium text-emerald-950">All budgeted categories are under watch level.</p>
                     <p class="mt-1 text-sm text-emerald-700">The dashboard will highlight a category here once current-month spending reaches 80% of its monthly budget.</p>
                 </div>
             @else
-            <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-amber-200 bg-white">
+            <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-amber-200 bg-white dark:bg-zinc-900">
                 <table class="min-w-[860px] w-full text-left text-sm">
                     <thead class="bg-amber-50 text-amber-800">
                         <tr>
@@ -663,15 +663,15 @@
                                     <p class="font-medium">{{ $row['category'] }}</p>
                                     <p class="mt-1 text-xs {{ $row['usage'] > 100 ? 'text-red-700' : 'text-amber-700' }}">{{ $row['status'] }}</p>
                                 </td>
-                                <td class="px-4 py-3 text-zinc-600">{{ $row['tenant'] ?: 'All tenants' }}</td>
+                                <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $row['tenant'] ?: 'All tenants' }}</td>
                                 <td class="px-4 py-3 text-right font-semibold">NGN {{ number_format($row['spent'], 2) }}</td>
                                 <td class="px-4 py-3 text-right">NGN {{ number_format($row['budget'], 2) }}</td>
-                                <td class="px-4 py-3 text-right {{ $row['variance'] < 0 ? 'font-semibold text-red-700' : 'text-zinc-700' }}">
+                                <td class="px-4 py-3 text-right {{ $row['variance'] < 0 ? 'font-semibold text-red-700' : 'text-zinc-700 dark:text-zinc-300' }}">
                                     NGN {{ number_format($row['variance'], 2) }}
                                 </td>
                                 <td class="px-4 py-3 text-right">
                                     <div class="ml-auto flex w-28 flex-col items-end gap-1">
-                                        <span class="{{ $row['usage'] > 100 ? 'font-semibold text-red-700' : 'text-zinc-700' }}">{{ $row['usage'] }}%</span>
+                                        <span class="{{ $row['usage'] > 100 ? 'font-semibold text-red-700' : 'text-zinc-700 dark:text-zinc-300' }}">{{ $row['usage'] }}%</span>
                                         <span class="block h-1.5 w-full overflow-hidden rounded-full bg-amber-100">
                                             <span class="block h-full rounded-full {{ $row['usage'] > 100 ? 'bg-red-600' : 'bg-amber-500' }}" style="width: {{ min($row['usage'], 100) }}%"></span>
                                         </span>
@@ -698,35 +698,35 @@
     @endif
 
     @if ($tenantBillingSummary)
-        <section class="mt-6 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+        <section class="mt-6 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
             <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                 <div>
-                    <p class="text-sm font-medium text-zinc-500">Platform Plan</p>
+                    <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">Platform Plan</p>
                     <h2 class="mt-2 text-2xl font-semibold">{{ $tenantBillingSummary['plan_name'] }}</h2>
-                    <p class="mt-1 text-sm text-zinc-500">{{ $tenantBillingSummary['price'] }}</p>
+                    <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{{ $tenantBillingSummary['price'] }}</p>
                 </div>
 
                 <div class="flex flex-wrap gap-2">
-                    <span class="rounded-full bg-zinc-100 px-3 py-1 text-sm font-medium text-zinc-700">{{ $tenantBillingSummary['status'] }}</span>
+                    <span class="rounded-full bg-zinc-100 dark:bg-zinc-800 px-3 py-1 text-sm font-medium text-zinc-700 dark:text-zinc-300">{{ $tenantBillingSummary['status'] }}</span>
                     <span class="rounded-full bg-blue-50 px-3 py-1 text-sm font-medium text-blue-700">{{ $tenantBillingSummary['period_label'] }}</span>
-                    <a href="{{ route('admin.billing.index') }}" wire:navigate class="rounded-md border border-zinc-200 px-3 py-1.5 text-sm font-medium hover:bg-zinc-50">Manage billing</a>
+                    <a href="{{ route('admin.billing.index') }}" wire:navigate class="rounded-md border border-zinc-200 dark:border-zinc-700 px-3 py-1.5 text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800">Manage billing</a>
                 </div>
             </div>
 
             <div class="mt-5 grid gap-4 md:grid-cols-3">
                 @foreach ($tenantBillingSummary['usage'] as $usage)
-                    <div class="rounded-lg border border-zinc-200 p-4">
+                    <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 p-4">
                         <div class="flex items-center justify-between gap-3">
                             <p class="text-sm font-medium">{{ $usage['label'] }}</p>
-                            <p class="text-sm text-zinc-500">{{ number_format($usage['used']) }} / {{ $usage['limit_label'] }}</p>
+                            <p class="text-sm text-zinc-500 dark:text-zinc-400">{{ number_format($usage['used']) }} / {{ $usage['limit_label'] }}</p>
                         </div>
-                        <div class="mt-3 h-2 overflow-hidden rounded-full bg-zinc-100">
+                        <div class="mt-3 h-2 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
                             <div
-                                class="h-full rounded-full {{ $usage['is_limited'] && $usage['percent'] >= 90 ? 'bg-amber-500' : 'bg-zinc-950' }}"
+                                class="h-full rounded-full {{ $usage['is_limited'] && $usage['percent'] >= 90 ? 'bg-amber-500' : 'bg-zinc-950 dark:bg-zinc-100' }}"
                                 style="width: {{ $usage['percent'] }}%"
                             ></div>
                         </div>
-                        <p class="mt-2 text-xs leading-5 text-zinc-500">
+                        <p class="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">
                             {{ $usage['is_limited'] ? 'Upgrade before adding beyond this plan limit.' : 'No plan limit is applied to this resource.' }}
                         </p>
                     </div>
@@ -743,10 +743,10 @@
                 ['label' => 'Past Due', 'value' => $platformBillingSummary['past_due_subscription_count'], 'hint' => 'Tenants needing billing attention'],
                 ['label' => 'Platform MRR', 'value' => 'NGN '.number_format($platformBillingSummary['monthly_recurring_revenue'], 2), 'hint' => 'Active subscription amount per month'],
             ] as $billingStat)
-                <div class="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
-                    <p class="text-sm font-medium text-zinc-500">{{ $billingStat['label'] }}</p>
+                <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
+                    <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">{{ $billingStat['label'] }}</p>
                     <p class="mt-3 text-2xl font-semibold">{{ is_numeric($billingStat['value']) ? number_format($billingStat['value']) : $billingStat['value'] }}</p>
-                    <p class="mt-2 text-xs leading-5 text-zinc-500">{{ $billingStat['hint'] }}</p>
+                    <p class="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{{ $billingStat['hint'] }}</p>
                 </div>
             @endforeach
         </section>
@@ -762,7 +762,7 @@
                 <flux:button href="{{ route('admin.expenses.index', ['schedule' => 'overdue']) }}" wire:navigate variant="outline" size="sm" icon="receipt-percent">Review overdue</flux:button>
             </div>
 
-            <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-red-200 bg-white">
+            <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-red-200 bg-white dark:bg-zinc-900">
                 <table class="min-w-[720px] w-full text-left text-sm">
                     <thead class="bg-red-50 text-red-700">
                         <tr>
@@ -778,9 +778,9 @@
                             <tr>
                                 <td class="px-4 py-3">
                                     <p class="font-medium">{{ $expense->title }}</p>
-                                    <p class="mt-1 text-xs text-zinc-500">{{ $expense->category?->name ?? 'Uncategorized' }}</p>
+                                    <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $expense->category?->name ?? 'Uncategorized' }}</p>
                                 </td>
-                                <td class="px-4 py-3 text-zinc-600">{{ $expense->tenant?->company_name }}</td>
+                                <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $expense->tenant?->company_name }}</td>
                                 <td class="px-4 py-3 text-red-700">{{ $expense->next_due_on?->toFormattedDateString() }}</td>
                                 <td class="px-4 py-3 text-right font-semibold">{{ $expense->currency }} {{ number_format($expense->amount, 2) }}</td>
                                 <td class="px-4 py-3">
@@ -797,18 +797,18 @@
         </section>
     @endif
 
-    <section class="mt-6 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+    <section class="mt-6 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
         <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
             <div>
                 <h2 class="text-base font-semibold">Upcoming Recurring Expenses</h2>
-                <p class="mt-1 text-sm text-zinc-500">Costs due within the next 30 days.</p>
+                <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Costs due within the next 30 days.</p>
             </div>
             <flux:button href="{{ route('admin.expenses.index', ['schedule' => 'due_soon']) }}" wire:navigate variant="outline" size="sm" icon="receipt-percent">View due soon</flux:button>
         </div>
 
-        <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200">
+        <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 dark:border-zinc-700">
             <table class="min-w-[760px] w-full text-left text-sm">
-                <thead class="bg-zinc-50 text-zinc-500">
+                <thead class="bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
                     <tr>
                         <th class="px-4 py-3 font-medium">Expense</th>
                         <th class="px-4 py-3 font-medium">Tenant</th>
@@ -818,16 +818,16 @@
                         <th class="px-4 py-3 text-right font-medium">Action</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-zinc-100">
+                <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
                     @forelse ($upcomingRecurringExpenses as $expense)
                         <tr>
                             <td class="px-4 py-3">
                                 <p class="font-medium">{{ $expense->title }}</p>
-                                <p class="mt-1 text-xs text-zinc-500">{{ $expense->category?->name ?? 'Uncategorized' }}</p>
+                                <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $expense->category?->name ?? 'Uncategorized' }}</p>
                             </td>
-                            <td class="px-4 py-3 text-zinc-600">{{ $expense->tenant?->company_name }}</td>
-                            <td class="px-4 py-3 text-zinc-600">{{ $expense->recurring_frequency ? str($expense->recurring_frequency)->title() : 'Not set' }}</td>
-                            <td class="px-4 py-3 text-zinc-600">{{ $expense->next_due_on?->toFormattedDateString() }}</td>
+                            <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $expense->tenant?->company_name }}</td>
+                            <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $expense->recurring_frequency ? str($expense->recurring_frequency)->title() : 'Not set' }}</td>
+                            <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $expense->next_due_on?->toFormattedDateString() }}</td>
                             <td class="px-4 py-3 text-right font-semibold">{{ $expense->currency }} {{ number_format($expense->amount, 2) }}</td>
                             <td class="px-4 py-3">
                                 <form method="POST" action="{{ route('admin.expenses.record-recurring', $expense) }}" class="flex justify-end">
@@ -837,7 +837,7 @@
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="6" class="px-4 py-8 text-center text-zinc-500">No recurring expenses are due in the next 30 days.</td></tr>
+                        <tr><td colspan="6" class="px-4 py-8 text-center text-zinc-500 dark:text-zinc-400">No recurring expenses are due in the next 30 days.</td></tr>
                     @endforelse
                 </tbody>
             </table>
@@ -845,18 +845,18 @@
     </section>
 
     <section class="mt-6 grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-        <div class="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+        <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
             <div class="flex items-center justify-between gap-4">
                 <div>
                     <h2 class="text-base font-semibold">Router Health</h2>
-                    <p class="mt-1 text-sm text-zinc-500">Status is refreshed from recent FreeRADIUS accounting activity.</p>
+                    <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Status is refreshed from recent FreeRADIUS accounting activity.</p>
                 </div>
-                <a href="{{ route('admin.routers.index') }}" wire:navigate class="rounded-md border border-zinc-200 px-3 py-2 text-sm hover:bg-zinc-50">View all</a>
+                <a href="{{ route('admin.routers.index') }}" wire:navigate class="rounded-md border border-zinc-200 dark:border-zinc-700 px-3 py-2 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800">View all</a>
             </div>
 
-            <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200">
+            <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 dark:border-zinc-700">
                 <table class="min-w-[760px] w-full text-left text-sm">
-                    <thead class="bg-zinc-50 text-zinc-500">
+                    <thead class="bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
                         <tr>
                             <th class="px-4 py-3 font-medium">Router</th>
                             <th class="px-4 py-3 font-medium">Shop</th>
@@ -864,44 +864,44 @@
                             <th class="px-4 py-3 font-medium">Last Seen</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-zinc-100">
+                    <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
                         @forelse ($routerHealth as $router)
                             <tr>
                                 <td class="px-4 py-3 font-medium">{{ $router->name }}</td>
-                                <td class="px-4 py-3 text-zinc-600">{{ $router->shop->name }}</td>
+                                <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $router->shop->name }}</td>
                                 <td class="px-4 py-3">
-                                    <span class="rounded-full px-2 py-1 text-xs font-medium {{ $router->detected_status === 'Online' ? 'bg-emerald-50 text-emerald-700' : ($router->detected_status === 'Recently seen' ? 'bg-blue-50 text-blue-700' : 'bg-zinc-100 text-zinc-600') }}">
+                                    <span class="rounded-full px-2 py-1 text-xs font-medium {{ $router->detected_status === 'Online' ? 'bg-emerald-50 text-emerald-700' : ($router->detected_status === 'Recently seen' ? 'bg-blue-50 text-blue-700' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400') }}">
                                         {{ $router->detected_status ?? 'Unknown' }}
                                     </span>
                                 </td>
-                                <td class="px-4 py-3 text-zinc-600">{{ $router->last_seen_at?->diffForHumans() ?? 'Never' }}</td>
+                                <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $router->last_seen_at?->diffForHumans() ?? 'Never' }}</td>
                             </tr>
                         @empty
-                            <tr><td colspan="4" class="px-4 py-8 text-center text-zinc-500">No routers have been registered yet.</td></tr>
+                            <tr><td colspan="4" class="px-4 py-8 text-center text-zinc-500 dark:text-zinc-400">No routers have been registered yet.</td></tr>
                         @endforelse
                     </tbody>
                 </table>
             </div>
         </div>
 
-        <div class="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+        <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
             <h2 class="text-base font-semibold">Setup Progress</h2>
-            <p class="mt-1 text-sm text-zinc-500">The clean path from platform setup to live customer access.</p>
+            <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">The clean path from platform setup to live customer access.</p>
 
             <div class="mt-5 space-y-3">
                 @foreach ($setupSteps as $step)
-                    <div class="flex items-center justify-between gap-4 rounded-lg border border-zinc-200 p-4">
+                    <div class="flex items-center justify-between gap-4 rounded-lg border border-zinc-200 dark:border-zinc-700 p-4">
                         <div class="flex items-center gap-3">
-                            <span class="flex h-8 w-8 items-center justify-center rounded-full text-xs font-medium {{ $step['complete'] ? 'bg-emerald-50 text-emerald-700' : 'bg-zinc-100 text-zinc-500' }}">
+                            <span class="flex h-8 w-8 items-center justify-center rounded-full text-xs font-medium {{ $step['complete'] ? 'bg-emerald-50 text-emerald-700' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400' }}">
                                 {{ $step['complete'] ? 'OK' : $loop->iteration }}
                             </span>
                             <p class="text-sm font-medium">{{ $step['label'] }}</p>
                         </div>
 
                         @if (! $step['complete'] && $step['route'])
-                            <a href="{{ route($step['route']) }}" wire:navigate class="text-sm font-medium text-zinc-950 underline decoration-zinc-300 underline-offset-4">Start</a>
+                            <a href="{{ route($step['route']) }}" wire:navigate class="text-sm font-medium text-zinc-950 dark:text-zinc-100 underline decoration-zinc-300 underline-offset-4">Start</a>
                         @else
-                            <span class="text-sm text-zinc-500">{{ $step['complete'] ? 'Done' : 'Pending' }}</span>
+                            <span class="text-sm text-zinc-500 dark:text-zinc-400">{{ $step['complete'] ? 'Done' : 'Pending' }}</span>
                         @endif
                     </div>
                 @endforeach
@@ -909,17 +909,17 @@
         </div>
     </section>
 
-    <section class="mt-6 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+    <section class="mt-6 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
         <div class="flex items-center justify-between gap-4">
             <div>
                 <h2 class="text-base font-semibold">Users Online</h2>
-                <p class="mt-1 text-sm text-zinc-500">Live sessions from FreeRADIUS accounting, grouped by routers this admin can access.</p>
+                <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Live sessions from FreeRADIUS accounting, grouped by routers this admin can access.</p>
             </div>
         </div>
 
-        <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200">
+        <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 dark:border-zinc-700">
             <table class="min-w-[720px] w-full text-left text-sm">
-                <thead class="bg-zinc-50 text-zinc-500">
+                <thead class="bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
                     <tr>
                         <th class="px-4 py-3 font-medium">User / Device</th>
                         <th class="px-4 py-3 font-medium">Router</th>
@@ -928,24 +928,24 @@
                         <th class="px-4 py-3 font-medium">Usage</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-zinc-100">
+                <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
                     @forelse ($onlineSessions as $session)
                         <tr>
                             <td class="px-4 py-3">
                                 <p class="font-medium">{{ $session->username }}</p>
-                                <p class="mt-1 font-mono text-xs text-zinc-500">{{ $session->callingstationid ?: 'No MAC reported' }}</p>
+                                <p class="mt-1 font-mono text-xs text-zinc-500 dark:text-zinc-400">{{ $session->callingstationid ?: 'No MAC reported' }}</p>
                             </td>
-                            <td class="px-4 py-3 text-zinc-600">
+                            <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">
                                 <p>{{ $session->router_name }}</p>
-                                <p class="mt-1 text-xs text-zinc-500">{{ $session->shop_name ?: $session->nasipaddress }}</p>
+                                <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $session->shop_name ?: $session->nasipaddress }}</p>
                             </td>
-                            <td class="px-4 py-3 font-mono text-xs text-zinc-600">{{ $session->framedipaddress ?: 'None' }}</td>
-                            <td class="px-4 py-3 text-zinc-600">{{ $session->acctstarttime ? \Illuminate\Support\Carbon::parse($session->acctstarttime)->diffForHumans() : 'Unknown' }}</td>
+                            <td class="px-4 py-3 font-mono text-xs text-zinc-600 dark:text-zinc-400">{{ $session->framedipaddress ?: 'None' }}</td>
+                            <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $session->acctstarttime ? \Illuminate\Support\Carbon::parse($session->acctstarttime)->diffForHumans() : 'Unknown' }}</td>
                             <td class="px-4 py-3 font-medium">{{ $formatBytes($session->total_bytes) }}</td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="5" class="px-4 py-8 text-center text-zinc-500">
+                            <td colspan="5" class="px-4 py-8 text-center text-zinc-500 dark:text-zinc-400">
                                 {{ $radiusAccountingReady ? 'No users are online right now.' : 'FreeRADIUS accounting is not available yet.' }}
                             </td>
                         </tr>
@@ -955,18 +955,18 @@
         </div>
     </section>
 
-    <section class="mt-6 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+    <section class="mt-6 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
         <div class="flex items-center justify-between gap-4">
             <div>
                 <h2 class="text-base font-semibold">Recent Access Grants</h2>
-                <p class="mt-1 text-sm text-zinc-500">Latest subscriptions created from the captive portal or package flow.</p>
+                <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Latest subscriptions created from the captive portal or package flow.</p>
             </div>
-            <a href="{{ route('admin.packages.index') }}" wire:navigate class="rounded-md border border-zinc-200 px-3 py-2 text-sm hover:bg-zinc-50">Manage plans</a>
+            <a href="{{ route('admin.packages.index') }}" wire:navigate class="rounded-md border border-zinc-200 dark:border-zinc-700 px-3 py-2 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800">Manage plans</a>
         </div>
 
-        <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200">
+        <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 dark:border-zinc-700">
             <table class="min-w-[640px] w-full text-left text-sm">
-                <thead class="bg-zinc-50 text-zinc-500">
+                <thead class="bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
                     <tr>
                         <th class="px-4 py-3 font-medium">Device</th>
                         <th class="px-4 py-3 font-medium">Package</th>
@@ -974,16 +974,16 @@
                         <th class="px-4 py-3 font-medium">Expires</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-zinc-100">
+                <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
                     @forelse ($recentSubscriptions as $subscription)
                         <tr>
                             <td class="px-4 py-3 font-medium">{{ $subscription->mac_address }}</td>
-                            <td class="px-4 py-3 text-zinc-600">{{ $subscription->package->name }}</td>
-                            <td class="px-4 py-3 text-zinc-600">{{ $subscription->shop->name }}</td>
-                            <td class="px-4 py-3 text-zinc-600">{{ $subscription->expires_at->diffForHumans() }}</td>
+                            <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $subscription->package->name }}</td>
+                            <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $subscription->shop->name }}</td>
+                            <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $subscription->expires_at->diffForHumans() }}</td>
                         </tr>
                     @empty
-                        <tr><td colspan="4" class="px-4 py-8 text-center text-zinc-500">No access grants have been created yet.</td></tr>
+                        <tr><td colspan="4" class="px-4 py-8 text-center text-zinc-500 dark:text-zinc-400">No access grants have been created yet.</td></tr>
                     @endforelse
                 </tbody>
             </table>

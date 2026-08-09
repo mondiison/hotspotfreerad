@@ -1,38 +1,38 @@
 <x-layouts.admin title="Payment Setup" heading="Payment Setup" subheading="Connect tenant-owned collection accounts for customer hotspot payments.">
     <section class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <div class="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+        <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
             <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div class="min-w-0">
                     <div class="flex flex-wrap items-center gap-2">
                         <h2 class="text-base font-semibold">{{ $gateway['label'] }}</h2>
                         <flux:badge color="blue" size="sm">Tenant collections</flux:badge>
                     </div>
-                    <p class="mt-2 max-w-2xl text-sm leading-6 text-zinc-600">{{ $gateway['summary'] }}</p>
+                    <p class="mt-2 max-w-2xl text-sm leading-6 text-zinc-600 dark:text-zinc-400">{{ $gateway['summary'] }}</p>
                 </div>
             </div>
 
             <div class="mt-5 grid gap-3 md:grid-cols-3">
                 @foreach ($gateway['channels'] as $channel)
-                    <div class="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
-                        <p class="text-sm font-semibold text-zinc-950">{{ $channel['label'] }}</p>
-                        <p class="mt-1 text-xs font-medium text-zinc-500">{{ $channel['requires'] }}</p>
-                        <p class="mt-2 text-xs leading-5 text-zinc-600">{{ $channel['description'] }}</p>
+                    <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4">
+                        <p class="text-sm font-semibold text-zinc-950 dark:text-zinc-100">{{ $channel['label'] }}</p>
+                        <p class="mt-1 text-xs font-medium text-zinc-500 dark:text-zinc-400">{{ $channel['requires'] }}</p>
+                        <p class="mt-2 text-xs leading-5 text-zinc-600 dark:text-zinc-400">{{ $channel['description'] }}</p>
                     </div>
                 @endforeach
             </div>
         </div>
 
-        <div class="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+        <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
             <h2 class="text-base font-semibold">Global URLs</h2>
-            <p class="mt-1 text-sm leading-6 text-zinc-500">Use these once in the active payment gateway dashboard. They do not change per tenant.</p>
+            <p class="mt-1 text-sm leading-6 text-zinc-500 dark:text-zinc-400">Use these once in the active payment gateway dashboard. They do not change per tenant.</p>
 
             @foreach ([['label' => 'Payment webhook', 'url' => $webhookUrl], ['label' => 'Payment callback', 'url' => $callbackUrl]] as $endpoint)
                 <div class="mt-4">
                     <div class="flex items-center justify-between gap-2">
-                        <p class="text-xs font-semibold uppercase text-zinc-500">{{ $endpoint['label'] }}</p>
+                        <p class="text-xs font-semibold uppercase text-zinc-500 dark:text-zinc-400">{{ $endpoint['label'] }}</p>
                         <button
                             type="button"
-                            class="text-xs font-semibold text-zinc-950 underline decoration-zinc-300 underline-offset-4"
+                            class="text-xs font-semibold text-zinc-950 dark:text-zinc-100 underline decoration-zinc-300 underline-offset-4"
                             x-data="{ copied: false }"
                             x-on:click="navigator.clipboard?.writeText('{{ $endpoint['url'] }}'); copied = true; setTimeout(() => copied = false, 1400)"
                             x-text="copied ? 'Copied' : 'Copy'"
@@ -53,10 +53,10 @@
             ['label' => 'Card checkout', 'value' => number_format($summary['card_ready']), 'hint' => 'v3 Secret Key saved'],
             ['label' => 'Webhooks ready', 'value' => number_format($summary['webhook_ready']), 'hint' => 'Webhook secret hash saved'],
         ] as $stat)
-            <div class="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
-                <p class="text-sm font-medium text-zinc-500">{{ $stat['label'] }}</p>
+            <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
+                <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">{{ $stat['label'] }}</p>
                 <p class="mt-3 text-2xl font-semibold">{{ $stat['value'] }}</p>
-                <p class="mt-2 text-xs leading-5 text-zinc-500">{{ $stat['hint'] }}</p>
+                <p class="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{{ $stat['hint'] }}</p>
             </div>
         @endforeach
     </section>
@@ -69,7 +69,7 @@
         @forelse ($shops as $shop)
             <livewire:admin.payment-settings-card :shop="$shop" :key="'payment-settings-'.$shop->id" />
         @empty
-            <div class="rounded-lg border border-zinc-200 bg-white p-8 text-center text-zinc-500 xl:col-span-2">
+            <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-8 text-center text-zinc-500 dark:text-zinc-400 xl:col-span-2">
                 No shops have been created yet.
             </div>
         @endforelse

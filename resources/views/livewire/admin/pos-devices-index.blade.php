@@ -1,6 +1,6 @@
 <div>
     <div class="mb-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-        <p class="text-sm text-zinc-500">POS devices use the POS SSID/VLAN and are renewed from here without sharing customer hotspot passwords.</p>
+        <p class="text-sm text-zinc-500 dark:text-zinc-400">POS devices use the POS SSID/VLAN and are renewed from here without sharing customer hotspot passwords.</p>
         <div class="flex flex-wrap gap-2">
             <flux:button href="{{ route('admin.packages.index', ['service' => 'hotspot_capable']) }}" wire:navigate variant="outline" icon="radio">
                 POS Plans
@@ -31,16 +31,16 @@
                 wire:click="$set('status', '{{ $stat['key'] }}')"
                 wire:loading.attr="disabled"
                 wire:target="status"
-                class="rounded-lg border px-4 py-3 text-left shadow-sm transition hover:border-zinc-400 {{ $status === $stat['key'] ? 'border-zinc-950 bg-zinc-950 text-white' : 'border-zinc-200 bg-white text-zinc-950' }}"
+                class="rounded-lg border px-4 py-3 text-left shadow-sm transition hover:border-zinc-400 dark:hover:border-zinc-500 {{ $status === $stat['key'] ? 'border-zinc-950 bg-zinc-950 text-white dark:border-zinc-700 dark:bg-zinc-800' : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-950 dark:text-zinc-100' }}"
             >
-                <span class="block text-xs font-medium uppercase {{ $status === $stat['key'] ? 'text-zinc-300' : 'text-zinc-500' }}">{{ $stat['label'] }}</span>
+                <span class="block text-xs font-medium uppercase {{ $status === $stat['key'] ? 'text-zinc-300 dark:text-zinc-600' : 'text-zinc-500 dark:text-zinc-400' }}">{{ $stat['label'] }}</span>
                 <span class="mt-2 block text-2xl font-semibold">{{ number_format($stat['value']) }}</span>
-                <span class="mt-1 block text-xs {{ $status === $stat['key'] ? 'text-zinc-300' : 'text-zinc-500' }}">{{ $stat['hint'] }}</span>
+                <span class="mt-1 block text-xs {{ $status === $stat['key'] ? 'text-zinc-300 dark:text-zinc-600' : 'text-zinc-500 dark:text-zinc-400' }}">{{ $stat['hint'] }}</span>
             </button>
         @endforeach
     </section>
 
-    <section class="grid min-w-0 gap-3 rounded-lg border border-zinc-200 bg-white p-4 [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))] [&>*]:min-w-0">
+    <section class="grid min-w-0 gap-3 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4 [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))] [&>*]:min-w-0">
         <div class="sm:col-span-2 xl:col-span-3">
             <flux:input wire:model.live.debounce.350ms="search" icon="magnifying-glass" placeholder="Search device, MAC, owner, phone, shop" />
         </div>
@@ -61,9 +61,9 @@
         Updating POS devices...
     </div>
 
-    <div class="mt-6 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 bg-white">
+    <div class="mt-6 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900">
         <table class="min-w-[980px] w-full text-left text-sm">
-            <thead class="border-b border-zinc-200 bg-zinc-50 text-zinc-500">
+            <thead class="border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
                 <tr>
                     <th class="px-4 py-3 font-medium">Device</th>
                     <th class="px-4 py-3 font-medium">Owner</th>
@@ -73,25 +73,25 @@
                     <th class="px-4 py-3 text-right font-medium">Actions</th>
                 </tr>
             </thead>
-            <tbody class="divide-y divide-zinc-100">
+            <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
                 @forelse ($devices as $device)
                     @php($isActive = $device->isCurrentlyActive())
                     <tr wire:key="pos-device-{{ $device->id }}">
                         <td class="px-4 py-3">
                             <p class="font-medium">{{ $device->device_name }}</p>
-                            <p class="mt-1 font-mono text-xs text-zinc-500">{{ $device->mac_address }}</p>
+                            <p class="mt-1 font-mono text-xs text-zinc-500 dark:text-zinc-400">{{ $device->mac_address }}</p>
                         </td>
                         <td class="px-4 py-3">
                             <p>{{ $device->owner_name ?: 'No owner name' }}</p>
-                            <p class="mt-1 text-xs text-zinc-500">{{ $device->phone ?: 'No phone' }}{{ $device->email ? ' - '.$device->email : '' }}</p>
+                            <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $device->phone ?: 'No phone' }}{{ $device->email ? ' - '.$device->email : '' }}</p>
                         </td>
                         <td class="px-4 py-3">
                             <p class="font-medium">{{ $device->package?->name ?? 'Deleted package' }}</p>
-                            <p class="mt-1 text-xs text-zinc-500">{{ $device->package?->speed_limit_profile ?: 'No speed profile' }}</p>
+                            <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $device->package?->speed_limit_profile ?: 'No speed profile' }}</p>
                         </td>
                         <td class="px-4 py-3">
                             <p>{{ $device->shop?->name ?? 'Deleted shop' }}</p>
-                            <p class="mt-1 text-xs text-zinc-500">{{ $device->shop?->tenant?->company_name }}</p>
+                            <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $device->shop?->tenant?->company_name }}</p>
                         </td>
                         <td class="px-4 py-3">
                             <flux:badge :color="$isActive ? 'green' : ($device->is_active ? 'amber' : 'zinc')">
@@ -100,8 +100,8 @@
                             @if (! $device->last_provisioned_at)
                                 <flux:badge color="zinc" class="ml-1">Unsynced</flux:badge>
                             @endif
-                            <p class="mt-2 text-xs text-zinc-500">{{ $device->expires_at ? 'Expires '.$device->expires_at->format('M j, Y g:i A') : 'No expiry set' }}</p>
-                            <p class="mt-1 text-xs text-zinc-400">{{ $device->last_provisioned_at ? 'Synced '.$device->last_provisioned_at->diffForHumans() : 'Not synced yet' }}</p>
+                            <p class="mt-2 text-xs text-zinc-500 dark:text-zinc-400">{{ $device->expires_at ? 'Expires '.$device->expires_at->format('M j, Y g:i A') : 'No expiry set' }}</p>
+                            <p class="mt-1 text-xs text-zinc-400 dark:text-zinc-500">{{ $device->last_provisioned_at ? 'Synced '.$device->last_provisioned_at->diffForHumans() : 'Not synced yet' }}</p>
                         </td>
                         <td class="px-4 py-3">
                             <div class="flex justify-end gap-2">
@@ -120,7 +120,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="6" class="px-4 py-8 text-center text-zinc-500">No POS devices found.</td>
+                        <td colspan="6" class="px-4 py-8 text-center text-zinc-500 dark:text-zinc-400">No POS devices found.</td>
                     </tr>
                 @endforelse
             </tbody>
@@ -207,7 +207,7 @@
                 <flux:checkbox wire:model.live="is_active" label="Active in RADIUS" />
             </div>
 
-            <section class="rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-600">
+            <section class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4 text-sm text-zinc-600 dark:text-zinc-400">
                 POS terminals should connect to the password-protected POS SSID on VLAN 50. The Wi-Fi password protects the radio, while this record controls renewal, expiry, and bandwidth through FreeRADIUS.
             </section>
 
@@ -229,9 +229,9 @@
             </div>
 
             @if ($deletingDevice)
-                <div class="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+                <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4">
                     <p class="font-medium">{{ $deletingDevice->device_name }}</p>
-                    <p class="mt-1 font-mono text-xs text-zinc-500">{{ $deletingDevice->mac_address }}</p>
+                    <p class="mt-1 font-mono text-xs text-zinc-500 dark:text-zinc-400">{{ $deletingDevice->mac_address }}</p>
                 </div>
             @endif
 

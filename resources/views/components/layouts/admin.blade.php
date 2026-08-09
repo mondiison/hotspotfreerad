@@ -10,7 +10,7 @@
     <style>[x-cloak] { display: none !important; }</style>
 </head>
 <body
-    class="min-h-screen overflow-x-hidden bg-zinc-100 text-zinc-950 antialiased"
+    class="min-h-screen overflow-x-hidden bg-zinc-100 text-zinc-950 antialiased dark:bg-zinc-950 dark:text-zinc-100"
     x-data="{
         mobileSidebarOpen: false,
         sidebarCollapsed: localStorage.getItem('adminSidebarCollapsed') === '1',
@@ -31,7 +31,7 @@
         ></div>
 
         <aside
-            class="fixed inset-y-0 left-0 z-40 flex w-72 flex-col border-r border-zinc-200 bg-white px-5 py-6 transition-all duration-200 lg:static lg:translate-x-0"
+            class="fixed inset-y-0 left-0 z-40 flex w-72 flex-col border-r border-zinc-200 bg-white px-5 py-6 transition-all duration-200 lg:static lg:translate-x-0 dark:border-zinc-800 dark:bg-zinc-900"
             :class="{
                 '-translate-x-full': ! mobileSidebarOpen,
                 'translate-x-0': mobileSidebarOpen,
@@ -44,18 +44,18 @@
                     <span class="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-zinc-950 text-sm font-semibold text-white">HF</span>
                     <span class="min-w-0" :class="{ 'lg:hidden': sidebarCollapsed }">
                         <span class="block truncate text-lg font-semibold">HotspotFreeRAD</span>
-                        <span class="mt-1 block truncate text-sm text-zinc-500">FreeRADIUS control</span>
+                        <span class="mt-1 block truncate text-sm text-zinc-500 dark:text-zinc-400">FreeRADIUS control</span>
                     </span>
                 </a>
 
-                <button type="button" @click="mobileSidebarOpen = false" class="rounded-md border border-zinc-200 p-2 text-zinc-600 hover:bg-zinc-100 lg:hidden" aria-label="Close navigation">
+                <button type="button" @click="mobileSidebarOpen = false" class="rounded-md border border-zinc-200 p-2 text-zinc-600 hover:bg-zinc-100 lg:hidden dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800" aria-label="Close navigation">
                     <span aria-hidden="true">&times;</span>
                 </button>
 
                 <button
                     type="button"
                     @click="setSidebarCollapsed(! sidebarCollapsed)"
-                    class="hidden rounded-md border border-zinc-200 p-2 text-zinc-600 hover:bg-zinc-100 lg:block"
+                    class="hidden rounded-md border border-zinc-200 p-2 text-zinc-600 hover:bg-zinc-100 lg:block dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
                     :class="{ 'lg:mx-auto': sidebarCollapsed }"
                     aria-label="Collapse navigation"
                 >
@@ -136,10 +136,10 @@
                         href="{{ route($link['route']) }}"
                         wire:navigate
                         title="{{ $link['label'] }}"
-                        class="flex items-center gap-3 rounded-md px-3 py-2 {{ $active ? 'bg-zinc-950 text-white' : 'text-zinc-700 hover:bg-zinc-100' }}"
+                        class="flex items-center gap-3 rounded-md px-3 py-2 {{ $active ? 'bg-zinc-950 text-white dark:bg-zinc-800' : 'text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800' }}"
                         :class="{ 'lg:justify-center': sidebarCollapsed }"
                     >
-                        <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-md {{ $active ? 'bg-white/10' : 'bg-zinc-100' }}">
+                        <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-md {{ $active ? 'bg-white/10' : 'bg-zinc-100 dark:bg-zinc-800' }}">
                             <x-dynamic-component :component="'flux::icon.'.$link['icon']" class="size-4" />
                         </span>
                         <span :class="{ 'lg:hidden': sidebarCollapsed }">{{ $link['label'] }}</span>
@@ -155,11 +155,11 @@
                         <button
                             type="button"
                             @click="groupOpen = ! groupOpen"
-                            class="flex w-full items-center justify-between rounded-md px-3 py-1.5 text-xs font-semibold tracking-wide text-zinc-400 uppercase hover:text-zinc-600"
+                            class="flex w-full items-center justify-between rounded-md px-3 py-1.5 text-xs font-semibold tracking-wide text-zinc-400 uppercase hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
                             :class="{ 'lg:justify-center lg:px-0': sidebarCollapsed }"
                         >
                             <span :class="{ 'lg:hidden': sidebarCollapsed }">{{ $group['label'] }}</span>
-                            <span class="hidden text-zinc-300" :class="{ 'lg:block': sidebarCollapsed }">&middot;&middot;&middot;</span>
+                            <span class="hidden text-zinc-300 dark:text-zinc-600" :class="{ 'lg:block': sidebarCollapsed }">&middot;&middot;&middot;</span>
                             <flux:icon.chevron-down class="size-3.5 shrink-0 transition-transform" x-bind:class="{ '-rotate-90': ! groupOpen, 'lg:hidden': sidebarCollapsed }" />
                         </button>
 
@@ -170,10 +170,10 @@
                                     href="{{ route($link['route']) }}"
                                     wire:navigate
                                     title="{{ $link['label'] }}"
-                                    class="flex items-center gap-3 rounded-md px-3 py-2 {{ $active ? 'bg-zinc-950 text-white' : 'text-zinc-700 hover:bg-zinc-100' }}"
+                                    class="flex items-center gap-3 rounded-md px-3 py-2 {{ $active ? 'bg-zinc-950 text-white dark:bg-zinc-800' : 'text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800' }}"
                                     :class="{ 'lg:justify-center': sidebarCollapsed }"
                                 >
-                                    <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-md {{ $active ? 'bg-white/10' : 'bg-zinc-100' }}">
+                                    <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-md {{ $active ? 'bg-white/10' : 'bg-zinc-100 dark:bg-zinc-800' }}">
                                         <x-dynamic-component :component="'flux::icon.'.$link['icon']" class="size-4" />
                                     </span>
                                     <span :class="{ 'lg:hidden': sidebarCollapsed }">{{ $link['label'] }}</span>
@@ -186,10 +186,10 @@
         </aside>
 
         <main class="min-w-0 max-w-full flex-1 overflow-x-hidden">
-            <header class="border-b border-zinc-200 bg-white px-5 py-5 lg:px-8">
+            <header class="border-b border-zinc-200 bg-white px-5 py-5 lg:px-8 dark:border-zinc-800 dark:bg-zinc-900">
                 <div class="flex items-center justify-between gap-4">
                     <div class="flex min-w-0 items-center gap-3">
-                        <button type="button" @click="mobileSidebarOpen = true" class="rounded-md border border-zinc-200 p-2 text-zinc-600 hover:bg-zinc-100 lg:hidden" aria-label="Open navigation">
+                        <button type="button" @click="mobileSidebarOpen = true" class="rounded-md border border-zinc-200 p-2 text-zinc-600 hover:bg-zinc-100 lg:hidden dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800" aria-label="Open navigation">
                             <span aria-hidden="true">&#9776;</span>
                         </button>
 
@@ -203,12 +203,25 @@
                                 @endauth
                             </div>
                             @isset($subheading)
-                                <p class="mt-1 text-sm text-zinc-500">{{ $subheading }}</p>
+                                <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{{ $subheading }}</p>
                             @endisset
                         </div>
                     </div>
 
                     <div class="flex shrink-0 items-center gap-2">
+                        <flux:dropdown x-data align="end">
+                            <flux:button variant="subtle" square aria-label="Preferred color scheme">
+                                <flux:icon.sun x-show="$flux.appearance === 'light'" variant="mini" />
+                                <flux:icon.moon x-show="$flux.appearance === 'dark'" variant="mini" />
+                                <flux:icon.computer-desktop x-show="$flux.appearance === 'system'" variant="mini" />
+                            </flux:button>
+                            <flux:menu>
+                                <flux:menu.item icon="sun" x-on:click="$flux.appearance = 'light'">Light</flux:menu.item>
+                                <flux:menu.item icon="moon" x-on:click="$flux.appearance = 'dark'">Dark</flux:menu.item>
+                                <flux:menu.item icon="computer-desktop" x-on:click="$flux.appearance = 'system'">System</flux:menu.item>
+                            </flux:menu>
+                        </flux:dropdown>
+
                         @auth
                             <livewire:admin.notification-bell />
 
@@ -216,10 +229,10 @@
                                 <button
                                     type="button"
                                     @click="headerAccountMenuOpen = ! headerAccountMenuOpen"
-                                    class="flex items-center gap-2 rounded-lg border border-zinc-200 bg-white p-2 text-sm hover:bg-zinc-50"
+                                    class="flex items-center gap-2 rounded-lg border border-zinc-200 bg-white p-2 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800"
                                     title="{{ auth()->user()->name }}"
                                 >
-                                    <span class="grid h-8 w-8 place-items-center overflow-hidden rounded-md bg-zinc-950 text-xs font-semibold text-white">
+                                    <span class="grid h-8 w-8 place-items-center overflow-hidden rounded-md bg-zinc-950 text-xs font-semibold text-white dark:bg-zinc-100 dark:text-zinc-900">
                                         @if (auth()->user()->avatarUrl())
                                             <img src="{{ auth()->user()->avatarUrl() }}" alt="{{ auth()->user()->name }} profile photo" class="h-full w-full object-cover">
                                         @else
@@ -227,7 +240,7 @@
                                         @endif
                                     </span>
                                     <span class="hidden max-w-36 truncate font-medium xl:block">{{ auth()->user()->name }}</span>
-                                    <flux:icon.chevron-down class="size-4 text-zinc-500" />
+                                    <flux:icon.chevron-down class="size-4 text-zinc-500 dark:text-zinc-400" />
                                 </button>
 
                                 <div
@@ -235,33 +248,33 @@
                                     x-show="headerAccountMenuOpen"
                                     x-transition.origin.top.right
                                     @click.outside="headerAccountMenuOpen = false"
-                                    class="absolute right-0 z-50 mt-3 w-64 rounded-lg border border-zinc-200 bg-white p-2 text-sm shadow-lg"
+                                    class="absolute right-0 z-50 mt-3 w-64 rounded-lg border border-zinc-200 bg-white p-2 text-sm shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
                                 >
                                     <div class="px-3 py-2">
                                         <p class="truncate font-medium">{{ auth()->user()->name }}</p>
-                                        <p class="mt-1 truncate text-xs text-zinc-500">{{ auth()->user()->email }}</p>
+                                        <p class="mt-1 truncate text-xs text-zinc-500 dark:text-zinc-400">{{ auth()->user()->email }}</p>
                                     </div>
 
-                                    <a href="{{ route('admin.profile.edit') }}" wire:navigate class="flex items-center gap-3 rounded-md px-3 py-2 text-zinc-700 hover:bg-zinc-100">
+                                    <a href="{{ route('admin.profile.edit') }}" wire:navigate class="flex items-center gap-3 rounded-md px-3 py-2 text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800">
                                         <flux:icon.user-circle class="size-4" />
                                         <span>Profile</span>
                                     </a>
 
-                                    <a href="{{ route('admin.passkeys.index') }}" wire:navigate class="flex items-center gap-3 rounded-md px-3 py-2 text-zinc-700 hover:bg-zinc-100">
+                                    <a href="{{ route('admin.passkeys.index') }}" wire:navigate class="flex items-center gap-3 rounded-md px-3 py-2 text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800">
                                         <flux:icon.key class="size-4" />
                                         <span>Passkeys</span>
                                     </a>
 
                                     @if (auth()->user()->isTenantAdmin() && auth()->user()->tenant)
-                                        <a href="{{ auth()->user()->tenant->publicUrl() }}" target="_blank" class="flex items-center gap-3 rounded-md px-3 py-2 text-zinc-700 hover:bg-zinc-100">
+                                        <a href="{{ auth()->user()->tenant->publicUrl() }}" target="_blank" class="flex items-center gap-3 rounded-md px-3 py-2 text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800">
                                             <flux:icon.arrow-top-right-on-square class="size-4" />
                                             <span>Public page</span>
                                         </a>
                                     @endif
 
-                                    <form method="POST" action="{{ route('logout') }}" class="mt-1 border-t border-zinc-100 pt-1">
+                                    <form method="POST" action="{{ route('logout') }}" class="mt-1 border-t border-zinc-100 pt-1 dark:border-zinc-800">
                                         @csrf
-                                        <button class="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-red-700 hover:bg-red-50">
+                                        <button class="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40">
                                             <flux:icon.arrow-left-start-on-rectangle class="size-4" />
                                             <span>Sign out</span>
                                         </button>
@@ -279,13 +292,13 @@
 
             <div class="min-w-0 max-w-full overflow-x-hidden px-5 py-6 lg:px-8">
                 @if (session('status'))
-                    <div class="mb-5 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                    <div class="mb-5 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
                         {{ session('status') }}
                     </div>
                 @endif
 
                 @if ($errors->any())
-                    <div class="mb-5 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+                    <div class="mb-5 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
                         <p class="font-medium">Please fix the highlighted fields.</p>
                     </div>
                 @endif
