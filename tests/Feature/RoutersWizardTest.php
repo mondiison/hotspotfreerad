@@ -89,6 +89,24 @@ class RoutersWizardTest extends TestCase
             ->assertSee('Management Wi-Fi password');
     }
 
+    public function test_local_wireguard_endpoint_button_uses_configured_pi_lan_ip(): void
+    {
+        config([
+            'services.wireguard.local_endpoint_host' => '192.168.188.159',
+            'services.wireguard.endpoint_port' => 13231,
+        ]);
+
+        Livewire::actingAs($this->superAdmin())
+            ->test(RoutersIndex::class)
+            ->call('create')
+            ->call('useLocalWireguardEndpoint')
+            ->assertSet('wireguard_endpoint_override_host', '192.168.188.159')
+            ->assertSet('wireguard_endpoint_override_port', '13231')
+            ->call('clearWireguardEndpointOverride')
+            ->assertSet('wireguard_endpoint_override_host', null)
+            ->assertSet('wireguard_endpoint_override_port', null);
+    }
+
     public function test_builtin_wifi_credentials_are_required_when_wireless_is_enabled(): void
     {
         $shop = $this->shop();

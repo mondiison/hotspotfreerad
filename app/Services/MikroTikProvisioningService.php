@@ -44,12 +44,14 @@ class MikroTikProvisioningService
         $wgEndpoint = $this->wireguardEndpoint($router);
         $wgEndpointHost = $wgEndpoint['host'];
         $wgEndpointPort = $wgEndpoint['port'];
+        $wgEndpointSource = $wgEndpoint['source'];
         $wgPublicKey = config('services.wireguard.public_key');
         $wgInterfaceLine = $this->wireguardInterfaceLine($router);
         $apiUserLines = implode("\n", $this->apiUserProvisioningLines($router));
 
         return <<<SCRIPT
 /system identity set name="{$nasIdentifier}"
+# WireGuard endpoint: {$wgEndpointHost}:{$wgEndpointPort} ({$wgEndpointSource}). For a router on the same LAN as the Pi, this must be the Pi's current LAN IP.
 {$wgInterfaceLine}
 /interface wireguard peers add interface=wg-saas public-key="{$wgPublicKey}" endpoint-address={$wgEndpointHost} endpoint-port={$wgEndpointPort} allowed-address=10.8.0.1/32 persistent-keepalive=25s
 /ip address add address={$router->wireguard_internal_ip}/24 interface=wg-saas
@@ -69,6 +71,7 @@ SCRIPT;
         $wgEndpoint = $this->wireguardEndpoint($router);
         $wgEndpointHost = $wgEndpoint['host'];
         $wgEndpointPort = $wgEndpoint['port'];
+        $wgEndpointSource = $wgEndpoint['source'];
         $wgPublicKey = config('services.wireguard.public_key');
         $wgInterfaceLine = $this->wireguardInterfaceLine($router);
         $apiUserLines = implode("\n", $this->apiUserProvisioningLines($router));
@@ -79,12 +82,13 @@ SCRIPT;
 
         return <<<SCRIPT
 /system identity set name="{$nasIdentifier}"
+# WireGuard endpoint: {$wgEndpointHost}:{$wgEndpointPort} ({$wgEndpointSource}). For a router on the same LAN as the Pi, this must be the Pi's current LAN IP.
 {$wgInterfaceLine}
 /interface wireguard peers add interface=wg-saas public-key="{$wgPublicKey}" endpoint-address={$wgEndpointHost} endpoint-port={$wgEndpointPort} allowed-address=10.8.0.1/32 persistent-keepalive=25s
 /ip address add address={$router->wireguard_internal_ip}/24 interface=wg-saas
 {$apiUserLines}
 /radius add address={$radiusIp} secret="{$sharedSecret}" service=hotspot,ppp authentication-port={$authPort} accounting-port={$acctPort} timeout=1000ms
-/ip hotspot profile add name=saas-prof use-radius=yes login-by=http-chap,cookie,mac-cookie html-directory=flash/hotspot dns-name={$hotspotDnsName}
+/ip hotspot profile add name=saas-prof use-radius=yes login-by=http-pap,http-chap,cookie,mac-cookie html-directory=flash/hotspot dns-name={$hotspotDnsName}
 /ip hotspot profile set saas-prof radius-accounting=yes
 # Points any existing hotspot server at this profile. If none exists yet, this is a no-op --
 # run "/ip hotspot setup" first (or select saas-prof as its profile), then re-run this line.
@@ -103,6 +107,7 @@ SCRIPT;
         $wgEndpoint = $this->wireguardEndpoint($router);
         $wgEndpointHost = $wgEndpoint['host'];
         $wgEndpointPort = $wgEndpoint['port'];
+        $wgEndpointSource = $wgEndpoint['source'];
         $wgPublicKey = config('services.wireguard.public_key');
         $wgInterfaceLine = $this->wireguardInterfaceLine($router);
         $apiUserLines = implode("\n", $this->apiUserProvisioningLines($router));
@@ -110,6 +115,7 @@ SCRIPT;
 
         return <<<SCRIPT
 /system identity set name="{$nasIdentifier}"
+# WireGuard endpoint: {$wgEndpointHost}:{$wgEndpointPort} ({$wgEndpointSource}). For a router on the same LAN as the Pi, this must be the Pi's current LAN IP.
 {$wgInterfaceLine}
 /interface wireguard peers add interface=wg-saas public-key="{$wgPublicKey}" endpoint-address={$wgEndpointHost} endpoint-port={$wgEndpointPort} allowed-address=10.8.0.1/32 persistent-keepalive=25s
 /ip address add address={$router->wireguard_internal_ip}/24 interface=wg-saas
@@ -137,6 +143,7 @@ SCRIPT;
         $wgEndpoint = $this->wireguardEndpoint($router);
         $wgEndpointHost = $wgEndpoint['host'];
         $wgEndpointPort = $wgEndpoint['port'];
+        $wgEndpointSource = $wgEndpoint['source'];
         $wgPublicKey = $this->quote(config('services.wireguard.public_key'));
         $portalUrl = $this->portalUrl();
         $portalHost = parse_url($portalUrl, PHP_URL_HOST) ?: config('services.mikrotik.hotspot_dns_name');
@@ -255,6 +262,7 @@ SCRIPT;
             '# MMS Radius flexible MikroTik infrastructure script',
             '# Profile: '.$this->infrastructureProfiles()[$profile]['name'],
             '# Use on a fresh/no-default-config router, or review each section before pasting on an existing router.',
+            '# WireGuard endpoint: '.$wgEndpointHost.':'.$wgEndpointPort.' ('.$wgEndpointSource.'). If this router is on the same LAN as the Pi, this must be the Pi LAN IP from hostname -I.',
             '# Edit these global values first to match the tenant hardware and cabling.',
             '# Global variables are used so this works when pasted directly into RouterOS terminal.',
             ':global wan1 "'.$settings['wan1'].'"',
@@ -322,7 +330,7 @@ SCRIPT;
             '/ip dhcp-server add name=dhcp-hotspot interface=vlan-hotspot address-pool=pool-hotspot lease-time=30m disabled=no',
             '/ip dhcp-server network add address=$hotspotNetwork gateway='.str($settings['hotspot_gateway'])->before('/').' dns-server='.str($settings['hotspot_gateway'])->before('/'),
             '# DHCP for MMS Hotspot is served from vlan-hotspot. Do not attach hotspot DHCP directly to wifi1/ether ports because bridge member ports become slave interfaces.',
-            '/ip hotspot profile add name=mms-hotspot-profile use-radius=yes login-by=http-chap,cookie,mac-cookie html-directory=flash/hotspot dns-name='.$hotspotDnsName.' radius-accounting=yes',
+            '/ip hotspot profile add name=mms-hotspot-profile use-radius=yes login-by=http-pap,http-chap,cookie,mac-cookie html-directory=flash/hotspot dns-name='.$hotspotDnsName.' radius-accounting=yes',
             '/ip hotspot add name=mms-hotspot interface=vlan-hotspot address-pool=pool-hotspot profile=mms-hotspot-profile disabled=no',
             ...$this->walledGardenLines($router, $portalHost),
             '',
@@ -583,13 +591,16 @@ HTML;
      * don't support for UDP and the handshake silently never completes. The
      * override should be the Pi's LAN IP in that case.
      *
-     * @return array{host: string, port: int}
+     * @return array{host: string, port: int, source: string}
      */
     private function wireguardEndpoint(Router $router): array
     {
+        $hasOverride = filled($router->wireguard_endpoint_override_host);
+
         return [
-            'host' => $router->wireguard_endpoint_override_host ?: (string) config('services.wireguard.endpoint_host'),
+            'host' => $hasOverride ? (string) $router->wireguard_endpoint_override_host : (string) config('services.wireguard.endpoint_host'),
             'port' => (int) ($router->wireguard_endpoint_override_port ?: config('services.wireguard.endpoint_port')),
+            'source' => $hasOverride ? 'router local override' : 'default public endpoint',
         ];
     }
 

@@ -47,6 +47,7 @@ return [
     'wireguard' => [
         'endpoint_host' => env('WIREGUARD_ENDPOINT_HOST', 'YOUR_PI_PUBLIC_IP'),
         'endpoint_port' => (int) env('WIREGUARD_ENDPOINT_PORT', 13231),
+        'local_endpoint_host' => env('WIREGUARD_LOCAL_ENDPOINT_HOST'),
         'public_key' => env('WIREGUARD_PUBLIC_KEY', 'YOUR_PI_WG_PUBLIC_KEY'),
         'interface' => env('WIREGUARD_INTERFACE', 'wg-saas'),
         'manage_peers' => (bool) env('WIREGUARD_MANAGE_PEERS', false),

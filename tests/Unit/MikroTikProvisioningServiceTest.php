@@ -38,12 +38,14 @@ class MikroTikProvisioningServiceTest extends TestCase
 
         $this->assertStringContainsString('/system identity set name="shop-main-router"', $script);
         $this->assertStringContainsString('/interface wireguard add name=wg-saas listen-port=13231 mtu=1420 private-key="client-private-key"', $script);
+        $this->assertStringContainsString('# WireGuard endpoint: vpn.example.com:13231 (default public endpoint)', $script);
         $this->assertStringContainsString('endpoint-address=vpn.example.com', $script);
         $this->assertStringContainsString('/ip address add address=10.8.0.10/24 interface=wg-saas', $script);
         $this->assertStringContainsString('/radius add address=10.8.0.1 secret="radius-secret" service=hotspot,ppp', $script);
         $this->assertStringContainsString('authentication-port=1812 accounting-port=1813', $script);
         $this->assertStringContainsString('/ip hotspot walled-garden add dst-host=portal.example.com action=allow', $script);
         $this->assertStringContainsString('/ip hotspot set [find] profile=saas-prof', $script);
+        $this->assertStringContainsString('login-by=http-pap,http-chap,cookie,mac-cookie', $script);
     }
 
     public function test_scripts_use_the_routers_endpoint_override_when_set(): void
@@ -78,6 +80,7 @@ class MikroTikProvisioningServiceTest extends TestCase
             $service->generatePppoeScript($router),
         ] as $script) {
             $this->assertStringContainsString('endpoint-address=192.168.10.250', $script);
+            $this->assertStringContainsString('router local override', $script);
             $this->assertStringNotContainsString('endpoint-address=vpn.example.com', $script);
         }
     }
@@ -251,6 +254,7 @@ class MikroTikProvisioningServiceTest extends TestCase
         $script = app(MikroTikProvisioningService::class)->generateFreshInfrastructureScript($router);
 
         $this->assertStringContainsString('Profile: Starlink plaza / high concurrency', $script);
+        $this->assertStringContainsString('WireGuard endpoint: vpn.example.com:13231 (default public endpoint)', $script);
         $this->assertStringContainsString('/interface vlan add interface=$lanBridge name=vlan-hotspot vlan-id=$hotspotVlan', $script);
         $this->assertStringContainsString('/interface vlan add interface=$lanBridge name=vlan-pos vlan-id=$posVlan', $script);
         $this->assertStringContainsString(':global piPort "ether3"', $script);
@@ -260,6 +264,7 @@ class MikroTikProvisioningServiceTest extends TestCase
         $this->assertStringContainsString('/ip dhcp-client add interface=$wan1 add-default-route=yes use-peer-dns=no disabled=no', $script);
         $this->assertStringContainsString('/ip dhcp-server add name=dhcp-hotspot interface=vlan-hotspot', $script);
         $this->assertStringContainsString('/ip hotspot add name=mms-hotspot interface=vlan-hotspot', $script);
+        $this->assertStringContainsString('login-by=http-pap,http-chap,cookie,mac-cookie', $script);
         $this->assertStringContainsString('/radius add address=10.8.0.1 secret="radius-secret" service=hotspot,ppp', $script);
         $this->assertStringContainsString('/queue type add name=pcq-hotspot-down kind=pcq', $script);
         $this->assertStringContainsString('Realtime voice/video small UDP upload', $script);

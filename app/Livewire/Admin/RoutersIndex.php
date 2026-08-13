@@ -153,6 +153,26 @@ class RoutersIndex extends Component
         $this->shared_secret = $routers->suggestedSharedSecret();
     }
 
+    public function useLocalWireguardEndpoint(): void
+    {
+        $host = config('services.wireguard.local_endpoint_host');
+
+        if (blank($host)) {
+            $this->addError('wireguard_endpoint_override_host', 'Set WIREGUARD_LOCAL_ENDPOINT_HOST on the Pi first, for example 192.168.188.159.');
+
+            return;
+        }
+
+        $this->wireguard_endpoint_override_host = (string) $host;
+        $this->wireguard_endpoint_override_port = (string) config('services.wireguard.endpoint_port', 13231);
+    }
+
+    public function clearWireguardEndpointOverride(): void
+    {
+        $this->wireguard_endpoint_override_host = null;
+        $this->wireguard_endpoint_override_port = null;
+    }
+
     public function setPreset(string $field, string $value): void
     {
         if ($field !== 'wireguard_internal_ip') {
@@ -299,6 +319,9 @@ class RoutersIndex extends Component
             'infrastructureProfiles' => $mikroTik->infrastructureProfiles(),
             'billingUsage' => $this->editingRouterId ? null : BillingPlanLimits::usageSummary($user, 'routers'),
             'deletingRouter' => $this->deletingRouterId ? Router::find($this->deletingRouterId) : null,
+            'localWireguardEndpointHost' => config('services.wireguard.local_endpoint_host'),
+            'defaultWireguardEndpointHost' => config('services.wireguard.endpoint_host'),
+            'defaultWireguardEndpointPort' => config('services.wireguard.endpoint_port'),
         ]);
     }
 

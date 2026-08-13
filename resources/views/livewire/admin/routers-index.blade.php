@@ -144,7 +144,15 @@
                                 <flux:input wire:model.blur="wireguard_endpoint_override_host" icon="map-pin" placeholder="Leave blank to use the default public endpoint" />
                                 <flux:input wire:model.blur="wireguard_endpoint_override_port" type="number" min="1" max="65535" placeholder="13231" />
                             </div>
-                            <flux:description>Only set this if this router is physically on the same local network as the Pi &mdash; use the Pi's LAN IP here instead of the public endpoint. Reaching the public endpoint from inside the same LAN commonly fails silently (NAT hairpin/loopback isn't supported for UDP on many routers). Leave both blank for every other (remote) router.</flux:description>
+                            <div class="mt-2 flex flex-wrap gap-2">
+                                <flux:button type="button" size="xs" wire:click="useLocalWireguardEndpoint">
+                                    Use Pi LAN endpoint{{ $localWireguardEndpointHost ? ': '.$localWireguardEndpointHost : '' }}
+                                </flux:button>
+                                <flux:button type="button" size="xs" variant="ghost" wire:click="clearWireguardEndpointOverride">
+                                    Use public endpoint
+                                </flux:button>
+                            </div>
+                            <flux:description>For a router on the same LAN as the Pi, click <strong>Use Pi LAN endpoint</strong>. For a remote router, leave this blank so the script uses <code>{{ $defaultWireguardEndpointHost }}:{{ $defaultWireguardEndpointPort }}</code>. If the Pi LAN IP changes, update <code>WIREGUARD_LOCAL_ENDPOINT_HOST</code> in the Pi <code>.env</code>, clear config cache, then regenerate the script.</flux:description>
                             <flux:error name="wireguard_endpoint_override_host" />
                             <flux:error name="wireguard_endpoint_override_port" />
                         </flux:field>
