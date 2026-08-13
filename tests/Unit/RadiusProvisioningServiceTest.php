@@ -9,6 +9,7 @@ use App\Models\Shop;
 use App\Models\Subscription;
 use App\Models\Tenant;
 use App\Models\TrustedWifiDevice;
+use App\Services\FreeRadiusClientSyncService;
 use App\Services\RadiusProvisioningService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -47,6 +48,53 @@ class RadiusProvisioningServiceTest extends TestCase
             'secret' => 'radius-secret',
             'description' => 'Main Router (services: hotspot, ppp)',
         ]);
+    }
+
+    public function test_it_removes_a_deleted_router_from_radius_nas_table(): void
+    {
+        $shop = $this->shop($this->tenant());
+        $router = Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'Deleted Router',
+            'nas_identifier' => 'deleted-router',
+            'wireguard_internal_ip' => '10.8.0.11',
+            'shared_secret' => 'radius-secret',
+        ]);
+        $service = app(RadiusProvisioningService::class);
+
+        $service->syncRouter($router);
+        $service->deleteRouter($router);
+
+        $this->assertDatabaseMissing('nas', [
+            'nasname' => '10.8.0.11',
+        ]);
+    }
+
+    public function test_it_rewrites_managed_radius_clients_file_after_router_delete(): void
+    {
+        $path = storage_path('framework/testing/router-delete-radius-clients.conf');
+        @unlink($path);
+        config([
+            'services.radius.manage_clients' => true,
+            'services.radius.clients_file' => $path,
+        ]);
+        $shop = $this->shop($this->tenant());
+        $router = Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'Deleted Router',
+            'nas_identifier' => 'deleted-router',
+            'wireguard_internal_ip' => '10.8.0.11',
+            'shared_secret' => 'radius-secret',
+        ]);
+        $service = app(RadiusProvisioningService::class);
+
+        app(FreeRadiusClientSyncService::class)->sync();
+        $this->assertStringContainsString('ipaddr = 10.8.0.11', file_get_contents($path));
+
+        $router->delete();
+        $service->deleteRouter($router);
+
+        $this->assertStringNotContainsString('ipaddr = 10.8.0.11', file_get_contents($path));
     }
 
     public function test_it_syncs_package_radius_group_reply_rows(): void

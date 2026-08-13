@@ -41,6 +41,25 @@ class RadiusProvisioningService
         }
     }
 
+    public function deleteRouter(Router $router): void
+    {
+        DB::table('nas')
+            ->where('nasname', $router->wireguard_internal_ip)
+            ->orWhere('shortname', $router->nas_identifier)
+            ->delete();
+
+        if ((bool) config('services.radius.manage_clients', false)) {
+            $result = app(FreeRadiusClientSyncService::class)->sync(reload: true);
+
+            if (! empty($result['errors'])) {
+                Log::warning('FreeRADIUS client file sync failed after router deletion', [
+                    'router_id' => $router->id,
+                    'errors' => $result['errors'],
+                ]);
+            }
+        }
+    }
+
     public function syncPackageProfile(Package $package): string
     {
         $groupName = $package->radius_group_name ?: $this->makeGroupName($package);

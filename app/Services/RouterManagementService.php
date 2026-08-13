@@ -131,6 +131,7 @@ class RouterManagementService
         TenantAccess::assertRouter($router, $user);
 
         $router->delete();
+        $this->radius->deleteRouter($router);
     }
 
     public function regenerateWireguardKey(Router $router, User $user): Router
