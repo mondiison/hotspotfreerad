@@ -50,6 +50,7 @@
                     <form id="mikrotik-login" method="POST" action="{{ $loginUrl }}" class="mt-4">
                         <input type="hidden" name="username" value="{{ $username }}">
                         <input type="hidden" name="password" value="{{ $password }}">
+                        <input type="hidden" name="popup" value="true">
                         @if ($originalUrl)
                             <input type="hidden" name="dst" value="{{ $originalUrl }}">
                         @endif

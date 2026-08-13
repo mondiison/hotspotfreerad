@@ -41,6 +41,7 @@ class PortalController extends Controller
             'mac' => ['nullable', 'string', 'max:64'],
             'nasid' => ['nullable', 'string', 'max:255'],
             'link-login' => ['nullable', 'string', 'max:2048'],
+            'link-login-only' => ['nullable', 'string', 'max:2048'],
             'link-orig' => ['nullable', 'string', 'max:2048'],
         ]);
 
@@ -82,7 +83,7 @@ class PortalController extends Controller
                 'macAddress' => $validated['mac'],
                 'username' => $validated['mac'],
                 'password' => self::TEST_ACCESS_PASSWORD,
-                'loginUrl' => $validated['link-login'] ?? null,
+                'loginUrl' => $this->mikrotikLoginUrl($validated),
                 'originalUrl' => $validated['link-orig'] ?? null,
             ]);
         }
@@ -92,7 +93,7 @@ class PortalController extends Controller
             'shop' => $router->shop,
             'packages' => $router->shop->packages,
             'macAddress' => $validated['mac'],
-            'loginUrl' => $validated['link-login'] ?? null,
+            'loginUrl' => $this->mikrotikLoginUrl($validated),
             'originalUrl' => $validated['link-orig'] ?? null,
         ]);
     }
@@ -104,6 +105,7 @@ class PortalController extends Controller
             'nasid' => ['required', 'string', 'max:255'],
             'package_id' => ['required', 'integer', 'exists:packages,id'],
             'link-login' => ['nullable', 'string', 'max:2048'],
+            'link-login-only' => ['nullable', 'string', 'max:2048'],
             'link-orig' => ['nullable', 'string', 'max:2048'],
         ]);
 
@@ -158,7 +160,7 @@ class PortalController extends Controller
             'macAddress' => $validated['mac'],
             'username' => $validated['mac'],
             'password' => self::TEST_ACCESS_PASSWORD,
-            'loginUrl' => $validated['link-login'] ?? null,
+            'loginUrl' => $this->mikrotikLoginUrl($validated),
             'originalUrl' => $validated['link-orig'] ?? null,
         ]);
     }
@@ -170,6 +172,7 @@ class PortalController extends Controller
             'nasid' => ['required', 'string', 'max:255'],
             'voucher_code' => ['required', 'string', 'max:64'],
             'link-login' => ['nullable', 'string', 'max:2048'],
+            'link-login-only' => ['nullable', 'string', 'max:2048'],
             'link-orig' => ['nullable', 'string', 'max:2048'],
         ]);
 
@@ -195,7 +198,7 @@ class PortalController extends Controller
             'macAddress' => $validated['mac'],
             'username' => $validated['mac'],
             'password' => self::TEST_ACCESS_PASSWORD,
-            'loginUrl' => $validated['link-login'] ?? null,
+            'loginUrl' => $this->mikrotikLoginUrl($validated),
             'originalUrl' => $validated['link-orig'] ?? null,
         ]);
     }
@@ -210,6 +213,7 @@ class PortalController extends Controller
             'phone' => ['nullable', 'string', 'max:255'],
             'payment_method' => ['nullable', 'string', 'in:opay,bank_transfer,card'],
             'link-login' => ['nullable', 'string', 'max:2048'],
+            'link-login-only' => ['nullable', 'string', 'max:2048'],
             'link-orig' => ['nullable', 'string', 'max:2048'],
         ]);
 
@@ -258,7 +262,8 @@ class PortalController extends Controller
                     'payment_method' => $validated['payment_method'] ?? null,
                     'payment_gateway' => $router->shop->paymentGateway(),
                     'payment_gateway_name' => $router->shop->paymentGatewayName(),
-                    'link_login' => $validated['link-login'] ?? null,
+                    'link_login' => $this->mikrotikLoginUrl($validated),
+                    'link_login_page' => $validated['link-login'] ?? null,
                     'link_orig' => $validated['link-orig'] ?? null,
                 ],
             ]);
@@ -290,7 +295,7 @@ class PortalController extends Controller
                     'payment' => $payment->fresh(['shop.tenant', 'package']),
                     'transfer' => $manualBank->transferDetails($payment),
                     'macAddress' => $validated['mac'],
-                    'loginUrl' => $validated['link-login'] ?? null,
+                    'loginUrl' => $this->mikrotikLoginUrl($validated),
                     'originalUrl' => $validated['link-orig'] ?? null,
                 ]);
             }
@@ -386,7 +391,7 @@ class PortalController extends Controller
                         'payment' => $payment->fresh(),
                         'transfer' => $transfer,
                         'macAddress' => $validated['mac'],
-                        'loginUrl' => $validated['link-login'] ?? null,
+                        'loginUrl' => $this->mikrotikLoginUrl($validated),
                         'originalUrl' => $validated['link-orig'] ?? null,
                     ]);
                 }
@@ -447,7 +452,7 @@ class PortalController extends Controller
             'credentialSource' => $credentialSource,
             'checkoutUnavailableReason' => $checkoutUnavailableReason,
             'macAddress' => $validated['mac'],
-            'loginUrl' => $validated['link-login'] ?? null,
+            'loginUrl' => $this->mikrotikLoginUrl($validated),
             'originalUrl' => $validated['link-orig'] ?? null,
         ]);
     }
@@ -727,6 +732,16 @@ class PortalController extends Controller
         }
 
         return null;
+    }
+
+    /**
+     * MikroTik exposes the browser-facing login page and the credential POST
+     * endpoint separately. Prefer the POST endpoint to avoid looping back into
+     * the external portal after access has already been provisioned.
+     */
+    private function mikrotikLoginUrl(array $payload): ?string
+    {
+        return $payload['link-login-only'] ?? $payload['link_login_only'] ?? $payload['link-login'] ?? $payload['link_login'] ?? null;
     }
 
     private function flutterwaveCheckoutFailureReason(Throwable $exception): string

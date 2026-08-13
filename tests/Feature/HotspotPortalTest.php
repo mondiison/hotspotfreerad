@@ -220,6 +220,26 @@ class HotspotPortalTest extends TestCase
             ->assertDontSee('Choose internet access');
     }
 
+    public function test_portal_prefers_mikrotik_login_only_url_for_auto_connect(): void
+    {
+        [$router, $package] = $this->routerWithPackage();
+
+        Subscription::create([
+            'shop_id' => $router->shop_id,
+            'package_id' => $package->id,
+            'mac_address' => 'AA:BB:CC:DD:EE:FF',
+            'starts_at' => now()->subMinutes(5),
+            'expires_at' => now()->addHour(),
+            'is_throttled' => false,
+        ]);
+
+        $this->get('/hotspot/portal?mac=AA:BB:CC:DD:EE:FF&nasid='.$router->nas_identifier.'&link-login='.urlencode('http://10.5.50.1/login').'&link-login-only='.urlencode('http://10.5.50.1/login?dst=http%3A%2F%2Fneverssl.com').'&link-orig='.urlencode('http://neverssl.com'))
+            ->assertOk()
+            ->assertSee('Access provisioned')
+            ->assertSee('http://10.5.50.1/login?dst=http%3A%2F%2Fneverssl.com', false)
+            ->assertDontSee('action="http://10.5.50.1/login"', false);
+    }
+
     public function test_portal_keeps_showing_plans_for_expired_subscription(): void
     {
         [$router, $package] = $this->routerWithPackage();

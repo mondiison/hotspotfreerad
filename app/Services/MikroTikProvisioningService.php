@@ -399,7 +399,7 @@ SCRIPT;
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Opening hotspot portal</title>
-    <meta http-equiv="refresh" content="0; url={$portalUrl}?mac=\$(mac)&nasid=\$(identity)&link-login=\$(link-login)&link-orig=\$(link-orig)">
+    <meta http-equiv="refresh" content="0; url={$portalUrl}?mac=\$(mac)&nasid=\$(identity)&link-login=\$(link-login)&link-login-only=\$(link-login-only)&link-orig=\$(link-orig)">
 </head>
 <body style="font-family: system-ui, sans-serif; padding: 24px;">
     <h1>Opening internet access</h1>
@@ -411,6 +411,7 @@ SCRIPT;
             + '?mac=' + encodeURIComponent('\$(mac)')
             + '&nasid=' + encodeURIComponent('\$(identity)')
             + '&link-login=' + encodeURIComponent('\$(link-login)')
+            + '&link-login-only=' + encodeURIComponent('\$(link-login-only)')
             + '&link-orig=' + encodeURIComponent('\$(link-orig)');
 
         document.getElementById('portal-link').href = portal;

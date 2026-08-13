@@ -480,7 +480,8 @@ class MikroTikProvisioningServiceTest extends TestCase
 
         $template = app(MikroTikProvisioningService::class)->generateLoginTemplate();
 
-        $this->assertStringContainsString('https://mmsradius.com/hotspot/portal?mac=$(mac)&nasid=$(identity)&link-login=$(link-login)&link-orig=$(link-orig)', $template);
+        $this->assertStringContainsString('https://mmsradius.com/hotspot/portal?mac=$(mac)&nasid=$(identity)&link-login=$(link-login)&link-login-only=$(link-login-only)&link-orig=$(link-orig)', $template);
+        $this->assertStringContainsString('&link-login-only=\' + encodeURIComponent(\'$(link-login-only)\')', $template);
         $this->assertStringContainsString("var portal = 'https://mmsradius.com/hotspot/portal'", $template);
         $this->assertStringNotContainsString('http://127.0.0.1:8001/hotspot/portal', $template);
     }
