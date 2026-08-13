@@ -31,6 +31,7 @@ class FreeRadiusClientSyncServiceTest extends TestCase
         $this->assertStringContainsString('ipaddr = 10.8.0.11', $content);
         $this->assertStringContainsString('secret = "bOkHIAsjGfLyVK9NSHBRJsqog09"', $content);
         $this->assertStringContainsString('shortname = "bebeji-router01"', $content);
+        $this->assertStringContainsString('nastype = mikrotik', $content);
     }
 
     public function test_sync_writes_configured_clients_file_when_enabled(): void
@@ -58,6 +59,7 @@ class FreeRadiusClientSyncServiceTest extends TestCase
         $this->assertSame([], $result['errors']);
         $this->assertFileExists($path);
         $this->assertStringContainsString('client main-router {', file_get_contents($path));
+        $this->assertStringContainsString('nastype = mikrotik', file_get_contents($path));
     }
 
     public function test_sync_does_not_write_when_disabled(): void

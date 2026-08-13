@@ -90,6 +90,7 @@ class FreeRadiusClientSyncService
             $lines[] = "    ipaddr = {$router->wireguard_internal_ip}";
             $lines[] = "    secret = {$secret}";
             $lines[] = "    shortname = {$shortname}";
+            $lines[] = '    nastype = mikrotik';
             $lines[] = "}";
             $lines[] = '';
         }

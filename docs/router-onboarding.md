@@ -123,26 +123,42 @@ If your Raspberry Pi FreeRADIUS is using static client files instead of SQL NAS
 loading, enable the managed clients include file on the Pi:
 
 ```bash
-sudo mkdir -p /etc/freeradius/3.0/clients.d
-sudo touch /etc/freeradius/3.0/clients.d/hotspotfreerad.conf
-sudo chown www-data:www-data /etc/freeradius/3.0/clients.d/hotspotfreerad.conf
-sudo chmod 664 /etc/freeradius/3.0/clients.d/hotspotfreerad.conf
+cd /var/www/hotspotfreerad
+sudo mkdir -p storage/app/freeradius
+sudo touch storage/app/freeradius/hotspotfreerad-clients.conf
+sudo chown -R www-data:www-data storage/app/freeradius
+sudo chmod 755 storage/app/freeradius
+sudo chmod 644 storage/app/freeradius/hotspotfreerad-clients.conf
 ```
 
-Make sure `/etc/freeradius/3.0/clients.conf` includes the directory:
+Make sure `/etc/freeradius/3.0/clients.conf` includes the managed file:
 
 ```conf
-$INCLUDE clients.d/*.conf
+$INCLUDE /var/www/hotspotfreerad/storage/app/freeradius/hotspotfreerad-clients.conf
 ```
 
 Then set these in `.env`:
 
 ```env
 RADIUS_MANAGE_CLIENTS=true
-RADIUS_CLIENTS_FILE=/etc/freeradius/3.0/clients.d/hotspotfreerad.conf
+RADIUS_CLIENTS_FILE=/var/www/hotspotfreerad/storage/app/freeradius/hotspotfreerad-clients.conf
+RADIUS_RELOAD_COMMAND="sudo -n systemctl reload-or-restart freeradius"
 ```
 
-After creating or editing routers, the scheduler runs:
+Allow the web user to reload FreeRADIUS without a password:
+
+```bash
+which systemctl
+sudo visudo -f /etc/sudoers.d/hotspotfreerad-radius
+```
+
+Add this line, using the real `systemctl` path returned above:
+
+```text
+www-data ALL=(root) NOPASSWD: /usr/bin/systemctl reload-or-restart freeradius
+```
+
+After creating, editing, or deleting routers, the scheduler runs:
 
 ```bash
 php artisan hotspot:sync-radius-clients --reload
@@ -155,6 +171,7 @@ client bebeji-router01 {
     ipaddr = 10.8.0.11
     secret = "router-shared-secret"
     shortname = "bebeji-router01"
+    nastype = mikrotik
 }
 ```
 

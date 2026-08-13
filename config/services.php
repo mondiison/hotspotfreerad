@@ -41,7 +41,7 @@ return [
         'acct_port' => (int) env('RADIUS_ACCT_PORT', 1813),
         'manage_clients' => (bool) env('RADIUS_MANAGE_CLIENTS', false),
         'clients_file' => env('RADIUS_CLIENTS_FILE', '/etc/freeradius/3.0/clients.d/hotspotfreerad.conf'),
-        'reload_command' => explode(' ', env('RADIUS_RELOAD_COMMAND', 'sudo -n systemctl reload freeradius')),
+        'reload_command' => explode(' ', env('RADIUS_RELOAD_COMMAND', 'sudo -n systemctl reload-or-restart freeradius')),
     ],
 
     'wireguard' => [
