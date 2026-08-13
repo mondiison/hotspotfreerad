@@ -399,7 +399,6 @@ SCRIPT;
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Opening hotspot portal</title>
-    <meta http-equiv="refresh" content="0; url={$portalUrl}?mac=\$(mac)&nasid=\$(identity)&link-login=\$(link-login)&link-login-only=\$(link-login-only)&link-orig=\$(link-orig)">
 </head>
 <body style="font-family: system-ui, sans-serif; padding: 24px;">
     <h1>Opening internet access</h1>
