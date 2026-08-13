@@ -99,6 +99,9 @@ class RouterOsApiProvisioningTest extends TestCase
         $script = app(MikroTikProvisioningService::class)->generateScript($router);
 
         $this->assertStringContainsString('/user group add name=mmsradius-api-group', $script);
+        $this->assertStringContainsString('policy=read,write,api,test,sensitive,', $script);
+        $this->assertStringNotContainsString('!test', $script);
+        $this->assertStringNotContainsString('!sensitive', $script);
         $this->assertStringContainsString('/user add name="'.Router::API_USERNAME.'" password="'.$router->api_password.'"', $script);
         $this->assertStringContainsString('/ip service set api disabled=no port=8728 address=10.8.0.0/24', $script);
     }

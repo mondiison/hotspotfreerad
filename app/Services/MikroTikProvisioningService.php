@@ -617,7 +617,7 @@ HTML;
         $username = $this->quote($router->api_username ?: 'mmsradius-api');
         $password = $this->quote($router->api_password);
 
-        // Deny-list of every policy RouterOS 7 recognizes except read+write+api --
+        // Deny-list of every policy RouterOS 7 recognizes except read+write+api+test+sensitive --
         // confirmed against a real RouterOS 7.18.2 router's own `/user group print
         // detail where name=full` output. Earlier revisions of this list included
         // "dude" and "tikapp", which RouterOS 7 rejects outright ("input does not
@@ -628,6 +628,9 @@ HTML;
         //
         // "write" is REQUIRED, not optional: "Provision via API" issues genuine
         // write commands (/radius/add, /ip/hotspot/*/add, /ip/hotspot/walled-garden/add).
+        // "test" and "sensitive" are also granted so the connection checker and
+        // generated diagnostic/provisioning flows can inspect secrets and run
+        // RouterOS test commands consistently across fresh installs.
         // A prior revision of this policy denied write ("read-only monitoring
         // account"), which meant every one of those commands was silently rejected
         // by RouterOS -- and, compounding it, RouterOsConnectionService::runSteps()
@@ -637,14 +640,14 @@ HTML;
         // actually detects a trap. A router bootstrapped before this fix needs its
         // script re-run (or a fresh "Provision via API" push once the API user's
         // policy line has been re-applied) before writes will actually take effect.
-        $policy = 'read,write,api,!local,!telnet,!ssh,!ftp,!reboot,!policy,!test,!winbox,!password,!web,!sniff,!sensitive,!romon,!rest-api';
+        $policy = 'read,write,api,test,sensitive,!local,!telnet,!ssh,!ftp,!reboot,!policy,!winbox,!password,!web,!sniff,!romon,!rest-api';
 
         return [
             // Update-in-place if the group/user already exist (e.g. this script is
             // being re-run after "Regenerate credentials") instead of erroring on a
             // duplicate name and silently leaving the router with stale credentials.
-            ':if ([:len [/user group find name=mmsradius-api-group]] = 0) do={ /user group add name=mmsradius-api-group policy='.$policy.' comment="MMS Radius read-only API access" } else={ /user group set [find name=mmsradius-api-group] policy='.$policy.' comment="MMS Radius read-only API access" }',
-            ':if ([:len [/user find name="'.$username.'"]] = 0) do={ /user add name="'.$username.'" password="'.$password.'" group=mmsradius-api-group comment="MMS Radius monitoring" } else={ /user set [find name="'.$username.'"] password="'.$password.'" group=mmsradius-api-group comment="MMS Radius monitoring" }',
+            ':if ([:len [/user group find name=mmsradius-api-group]] = 0) do={ /user group add name=mmsradius-api-group policy='.$policy.' comment="MMS Radius API provisioning access" } else={ /user group set [find name=mmsradius-api-group] policy='.$policy.' comment="MMS Radius API provisioning access" }',
+            ':if ([:len [/user find name="'.$username.'"]] = 0) do={ /user add name="'.$username.'" password="'.$password.'" group=mmsradius-api-group comment="MMS Radius API provisioning" } else={ /user set [find name="'.$username.'"] password="'.$password.'" group=mmsradius-api-group comment="MMS Radius API provisioning" }',
             '/ip service set api disabled=no port=8728 address=10.8.0.0/24',
         ];
     }
