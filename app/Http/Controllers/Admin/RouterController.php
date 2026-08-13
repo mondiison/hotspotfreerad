@@ -109,7 +109,7 @@ class RouterController extends Controller
         $routers->regenerateWireguardKey($router, $request->user());
 
         return redirect()->route('admin.routers.show', $router)
-            ->with('status', 'New WireGuard key generated. Re-run the WireGuard section of the script on this router, then wait for (or trigger) the next peer sync.');
+            ->with('status', 'New WireGuard key generated and Pi peer sync attempted. Re-run the WireGuard section of the script on this router.');
     }
 
     public function regenerateApiCredentials(Request $request, Router $router, RouterManagementService $routers): RedirectResponse

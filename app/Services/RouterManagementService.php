@@ -11,12 +11,16 @@ use App\Support\TenantAccess;
 use App\Support\WireGuardKeyPair;
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class RouterManagementService
 {
-    public function __construct(private readonly RadiusProvisioningService $radius) {}
+    public function __construct(
+        private readonly RadiusProvisioningService $radius,
+        private readonly WireGuardPeerSyncService $wireGuard,
+    ) {}
 
     /**
      * @param  array<string, mixed>|null  $provisioningSettings  the live/submitted provisioning_settings
@@ -123,6 +127,7 @@ class RouterManagementService
 
         $router = Router::create($this->normalize($data));
         $this->radius->syncRouter($router);
+        $this->syncWireGuardPeers();
 
         return $router;
     }
@@ -133,6 +138,7 @@ class RouterManagementService
 
         $router->update($this->normalize($data, $router));
         $this->radius->syncRouter($router);
+        $this->syncWireGuardPeers();
 
         return $router;
     }
@@ -155,6 +161,8 @@ class RouterManagementService
             'wireguard_private_key' => $keyPair['private'],
             'wireguard_public_key' => $keyPair['public'],
         ]);
+
+        $this->syncWireGuardPeers();
 
         return $router;
     }
@@ -216,6 +224,18 @@ class RouterManagementService
     public function suggestedSharedSecret(): string
     {
         return Str::random(32);
+    }
+
+    private function syncWireGuardPeers(): void
+    {
+        $result = $this->wireGuard->reconcile();
+
+        if (($result['errors'] ?? []) !== []) {
+            Log::warning('WireGuard peer sync after router save reported errors', [
+                'interface' => $result['interface'] ?? null,
+                'errors' => $result['errors'],
+            ]);
+        }
     }
 
     public function defaultProvisioningSettings(?string $profile = null): array

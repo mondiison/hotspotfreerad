@@ -8,6 +8,7 @@ use App\Models\Shop;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\RouterManagementService;
+use App\Services\WireGuardPeerSyncService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -127,6 +128,66 @@ class RouterWireGuardProvisioningTest extends TestCase
         $router->refresh();
 
         $this->assertNotSame($originalPublicKey, $router->wireguard_public_key);
+    }
+
+    public function test_router_save_triggers_wireguard_peer_sync(): void
+    {
+        $shop = $this->makeShop();
+        $user = User::factory()->create(['role' => 'super_admin', 'is_active' => true]);
+
+        $this->mock(WireGuardPeerSyncService::class, function ($mock): void {
+            $mock->shouldReceive('reconcile')
+                ->once()
+                ->andReturn([
+                    'enabled' => true,
+                    'interface' => 'wg-saas',
+                    'binary_available' => true,
+                    'desired' => [],
+                    'current' => [],
+                    'added' => [],
+                    'updated' => [],
+                    'errors' => [],
+                ]);
+        });
+
+        app(RouterManagementService::class)->create([
+            'shop_id' => $shop->id,
+            'name' => 'Synced Router',
+            'nas_identifier' => 'synced-router',
+            'wireguard_internal_ip' => '10.8.0.71',
+            'shared_secret' => 'radius-secret',
+        ], $user);
+    }
+
+    public function test_regenerating_wireguard_key_triggers_wireguard_peer_sync(): void
+    {
+        $shop = $this->makeShop();
+        $user = User::factory()->create(['role' => 'super_admin', 'is_active' => true]);
+
+        $router = Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'Sync Regenerate Router',
+            'nas_identifier' => 'sync-regenerate-router',
+            'wireguard_internal_ip' => '10.8.0.72',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        $this->mock(WireGuardPeerSyncService::class, function ($mock): void {
+            $mock->shouldReceive('reconcile')
+                ->once()
+                ->andReturn([
+                    'enabled' => true,
+                    'interface' => 'wg-saas',
+                    'binary_available' => true,
+                    'desired' => [],
+                    'current' => [],
+                    'added' => [],
+                    'updated' => [],
+                    'errors' => [],
+                ]);
+        });
+
+        app(RouterManagementService::class)->regenerateWireguardKey($router, $user);
     }
 
     public function test_router_script_page_shows_the_generated_public_key(): void

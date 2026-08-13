@@ -41,7 +41,7 @@ class RouterCredentialsCard extends Component
 
         Flux::toast(
             heading: 'WireGuard key generated',
-            text: 'Re-run the WireGuard section of the script on the physical router, then wait for (or trigger) the next peer sync.',
+            text: 'MMS Radius refreshed the Pi peer list. Re-run the WireGuard section of the script on the physical router.',
             variant: 'success',
         );
     }
