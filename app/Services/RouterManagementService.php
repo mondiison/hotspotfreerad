@@ -50,9 +50,18 @@ class RouterManagementService
             'provisioning_settings.trunk_port' => ['nullable', 'string', 'max:40'],
             'provisioning_settings.pi_port' => ['nullable', 'string', 'max:40'],
             'provisioning_settings.builtin_wifi_interface' => ['required_if:provisioning_settings.enable_builtin_wifi,true', 'nullable', 'string', 'max:40'],
-            'provisioning_settings.staff_wifi_password' => ['required_if:provisioning_settings.enable_builtin_wifi,true', 'nullable', 'string', 'min:8', 'max:63'],
-            'provisioning_settings.pos_wifi_password' => ['nullable', 'string', 'min:8', 'max:63'],
-            'provisioning_settings.mgmt_wifi_password' => ['required_if:provisioning_settings.enable_builtin_wifi,true', 'nullable', 'string', 'min:8', 'max:63'],
+            'provisioning_settings.staff_wifi_password' => [
+                Rule::requiredIf(fn () => (bool) data_get($provisioningSettings, 'enable_builtin_wifi') && (bool) data_get($provisioningSettings, 'enable_staff')),
+                'nullable', 'string', 'min:8', 'max:63',
+            ],
+            'provisioning_settings.pos_wifi_password' => [
+                Rule::requiredIf(fn () => (bool) data_get($provisioningSettings, 'enable_builtin_wifi') && (bool) data_get($provisioningSettings, 'enable_pos')),
+                'nullable', 'string', 'min:8', 'max:63',
+            ],
+            'provisioning_settings.mgmt_wifi_password' => [
+                Rule::requiredIf(fn () => (bool) data_get($provisioningSettings, 'enable_builtin_wifi') && (bool) data_get($provisioningSettings, 'enable_mgmt_wifi')),
+                'nullable', 'string', 'min:8', 'max:63',
+            ],
             'provisioning_settings.download_limit' => ['nullable', 'string', 'max:20'],
             'provisioning_settings.upload_limit' => ['nullable', 'string', 'max:20'],
             'provisioning_settings.mgmt_vlan' => ['nullable', 'integer', 'min:1', 'max:4094'],
@@ -74,6 +83,8 @@ class RouterManagementService
             'provisioning_settings.pos_pool' => ['nullable', 'string', 'max:64'],
             'provisioning_settings.pppoe_gateway' => ['nullable', 'string', 'max:32'],
             'provisioning_settings.enable_builtin_wifi' => ['nullable', 'boolean'],
+            'provisioning_settings.enable_staff' => ['nullable', 'boolean'],
+            'provisioning_settings.enable_mgmt_wifi' => ['nullable', 'boolean'],
             'provisioning_settings.enable_pos' => ['nullable', 'boolean'],
             'provisioning_settings.enable_pppoe' => ['nullable', 'boolean'],
             'provisioning_settings.enable_realtime_qos' => ['nullable', 'boolean'],
@@ -258,6 +269,8 @@ class RouterManagementService
             'pos_pool' => '192.168.50.10-192.168.50.250',
             'pppoe_gateway' => '172.16.40.1/24',
             'enable_builtin_wifi' => false,
+            'enable_staff' => true,
+            'enable_mgmt_wifi' => false,
             'enable_pos' => true,
             'enable_pppoe' => $profile !== 'small_hotspot',
             'enable_realtime_qos' => true,
@@ -275,7 +288,7 @@ class RouterManagementService
         $settings = $settings + ['profile' => 'starlink_plaza'];
         $settings = array_replace($this->defaultProvisioningSettings((string) $settings['profile']), $settings);
 
-        foreach (['enable_builtin_wifi', 'enable_pos', 'enable_pppoe', 'enable_realtime_qos', 'enable_second_wan', 'ports_advanced_mode'] as $field) {
+        foreach (['enable_builtin_wifi', 'enable_staff', 'enable_mgmt_wifi', 'enable_pos', 'enable_pppoe', 'enable_realtime_qos', 'enable_second_wan', 'ports_advanced_mode'] as $field) {
             $settings[$field] = (bool) ($settings[$field] ?? false);
         }
 

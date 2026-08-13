@@ -306,7 +306,9 @@
                 @if ($step === 3)
                     <div class="space-y-5">
                         <div class="grid gap-3 rounded-md border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-3 text-sm md:grid-cols-3">
+                            <flux:checkbox wire:model.live="provisioning_settings.enable_staff" label="Staff VLAN/SSID" />
                             <flux:checkbox wire:model.live="provisioning_settings.enable_pos" label="POS VLAN/SSID" />
+                            <flux:checkbox wire:model.live="provisioning_settings.enable_mgmt_wifi" label="Management Wi-Fi" />
                             <flux:checkbox wire:model.live="provisioning_settings.enable_pppoe" label="PPPoE/CPE VLAN" />
                             <flux:checkbox wire:model.live="provisioning_settings.enable_realtime_qos" label="Realtime voice/video QoS" />
                         </div>
@@ -338,17 +340,22 @@
                                     <flux:error name="provisioning_settings.builtin_wifi_interface" />
                                 </flux:field>
 
-                                <flux:field>
-                                    <flux:label>Management Wi-Fi password</flux:label>
-                                    <flux:input wire:model.blur="provisioning_settings.mgmt_wifi_password" viewable />
-                                    <flux:error name="provisioning_settings.mgmt_wifi_password" />
-                                </flux:field>
+                                @if ($provisioning_settings['enable_mgmt_wifi'] ?? false)
+                                    <flux:field>
+                                        <flux:label>Management Wi-Fi password</flux:label>
+                                        <flux:input wire:model.blur="provisioning_settings.mgmt_wifi_password" viewable />
+                                        <flux:description>Optional lab/admin SSID on the management VLAN. The wired Pi/management port is still generated even when this is off.</flux:description>
+                                        <flux:error name="provisioning_settings.mgmt_wifi_password" />
+                                    </flux:field>
+                                @endif
 
-                                <flux:field>
-                                    <flux:label>Staff Wi-Fi password</flux:label>
-                                    <flux:input wire:model.blur="provisioning_settings.staff_wifi_password" viewable />
-                                    <flux:error name="provisioning_settings.staff_wifi_password" />
-                                </flux:field>
+                                @if ($provisioning_settings['enable_staff'] ?? false)
+                                    <flux:field>
+                                        <flux:label>Staff Wi-Fi password</flux:label>
+                                        <flux:input wire:model.blur="provisioning_settings.staff_wifi_password" viewable />
+                                        <flux:error name="provisioning_settings.staff_wifi_password" />
+                                    </flux:field>
+                                @endif
 
                                 @if ($provisioning_settings['enable_pos'] ?? false)
                                     <flux:field>
@@ -406,11 +413,13 @@
                                 <flux:error name="provisioning_settings.hotspot_vlan" />
                             </flux:field>
 
-                            <flux:field>
-                                <flux:label>Staff VLAN</flux:label>
-                                <flux:input type="number" wire:model.blur="provisioning_settings.staff_vlan" placeholder="30" />
-                                <flux:error name="provisioning_settings.staff_vlan" />
-                            </flux:field>
+                            @if ($provisioning_settings['enable_staff'] ?? false)
+                                <flux:field>
+                                    <flux:label>Staff VLAN</flux:label>
+                                    <flux:input type="number" wire:model.blur="provisioning_settings.staff_vlan" placeholder="30" />
+                                    <flux:error name="provisioning_settings.staff_vlan" />
+                                </flux:field>
+                            @endif
 
                             @if ($provisioning_settings['enable_pppoe'] ?? false)
                                 <flux:field>
@@ -466,23 +475,25 @@
                                 <flux:error name="provisioning_settings.hotspot_pool" />
                             </flux:field>
 
-                            <flux:field>
-                                <flux:label>Staff gateway</flux:label>
-                                <flux:input wire:model.blur="provisioning_settings.staff_gateway" placeholder="192.168.30.1/24" />
-                                <flux:error name="provisioning_settings.staff_gateway" />
-                            </flux:field>
+                            @if ($provisioning_settings['enable_staff'] ?? false)
+                                <flux:field>
+                                    <flux:label>Staff gateway</flux:label>
+                                    <flux:input wire:model.blur="provisioning_settings.staff_gateway" placeholder="192.168.30.1/24" />
+                                    <flux:error name="provisioning_settings.staff_gateway" />
+                                </flux:field>
 
-                            <flux:field>
-                                <flux:label>Staff network</flux:label>
-                                <flux:input wire:model.blur="provisioning_settings.staff_network" placeholder="192.168.30.0/24" />
-                                <flux:error name="provisioning_settings.staff_network" />
-                            </flux:field>
+                                <flux:field>
+                                    <flux:label>Staff network</flux:label>
+                                    <flux:input wire:model.blur="provisioning_settings.staff_network" placeholder="192.168.30.0/24" />
+                                    <flux:error name="provisioning_settings.staff_network" />
+                                </flux:field>
 
-                            <flux:field>
-                                <flux:label>Staff DHCP pool</flux:label>
-                                <flux:input wire:model.blur="provisioning_settings.staff_pool" placeholder="192.168.30.10-192.168.30.250" />
-                                <flux:error name="provisioning_settings.staff_pool" />
-                            </flux:field>
+                                <flux:field>
+                                    <flux:label>Staff DHCP pool</flux:label>
+                                    <flux:input wire:model.blur="provisioning_settings.staff_pool" placeholder="192.168.30.10-192.168.30.250" />
+                                    <flux:error name="provisioning_settings.staff_pool" />
+                                </flux:field>
+                            @endif
 
                             @if ($provisioning_settings['enable_pos'] ?? false)
                                 <flux:field>

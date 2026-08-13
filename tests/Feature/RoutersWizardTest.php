@@ -86,6 +86,8 @@ class RoutersWizardTest extends TestCase
             ->set('provisioning_settings.enable_builtin_wifi', true)
             ->call('nextStep')
             ->assertSee('Built-in Wi-Fi credentials')
+            ->assertDontSee('Management Wi-Fi password')
+            ->set('provisioning_settings.enable_mgmt_wifi', true)
             ->assertSee('Management Wi-Fi password');
     }
 
@@ -121,6 +123,7 @@ class RoutersWizardTest extends TestCase
             ->set('shared_secret', 'radius-secret')
             ->call('nextStep')
             ->set('provisioning_settings.enable_builtin_wifi', true)
+            ->set('provisioning_settings.enable_mgmt_wifi', true)
             ->call('nextStep')
             ->set('provisioning_settings.mgmt_wifi_password', '')
             ->call('nextStep')

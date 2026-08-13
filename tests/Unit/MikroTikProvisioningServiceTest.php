@@ -352,6 +352,7 @@ class MikroTikProvisioningServiceTest extends TestCase
             'provisioning_settings' => [
                 'profile' => 'small_hotspot',
                 'enable_builtin_wifi' => true,
+                'enable_mgmt_wifi' => true,
                 'wan2' => 'ether7',
                 'hotspot_gateway' => '10.5.50.1/24',
                 'hotspot_network' => '10.5.50.0/24',
@@ -413,7 +414,11 @@ class MikroTikProvisioningServiceTest extends TestCase
             'nas_identifier' => 'l009-router',
             'wireguard_internal_ip' => '10.8.0.31',
             'shared_secret' => 'radius-secret',
-            'provisioning_settings' => ['profile' => 'small_hotspot', 'enable_builtin_wifi' => true],
+            'provisioning_settings' => [
+                'profile' => 'small_hotspot',
+                'enable_builtin_wifi' => true,
+                'enable_mgmt_wifi' => true,
+            ],
         ]);
 
         $staffDevice = TrustedWifiDevice::create([
@@ -446,6 +451,40 @@ class MikroTikProvisioningServiceTest extends TestCase
         $this->assertStringNotContainsString('AA:BB:CC:DD:EE:02', $script);
         $this->assertStringContainsString('/interface wifi access-list add interface=$mgmtWifiInterface mac-address='.$mgmtDevice->mac_address.' action=accept', $script);
         $this->assertStringContainsString('/interface wifi access-list add interface=$mgmtWifiInterface action=reject', $script);
+    }
+
+    public function test_builtin_wifi_script_can_omit_staff_and_management_wifi(): void
+    {
+        config([
+            'app.url' => 'https://mmsradius.com',
+            'services.radius.server_ip' => '10.8.0.1',
+            'services.wireguard.endpoint_host' => 'vpn.example.com',
+            'services.wireguard.endpoint_port' => 13231,
+            'services.wireguard.public_key' => 'server-public-key',
+            'services.mikrotik.hotspot_dns_name' => 'hotspot.local',
+        ]);
+
+        $router = new Router([
+            'nas_identifier' => 'hotspot-only-router',
+            'wireguard_internal_ip' => '10.8.0.32',
+            'shared_secret' => 'radius-secret',
+            'provisioning_settings' => [
+                'profile' => 'small_hotspot',
+                'enable_builtin_wifi' => true,
+                'enable_staff' => false,
+                'enable_pos' => false,
+                'enable_mgmt_wifi' => false,
+            ],
+        ]);
+
+        $script = app(MikroTikProvisioningService::class)->generateFreshInfrastructureScript($router);
+
+        $this->assertStringContainsString('Staff VLAN/SSID is disabled', $script);
+        $this->assertStringContainsString('Management virtual Wi-Fi is disabled', $script);
+        $this->assertStringNotContainsString('name=vlan-staff', $script);
+        $this->assertStringNotContainsString('ssid="MMS Staff"', $script);
+        $this->assertStringNotContainsString('ssid="MMS Mgmt"', $script);
+        $this->assertStringContainsString('/interface bridge vlan add bridge=bridge-lan tagged=bridge-lan,ether2 untagged=ether3 vlan-ids=10', $script);
     }
 
     public function test_it_omits_wireguard_private_key_when_router_has_none(): void

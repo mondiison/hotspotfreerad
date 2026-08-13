@@ -157,7 +157,7 @@ SCRIPT;
         $allVlans = array_filter([
             $settings['mgmt_vlan'],
             $settings['hotspot_vlan'],
-            $settings['staff_vlan'],
+            $settings['enable_staff'] ? $settings['staff_vlan'] : null,
             $settings['enable_pppoe'] ? $settings['pppoe_vlan'] : null,
             $settings['enable_pos'] ? $settings['pos_vlan'] : null,
         ]);
@@ -196,6 +196,17 @@ SCRIPT;
         ] : [
             '',
             '# POS VLAN is disabled for this router profile. Enable it when POS terminals need password Wi-Fi and app-managed renewal.',
+        ];
+
+        $staffLines = $settings['enable_staff'] ? [
+            '',
+            '/ip address add address=$staffGateway interface=vlan-staff comment="Password staff/admin SSID VLAN"',
+            '/ip pool add name=pool-staff ranges=$staffPool',
+            '/ip dhcp-server add name=dhcp-staff interface=vlan-staff address-pool=pool-staff lease-time=8h disabled=no',
+            '/ip dhcp-server network add address=$staffNetwork gateway='.str($settings['staff_gateway'])->before('/').' dns-server='.str($settings['staff_gateway'])->before('/'),
+        ] : [
+            '',
+            '# Staff VLAN/SSID is disabled for this router profile.',
         ];
 
         $pppoeLines = $settings['enable_pppoe'] ? [
@@ -237,22 +248,22 @@ SCRIPT;
             '# MikroTik L009 built-in Wi-Fi test SSID. RouterOS v7 WiFi package uses wifi1 on L009UiGS-2HaxD.',
             '/interface wifi security add name=mms-open-hotspot-sec authentication-types=""',
             '/interface wifi configuration add name=mms-open-hotspot-cfg mode=ap ssid="MMS Hotspot" security=mms-open-hotspot-sec country=Nigeria',
-            '/interface wifi security add name=mms-staff-sec authentication-types=wpa2-psk,wpa3-psk passphrase="'.$this->quote($settings['staff_wifi_password']).'"',
-            '/interface wifi security add name=mms-pos-sec authentication-types=wpa2-psk,wpa3-psk passphrase="'.$this->quote($settings['pos_wifi_password']).'"',
-            '/interface wifi security add name=mms-mgmt-sec authentication-types=wpa2-psk,wpa3-psk passphrase="'.$this->quote($settings['mgmt_wifi_password']).'"',
-            '/interface wifi configuration add name=mms-staff-cfg mode=ap ssid="MMS Staff" security=mms-staff-sec country=Nigeria',
-            '/interface wifi configuration add name=mms-pos-cfg mode=ap ssid="MMS POS" security=mms-pos-sec country=Nigeria',
-            '/interface wifi configuration add name=mms-mgmt-cfg mode=ap ssid="MMS Mgmt" security=mms-mgmt-sec country=Nigeria',
+            $settings['enable_staff'] ? '/interface wifi security add name=mms-staff-sec authentication-types=wpa2-psk,wpa3-psk passphrase="'.$this->quote($settings['staff_wifi_password']).'"' : '# Staff virtual Wi-Fi is disabled.',
+            $settings['enable_pos'] ? '/interface wifi security add name=mms-pos-sec authentication-types=wpa2-psk,wpa3-psk passphrase="'.$this->quote($settings['pos_wifi_password']).'"' : '# POS virtual Wi-Fi security disabled.',
+            $settings['enable_mgmt_wifi'] ? '/interface wifi security add name=mms-mgmt-sec authentication-types=wpa2-psk,wpa3-psk passphrase="'.$this->quote($settings['mgmt_wifi_password']).'"' : '# Management virtual Wi-Fi is disabled; wired Pi/management port remains active.',
+            $settings['enable_staff'] ? '/interface wifi configuration add name=mms-staff-cfg mode=ap ssid="MMS Staff" security=mms-staff-sec country=Nigeria' : '# Staff virtual Wi-Fi configuration disabled.',
+            $settings['enable_pos'] ? '/interface wifi configuration add name=mms-pos-cfg mode=ap ssid="MMS POS" security=mms-pos-sec country=Nigeria' : '# POS virtual Wi-Fi configuration disabled.',
+            $settings['enable_mgmt_wifi'] ? '/interface wifi configuration add name=mms-mgmt-cfg mode=ap ssid="MMS Mgmt" security=mms-mgmt-sec country=Nigeria' : '# Management virtual Wi-Fi configuration disabled.',
             '/interface wifi set [find default-name=$builtinWifiInterface] configuration=mms-open-hotspot-cfg disabled=no',
-            '/interface wifi add name=$staffWifiInterface master-interface=$builtinWifiInterface configuration=mms-staff-cfg disabled=no',
+            $settings['enable_staff'] ? '/interface wifi add name=$staffWifiInterface master-interface=$builtinWifiInterface configuration=mms-staff-cfg disabled=no' : '# Staff virtual Wi-Fi interface disabled.',
             $settings['enable_pos'] ? '/interface wifi add name=$posWifiInterface master-interface=$builtinWifiInterface configuration=mms-pos-cfg disabled=no' : '# POS virtual Wi-Fi is disabled because POS VLAN is disabled.',
-            '/interface wifi add name=$mgmtWifiInterface master-interface=$builtinWifiInterface configuration=mms-mgmt-cfg disabled=no',
+            $settings['enable_mgmt_wifi'] ? '/interface wifi add name=$mgmtWifiInterface master-interface=$builtinWifiInterface configuration=mms-mgmt-cfg disabled=no' : '# Management virtual Wi-Fi interface disabled.',
             '/interface bridge port add bridge=$lanBridge interface=$builtinWifiInterface pvid=$hotspotVlan comment="L009 built-in open hotspot Wi-Fi"',
-            '/interface bridge port add bridge=$lanBridge interface=$staffWifiInterface pvid=$staffVlan comment="Virtual staff/admin Wi-Fi"',
+            $settings['enable_staff'] ? '/interface bridge port add bridge=$lanBridge interface=$staffWifiInterface pvid=$staffVlan comment="Virtual staff/admin Wi-Fi"' : '# Staff virtual bridge port disabled.',
             $settings['enable_pos'] ? '/interface bridge port add bridge=$lanBridge interface=$posWifiInterface pvid=$posVlan comment="Virtual POS Wi-Fi for terminal testing"' : '# POS virtual bridge port disabled.',
-            '/interface bridge port add bridge=$lanBridge interface=$mgmtWifiInterface pvid=$mgmtVlan comment="Virtual management Wi-Fi for lab testing"',
-            ...$this->wifiAccessListLines($router, '$staffWifiInterface', 'MMS Staff', TrustedWifiDevice::NETWORK_STAFF),
-            ...$this->wifiAccessListLines($router, '$mgmtWifiInterface', 'MMS Mgmt', TrustedWifiDevice::NETWORK_MGMT),
+            $settings['enable_mgmt_wifi'] ? '/interface bridge port add bridge=$lanBridge interface=$mgmtWifiInterface pvid=$mgmtVlan comment="Virtual management Wi-Fi for lab testing"' : '# Management virtual bridge port disabled.',
+            ...($settings['enable_staff'] ? $this->wifiAccessListLines($router, '$staffWifiInterface', 'MMS Staff', TrustedWifiDevice::NETWORK_STAFF) : []),
+            ...($settings['enable_mgmt_wifi'] ? $this->wifiAccessListLines($router, '$mgmtWifiInterface', 'MMS Mgmt', TrustedWifiDevice::NETWORK_MGMT) : []),
         ] : [
             '',
             '# Built-in MikroTik Wi-Fi is disabled for this profile. Use the AP/switch trunk for external APs.',
@@ -307,7 +318,7 @@ SCRIPT;
             '/interface bridge port add bridge=$lanBridge interface=$piPort pvid=$mgmtVlan comment="Pi/management access port, untagged VLAN 10 by default"',
             '/interface vlan add interface=$lanBridge name=vlan-mgmt vlan-id=$mgmtVlan',
             '/interface vlan add interface=$lanBridge name=vlan-hotspot vlan-id=$hotspotVlan',
-            '/interface vlan add interface=$lanBridge name=vlan-staff vlan-id=$staffVlan',
+            $settings['enable_staff'] ? '/interface vlan add interface=$lanBridge name=vlan-staff vlan-id=$staffVlan' : '# Staff VLAN interface disabled',
             $settings['enable_pppoe'] ? '/interface vlan add interface=$lanBridge name=vlan-pppoe vlan-id=$pppoeVlan' : '# PPPoE VLAN interface disabled',
             $settings['enable_pos'] ? '/interface vlan add interface=$lanBridge name=vlan-pos vlan-id=$posVlan' : '# POS VLAN interface disabled',
         ], $builtinWifiLines, $bridgeVlanLines, [
@@ -333,12 +344,7 @@ SCRIPT;
             '/ip hotspot profile add name=mms-hotspot-profile use-radius=yes login-by=http-pap,http-chap,cookie,mac-cookie html-directory=flash/hotspot dns-name='.$hotspotDnsName.' radius-accounting=yes',
             '/ip hotspot add name=mms-hotspot interface=vlan-hotspot address-pool=pool-hotspot profile=mms-hotspot-profile disabled=no',
             ...$this->walledGardenLines($router, $portalHost),
-            '',
-            '/ip address add address=$staffGateway interface=vlan-staff comment="Password staff/admin SSID VLAN"',
-            '/ip pool add name=pool-staff ranges=$staffPool',
-            '/ip dhcp-server add name=dhcp-staff interface=vlan-staff address-pool=pool-staff lease-time=8h disabled=no',
-            '/ip dhcp-server network add address=$staffNetwork gateway='.str($settings['staff_gateway'])->before('/').' dns-server='.str($settings['staff_gateway'])->before('/'),
-        ], $posLines, $pppoeLines, [
+        ], $staffLines, $posLines, $pppoeLines, [
             '',
             '/ip firewall address-list add list=mms-hotspot-subnets address=$hotspotNetwork',
             $settings['enable_pos'] ? '/ip firewall address-list add list=mms-pos-subnets address=$posNetwork' : '# POS firewall list disabled',
@@ -348,7 +354,7 @@ SCRIPT;
             '/ip firewall filter add chain=input in-interface=vlan-mgmt action=accept comment="Allow management VLAN to router"',
             '/ip firewall filter add chain=input protocol=udp dst-port=53,67 action=accept comment="Allow DNS/DHCP from client VLANs"',
             '/ip firewall filter add chain=input in-interface=vlan-hotspot protocol=tcp dst-port=80,443,64872-64875 action=accept comment="Allow hotspot captive portal services"',
-            '/ip firewall filter add chain=input in-interface=vlan-pos protocol=tcp dst-port=80,443,64872-64875 action=accept comment="Allow optional POS MAC-auth hotspot services"',
+            $settings['enable_pos'] ? '/ip firewall filter add chain=input in-interface=vlan-pos protocol=tcp dst-port=80,443,64872-64875 action=accept comment="Allow optional POS MAC-auth hotspot services"' : '# POS hotspot input rule disabled',
             '/ip firewall filter add chain=input in-interface-list=!WAN action=drop comment="Drop other router access from clients"',
             '/ip firewall filter add chain=forward connection-state=established,related action=accept',
             '/ip firewall filter add chain=forward connection-state=invalid action=drop',
@@ -360,9 +366,9 @@ SCRIPT;
             '',
             '# AP SSID mapping recommended by MMS Radius:',
             '# MMS Hotspot = open SSID tagged VLAN '.$settings['hotspot_vlan'].', captive portal',
-            '# MMS Staff = WPA2/WPA3 SSID tagged VLAN '.$settings['staff_vlan'],
-            '# MMS POS = WPA2/WPA3 SSID tagged VLAN '.$settings['pos_vlan'].', hidden optional, registered devices',
-            '# MMS Mgmt = wired or restricted SSID tagged VLAN '.$settings['mgmt_vlan'],
+            $settings['enable_staff'] ? '# MMS Staff = WPA2/WPA3 SSID tagged VLAN '.$settings['staff_vlan'] : '# MMS Staff disabled',
+            $settings['enable_pos'] ? '# MMS POS = WPA2/WPA3 SSID tagged VLAN '.$settings['pos_vlan'].', hidden optional, registered devices' : '# MMS POS disabled',
+            $settings['enable_mgmt_wifi'] ? '# MMS Mgmt = restricted SSID tagged VLAN '.$settings['mgmt_vlan'] : '# MMS Mgmt Wi-Fi disabled; wired management VLAN remains on the Pi port',
         ]));
     }
 
@@ -504,6 +510,8 @@ HTML;
             'pos_pool' => '192.168.50.10-192.168.50.250',
             'pppoe_gateway' => '172.16.40.1/24',
             'enable_builtin_wifi' => false,
+            'enable_staff' => true,
+            'enable_mgmt_wifi' => false,
             'enable_pos' => true,
             'enable_pppoe' => $profile !== 'small_hotspot',
             'enable_realtime_qos' => true,
@@ -515,7 +523,7 @@ HTML;
 
     private function builtinWifiBridgeVlanLines(array $settings, string $lanBridgeName, string $taggedPorts, string $hotspotWifiInterface, string $staffWifiInterface, string $posWifiInterface, string $mgmtWifiInterface): array
     {
-        $mgmtUntagged = implode(',', array_filter([$settings['pi_port'], $mgmtWifiInterface]));
+        $mgmtUntagged = implode(',', array_filter([$settings['pi_port'], $settings['enable_mgmt_wifi'] ? $mgmtWifiInterface : null]));
         $pppoeTaggedOnly = $settings['enable_pppoe']
             ? $this->taggedVlanLine($lanBridgeName, $taggedPorts, $settings['pppoe_vlan'])
             : null;
@@ -523,7 +531,7 @@ HTML;
         return array_filter([
             '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' untagged='.$mgmtUntagged.' vlan-ids='.$settings['mgmt_vlan'],
             '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' untagged='.$hotspotWifiInterface.' vlan-ids='.$settings['hotspot_vlan'],
-            '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' untagged='.$staffWifiInterface.' vlan-ids='.$settings['staff_vlan'],
+            $settings['enable_staff'] ? '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' untagged='.$staffWifiInterface.' vlan-ids='.$settings['staff_vlan'] : null,
             $settings['enable_pos'] ? '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' untagged='.$posWifiInterface.' vlan-ids='.$settings['pos_vlan'] : null,
             $settings['enable_pppoe'] ? $pppoeTaggedOnly : null,
             '# If your AP/switch also needs tagged Staff/PPPoE/POS VLANs, keep the tagged ports above and use these virtual SSIDs only for MikroTik built-in Wi-Fi testing.',
