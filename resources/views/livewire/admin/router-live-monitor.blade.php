@@ -1,4 +1,4 @@
-<div wire:poll.5s="poll">
+<div @if (! $pollingPaused) wire:poll.5s="poll" @endif>
     <div class="mb-4 flex flex-col justify-between gap-3 md:flex-row md:items-center">
         <div class="flex items-center gap-2">
             <label class="text-sm text-zinc-500 dark:text-zinc-400">Interface</label>
@@ -6,7 +6,7 @@
                 <flux:select wire:model.live="interface" size="sm" class="w-56">
                     @foreach ($interfaces as $iface)
                         <flux:select.option value="{{ $iface['name'] }}">
-                            {{ $iface['name'] }}{{ $iface['disabled'] ? ' (disabled)' : ($iface['running'] ? ' — up' : ' — down') }}
+                            {{ $iface['name'] }}{{ $iface['disabled'] ? ' (disabled)' : ($iface['running'] ? ' - up' : ' - down') }}
                         </flux:select.option>
                     @endforeach
                 </flux:select>
@@ -15,16 +15,20 @@
             @endif
             <flux:button type="button" size="xs" variant="ghost" icon="arrow-path" wire:click="refreshInterfaces" wire:loading.attr="disabled" wire:target="refreshInterfaces" title="Refresh interface list" />
         </div>
-        <flux:badge :color="$error ? 'red' : 'green'">{{ $error ? 'Unreachable' : 'Polling every 5s' }}</flux:badge>
+        <flux:badge :color="$error || $pollingPaused ? 'red' : 'green'">{{ $error || $pollingPaused ? 'Polling paused' : 'Polling every 5s' }}</flux:badge>
     </div>
 
     @if ($interfacesError)
-        <p class="mb-3 text-xs text-amber-600">Could not load the interface list ({{ $interfacesError }}) — type a name manually above.</p>
+        <div class="mb-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            Could not load the interface list ({{ $interfacesError }}). Polling is paused so MikroTik is not flooded with API login attempts.
+            <button type="button" class="ml-2 font-medium underline" wire:click="refreshInterfaces" wire:loading.attr="disabled" wire:target="refreshInterfaces">Retry</button>
+        </div>
     @endif
 
     @if ($error)
         <div class="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
             Could not reach this router over the RouterOS API: {{ $error }}
+            <button type="button" class="ml-2 font-medium underline" wire:click="refreshInterfaces" wire:loading.attr="disabled" wire:target="refreshInterfaces">Retry after fixing credentials</button>
         </div>
     @elseif (count($samples) < 2)
         <p class="py-8 text-center text-sm text-zinc-500 dark:text-zinc-400">Waiting for the first live samples&hellip;</p>

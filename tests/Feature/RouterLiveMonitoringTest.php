@@ -42,7 +42,8 @@ class RouterLiveMonitoringTest extends TestCase
             ->test(RouterLiveMonitor::class, ['router' => $router])
             ->call('poll')
             ->assertSet('samples', [])
-            ->assertSee('Could not reach this router');
+            ->assertSet('pollingPaused', true)
+            ->assertSee('Polling is paused');
     }
 
     public function test_live_monitor_surfaces_an_interface_list_error_instead_of_crashing(): void
@@ -54,6 +55,7 @@ class RouterLiveMonitoringTest extends TestCase
             ->test(RouterLiveMonitor::class, ['router' => $router])
             ->assertSet('interfaces', [])
             ->assertSet('interface', 'wg-saas')
+            ->assertSet('pollingPaused', true)
             ->assertSet('interfacesError', fn (?string $error) => filled($error));
     }
 

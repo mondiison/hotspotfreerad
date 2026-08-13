@@ -24,6 +24,8 @@ class RouterLiveMonitor extends Component
 
     public bool $polling = false;
 
+    public bool $pollingPaused = false;
+
     private const MAX_SAMPLES = 30;
 
     public function mount(Router $router, RouterOsConnectionService $routerOs): void
@@ -37,6 +39,7 @@ class RouterLiveMonitor extends Component
         $router = Router::find($this->routerId);
 
         if ($router) {
+            $this->pollingPaused = false;
             $this->loadInterfaces($routerOs, $router);
         }
     }
@@ -45,6 +48,7 @@ class RouterLiveMonitor extends Component
     {
         $this->samples = [];
         $this->error = null;
+        $this->pollingPaused = false;
     }
 
     private function loadInterfaces(RouterOsConnectionService $routerOs, Router $router): void
@@ -53,11 +57,13 @@ class RouterLiveMonitor extends Component
 
         if (! $result['success']) {
             $this->interfacesError = $result['error'];
+            $this->pollingPaused = true;
 
             return;
         }
 
         $this->interfacesError = null;
+        $this->pollingPaused = false;
         $this->interfaces = $result['interfaces'];
 
         if ($this->interfaces !== [] && ! in_array($this->interface, array_column($this->interfaces, 'name'), true)) {
@@ -67,6 +73,10 @@ class RouterLiveMonitor extends Component
 
     public function poll(RouterOsConnectionService $routerOs): void
     {
+        if ($this->pollingPaused) {
+            return;
+        }
+
         $router = Router::find($this->routerId);
 
         if (! $router) {
@@ -78,11 +88,14 @@ class RouterLiveMonitor extends Component
 
         if (! $result['success']) {
             $this->error = $result['error'];
+            $this->polling = false;
+            $this->pollingPaused = true;
 
             return;
         }
 
         $this->error = null;
+        $this->pollingPaused = false;
         $this->samples[] = [
             'time' => now()->format('H:i:s'),
             'download_mbps' => round($result['rx_bits_per_second'] / 1_000_000, 2),
