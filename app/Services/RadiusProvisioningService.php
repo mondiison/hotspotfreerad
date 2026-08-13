@@ -9,6 +9,7 @@ use App\Models\Router;
 use App\Models\Subscription;
 use App\Models\TrustedWifiDevice;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class RadiusProvisioningService
@@ -27,6 +28,17 @@ class RadiusProvisioningService
                 'description' => $router->name.' (services: hotspot, ppp)',
             ]
         );
+
+        if ((bool) config('services.radius.manage_clients', false)) {
+            $result = app(FreeRadiusClientSyncService::class)->sync(reload: true);
+
+            if (! empty($result['errors'])) {
+                Log::warning('FreeRADIUS client file sync failed after router sync', [
+                    'router_id' => $router->id,
+                    'errors' => $result['errors'],
+                ]);
+            }
+        }
     }
 
     public function syncPackageProfile(Package $package): string

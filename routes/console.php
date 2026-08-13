@@ -11,6 +11,7 @@ use App\Models\Router;
 use App\Models\Voucher;
 use App\Services\PppoeSubscriberManagementService;
 use App\Services\PosDeviceManagementService;
+use App\Services\FreeRadiusClientSyncService;
 use App\Services\RadiusProvisioningService;
 use App\Services\RouterMetricSamplingService;
 use App\Services\RouterOsConnectionService;
@@ -311,6 +312,44 @@ Artisan::command('hotspot:sync-wireguard-peers {--dry-run}', function (WireGuard
 })->purpose('Reconcile Raspberry Pi WireGuard peers from router records (adds/updates only, never removes a peer)');
 
 Schedule::command('hotspot:sync-wireguard-peers')
+    ->everyFiveMinutes()
+    ->withoutOverlapping();
+
+Artisan::command('hotspot:sync-radius-clients {--dry-run} {--reload}', function (FreeRadiusClientSyncService $clients): int {
+    $dryRun = (bool) $this->option('dry-run');
+    $reload = (bool) $this->option('reload');
+    $result = $clients->sync(dryRun: $dryRun, reload: $reload);
+
+    if (! $result['enabled']) {
+        $this->info('FreeRADIUS client-file management is disabled. Set RADIUS_MANAGE_CLIENTS=true on the Pi to enable writes.');
+        $this->line('Preview of managed file:');
+        $this->line($result['content']);
+
+        return Command::SUCCESS;
+    }
+
+    if ($dryRun) {
+        $this->info("Dry run for {$result['desired_count']} router client(s). Target: {$result['path']}");
+        $this->line($result['content']);
+
+        return Command::SUCCESS;
+    }
+
+    $this->info("FreeRADIUS clients sync target: {$result['path']}");
+    $this->info($result['written'] ? 'Managed clients file written.' : 'Managed clients file was not written.');
+
+    if ($reload) {
+        $this->info($result['reloaded'] ? 'FreeRADIUS reloaded.' : 'FreeRADIUS was not reloaded.');
+    }
+
+    foreach ($result['errors'] as $error) {
+        $this->error($error);
+    }
+
+    return count($result['errors']) > 0 ? Command::FAILURE : Command::SUCCESS;
+})->purpose('Write the managed FreeRADIUS clients include file from router records');
+
+Schedule::command('hotspot:sync-radius-clients --reload')
     ->everyFiveMinutes()
     ->withoutOverlapping();
 

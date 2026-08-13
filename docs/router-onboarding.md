@@ -119,6 +119,45 @@ On Windows PowerShell, you can generate one with:
 
 HotspotFreeRAD stores the secret encrypted in the application table, and syncs it into the FreeRADIUS `nas.secret` column.
 
+If your Raspberry Pi FreeRADIUS is using static client files instead of SQL NAS
+loading, enable the managed clients include file on the Pi:
+
+```bash
+sudo mkdir -p /etc/freeradius/3.0/clients.d
+sudo touch /etc/freeradius/3.0/clients.d/hotspotfreerad.conf
+sudo chown www-data:www-data /etc/freeradius/3.0/clients.d/hotspotfreerad.conf
+sudo chmod 664 /etc/freeradius/3.0/clients.d/hotspotfreerad.conf
+```
+
+Make sure `/etc/freeradius/3.0/clients.conf` includes the directory:
+
+```conf
+$INCLUDE clients.d/*.conf
+```
+
+Then set these in `.env`:
+
+```env
+RADIUS_MANAGE_CLIENTS=true
+RADIUS_CLIENTS_FILE=/etc/freeradius/3.0/clients.d/hotspotfreerad.conf
+```
+
+After creating or editing routers, the scheduler runs:
+
+```bash
+php artisan hotspot:sync-radius-clients --reload
+```
+
+You can also run it manually. It writes entries like:
+
+```conf
+client bebeji-router01 {
+    ipaddr = 10.8.0.11
+    secret = "router-shared-secret"
+    shortname = "bebeji-router01"
+}
+```
+
 ## First Router Checklist
 
 1. Add a tenant in HotspotFreeRAD.
