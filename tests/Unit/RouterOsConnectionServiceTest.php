@@ -193,4 +193,36 @@ class RouterOsConnectionServiceTest extends TestCase
             ],
         ], $leases);
     }
+
+    public function test_it_maps_file_print_rows_down_to_directory_names(): void
+    {
+        $rows = [
+            ['name' => 'flash', 'type' => 'disk'],
+            ['name' => 'flash/hotspot', 'type' => 'directory'],
+            ['name' => 'hotspot', 'type' => 'directory'],
+            ['name' => 'flash/hotspot/login.html', 'type' => 'html'],
+            ['name' => 'skins', 'type' => 'directory'],
+            ['type' => 'directory'],
+        ];
+
+        $directories = RouterOsConnectionService::mapDirectoryRows($rows);
+
+        $this->assertSame(['flash/hotspot', 'hotspot', 'skins'], $directories);
+    }
+
+    #[DataProvider('resolveHotspotDirectoryProvider')]
+    public function test_it_resolves_the_hotspot_directory(?string $input, string $expected): void
+    {
+        $this->assertSame($expected, RouterOsConnectionService::resolveHotspotDirectory($input));
+    }
+
+    public static function resolveHotspotDirectoryProvider(): array
+    {
+        return [
+            'null falls back to the default' => [null, 'flash/hotspot'],
+            'a custom directory is used as-is' => ['hotspot1', 'hotspot1'],
+            'leading and trailing slashes are trimmed' => ['/hotspot/', 'hotspot'],
+            'a router without the flash prefix is preserved' => ['hotspot', 'hotspot'],
+        ];
+    }
 }

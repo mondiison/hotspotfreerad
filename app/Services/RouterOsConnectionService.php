@@ -470,10 +470,25 @@ class RouterOsConnectionService
     }
 
     /**
-     * Replaces the router's local flash/hotspot/login.html with the redirect
-     * stub from MikroTikProvisioningService::hotspotLoginPageHtml(), fetched
-     * directly by the router itself over `/tool fetch` rather than written
-     * through the API -- RouterOS's binary API has no reliable way to write
+     * The directory this app's own hotspot profile (`saas-prof`, created by
+     * `provisionHotspot()`) uses -- correct as a default for a router being
+     * freshly onboarded through this app, but NOT guaranteed for a router
+     * that already had a hotspot server set up another way (MikroTik's own
+     * `/ip hotspot setup` wizard, a differently-named profile, or an older
+     * RouterOS version that doesn't prefix paths with "flash/" at all --
+     * confirmed live: the same file shows as "hotspot/login.html" on some
+     * routers, not "flash/hotspot/login.html"). listHotspotDirectories()
+     * lets an admin see what's actually on THIS router and override this
+     * default via pushHotspotLoginPage()'s $directory parameter instead of
+     * guessing wrong and silently writing to a directory nothing serves.
+     */
+    public const DEFAULT_HOTSPOT_DIRECTORY = 'flash/hotspot';
+
+    /**
+     * Replaces a router's local login.html with the redirect stub from
+     * MikroTikProvisioningService::hotspotLoginPageHtml(), fetched directly
+     * by the router itself over `/tool fetch` rather than written through
+     * the API -- RouterOS's binary API has no reliable way to write
      * arbitrary file content directly across versions, but every router
      * already has outbound reach to the portal host (it's the same host the
      * walled-garden entries above allow customer devices to reach), so
@@ -486,9 +501,15 @@ class RouterOsConnectionService
      * "test", which is what `/tool fetch` needs (see
      * MikroTikProvisioningService::apiUserProvisioningLines()).
      *
+     * $directory defaults to DEFAULT_HOTSPOT_DIRECTORY (correct for this
+     * app's own hotspot profile) -- pass the router's actual directory
+     * (see listHotspotDirectories()) when it already has a different
+     * hotspot setup, so the file lands where RouterOS is actually serving
+     * login pages from rather than an unused directory.
+     *
      * @return array{success: bool, steps: list<array{label: string, success: bool, error: ?string}>}
      */
-    public function pushHotspotLoginPage(Router $router): array
+    public function pushHotspotLoginPage(Router $router, ?string $directory = null): array
     {
         if (! $this->isConfigured($router)) {
             return [
@@ -500,12 +521,66 @@ class RouterOsConnectionService
         $steps = [
             'Push hotspot login page' => (new Query('/tool/fetch'))
                 ->equal('url', $this->provisioning->loginPageUrl())
-                ->equal('dst-path', 'flash/hotspot/login.html')
+                ->equal('dst-path', self::resolveHotspotDirectory($directory).'/login.html')
                 ->equal('mode', 'https')
                 ->equal('check-certificate', 'no'),
         ];
 
         return $this->runSteps($router, $steps);
+    }
+
+    /**
+     * Defaults and trims a caller-supplied directory -- pulled out of
+     * pushHotspotLoginPage() so the resolution logic itself (default
+     * fallback, leading/trailing slash trimming) can be unit tested without
+     * a live RouterOS connection.
+     */
+    public static function resolveHotspotDirectory(?string $directory): string
+    {
+        return trim($directory ?? self::DEFAULT_HOTSPOT_DIRECTORY, '/');
+    }
+
+    /**
+     * Every directory RouterOS's own file storage actually has, so an admin
+     * can see the real layout of a router instead of guessing whether
+     * pushHotspotLoginPage()'s default (DEFAULT_HOTSPOT_DIRECTORY) is
+     * correct for THIS router -- see the caveat on that constant. `/file
+     * print` already covers whatever storage the router has (just "flash"
+     * on most boards); this only keeps entries RouterOS itself reports as
+     * type=directory, not individual files.
+     *
+     * @return array{success: bool, directories?: list<string>, error?: string}
+     */
+    public function listHotspotDirectories(Router $router): array
+    {
+        if (! $this->isConfigured($router)) {
+            return ['success' => false, 'error' => 'RouterOS API credentials not generated yet.'];
+        }
+
+        try {
+            $response = $this->client($router)->query(new Query('/file/print'))->read();
+
+            return ['success' => true, 'directories' => self::mapDirectoryRows($response)];
+        } catch (\Throwable $e) {
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Pure row-mapping logic pulled out of listHotspotDirectories() so it
+     * can be unit tested without a live RouterOS connection.
+     *
+     * @param  list<array<string,mixed>>  $rows
+     * @return list<string>
+     */
+    public static function mapDirectoryRows(array $rows): array
+    {
+        return collect($rows)
+            ->filter(fn ($row) => is_array($row) && ($row['type'] ?? null) === 'directory' && filled($row['name'] ?? null))
+            ->map(fn (array $row): string => (string) $row['name'])
+            ->sort()
+            ->values()
+            ->all();
     }
 
     /**

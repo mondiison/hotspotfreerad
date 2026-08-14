@@ -314,6 +314,16 @@ sudo freeradius -X</code></pre>
 
                         <section class="min-w-0 overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm">
                             <div class="border-b border-zinc-200 dark:border-zinc-700 px-5 py-4">
+                                <h2 class="text-base font-semibold">Hotspot Login Page</h2>
+                                <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">"Provision via API" already pushes this to the default directory automatically. Use this if the router's hotspot server uses a different directory.</p>
+                            </div>
+                            <div class="p-5">
+                                <livewire:admin.router-hotspot-login-page :router="$router" :key="'hotspot-login-page-'.$router->id" />
+                            </div>
+                        </section>
+
+                        <section class="min-w-0 overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm">
+                            <div class="border-b border-zinc-200 dark:border-zinc-700 px-5 py-4">
                                 <h2 class="text-base font-semibold">Console</h2>
                                 <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Read-only RouterOS terminal &mdash; run any <code>print</code> command against this router over the API.</p>
                             </div>

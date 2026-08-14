@@ -281,6 +281,39 @@ class RouterOsApiProvisioningTest extends TestCase
         $this->assertNotEmpty($result['steps'][0]['error']);
     }
 
+    public function test_push_hotspot_login_page_accepts_a_custom_directory(): void
+    {
+        $router = Router::create([
+            'shop_id' => $this->makeShop()->id,
+            'name' => 'Custom Directory Login Page Router',
+            'nas_identifier' => 'custom-directory-login-page-router',
+            'wireguard_internal_ip' => '192.0.2.7',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        $result = app(RouterOsConnectionService::class)->pushHotspotLoginPage($router, 'hotspot1');
+
+        $this->assertFalse($result['success']);
+        $this->assertCount(1, $result['steps']);
+        $this->assertSame('Push hotspot login page', $result['steps'][0]['label']);
+    }
+
+    public function test_list_hotspot_directories_reports_a_clear_error_when_router_is_unreachable(): void
+    {
+        $router = Router::create([
+            'shop_id' => $this->makeShop()->id,
+            'name' => 'Unreachable Directory Listing Router',
+            'nas_identifier' => 'unreachable-directory-listing-router',
+            'wireguard_internal_ip' => '192.0.2.8',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        $result = app(RouterOsConnectionService::class)->listHotspotDirectories($router);
+
+        $this->assertFalse($result['success']);
+        $this->assertNotEmpty($result['error']);
+    }
+
     public function test_login_page_url_uses_the_same_host_as_the_portal_url(): void
     {
         config(['services.mikrotik.portal_url' => 'https://mmsradius.example.com/hotspot/portal']);
