@@ -444,6 +444,68 @@ HTML;
             : rtrim(config('app.url'), '/').'/hotspot/portal';
     }
 
+    /**
+     * The URL a router fetches (via `/tool fetch` -- see
+     * RouterOsConnectionService::pushHotspotLoginPage()) to replace its
+     * default local hotspot login page with the redirect stub below.
+     * Built from the same host as portalUrl() rather than Laravel's own
+     * route()/APP_URL, so it stays correct if HOTSPOT_PORTAL_URL is
+     * configured to a different public host than APP_URL.
+     */
+    public function loginPageUrl(): string
+    {
+        $portalUrl = $this->portalUrl();
+        $host = parse_url($portalUrl, PHP_URL_HOST) ?: config('services.mikrotik.hotspot_dns_name');
+        $scheme = parse_url($portalUrl, PHP_URL_SCHEME) ?: 'https';
+
+        return $scheme.'://'.$host.'/hotspot/login-page';
+    }
+
+    /**
+     * The router's local flash/hotspot login.html is otherwise MikroTik's
+     * stock form, which would let customers "log in" against RouterOS's own
+     * hotspot server directly -- never reaching this app's portal, payment
+     * gateways, or RADIUS provisioning at all. RouterOS doesn't redirect
+     * hotspot logins to an external URL on its own; the html-directory file
+     * has to do that itself. This is a minimal stub that carries MikroTik's
+     * own login-time variables ($(mac)/$(identity)/$(link-login)/$(link-orig)
+     * -- substituted by RouterOS when it serves the file, not by this app)
+     * straight into the real portal URL. It has no per-router content --
+     * every router fetches the exact same file, since there's only one
+     * portal host per install -- see loginPageUrl()/pushHotspotLoginPage().
+     */
+    public function hotspotLoginPageHtml(): string
+    {
+        $portal = $this->portalUrl();
+
+        return <<<HTML
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Opening hotspot portal</title>
+</head>
+<body style="font-family: system-ui, sans-serif; padding: 24px;">
+    <h1>Opening internet access</h1>
+    <p>If nothing happens, use the button below.</p>
+    <p><a id="portal-link" href="#">Continue to internet packages</a></p>
+
+    <script>
+        var portal = '{$portal}'
+            + '?mac=' + encodeURIComponent('\$(mac)')
+            + '&nasid=' + encodeURIComponent('\$(identity)')
+            + '&link-login=' + encodeURIComponent('\$(link-login)')
+            + '&link-orig=' + encodeURIComponent('\$(link-orig)');
+
+        document.getElementById('portal-link').href = portal;
+        window.location.replace(portal);
+    </script>
+</body>
+</html>
+HTML;
+    }
+
     private function profileDefaults(string $profile): array
     {
         return match ($profile) {

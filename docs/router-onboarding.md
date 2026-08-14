@@ -277,7 +277,9 @@ Allow the Pi before login:
 /ip hotspot walled-garden ip add dst-address=192.168.190.244 action=accept
 ```
 
-Then replace the MikroTik hotspot `login.html` with this visible fallback template. It encodes MikroTik variables before redirecting, which prevents blank pages when the original URL contains its own query string.
+**On a router already onboarded to MMS Radius** (WireGuard + RouterOS API credentials generated, i.e. this isn't the from-scratch FreeRADIUS bring-up walkthrough above), "Provision via API" on the router's Live tab pushes this automatically now -- `RouterOsConnectionService::pushHotspotLoginPage()` has the router `/tool fetch` the stub from `GET /hotspot/login-page` (served by `MikroTikProvisioningService::hotspotLoginPageHtml()`) straight into `flash/hotspot/login.html`, so there's no manual copy/paste step. It's the exact same content shown below, with the real portal URL baked in instead of the LAN test IP. Re-running "Provision via API" re-pushes it, which is also how to recover if a firmware update or manual edit wipes/changes the file.
+
+For the from-scratch bring-up flow below (before a router has API credentials at all), or to understand what the automation actually pushes, replace the MikroTik hotspot `login.html` with this visible fallback template by hand. It encodes MikroTik variables before redirecting, which prevents blank pages when the original URL contains its own query string.
 
 ```html
 <!doctype html>

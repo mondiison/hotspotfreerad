@@ -198,7 +198,7 @@ sudo freeradius -X</code></pre>
                                     <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Paste this into MikroTik RouterOS terminal after confirming the config values, or apply it live over the API once the Bootstrap Script (Overview tab) has run.</p>
                                 </div>
                                 @if ($router->api_username)
-                                    <form method="POST" action="{{ route('admin.routers.provision-hotspot', $router) }}" onsubmit="return confirm('This pushes the RADIUS client, hotspot profile, and walled-garden entry to the router live over the API. Continue?');">
+                                    <form method="POST" action="{{ route('admin.routers.provision-hotspot', $router) }}" onsubmit="return confirm('This pushes the RADIUS client, hotspot profile, walled-garden entries, and the hotspot login page to the router live over the API. Continue?');">
                                         @csrf
                                         <button type="submit" class="rounded-md border border-zinc-200 dark:border-zinc-700 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-zinc-50 dark:hover:bg-zinc-800">Provision via API</button>
                                     </form>

@@ -12,6 +12,7 @@ use App\Models\Subscription;
 use App\Services\FlutterwaveService;
 use App\Services\HotspotPaymentConfirmationService;
 use App\Services\ManualBankTransferService;
+use App\Services\MikroTikProvisioningService;
 use App\Services\MonnifyService;
 use App\Services\PaystackService;
 use App\Services\Payments\HotspotHostedCheckoutManager;
@@ -34,6 +35,19 @@ use Throwable;
 class PortalController extends Controller
 {
     private const TEST_ACCESS_PASSWORD = 'authenticated_device_pass';
+
+    /**
+     * Fetched directly by a router's own `/tool fetch` command (see
+     * RouterOsConnectionService::pushHotspotLoginPage()), not by a
+     * customer's browser -- this replaces the router's local
+     * flash/hotspot/login.html with a stub that redirects into show()
+     * above, carrying MikroTik's own login-time variables along.
+     */
+    public function loginPage(MikroTikProvisioningService $provisioning): Response
+    {
+        return response($provisioning->hotspotLoginPageHtml())
+            ->header('Content-Type', 'text/html');
+    }
 
     public function show(Request $request): View
     {

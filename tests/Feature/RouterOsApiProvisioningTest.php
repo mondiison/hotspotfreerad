@@ -227,11 +227,14 @@ class RouterOsApiProvisioningTest extends TestCase
         // RADIUS client, hotspot profile, portal walled-garden entry, one walled-garden
         // entry per host in the shop's active gateway's PaymentGatewayCatalog list
         // (flutterwave by default: *.flutterwave.com, *.ravepay.co), the Cloudflare
-        // walled-garden entry, then the final "point hotspot server" step.
+        // walled-garden entry, the hotspot login page push, then the final
+        // "point hotspot server" step.
         $this->assertFalse($result['success']);
-        $this->assertCount(7, $result['steps']);
+        $this->assertCount(8, $result['steps']);
         $this->assertFalse($result['steps'][0]['success']);
         $this->assertNotEmpty($result['steps'][0]['error']);
+        $labels = array_column($result['steps'], 'label');
+        $this->assertContains('Push hotspot login page', $labels);
         $lastStep = $result['steps'][count($result['steps']) - 1];
         $this->assertSame('Point hotspot server at "saas-prof"', $lastStep['label']);
         $this->assertFalse($lastStep['success']);
@@ -257,6 +260,59 @@ class RouterOsApiProvisioningTest extends TestCase
         $this->assertContains('Add walled-garden entry (*.squadco.com)', $labels);
         $this->assertContains('Add walled-garden entry (*.cloudflare.com)', $labels);
         $this->assertNotContains('Add walled-garden entry (*.flutterwave.com)', $labels);
+    }
+
+    public function test_push_hotspot_login_page_reports_a_clear_error_when_router_is_unreachable(): void
+    {
+        $router = Router::create([
+            'shop_id' => $this->makeShop()->id,
+            'name' => 'Unreachable Login Page Router',
+            'nas_identifier' => 'unreachable-login-page-router',
+            'wireguard_internal_ip' => '192.0.2.6',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        $result = app(RouterOsConnectionService::class)->pushHotspotLoginPage($router);
+
+        $this->assertFalse($result['success']);
+        $this->assertCount(1, $result['steps']);
+        $this->assertSame('Push hotspot login page', $result['steps'][0]['label']);
+        $this->assertFalse($result['steps'][0]['success']);
+        $this->assertNotEmpty($result['steps'][0]['error']);
+    }
+
+    public function test_login_page_url_uses_the_same_host_as_the_portal_url(): void
+    {
+        config(['services.mikrotik.portal_url' => 'https://mmsradius.example.com/hotspot/portal']);
+
+        $url = app(MikroTikProvisioningService::class)->loginPageUrl();
+
+        $this->assertSame('https://mmsradius.example.com/hotspot/login-page', $url);
+    }
+
+    public function test_hotspot_login_page_html_embeds_the_portal_url_and_mikrotik_placeholders(): void
+    {
+        config(['services.mikrotik.portal_url' => 'https://mmsradius.example.com/hotspot/portal']);
+
+        $html = app(MikroTikProvisioningService::class)->hotspotLoginPageHtml();
+
+        $this->assertStringContainsString("var portal = 'https://mmsradius.example.com/hotspot/portal'", $html);
+        $this->assertStringContainsString('$(mac)', $html);
+        $this->assertStringContainsString('$(identity)', $html);
+        $this->assertStringContainsString('$(link-login)', $html);
+        $this->assertStringContainsString('$(link-orig)', $html);
+        $this->assertStringContainsString('window.location.replace(portal)', $html);
+    }
+
+    public function test_login_page_route_serves_the_stub_html(): void
+    {
+        config(['services.mikrotik.portal_url' => 'https://mmsradius.example.com/hotspot/portal']);
+
+        $response = $this->get(route('hotspot.login-page'));
+
+        $response->assertOk();
+        $response->assertHeader('Content-Type', 'text/html; charset=utf-8');
+        $response->assertSee('https://mmsradius.example.com/hotspot/portal', false);
     }
 
     public function test_provision_pppoe_reports_a_clear_error_when_router_is_unreachable(): void

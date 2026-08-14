@@ -459,13 +459,53 @@ class RouterOsConnectionService
 
         $result = $this->runSteps($router, $steps);
         $walledGardenResult = $this->syncWalledGarden($router);
+        $loginPageResult = $this->pushHotspotLoginPage($router);
         $profileStep = $this->applyHotspotProfile($router);
 
-        $result['steps'] = array_merge($result['steps'], $walledGardenResult['steps']);
+        $result['steps'] = array_merge($result['steps'], $walledGardenResult['steps'], $loginPageResult['steps']);
         $result['steps'][] = $profileStep;
-        $result['success'] = $result['success'] && $walledGardenResult['success'] && $profileStep['success'];
+        $result['success'] = $result['success'] && $walledGardenResult['success'] && $loginPageResult['success'] && $profileStep['success'];
 
         return $result;
+    }
+
+    /**
+     * Replaces the router's local flash/hotspot/login.html with the redirect
+     * stub from MikroTikProvisioningService::hotspotLoginPageHtml(), fetched
+     * directly by the router itself over `/tool fetch` rather than written
+     * through the API -- RouterOS's binary API has no reliable way to write
+     * arbitrary file content directly across versions, but every router
+     * already has outbound reach to the portal host (it's the same host the
+     * walled-garden entries above allow customer devices to reach), so
+     * having the router pull the file itself is both simpler and more
+     * reliable than trying to push bytes through the API connection.
+     * Without this, a router keeps serving MikroTik's stock local hotspot
+     * login form forever -- customers would "log in" against RouterOS
+     * directly and never reach this app's portal, payment gateways, or
+     * RADIUS provisioning at all. The API user's policy already grants
+     * "test", which is what `/tool fetch` needs (see
+     * MikroTikProvisioningService::apiUserProvisioningLines()).
+     *
+     * @return array{success: bool, steps: list<array{label: string, success: bool, error: ?string}>}
+     */
+    public function pushHotspotLoginPage(Router $router): array
+    {
+        if (! $this->isConfigured($router)) {
+            return [
+                'success' => false,
+                'steps' => [['label' => 'RouterOS API credentials', 'success' => false, 'error' => 'No RouterOS API credentials generated for this router yet.']],
+            ];
+        }
+
+        $steps = [
+            'Push hotspot login page' => (new Query('/tool/fetch'))
+                ->equal('url', $this->provisioning->loginPageUrl())
+                ->equal('dst-path', 'flash/hotspot/login.html')
+                ->equal('mode', 'https')
+                ->equal('check-certificate', 'no'),
+        ];
+
+        return $this->runSteps($router, $steps);
     }
 
     /**
