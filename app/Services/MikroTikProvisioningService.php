@@ -721,7 +721,20 @@ HTML;
         // actually detects a trap. A router bootstrapped before this fix needs its
         // script re-run (or a fresh "Provision via API" push once the API user's
         // policy line has been re-applied) before writes will actually take effect.
-        $policy = 'read,write,api,test,sensitive,!local,!telnet,!ssh,!ftp,!reboot,!policy,!winbox,!password,!web,!sniff,!romon,!rest-api';
+        //
+        // "ftp" is also REQUIRED, despite the misleading name -- RouterOS overloads
+        // this policy flag to gate local file-system writes generally (a holdover
+        // from when file transfer/backup only happened over literal FTP), not just
+        // the FTP *service* (which this app never enables via /ip service). It was
+        // originally denied here on a least-privilege assumption before this account
+        // needed to touch files at all. RouterOsConnectionService::pushHotspotLoginPage()
+        // writes the hotspot login page via `/tool fetch dst-path=...`, which RouterOS
+        // rejects with "failure: cannot open file: permission denied" without it --
+        // confirmed live 2026-08-09. A router bootstrapped before this fix needs the
+        // same remediation as the write-policy fix above: re-run the script, or just
+        // `/user group set [find name=mmsradius-api-group] policy=<the string below>`
+        // on the router directly.
+        $policy = 'read,write,api,test,sensitive,ftp,!local,!telnet,!ssh,!reboot,!policy,!winbox,!password,!web,!sniff,!romon,!rest-api';
 
         return [
             // Update-in-place if the group/user already exist (e.g. this script is
