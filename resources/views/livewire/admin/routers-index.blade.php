@@ -157,6 +157,43 @@
                             <flux:error name="wireguard_endpoint_override_port" />
                         </flux:field>
 
+                        <flux:field class="md:col-span-2">
+                            <flux:label>Tunnel mode</flux:label>
+                            <flux:select wire:model.live="tunnel_mode">
+                                <flux:select.option value="wireguard">WireGuard only</flux:select.option>
+                                <flux:select.option value="wireguard_zerotier">WireGuard + ZeroTier fallback</flux:select.option>
+                                <flux:select.option value="zerotier">ZeroTier only</flux:select.option>
+                            </flux:select>
+                            <flux:description>Use ZeroTier when this router's site is behind carrier-grade NAT (common on Starlink/mobile), where WireGuard can never form a tunnel no matter how port forwarding is configured. See <code>docs/zerotier-fallback-setup.md</code>.</flux:description>
+                            <flux:error name="tunnel_mode" />
+                        </flux:field>
+
+                        @if ($tunnel_mode !== 'wireguard')
+                            <flux:field>
+                                <flux:label>ZeroTier IP</flux:label>
+                                <flux:input wire:model.blur="zerotier_ip" icon="globe-alt" placeholder="{{ $zerotierIpPrefix }}.10" />
+                                <div class="mt-2 flex flex-wrap gap-2">
+                                    <flux:button type="button" size="xs" wire:click="suggestZeroTierIp">Suggest next available IP</flux:button>
+                                </div>
+                                <flux:description>This router's fixed address on the ZeroTier network, pushed as its authorized IP assignment.</flux:description>
+                                <flux:error name="zerotier_ip" />
+                            </flux:field>
+
+                            <flux:field>
+                                <flux:label>ZeroTier node ID</flux:label>
+                                <flux:input wire:model.blur="zerotier_node_id" icon="finger-print" placeholder="e.g. abcd123456" maxlength="16" />
+                                @if ($tunnel_mode === 'wireguard_zerotier')
+                                    <div class="mt-2 flex flex-wrap gap-2">
+                                        <flux:button type="button" size="xs" wire:click="fetchZeroTierNodeId">Fetch over WireGuard</flux:button>
+                                    </div>
+                                    <flux:description>RouterOS generates this itself, the first time <code>/zerotier enable</code> runs on the router -- MMS Radius can't predict it in advance the way it does WireGuard keys. Since this router still has WireGuard, click <strong>Fetch over WireGuard</strong> to read it automatically, or run <code>/zerotier print</code> on the router and paste it here.</flux:description>
+                                @else
+                                    <flux:description>This router has no working WireGuard link, so its ZeroTier node ID can't be fetched automatically -- run <code>/zerotier print</code> on the router console after it joins the network, then paste the result here.</flux:description>
+                                @endif
+                                <flux:error name="zerotier_node_id" />
+                            </flux:field>
+                        @endif
+
                         <flux:field>
                             <flux:label>RADIUS shared secret</flux:label>
                             <flux:input wire:model.blur="shared_secret" icon="key" placeholder="{{ $editingRouterId ? 'Leave blank to keep current value' : 'QF9mX7vC2pL8nR4sT6wY1zA5' }}" viewable />

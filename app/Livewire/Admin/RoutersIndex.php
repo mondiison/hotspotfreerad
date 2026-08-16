@@ -6,6 +6,7 @@ use App\Models\Router;
 use App\Models\Shop;
 use App\Services\MikroTikProvisioningService;
 use App\Services\RouterManagementService;
+use App\Services\RouterOsConnectionService;
 use App\Support\BillingPlanLimits;
 use App\Support\RadiusAccountingStats;
 use App\Support\RouterPortLayout;
@@ -49,6 +50,12 @@ class RoutersIndex extends Component
     public ?string $wireguard_endpoint_override_host = null;
 
     public ?string $wireguard_endpoint_override_port = null;
+
+    public string $tunnel_mode = 'wireguard';
+
+    public ?string $zerotier_node_id = null;
+
+    public ?string $zerotier_ip = null;
 
     public bool $is_online = false;
 
@@ -107,6 +114,9 @@ class RoutersIndex extends Component
         $this->wireguard_public_key = $router->wireguard_public_key;
         $this->wireguard_endpoint_override_host = $router->wireguard_endpoint_override_host;
         $this->wireguard_endpoint_override_port = $router->wireguard_endpoint_override_port !== null ? (string) $router->wireguard_endpoint_override_port : null;
+        $this->tunnel_mode = (string) $router->tunnel_mode;
+        $this->zerotier_node_id = $router->zerotier_node_id;
+        $this->zerotier_ip = $router->zerotier_ip;
         $this->is_online = (bool) $router->is_online;
         $this->provisioning_settings = $this->routerProvisioningSettings($router);
         $this->shared_secret = '';
@@ -171,6 +181,55 @@ class RoutersIndex extends Component
     {
         $this->wireguard_endpoint_override_host = null;
         $this->wireguard_endpoint_override_port = null;
+    }
+
+    public function suggestZeroTierIp(RouterManagementService $routers): void
+    {
+        $this->zerotier_ip = $routers->suggestedZeroTierIp();
+    }
+
+    /**
+     * Convenience only, for a router whose WireGuard link is still working
+     * (tunnel_mode=wireguard_zerotier) -- reads the node ID RouterOS
+     * generated for itself the first time "/zerotier enable" ran, over the
+     * still-functional WireGuard connection. A router with no working
+     * WireGuard at all (tunnel_mode=zerotier) has no path for this and
+     * needs the node ID entered manually instead -- see the field's
+     * description in the wizard.
+     */
+    public function fetchZeroTierNodeId(RouterOsConnectionService $routerOs): void
+    {
+        if (! $this->editingRouterId) {
+            $this->addError('zerotier_node_id', 'Save the router once with working WireGuard connectivity first, then fetch its ZeroTier node ID.');
+
+            return;
+        }
+
+        $router = Router::find($this->editingRouterId);
+
+        if (! $router || ! $routerOs->isConfigured($router)) {
+            $this->addError('zerotier_node_id', 'RouterOS API credentials are not generated for this router yet.');
+
+            return;
+        }
+
+        $result = $routerOs->runReadOnlyCommand($router, '/zerotier print');
+
+        if (! $result['success'] || empty($result['rows'])) {
+            $this->addError('zerotier_node_id', 'Could not read "/zerotier print" over WireGuard: '.($result['error'] ?? 'no rows returned -- has "/zerotier enable zt1" been run on the router yet?'));
+
+            return;
+        }
+
+        $nodeId = $result['rows'][0]['address'] ?? null;
+
+        if (blank($nodeId)) {
+            $this->addError('zerotier_node_id', 'Router responded but no node-ID field was found in the output -- enter it manually from "/zerotier print" on the router console instead.');
+
+            return;
+        }
+
+        $this->zerotier_node_id = (string) $nodeId;
     }
 
     public function setPreset(string $field, string $value): void
@@ -322,6 +381,7 @@ class RoutersIndex extends Component
             'localWireguardEndpointHost' => config('services.wireguard.local_endpoint_host'),
             'defaultWireguardEndpointHost' => config('services.wireguard.endpoint_host'),
             'defaultWireguardEndpointPort' => config('services.wireguard.endpoint_port'),
+            'zerotierIpPrefix' => config('services.zerotier.ip_prefix'),
         ]);
     }
 
@@ -344,8 +404,11 @@ class RoutersIndex extends Component
             'wireguard_public_key',
             'wireguard_endpoint_override_host',
             'wireguard_endpoint_override_port',
+            'zerotier_node_id',
+            'zerotier_ip',
             'provisioning_settings',
         ]);
+        $this->tunnel_mode = 'wireguard';
         $this->is_online = false;
         $this->step = 1;
         $this->provisioning_settings = app(RouterManagementService::class)->defaultProvisioningSettings();
@@ -410,6 +473,7 @@ class RoutersIndex extends Component
             1 => [
                 'shop_id', 'name', 'nas_identifier', 'wireguard_internal_ip',
                 'shared_secret', 'wireguard_endpoint_override_host', 'wireguard_endpoint_override_port',
+                'tunnel_mode', 'zerotier_node_id', 'zerotier_ip',
             ],
             2 => [
                 'provisioning_settings.enable_builtin_wifi', 'provisioning_settings.enable_second_wan',

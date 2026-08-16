@@ -85,6 +85,12 @@ The first confirms basic LAN reachability; the second confirms the tunnel itself
 
 Remote routers also require the internet router to forward UDP `13231` to the Pi LAN IP.
 
+## Tunnel Mode
+
+If a router's site is behind carrier-grade NAT (CGNAT) — common on Starlink/mobile home internet — WireGuard can never form a tunnel there at all, no matter how port forwarding is configured on that connection. The router create/edit wizard's Identity step has a **"Tunnel mode"** field: `WireGuard only` (default), `WireGuard + ZeroTier fallback`, or `ZeroTier only`. ZeroTier has built-in NAT traversal with automatic relay fallback, which raw WireGuard categorically lacks. This needs a one-time Pi-side setup and has one real limitation (a router's ZeroTier identity can't be predicted in advance the way its WireGuard keypair can) — see `docs/zerotier-fallback-setup.md` for the full setup and that limitation explained plainly before choosing anything other than "WireGuard only".
+
+ZeroTier on RouterOS also needs ARM/ARM64 hardware specifically (a separate installable package, RouterOS 7.5+) — this is why it's an explicit per-router choice in the wizard rather than something turned on globally, the same "capability toggle, not a hardware model database" pattern already used for the Hardware step's Built-in Wi-Fi toggle (see "Built-In Wi-Fi Testing" below).
+
 ## RADIUS Shared Secret
 
 The RADIUS shared secret is a private password used by MikroTik and FreeRADIUS to trust each other.

@@ -17,18 +17,57 @@ class RouterOsConnectionService
     /**
      * Short timeouts so a "Test Connection" click or a monitoring page load
      * never hangs the web request on an offline router -- fail fast instead.
+     *
+     * For a router with a ZeroTier fallback configured (`tunnel_mode`), this
+     * tries each candidate host in order and returns the first one that
+     * actually connects -- `evilfreelancer/routeros-api-php`'s Client
+     * connects synchronously in its constructor (confirmed), so a failed
+     * attempt throws immediately and this can just try the next host. Every
+     * caller in this file already wraps its whole client()+query() sequence
+     * in one try/catch, so this fallback needed zero changes anywhere else.
+     * Worst case for a fully-unreachable dual-mode router, this roughly
+     * doubles the wait before reporting failure -- accepted deliberately
+     * over splitting the timeout budget per host, which would risk a false
+     * "offline" verdict on a slow-but-working link.
      */
     public function client(Router $router, int $timeoutSeconds = 5): Client
     {
-        return new Client(new Config([
-            'host' => $router->wireguard_internal_ip,
-            'user' => (string) $router->api_username,
-            'pass' => (string) $router->api_password,
-            'port' => (int) ($router->api_port ?: Router::API_PORT),
-            'timeout' => $timeoutSeconds,
-            'socket_timeout' => $timeoutSeconds,
-            'attempts' => 1,
-        ]));
+        $lastException = null;
+
+        foreach (self::candidateHosts($router) as $host) {
+            try {
+                return new Client(new Config([
+                    'host' => $host,
+                    'user' => (string) $router->api_username,
+                    'pass' => (string) $router->api_password,
+                    'port' => (int) ($router->api_port ?: Router::API_PORT),
+                    'timeout' => $timeoutSeconds,
+                    'socket_timeout' => $timeoutSeconds,
+                    'attempts' => 1,
+                ]));
+            } catch (\Throwable $e) {
+                $lastException = $e;
+            }
+        }
+
+        throw $lastException ?? new \RuntimeException('No tunnel host configured for this router.');
+    }
+
+    /**
+     * Which host(s) to try reaching this router on, in order, based on its
+     * `tunnel_mode`. Pure branch, pulled out so it's unit testable without a
+     * live connection -- matches this file's existing static-helper pattern
+     * (mapLeaseRows(), missingWalledGardenEntries()).
+     *
+     * @return list<string>
+     */
+    public static function candidateHosts(Router $router): array
+    {
+        return match ($router->tunnel_mode) {
+            'zerotier' => array_values(array_filter([$router->zerotier_ip])),
+            'wireguard_zerotier' => array_values(array_filter([$router->wireguard_internal_ip, $router->zerotier_ip])),
+            default => array_values(array_filter([$router->wireguard_internal_ip])),
+        };
     }
 
     public function isConfigured(Router $router): bool
@@ -441,13 +480,7 @@ class RouterOsConnectionService
         }
 
         $steps = [
-            'Add RADIUS client' => (new Query('/radius/add'))
-                ->equal('address', (string) config('services.radius.server_ip'))
-                ->equal('secret', (string) $router->shared_secret)
-                ->equal('service', 'hotspot,ppp')
-                ->equal('authentication-port', (string) config('services.radius.auth_port'))
-                ->equal('accounting-port', (string) config('services.radius.acct_port'))
-                ->equal('timeout', '1000ms'),
+            ...$this->radiusClientSteps($router, 'hotspot,ppp'),
             'Add hotspot profile' => (new Query('/ip/hotspot/profile/add'))
                 ->equal('name', 'saas-prof')
                 ->equal('use-radius', 'yes')
@@ -693,13 +726,7 @@ class RouterOsConnectionService
         }
 
         $steps = [
-            'Add RADIUS client' => (new Query('/radius/add'))
-                ->equal('address', (string) config('services.radius.server_ip'))
-                ->equal('secret', (string) $router->shared_secret)
-                ->equal('service', 'ppp')
-                ->equal('authentication-port', (string) config('services.radius.auth_port'))
-                ->equal('accounting-port', (string) config('services.radius.acct_port'))
-                ->equal('timeout', '1000ms'),
+            ...$this->radiusClientSteps($router, 'ppp'),
             'Enable RADIUS for PPP' => (new Query('/ppp/aaa/set'))
                 ->equal('use-radius', 'yes')
                 ->equal('accounting', 'yes')
@@ -717,6 +744,57 @@ class RouterOsConnectionService
         ];
 
         return $this->runSteps($router, $steps);
+    }
+
+    /**
+     * One `/radius/add` step per enabled tunnel (WireGuard, ZeroTier, or
+     * both), with priority=1/priority=2 only when both are present -- the
+     * live-API mirror of MikroTikProvisioningService::radiusClientLines().
+     * RouterOS's own RADIUS client already fails over across multiple
+     * entries by priority natively, so this is all "use ZeroTier whenever
+     * WireGuard fails" needs on the RADIUS side.
+     *
+     * @return array<string, Query>
+     */
+    private function radiusClientSteps(Router $router, string $service): array
+    {
+        $includesWireguard = in_array($router->tunnel_mode, ['wireguard', 'wireguard_zerotier'], true);
+        $includesZeroTier = in_array($router->tunnel_mode, ['wireguard_zerotier', 'zerotier'], true);
+        $steps = [];
+
+        if ($includesWireguard) {
+            $query = (new Query('/radius/add'))
+                ->equal('address', (string) config('services.radius.server_ip'))
+                ->equal('secret', (string) $router->shared_secret)
+                ->equal('service', $service)
+                ->equal('authentication-port', (string) config('services.radius.auth_port'))
+                ->equal('accounting-port', (string) config('services.radius.acct_port'))
+                ->equal('timeout', '1000ms');
+
+            if ($includesZeroTier) {
+                $query->equal('priority', '1');
+            }
+
+            $steps['Add RADIUS client (WireGuard)'] = $query;
+        }
+
+        if ($includesZeroTier) {
+            $query = (new Query('/radius/add'))
+                ->equal('address', (string) config('services.zerotier.pi_ip'))
+                ->equal('secret', (string) $router->shared_secret)
+                ->equal('service', $service)
+                ->equal('authentication-port', (string) config('services.radius.auth_port'))
+                ->equal('accounting-port', (string) config('services.radius.acct_port'))
+                ->equal('timeout', '1000ms');
+
+            if ($includesWireguard) {
+                $query->equal('priority', '2');
+            }
+
+            $steps['Add RADIUS client (ZeroTier)'] = $query;
+        }
+
+        return $steps;
     }
 
     /**

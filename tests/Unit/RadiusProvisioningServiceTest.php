@@ -70,6 +70,72 @@ class RadiusProvisioningServiceTest extends TestCase
         ]);
     }
 
+    public function test_it_writes_a_second_nas_row_for_a_router_with_a_zerotier_fallback(): void
+    {
+        $shop = $this->shop($this->tenant());
+
+        $router = Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'Dual Tunnel Router',
+            'nas_identifier' => 'dual-tunnel-router',
+            'wireguard_internal_ip' => '10.8.0.12',
+            'shared_secret' => 'radius-secret',
+            'tunnel_mode' => 'wireguard_zerotier',
+            'zerotier_ip' => '10.9.0.12',
+        ]);
+
+        app(RadiusProvisioningService::class)->syncRouter($router);
+
+        $this->assertDatabaseHas('nas', [
+            'nasname' => '10.8.0.12',
+            'shortname' => 'dual-tunnel-router',
+        ]);
+        $this->assertDatabaseHas('nas', [
+            'nasname' => '10.9.0.12',
+            'shortname' => 'dual-tunnel-router-zt',
+            'description' => 'Dual Tunnel Router (ZeroTier fallback)',
+        ]);
+    }
+
+    public function test_it_only_writes_one_nas_row_for_a_wireguard_only_router(): void
+    {
+        $shop = $this->shop($this->tenant());
+
+        $router = Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'WireGuard Only Router',
+            'nas_identifier' => 'wireguard-only-router',
+            'wireguard_internal_ip' => '10.8.0.13',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        app(RadiusProvisioningService::class)->syncRouter($router);
+
+        $this->assertDatabaseCount('nas', 1);
+    }
+
+    public function test_it_removes_both_nas_rows_for_a_deleted_dual_tunnel_router(): void
+    {
+        $shop = $this->shop($this->tenant());
+
+        $router = Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'Dual Tunnel Router',
+            'nas_identifier' => 'dual-tunnel-router-2',
+            'wireguard_internal_ip' => '10.8.0.14',
+            'shared_secret' => 'radius-secret',
+            'tunnel_mode' => 'wireguard_zerotier',
+            'zerotier_ip' => '10.9.0.14',
+        ]);
+        $service = app(RadiusProvisioningService::class);
+
+        $service->syncRouter($router);
+        $service->deleteRouter($router);
+
+        $this->assertDatabaseMissing('nas', ['nasname' => '10.8.0.14']);
+        $this->assertDatabaseMissing('nas', ['nasname' => '10.9.0.14']);
+    }
+
     public function test_it_rewrites_managed_radius_clients_file_after_router_delete(): void
     {
         $path = storage_path('framework/testing/router-delete-radius-clients.conf');

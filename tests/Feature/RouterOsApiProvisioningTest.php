@@ -165,6 +165,25 @@ class RouterOsApiProvisioningTest extends TestCase
         $this->assertNotEmpty($result['error']);
     }
 
+    public function test_connection_service_falls_back_to_zerotier_and_still_reports_a_clear_error_when_both_are_unreachable(): void
+    {
+        $router = Router::create([
+            'shop_id' => $this->makeShop()->id,
+            'name' => 'Unreachable Dual Tunnel Router',
+            'nas_identifier' => 'unreachable-dual-tunnel-router',
+            // Reserved documentation-only addresses, guaranteed to never respond.
+            'wireguard_internal_ip' => '192.0.2.9',
+            'shared_secret' => 'radius-secret',
+            'tunnel_mode' => 'wireguard_zerotier',
+            'zerotier_ip' => '192.0.2.10',
+        ]);
+
+        $result = app(RouterOsConnectionService::class)->testConnection($router);
+
+        $this->assertFalse($result['success']);
+        $this->assertNotEmpty($result['error']);
+    }
+
     public function test_test_connection_route_redirects_with_a_status_message(): void
     {
         $shop = $this->makeShop();

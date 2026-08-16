@@ -20,6 +20,8 @@ class RouterManagementService
     public function __construct(
         private readonly RadiusProvisioningService $radius,
         private readonly WireGuardPeerSyncService $wireGuard,
+        private readonly ZeroTierMembershipSyncService $zeroTier,
+        private readonly ZeroTierControllerService $zeroTierController,
     ) {}
 
     /**
@@ -38,6 +40,12 @@ class RouterManagementService
             'shared_secret' => [$router ? 'nullable' : 'required', 'string', 'max:255'],
             'wireguard_endpoint_override_host' => ['nullable', 'string', 'max:255'],
             'wireguard_endpoint_override_port' => ['nullable', 'integer', 'min:1', 'max:65535'],
+            'tunnel_mode' => ['nullable', Rule::in(['wireguard', 'wireguard_zerotier', 'zerotier'])],
+            'zerotier_node_id' => [
+                'required_if:tunnel_mode,wireguard_zerotier,zerotier',
+                'nullable', 'string', 'max:16', Rule::unique('routers')->ignore($router),
+            ],
+            'zerotier_ip' => ['nullable', 'ip', Rule::unique('routers')->ignore($router)],
             'provisioning_settings' => ['nullable', 'array'],
             'provisioning_settings.profile' => ['nullable', Rule::in(['starlink_plaza', 'small_hotspot', 'pppoe_isp'])],
             'provisioning_settings.port_count' => [
@@ -128,6 +136,7 @@ class RouterManagementService
         $router = Router::create($this->normalize($data));
         $this->radius->syncRouter($router);
         $this->syncWireGuardPeers();
+        $this->syncZeroTierMembership();
 
         return $router;
     }
@@ -139,6 +148,7 @@ class RouterManagementService
         $router->update($this->normalize($data, $router));
         $this->radius->syncRouter($router);
         $this->syncWireGuardPeers();
+        $this->syncZeroTierMembership();
 
         return $router;
     }
@@ -146,6 +156,12 @@ class RouterManagementService
     public function delete(Router $router, User $user): void
     {
         TenantAccess::assertRouter($router, $user);
+
+        if (filled($router->zerotier_node_id)) {
+            // Best-effort, same as the RADIUS cleanup below -- a controller that's
+            // unreachable right now shouldn't block deleting the router record itself.
+            $this->zeroTierController->deauthorizeMember($router->zerotier_node_id);
+        }
 
         $router->delete();
         $this->radius->deleteRouter($router);
@@ -188,6 +204,22 @@ class RouterManagementService
             $data['is_online'] = false;
         }
 
+        // Not required -- callers that don't know about tunnel_mode yet (the legacy
+        // non-Livewire admin.routers.store/update form kept for regression coverage,
+        // any future API consumer) get the same 'wireguard' default the DB column and
+        // Router model attribute already fall back to, rather than a hard validation
+        // error for a field that's purely additive to the existing router flow. Only
+        // applied on create -- on update, omitting it must leave an existing router's
+        // saved tunnel_mode untouched rather than silently resetting it to 'wireguard'
+        // (the same reasoning as the is_online handling just above).
+        if (blank($data['tunnel_mode'] ?? null)) {
+            if (! $router) {
+                $data['tunnel_mode'] = 'wireguard';
+            } else {
+                unset($data['tunnel_mode']);
+            }
+        }
+
         $data['provisioning_settings'] = $this->normalizeProvisioningSettings($data['provisioning_settings'] ?? []);
 
         if ($router && blank($data['shared_secret'] ?? null)) {
@@ -206,6 +238,19 @@ class RouterManagementService
             ->max();
 
         return '10.8.0.'.max(10, ($lastOctet ?? 9) + 1);
+    }
+
+    public function suggestedZeroTierIp(): string
+    {
+        $prefix = (string) config('services.zerotier.ip_prefix', '10.9.0');
+
+        $lastOctet = Router::query()
+            ->where('zerotier_ip', 'like', $prefix.'.%')
+            ->pluck('zerotier_ip')
+            ->map(fn (string $ip): int => (int) str($ip)->afterLast('.')->toString())
+            ->max();
+
+        return $prefix.'.'.max(10, ($lastOctet ?? 9) + 1);
     }
 
     public function suggestedNasIdentifier(Shop $shop): string
@@ -233,6 +278,17 @@ class RouterManagementService
         if (($result['errors'] ?? []) !== []) {
             Log::warning('WireGuard peer sync after router save reported errors', [
                 'interface' => $result['interface'] ?? null,
+                'errors' => $result['errors'],
+            ]);
+        }
+    }
+
+    private function syncZeroTierMembership(): void
+    {
+        $result = $this->zeroTier->reconcile();
+
+        if (($result['errors'] ?? []) !== []) {
+            Log::warning('ZeroTier membership sync after router save reported errors', [
                 'errors' => $result['errors'],
             ]);
         }

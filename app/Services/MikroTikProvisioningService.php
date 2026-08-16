@@ -41,20 +41,12 @@ class MikroTikProvisioningService
     public function generateBootstrapScript(Router $router): string
     {
         $nasIdentifier = $router->nas_identifier;
-        $wgEndpoint = $this->wireguardEndpoint($router);
-        $wgEndpointHost = $wgEndpoint['host'];
-        $wgEndpointPort = $wgEndpoint['port'];
-        $wgEndpointSource = $wgEndpoint['source'];
-        $wgPublicKey = config('services.wireguard.public_key');
-        $wgInterfaceLine = $this->wireguardInterfaceLine($router);
+        $tunnelLines = implode("\n", array_merge($this->wireguardProvisioningLines($router), $this->zeroTierLines($router)));
         $apiUserLines = implode("\n", $this->apiUserProvisioningLines($router));
 
         return <<<SCRIPT
 /system identity set name="{$nasIdentifier}"
-# WireGuard endpoint: {$wgEndpointHost}:{$wgEndpointPort} ({$wgEndpointSource}). For a router on the same LAN as the Pi, this must be the Pi's current LAN IP.
-{$wgInterfaceLine}
-/interface wireguard peers add interface=wg-saas public-key="{$wgPublicKey}" endpoint-address={$wgEndpointHost} endpoint-port={$wgEndpointPort} allowed-address=10.8.0.1/32 persistent-keepalive=25s
-/ip address add address={$router->wireguard_internal_ip}/24 interface=wg-saas
+{$tunnelLines}
 {$apiUserLines}
 SCRIPT;
     }
@@ -64,17 +56,9 @@ SCRIPT;
         $router->loadMissing('shop');
 
         $nasIdentifier = $router->nas_identifier;
-        $sharedSecret = $router->shared_secret;
-        $radiusIp = config('services.radius.server_ip');
-        $authPort = config('services.radius.auth_port');
-        $acctPort = config('services.radius.acct_port');
-        $wgEndpoint = $this->wireguardEndpoint($router);
-        $wgEndpointHost = $wgEndpoint['host'];
-        $wgEndpointPort = $wgEndpoint['port'];
-        $wgEndpointSource = $wgEndpoint['source'];
-        $wgPublicKey = config('services.wireguard.public_key');
-        $wgInterfaceLine = $this->wireguardInterfaceLine($router);
+        $tunnelLines = implode("\n", array_merge($this->wireguardProvisioningLines($router), $this->zeroTierLines($router)));
         $apiUserLines = implode("\n", $this->apiUserProvisioningLines($router));
+        $radiusLines = implode("\n", $this->radiusClientLines($router, 'hotspot,ppp'));
         $portalUrl = $this->portalUrl();
         $portalHost = parse_url($portalUrl, PHP_URL_HOST) ?: config('services.mikrotik.hotspot_dns_name');
         $hotspotDnsName = config('services.mikrotik.hotspot_dns_name');
@@ -82,12 +66,9 @@ SCRIPT;
 
         return <<<SCRIPT
 /system identity set name="{$nasIdentifier}"
-# WireGuard endpoint: {$wgEndpointHost}:{$wgEndpointPort} ({$wgEndpointSource}). For a router on the same LAN as the Pi, this must be the Pi's current LAN IP.
-{$wgInterfaceLine}
-/interface wireguard peers add interface=wg-saas public-key="{$wgPublicKey}" endpoint-address={$wgEndpointHost} endpoint-port={$wgEndpointPort} allowed-address=10.8.0.1/32 persistent-keepalive=25s
-/ip address add address={$router->wireguard_internal_ip}/24 interface=wg-saas
+{$tunnelLines}
 {$apiUserLines}
-/radius add address={$radiusIp} secret="{$sharedSecret}" service=hotspot,ppp authentication-port={$authPort} accounting-port={$acctPort} timeout=1000ms
+{$radiusLines}
 /ip hotspot profile add name=saas-prof use-radius=yes login-by=http-pap,http-chap,cookie,mac-cookie html-directory=flash/hotspot dns-name={$hotspotDnsName}
 /ip hotspot profile set saas-prof radius-accounting=yes
 # Points any existing hotspot server at this profile. If none exists yet, this is a no-op --
@@ -100,27 +81,16 @@ SCRIPT;
     public function generatePppoeScript(Router $router): string
     {
         $nasIdentifier = $router->nas_identifier;
-        $sharedSecret = $router->shared_secret;
-        $radiusIp = config('services.radius.server_ip');
-        $authPort = config('services.radius.auth_port');
-        $acctPort = config('services.radius.acct_port');
-        $wgEndpoint = $this->wireguardEndpoint($router);
-        $wgEndpointHost = $wgEndpoint['host'];
-        $wgEndpointPort = $wgEndpoint['port'];
-        $wgEndpointSource = $wgEndpoint['source'];
-        $wgPublicKey = config('services.wireguard.public_key');
-        $wgInterfaceLine = $this->wireguardInterfaceLine($router);
+        $tunnelLines = implode("\n", array_merge($this->wireguardProvisioningLines($router), $this->zeroTierLines($router)));
         $apiUserLines = implode("\n", $this->apiUserProvisioningLines($router));
+        $radiusLines = implode("\n", $this->radiusClientLines($router, 'ppp'));
         $pppoeInterface = 'bridge1';
 
         return <<<SCRIPT
 /system identity set name="{$nasIdentifier}"
-# WireGuard endpoint: {$wgEndpointHost}:{$wgEndpointPort} ({$wgEndpointSource}). For a router on the same LAN as the Pi, this must be the Pi's current LAN IP.
-{$wgInterfaceLine}
-/interface wireguard peers add interface=wg-saas public-key="{$wgPublicKey}" endpoint-address={$wgEndpointHost} endpoint-port={$wgEndpointPort} allowed-address=10.8.0.1/32 persistent-keepalive=25s
-/ip address add address={$router->wireguard_internal_ip}/24 interface=wg-saas
+{$tunnelLines}
 {$apiUserLines}
-/radius add address={$radiusIp} secret="{$sharedSecret}" service=ppp authentication-port={$authPort} accounting-port={$acctPort} timeout=1000ms
+{$radiusLines}
 /ppp aaa set use-radius=yes accounting=yes interim-update=5m
 # PPPoE bandwidth is controlled by MMS Radius packages through Mikrotik-Rate-Limit.
 # Keep this profile generic; do not hard-code rate-limit here unless you want a router-side override.
@@ -136,10 +106,6 @@ SCRIPT;
         $settings = $this->provisioningSettings($router, $profile);
         $profile = $settings['profile'];
         $routerIdentity = $this->quote($router->nas_identifier);
-        $sharedSecret = $this->quote($router->shared_secret);
-        $radiusIp = config('services.radius.server_ip');
-        $authPort = config('services.radius.auth_port');
-        $acctPort = config('services.radius.acct_port');
         $wgEndpoint = $this->wireguardEndpoint($router);
         $wgEndpointHost = $wgEndpoint['host'];
         $wgEndpointPort = $wgEndpoint['port'];
@@ -273,7 +239,9 @@ SCRIPT;
             '# MMS Radius flexible MikroTik infrastructure script',
             '# Profile: '.$this->infrastructureProfiles()[$profile]['name'],
             '# Use on a fresh/no-default-config router, or review each section before pasting on an existing router.',
-            '# WireGuard endpoint: '.$wgEndpointHost.':'.$wgEndpointPort.' ('.$wgEndpointSource.'). If this router is on the same LAN as the Pi, this must be the Pi LAN IP from hostname -I.',
+            $this->includesWireguard($router)
+                ? '# WireGuard endpoint: '.$wgEndpointHost.':'.$wgEndpointPort.' ('.$wgEndpointSource.'). If this router is on the same LAN as the Pi, this must be the Pi LAN IP from hostname -I.'
+                : '# ZeroTier-only tunnel mode -- no WireGuard endpoint for this router.',
             '# Edit these global values first to match the tenant hardware and cabling.',
             '# Global variables are used so this works when pasted directly into RouterOS terminal.',
             ':global wan1 "'.$settings['wan1'].'"',
@@ -324,11 +292,14 @@ SCRIPT;
         ], $builtinWifiLines, $bridgeVlanLines, [
             '/interface bridge set $lanBridge vlan-filtering=yes',
             '',
-            $this->wireguardInterfaceLine($router),
-            '/interface wireguard peers add interface=wg-saas public-key="'.$wgPublicKey.'" endpoint-address='.$wgEndpointHost.' endpoint-port='.$wgEndpointPort.' allowed-address=10.8.0.1/32 persistent-keepalive=25s',
-            '/ip address add address='.$router->wireguard_internal_ip.'/24 interface=wg-saas comment="MMS Radius WireGuard IP"',
+            ...($this->includesWireguard($router) ? [
+                $this->wireguardInterfaceLine($router),
+                '/interface wireguard peers add interface=wg-saas public-key="'.$wgPublicKey.'" endpoint-address='.$wgEndpointHost.' endpoint-port='.$wgEndpointPort.' allowed-address=10.8.0.1/32 persistent-keepalive=25s',
+                '/ip address add address='.$router->wireguard_internal_ip.'/24 interface=wg-saas comment="MMS Radius WireGuard IP"',
+            ] : []),
+            ...$this->zeroTierLines($router),
             ...$this->apiUserProvisioningLines($router),
-            '/radius add address='.$radiusIp.' secret="'.$sharedSecret.'" service=hotspot,ppp authentication-port='.$authPort.' accounting-port='.$acctPort.' timeout=1000ms',
+            ...$this->radiusClientLines($router, 'hotspot,ppp'),
             '',
             '/ip address add address=$mgmtGateway interface=vlan-mgmt comment="Management VLAN for Pi, router, AP, and switch administration"',
             '/ip pool add name=pool-mgmt ranges=$mgmtPool',
@@ -653,6 +624,130 @@ HTML;
     }
 
     /**
+     * Whether this router's tunnel_mode expects a working WireGuard link at
+     * all -- a `zerotier`-only router has no business dialing an endpoint
+     * that can never handshake, so its script omits the WireGuard block
+     * entirely rather than leaving it present-but-unused.
+     */
+    private function includesWireguard(Router $router): bool
+    {
+        return in_array($router->tunnel_mode, ['wireguard', 'wireguard_zerotier'], true);
+    }
+
+    /**
+     * Whether this router's tunnel_mode includes the ZeroTier fallback.
+     */
+    private function includesZeroTier(Router $router): bool
+    {
+        return in_array($router->tunnel_mode, ['wireguard_zerotier', 'zerotier'], true);
+    }
+
+    /**
+     * The 4-line WireGuard interface/peer/address block shared identically
+     * across generateBootstrapScript()/generateScript()/generatePppoeScript()
+     * -- empty when includesWireguard() is false.
+     *
+     * @return list<string>
+     */
+    private function wireguardProvisioningLines(Router $router): array
+    {
+        if (! $this->includesWireguard($router)) {
+            return [];
+        }
+
+        $wgEndpoint = $this->wireguardEndpoint($router);
+        $wgPublicKey = config('services.wireguard.public_key');
+
+        return [
+            '# WireGuard endpoint: '.$wgEndpoint['host'].':'.$wgEndpoint['port'].' ('.$wgEndpoint['source'].'). For a router on the same LAN as the Pi, this must be the Pi\'s current LAN IP.',
+            $this->wireguardInterfaceLine($router),
+            '/interface wireguard peers add interface=wg-saas public-key="'.$wgPublicKey.'" endpoint-address='.$wgEndpoint['host'].' endpoint-port='.$wgEndpoint['port'].' allowed-address=10.8.0.1/32 persistent-keepalive=25s',
+            '/ip address add address='.$router->wireguard_internal_ip.'/24 interface=wg-saas',
+        ];
+    }
+
+    /**
+     * RouterOS has no native ZeroTier support before 7.5, and even then it's
+     * a separate installable package restricted to ARM/ARM64 hardware --
+     * this is a per-router opt-in (tunnel_mode), never assumed available.
+     * The network joined here is a self-hosted controller on the Pi, not
+     * ZeroTier Central -- see docs/zerotier-fallback-setup.md for why
+     * (Central's free plan has no API access at all). A router's ZeroTier
+     * node identity is generated locally the first time these lines run;
+     * this app has no way to predict it in advance the way it does for
+     * WireGuard keys, so the resulting node ID has to be read back
+     * (`/zerotier print`) and entered into MMS Radius before it can be
+     * authorized on the controller -- see RoutersIndex::fetchZeroTierNodeId().
+     *
+     * @return list<string>
+     */
+    private function zeroTierLines(Router $router): array
+    {
+        if (! $this->includesZeroTier($router)) {
+            return [];
+        }
+
+        $networkId = config('services.zerotier.network_id');
+
+        return [
+            '',
+            '# ZeroTier fallback tunnel. Requires the "zerotier" RouterOS package (RouterOS 7.5+,',
+            '# ARM/ARM64 hardware ONLY -- upload the .npk and reboot BEFORE running this section;',
+            '# see docs/zerotier-fallback-setup.md. Skip this whole block on MIPSBE/SMIPS boards.',
+            '/zerotier enable zt1',
+            '/zerotier interface add network='.$networkId.' instance=zt1',
+            '# This router\'s ZeroTier node ID only exists after the line above runs. Retrieve it',
+            '# with "/zerotier print" and enter it into MMS Radius so it can be authorized.',
+        ];
+    }
+
+    /**
+     * One `/radius add` line per enabled tunnel, with priority=1/priority=2
+     * only when both are present -- RouterOS's own RADIUS client already
+     * fails over across multiple entries by priority natively, so this is
+     * all "use ZeroTier whenever WireGuard fails" needs on the RADIUS side,
+     * no custom health-check scripting required.
+     *
+     * @return list<string>
+     */
+    private function radiusClientLines(Router $router, string $service): array
+    {
+        $secret = $this->quote($router->shared_secret);
+        $authPort = config('services.radius.auth_port');
+        $acctPort = config('services.radius.acct_port');
+        $lines = [];
+
+        if ($this->includesWireguard($router)) {
+            $priority = $this->includesZeroTier($router) ? ' priority=1' : '';
+            $lines[] = '/radius add address='.config('services.radius.server_ip').' secret="'.$secret.'" service='.$service.' authentication-port='.$authPort.' accounting-port='.$acctPort.' timeout=1000ms'.$priority;
+        }
+
+        if ($this->includesZeroTier($router)) {
+            $priority = $this->includesWireguard($router) ? ' priority=2' : '';
+            $lines[] = '/radius add address='.config('services.zerotier.pi_ip').' secret="'.$secret.'" service='.$service.' authentication-port='.$authPort.' accounting-port='.$acctPort.' timeout=1000ms'.$priority;
+        }
+
+        return $lines;
+    }
+
+    /**
+     * The subnet(s) allowed to reach this router's RouterOS API -- must
+     * include the ZeroTier /24 too once a router depends on that path, or
+     * "Provision via API"/live monitoring/the ZeroTier-node-ID auto-fetch
+     * button all silently fail: the tunnel itself works, but RouterOS's own
+     * firewall still only trusts the WireGuard subnet.
+     */
+    private function apiServiceAddressRestriction(Router $router): string
+    {
+        $ranges = array_filter([
+            $this->includesWireguard($router) ? '10.8.0.0/24' : null,
+            $this->includesZeroTier($router) ? config('services.zerotier.ip_prefix').'.0/24' : null,
+        ]);
+
+        return implode(',', $ranges) ?: '10.8.0.0/24';
+    }
+
+    /**
      * The WireGuard endpoint a router's script should dial. Defaults to the
      * app-wide public endpoint (services.wireguard.endpoint_host/port), but
      * a router can override this -- the one case that needs it is a router
@@ -742,7 +837,7 @@ HTML;
             // duplicate name and silently leaving the router with stale credentials.
             ':if ([:len [/user group find name=mmsradius-api-group]] = 0) do={ /user group add name=mmsradius-api-group policy='.$policy.' comment="MMS Radius API provisioning access" } else={ /user group set [find name=mmsradius-api-group] policy='.$policy.' comment="MMS Radius API provisioning access" }',
             ':if ([:len [/user find name="'.$username.'"]] = 0) do={ /user add name="'.$username.'" password="'.$password.'" group=mmsradius-api-group comment="MMS Radius API provisioning" } else={ /user set [find name="'.$username.'"] password="'.$password.'" group=mmsradius-api-group comment="MMS Radius API provisioning" }',
-            '/ip service set api disabled=no port=8728 address=10.8.0.0/24',
+            '/ip service set api disabled=no port=8728 address='.$this->apiServiceAddressRestriction($router),
         ];
     }
 

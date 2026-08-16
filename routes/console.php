@@ -17,6 +17,7 @@ use App\Services\RouterMetricSamplingService;
 use App\Services\RouterOsConnectionService;
 use App\Services\VoucherManagementService;
 use App\Services\WireGuardPeerSyncService;
+use App\Services\ZeroTierMembershipSyncService;
 use App\Support\SchedulerHealth;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -312,6 +313,37 @@ Artisan::command('hotspot:sync-wireguard-peers {--dry-run}', function (WireGuard
 })->purpose('Reconcile Raspberry Pi WireGuard peers from router records (adds/updates only, never removes a peer)');
 
 Schedule::command('hotspot:sync-wireguard-peers')
+    ->everyFiveMinutes()
+    ->withoutOverlapping();
+
+Artisan::command('hotspot:sync-zerotier-members {--dry-run}', function (ZeroTierMembershipSyncService $zeroTier): int {
+    $dryRun = (bool) $this->option('dry-run');
+    $result = $zeroTier->reconcile(dryRun: $dryRun);
+
+    if (! $result['enabled']) {
+        $this->info('ZeroTier membership management is disabled. Set ZEROTIER_MANAGE_MEMBERS=true on the Pi (see docs/zerotier-fallback-setup.md) to enable it. No changes made.');
+
+        return Command::SUCCESS;
+    }
+
+    $authorizedCount = count($result['authorized']);
+    $errorCount = count($result['errors']);
+    $authorizedLabel = $dryRun ? 'would authorize' : 'authorized';
+
+    $this->info("ZeroTier sync: {$authorizedLabel} {$authorizedCount} node(s), {$errorCount} error(s).");
+
+    foreach ($result['errors'] as $error) {
+        $this->error($error);
+    }
+
+    if ($result['unmatched_members'] !== []) {
+        $this->warn('Unmatched nodes on the controller (not attributed to any router): '.implode(', ', $result['unmatched_members']));
+    }
+
+    return $errorCount > 0 ? Command::FAILURE : Command::SUCCESS;
+})->purpose('Authorize known router ZeroTier nodes on the self-hosted controller and report any unmatched pending nodes');
+
+Schedule::command('hotspot:sync-zerotier-members')
     ->everyFiveMinutes()
     ->withoutOverlapping();
 

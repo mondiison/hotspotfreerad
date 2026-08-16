@@ -2,6 +2,7 @@
 
 namespace Tests\Unit;
 
+use App\Models\Router;
 use App\Services\RouterOsConnectionService;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -224,5 +225,49 @@ class RouterOsConnectionServiceTest extends TestCase
             'leading and trailing slashes are trimmed' => ['/hotspot/', 'hotspot'],
             'a router without the flash prefix is preserved' => ['hotspot', 'hotspot'],
         ];
+    }
+
+    public function test_candidate_hosts_for_wireguard_only(): void
+    {
+        $router = new Router([
+            'tunnel_mode' => 'wireguard',
+            'wireguard_internal_ip' => '10.8.0.10',
+            'zerotier_ip' => null,
+        ]);
+
+        $this->assertSame(['10.8.0.10'], RouterOsConnectionService::candidateHosts($router));
+    }
+
+    public function test_candidate_hosts_for_zerotier_only(): void
+    {
+        $router = new Router([
+            'tunnel_mode' => 'zerotier',
+            'wireguard_internal_ip' => '10.8.0.10',
+            'zerotier_ip' => '10.9.0.10',
+        ]);
+
+        $this->assertSame(['10.9.0.10'], RouterOsConnectionService::candidateHosts($router));
+    }
+
+    public function test_candidate_hosts_for_dual_mode_tries_wireguard_first(): void
+    {
+        $router = new Router([
+            'tunnel_mode' => 'wireguard_zerotier',
+            'wireguard_internal_ip' => '10.8.0.10',
+            'zerotier_ip' => '10.9.0.10',
+        ]);
+
+        $this->assertSame(['10.8.0.10', '10.9.0.10'], RouterOsConnectionService::candidateHosts($router));
+    }
+
+    public function test_candidate_hosts_for_dual_mode_without_a_zerotier_ip_yet(): void
+    {
+        $router = new Router([
+            'tunnel_mode' => 'wireguard_zerotier',
+            'wireguard_internal_ip' => '10.8.0.10',
+            'zerotier_ip' => null,
+        ]);
+
+        $this->assertSame(['10.8.0.10'], RouterOsConnectionService::candidateHosts($router));
     }
 }

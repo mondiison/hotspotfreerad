@@ -29,6 +29,27 @@ class RadiusProvisioningService
             ]
         );
 
+        // FreeRADIUS matches an incoming request to a NAS/client definition by the
+        // packet's source IP -- a router with a ZeroTier fallback might send RADIUS
+        // traffic from either its WireGuard IP or its ZeroTier IP, so it needs a
+        // second nas row too, both keyed to the same secret. Harmless to leave the
+        // row above in place even for a zerotier-only router (tunnel_mode='zerotier');
+        // FreeRADIUS just never sees traffic from an IP that never connects.
+        if (in_array($router->tunnel_mode, ['wireguard_zerotier', 'zerotier'], true) && filled($router->zerotier_ip)) {
+            DB::table('nas')->updateOrInsert(
+                ['nasname' => $router->zerotier_ip],
+                [
+                    'shortname' => $router->nas_identifier.'-zt',
+                    'type' => 'mikrotik',
+                    'ports' => null,
+                    'secret' => $router->shared_secret,
+                    'server' => null,
+                    'community' => null,
+                    'description' => $router->name.' (ZeroTier fallback)',
+                ]
+            );
+        }
+
         if ((bool) config('services.radius.manage_clients', false)) {
             $result = app(FreeRadiusClientSyncService::class)->sync(reload: true);
 
@@ -46,6 +67,8 @@ class RadiusProvisioningService
         DB::table('nas')
             ->where('nasname', $router->wireguard_internal_ip)
             ->orWhere('shortname', $router->nas_identifier)
+            ->orWhere('shortname', $router->nas_identifier.'-zt')
+            ->when(filled($router->zerotier_ip), fn ($query) => $query->orWhere('nasname', $router->zerotier_ip))
             ->delete();
 
         if ((bool) config('services.radius.manage_clients', false)) {

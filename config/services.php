@@ -61,6 +61,30 @@ return [
         'portal_url' => env('HOTSPOT_PORTAL_URL'),
     ],
 
+    'zerotier' => [
+        // Self-hosted controller's local API -- reachable only from the Pi itself (loopback),
+        // since the app and the controller run on the same machine. Not ZeroTier Central --
+        // see docs/zerotier-fallback-setup.md for why (free-tier Central has no API access at all).
+        'controller_url' => env('ZEROTIER_CONTROLLER_URL', 'http://127.0.0.1:9993'),
+        // Path to the local zerotier-one service's own auth token file -- read at call time,
+        // never stored as a secret in .env (the file is managed/rotated by zerotier-one itself).
+        'auth_token_path' => env('ZEROTIER_AUTH_TOKEN_PATH', '/var/lib/zerotier-one/authtoken.secret'),
+        // 16-hex-char self-hosted network ID (Pi's own ZT node ID + a chosen 6-char suffix),
+        // created once during Pi bootstrap -- see docs/zerotier-fallback-setup.md.
+        'network_id' => env('ZEROTIER_NETWORK_ID', 'YOUR_ZEROTIER_NETWORK_ID'),
+        // The Pi's own fixed address on the ZeroTier network -- routers dial this (not
+        // 10.8.0.1, which is the WireGuard-side address) for RADIUS traffic over the
+        // ZeroTier fallback path. Recorded by hand once during Pi bootstrap, since
+        // ZeroTier (not this app) assigns it -- see docs/zerotier-fallback-setup.md.
+        'pi_ip' => env('ZEROTIER_PI_IP', 'YOUR_PI_ZEROTIER_IP'),
+        // The /24 this app suggests for router addresses and pushes as each authorized
+        // router's fixed IP assignment. Kept out of WireGuard's 10.8.0.x range so the two
+        // are never confusable.
+        'ip_prefix' => env('ZEROTIER_IP_PREFIX', '10.9.0'),
+        // Guarded the same way WIREGUARD_MANAGE_PEERS is -- false everywhere by default.
+        'manage_members' => (bool) env('ZEROTIER_MANAGE_MEMBERS', false),
+    ],
+
     'flutterwave' => [
         'auth_url' => env('FLUTTERWAVE_AUTH_URL', 'https://idp.flutterwave.com/realms/flutterwave/protocol/openid-connect/token'),
         'base_url' => env('FLUTTERWAVE_BASE_URL', 'https://developersandbox-api.flutterwave.com'),

@@ -26,6 +26,20 @@ class Router extends Model
         'api_password',
     ];
 
+    /**
+     * `tunnel_mode` also defaults to 'wireguard' at the DB level (the migration's
+     * column default), but that alone only helps a row re-fetched from the
+     * database -- it does nothing for a `new Router([...])` instance that's never
+     * saved (used throughout this app's test suite to exercise script generation
+     * without touching the DB) or for the in-memory model returned by create()
+     * itself (Eloquent never re-fetches after INSERT). A model-level attribute
+     * default covers both: it's applied before fill(), so an explicitly passed
+     * tunnel_mode still overrides it normally.
+     */
+    protected $attributes = [
+        'tunnel_mode' => 'wireguard',
+    ];
+
     protected function casts(): array
     {
         return [
@@ -35,6 +49,7 @@ class Router extends Model
             'provisioning_settings' => 'array',
             'is_online' => 'boolean',
             'last_seen_at' => 'datetime',
+            'zerotier_authorized_at' => 'datetime',
         ];
     }
 
@@ -51,6 +66,18 @@ class Router extends Model
                 $router->api_username = self::API_USERNAME;
                 $router->api_password = Str::random(32);
                 $router->api_port = self::API_PORT;
+            }
+
+            // The `tunnel_mode` column defaults to 'wireguard' at the DB level too, but
+            // that alone only helps a *freshly queried* model -- Eloquent never re-fetches
+            // a row after INSERT, so an in-memory $router used immediately after create()
+            // (the common case: RouterManagementService::create() passes the same instance
+            // straight into script generation) would otherwise read tunnel_mode as null,
+            // not 'wireguard', breaking every in_array($router->tunnel_mode, [...]) check
+            // in MikroTikProvisioningService/RouterOsConnectionService. Set explicitly here
+            // for the same reason the WireGuard keypair/API credentials are.
+            if (blank($router->tunnel_mode)) {
+                $router->tunnel_mode = 'wireguard';
             }
         });
     }
