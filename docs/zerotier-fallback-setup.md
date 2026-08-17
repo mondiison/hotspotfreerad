@@ -155,7 +155,12 @@ If a device shows up on the network that this command doesn't recognize (a typo,
 ## If something goes wrong
 
 - **`listnetworks` still shows `ACCESS_DENIED` after running the approve command in Step 4** — re-run the approve command and actually read what it prints back this time. It should echo `"authorized":true`. If it instead comes back `"authorized":false`, the approval didn't take — the most common cause is a stray `"config"` wrapper around the fields (some older copies of this doc showed `-d '{"config": {"authorized": true, ...}}'`, which ZeroTier silently ignores instead of rejecting). The command above sends `"authorized"`/`"ipAssignments"` directly at the top level of the JSON body — no wrapper.
-- **"ZeroTier controller auth token not readable"** — the app (running as `www-data`) can't read the secret file from Step 3a. Check the path is right and try `sudo -u www-data cat /var/lib/zerotier-one/authtoken.secret` — if that fails, the file's permissions need loosening for that one user (same idea as the WireGuard permission grant in `docs/wireguard-server-setup.md`).
+- **"ZeroTier controller auth token not readable" / `Permission denied` reading `authtoken.secret`** — confirmed live: this file is root-only (`0600 root:root`) by default, and the app (running as `www-data`) can't read it as-is. Fix it with:
+  ```bash
+  sudo chgrp www-data /var/lib/zerotier-one/authtoken.secret
+  sudo chmod 640 /var/lib/zerotier-one/authtoken.secret
+  ```
+  Confirm it worked with `sudo -u www-data cat /var/lib/zerotier-one/authtoken.secret` — it should print the token, not an error. If `zerotier-one` is ever upgraded or reinstalled, it may recreate this file with the default root-only permissions again, so this may need to be re-applied after that.
 - **A router's ID never gets approved** — double-check the ID saved on the router record in HotspotFreeRAD matches exactly what `/zerotier print` shows on the router. A single wrong character means you're approving an ID that doesn't exist, while the real one waits forever.
 - **A `wireguard_zerotier` router isn't failing over properly** — on the router itself, run `/radius print`. You should see two entries, one WireGuard and one ZeroTier. RouterOS handles switching between them on its own; there's no extra logic in the app to debug here.
 - **"`/zerotier` package missing" on a router** — that router's hardware likely can't run it at all. Run `/system resource print` on it and check `architecture-name` — anything other than ARM/ARM64 means this feature isn't available on that board, and it should stay on plain WireGuard.
