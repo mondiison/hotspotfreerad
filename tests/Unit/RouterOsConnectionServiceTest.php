@@ -270,4 +270,142 @@ class RouterOsConnectionServiceTest extends TestCase
 
         $this->assertSame(['10.8.0.10'], RouterOsConnectionService::candidateHosts($router));
     }
+
+    public function test_desired_radius_clients_omits_priority_for_a_single_tunnel_router(): void
+    {
+        config(['services.radius.server_ip' => '10.8.0.1', 'services.radius.auth_port' => 1812, 'services.radius.acct_port' => 1813]);
+
+        $router = new Router(['tunnel_mode' => 'wireguard', 'shared_secret' => 'topsecret']);
+
+        $desired = RouterOsConnectionService::desiredRadiusClients($router, 'hotspot,ppp');
+
+        $this->assertSame(['wireguard'], array_keys($desired));
+        $this->assertNull($desired['wireguard']['priority']);
+        $this->assertSame('10.8.0.1', $desired['wireguard']['address']);
+    }
+
+    public function test_desired_radius_clients_sets_priority_for_a_dual_tunnel_router(): void
+    {
+        config([
+            'services.radius.server_ip' => '10.8.0.1',
+            'services.zerotier.pi_ip' => '10.9.0.1',
+            'services.radius.auth_port' => 1812,
+            'services.radius.acct_port' => 1813,
+        ]);
+
+        $router = new Router(['tunnel_mode' => 'wireguard_zerotier', 'shared_secret' => 'topsecret']);
+
+        $desired = RouterOsConnectionService::desiredRadiusClients($router, 'ppp');
+
+        $this->assertSame(['wireguard', 'zerotier'], array_keys($desired));
+        $this->assertSame('1', $desired['wireguard']['priority']);
+        $this->assertSame('2', $desired['zerotier']['priority']);
+        $this->assertSame('10.9.0.1', $desired['zerotier']['address']);
+    }
+
+    public function test_plan_radius_client_changes_adds_a_missing_entry(): void
+    {
+        $desired = ['wireguard' => ['address' => '10.8.0.1', 'priority' => null]];
+
+        $plan = RouterOsConnectionService::planRadiusClientChanges($desired, [], ['10.8.0.1', '10.9.0.1']);
+
+        $this->assertSame(['Add RADIUS client (WireGuard)' => $desired['wireguard']], $plan['add']);
+        $this->assertSame([], $plan['update']);
+        $this->assertSame([], $plan['remove']);
+        $this->assertSame([], $plan['unchanged']);
+    }
+
+    public function test_plan_radius_client_changes_fixes_a_wrong_priority_on_an_existing_entry(): void
+    {
+        // Real scenario, confirmed live 2026-08-19: a router switched from
+        // wireguard-only to wireguard_zerotier keeps its original WireGuard
+        // RADIUS entry with no priority set -- it now needs priority=1 so
+        // RouterOS tries it before the newly-added ZeroTier entry.
+        $desired = [
+            'wireguard' => ['address' => '10.8.0.1', 'priority' => '1'],
+            'zerotier' => ['address' => '10.9.0.1', 'priority' => '2'],
+        ];
+        $existing = [
+            ['.id' => '*1', 'address' => '10.8.0.1', 'priority' => '0'],
+        ];
+
+        $plan = RouterOsConnectionService::planRadiusClientChanges($desired, $existing, ['10.8.0.1', '10.9.0.1']);
+
+        $this->assertSame(['id' => '*1', 'priority' => '1'], $plan['update']['Fix RADIUS client priority (WireGuard)']);
+        $this->assertSame(['Add RADIUS client (ZeroTier)' => $desired['zerotier']], $plan['add']);
+        $this->assertSame([], $plan['remove']);
+    }
+
+    public function test_plan_radius_client_changes_leaves_an_already_correct_entry_alone(): void
+    {
+        $desired = ['wireguard' => ['address' => '10.8.0.1', 'priority' => null]];
+        $existing = [['.id' => '*1', 'address' => '10.8.0.1', 'priority' => '']];
+
+        $plan = RouterOsConnectionService::planRadiusClientChanges($desired, $existing, ['10.8.0.1']);
+
+        $this->assertSame([], $plan['add']);
+        $this->assertSame([], $plan['update']);
+        $this->assertSame([], $plan['remove']);
+        $this->assertSame(['RADIUS client (WireGuard)'], $plan['unchanged']);
+    }
+
+    public function test_plan_radius_client_changes_removes_a_stale_managed_entry(): void
+    {
+        // Router reverted from wireguard_zerotier back to wireguard-only --
+        // the old ZeroTier entry is no longer desired and should be removed,
+        // since its address is one of this app's own known endpoints.
+        $desired = ['wireguard' => ['address' => '10.8.0.1', 'priority' => null]];
+        $existing = [
+            ['.id' => '*1', 'address' => '10.8.0.1', 'priority' => ''],
+            ['.id' => '*2', 'address' => '10.9.0.1', 'priority' => ''],
+        ];
+
+        $plan = RouterOsConnectionService::planRadiusClientChanges($desired, $existing, ['10.8.0.1', '10.9.0.1']);
+
+        $this->assertSame(['Remove stale RADIUS client (10.9.0.1)' => '*2'], $plan['remove']);
+    }
+
+    public function test_plan_radius_client_changes_never_touches_an_unmanaged_address(): void
+    {
+        // A RADIUS client an admin added by hand for something unrelated --
+        // its address matches neither of this app's known Pi endpoints, so
+        // it must never be removed regardless of what tunnel_mode says.
+        $desired = ['wireguard' => ['address' => '10.8.0.1', 'priority' => null]];
+        $existing = [
+            ['.id' => '*1', 'address' => '10.8.0.1', 'priority' => ''],
+            ['.id' => '*9', 'address' => '203.0.113.50', 'priority' => ''],
+        ];
+
+        $plan = RouterOsConnectionService::planRadiusClientChanges($desired, $existing, ['10.8.0.1', '10.9.0.1']);
+
+        $this->assertSame([], $plan['remove']);
+    }
+
+    #[DataProvider('zeroTierActionsProvider')]
+    public function test_zerotier_actions_needed(array $state, array $expected): void
+    {
+        $this->assertSame($expected, RouterOsConnectionService::zeroTierActionsNeeded($state));
+    }
+
+    public static function zeroTierActionsProvider(): array
+    {
+        return [
+            'no instance found -- nothing to do until the package/instance exists' => [
+                ['instance_id' => null, 'instance_disabled' => true, 'network_joined' => false],
+                [],
+            ],
+            'enabled and already joined -- nothing to do' => [
+                ['instance_id' => '*1', 'instance_disabled' => false, 'network_joined' => true],
+                [],
+            ],
+            'disabled and not joined -- both steps needed' => [
+                ['instance_id' => '*1', 'instance_disabled' => true, 'network_joined' => false],
+                ['enable', 'join'],
+            ],
+            'enabled but not joined -- confirmed live scenario: "/zerotier enable" was run by hand without ever joining the network' => [
+                ['instance_id' => '*1', 'instance_disabled' => false, 'network_joined' => false],
+                ['join'],
+            ],
+        ];
+    }
 }

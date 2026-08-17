@@ -479,8 +479,10 @@ class RouterOsConnectionService
             ];
         }
 
+        $radiusResult = $this->syncRadiusClients($router, 'hotspot,ppp');
+        $zeroTierResult = $this->syncZeroTierNetworkMembership($router);
+
         $steps = [
-            ...$this->radiusClientSteps($router, 'hotspot,ppp'),
             'Add hotspot profile' => (new Query('/ip/hotspot/profile/add'))
                 ->equal('name', 'saas-prof')
                 ->equal('use-radius', 'yes')
@@ -491,6 +493,9 @@ class RouterOsConnectionService
         ];
 
         $result = $this->runSteps($router, $steps);
+        $result['steps'] = array_merge($radiusResult['steps'], $zeroTierResult['steps'], $result['steps']);
+        $result['success'] = $radiusResult['success'] && $zeroTierResult['success'] && $result['success'];
+
         $walledGardenResult = $this->syncWalledGarden($router);
         $loginPageResult = $this->pushHotspotLoginPage($router);
         $profileStep = $this->applyHotspotProfile($router);
@@ -725,8 +730,10 @@ class RouterOsConnectionService
             ];
         }
 
+        $radiusResult = $this->syncRadiusClients($router, 'ppp');
+        $zeroTierResult = $this->syncZeroTierNetworkMembership($router);
+
         $steps = [
-            ...$this->radiusClientSteps($router, 'ppp'),
             'Enable RADIUS for PPP' => (new Query('/ppp/aaa/set'))
                 ->equal('use-radius', 'yes')
                 ->equal('accounting', 'yes')
@@ -743,58 +750,331 @@ class RouterOsConnectionService
                 ->equal('disabled', 'no'),
         ];
 
+        $result = $this->runSteps($router, $steps);
+        $result['steps'] = array_merge($radiusResult['steps'], $zeroTierResult['steps'], $result['steps']);
+        $result['success'] = $radiusResult['success'] && $zeroTierResult['success'] && $result['success'];
+
+        return $result;
+    }
+
+    /**
+     * The RouterOS ZeroTier instance name this app always uses -- matches
+     * the literal "zt1" MikroTikProvisioningService::zeroTierLines() emits
+     * in the generated script (that method assumes an instance named "zt1"
+     * already exists by default on the router, which held true on the real
+     * hardware this was confirmed against 2026-08-19 -- RouterOS's zerotier
+     * package ships with one pre-created default instance under that name).
+     */
+    private const ZEROTIER_INSTANCE_NAME = 'zt1';
+
+    /**
+     * Reconciles this router's `/radius` client entries against what its
+     * `tunnel_mode` currently needs -- the live-API equivalent of
+     * MikroTikProvisioningService::radiusClientLines(), except idempotent:
+     * changing a router's tunnel_mode after it's already been provisioned
+     * (e.g. WireGuard-only -> wireguard_zerotier) used to need the WHOLE
+     * script re-pasted by hand, since the old version of this method always
+     * blindly ran `/radius/add` regardless of what already existed --
+     * confirmed live 2026-08-19: switching tunnel_mode and re-provisioning
+     * would have added a genuine duplicate WireGuard entry alongside the new
+     * ZeroTier one, and never fixed the existing entry's now-stale priority.
+     * Lists what's actually on the router first (existingRadiusClients()),
+     * diffs it against the desired set (planRadiusClientChanges()), and only
+     * adds/fixes/removes what's actually wrong -- the same "list first, only
+     * touch what's missing" shape as syncWalledGarden(). Removal is scoped
+     * to entries whose address matches one of this app's own two known
+     * endpoints (services.radius.server_ip / services.zerotier.pi_ip) --
+     * mirroring the `proto` tag safety idea in WireGuardRouteSyncService --
+     * so a RADIUS client an admin added by hand for something else entirely
+     * is never touched, regardless of what tunnel_mode says.
+     *
+     * @return array{success: bool, steps: list<array{label: string, success: bool, error: ?string}>}
+     */
+    public function syncRadiusClients(Router $router, string $service): array
+    {
+        if (! $this->isConfigured($router)) {
+            return [
+                'success' => false,
+                'steps' => [['label' => 'RADIUS client sync', 'success' => false, 'error' => 'No RouterOS API credentials generated for this router yet.']],
+            ];
+        }
+
+        $desired = self::desiredRadiusClients($router, $service);
+        $existing = $this->existingRadiusClients($router);
+        $managedAddresses = array_values(array_filter([
+            (string) config('services.radius.server_ip'),
+            (string) config('services.zerotier.pi_ip'),
+        ]));
+
+        $plan = self::planRadiusClientChanges($desired, $existing, $managedAddresses);
+
+        $steps = [];
+
+        foreach ($plan['add'] as $label => $fields) {
+            $query = new Query('/radius/add');
+            foreach ($fields as $key => $value) {
+                if ($value !== null) {
+                    $query->equal($key, (string) $value);
+                }
+            }
+            $steps[$label] = $query;
+        }
+
+        foreach ($plan['update'] as $label => $update) {
+            $steps[$label] = (new Query('/radius/set'))
+                ->equal('numbers', $update['id'])
+                ->equal('priority', $update['priority']);
+        }
+
+        foreach ($plan['remove'] as $label => $id) {
+            $steps[$label] = (new Query('/radius/remove'))->equal('numbers', $id);
+        }
+
+        $result = $steps === [] ? ['success' => true, 'steps' => []] : $this->runSteps($router, $steps);
+
+        foreach ($plan['unchanged'] as $label) {
+            $result['steps'][] = ['label' => $label, 'success' => true, 'error' => 'Already correct on the router, skipped.'];
+        }
+
+        return $result;
+    }
+
+    /**
+     * What this router's RADIUS clients SHOULD be, keyed by tunnel
+     * ('wireguard'/'zerotier') -- pure, pulled out of syncRadiusClients() so
+     * it's unit testable without a live connection. `priority` is left null
+     * (never sent) when only one tunnel is enabled, matching
+     * MikroTikProvisioningService::radiusClientLines()'s "no priority field
+     * at all" behavior for a single-tunnel router.
+     *
+     * @return array<string, array{address: string, secret: string, service: string, authentication-port: string, accounting-port: string, timeout: string, priority: ?string}>
+     */
+    public static function desiredRadiusClients(Router $router, string $service): array
+    {
+        $includesWireguard = in_array($router->tunnel_mode, ['wireguard', 'wireguard_zerotier'], true);
+        $includesZeroTier = in_array($router->tunnel_mode, ['wireguard_zerotier', 'zerotier'], true);
+        $desired = [];
+
+        if ($includesWireguard) {
+            $desired['wireguard'] = [
+                'address' => (string) config('services.radius.server_ip'),
+                'secret' => (string) $router->shared_secret,
+                'service' => $service,
+                'authentication-port' => (string) config('services.radius.auth_port'),
+                'accounting-port' => (string) config('services.radius.acct_port'),
+                'timeout' => '1000ms',
+                'priority' => $includesZeroTier ? '1' : null,
+            ];
+        }
+
+        if ($includesZeroTier) {
+            $desired['zerotier'] = [
+                'address' => (string) config('services.zerotier.pi_ip'),
+                'secret' => (string) $router->shared_secret,
+                'service' => $service,
+                'authentication-port' => (string) config('services.radius.auth_port'),
+                'accounting-port' => (string) config('services.radius.acct_port'),
+                'timeout' => '1000ms',
+                'priority' => $includesWireguard ? '2' : null,
+            ];
+        }
+
+        return $desired;
+    }
+
+    /**
+     * Diffs desired RADIUS clients against what's actually on the router --
+     * pure, pulled out of syncRadiusClients() so it's unit testable without
+     * a live connection. Matches an existing entry to a desired one purely
+     * by `address` (RouterOS matches a NAS/client definition by the
+     * request's source IP, so address is the only field that meaningfully
+     * identifies "which tunnel is this entry for"). Only compares/fixes
+     * `priority` -- not secret/service/ports -- to keep this narrowly
+     * scoped to the actual bug this was built to fix rather than
+     * second-guessing every field on an entry that's otherwise fine.
+     *
+     * @param  array<string, array{address: string, secret: string, service: string, authentication-port: string, accounting-port: string, timeout: string, priority: ?string}>  $desired
+     * @param  list<array<string,mixed>>  $existing  raw "/radius print" rows
+     * @param  list<string>  $managedAddresses  every address this app could ever desire (WireGuard + ZeroTier Pi IPs) -- an existing entry is only ever a remove candidate if its address is in this list, so a RADIUS client an admin added by hand for something unrelated is never touched
+     * @return array{add: array<string, array>, update: array<string, array{id: string, priority: string}>, remove: array<string, string>, unchanged: list<string>}
+     */
+    public static function planRadiusClientChanges(array $desired, array $existing, array $managedAddresses): array
+    {
+        $names = ['wireguard' => 'WireGuard', 'zerotier' => 'ZeroTier'];
+        $existingByAddress = collect($existing)->keyBy(fn (array $row) => (string) ($row['address'] ?? ''));
+
+        $add = [];
+        $update = [];
+        $unchanged = [];
+
+        foreach ($desired as $key => $fields) {
+            $name = $names[$key] ?? ucfirst($key);
+            $existingRow = $existingByAddress->get($fields['address']);
+
+            if ($existingRow === null) {
+                $add['Add RADIUS client ('.$name.')'] = $fields;
+
+                continue;
+            }
+
+            if ($fields['priority'] !== null && (string) ($existingRow['priority'] ?? '') !== $fields['priority']) {
+                $update['Fix RADIUS client priority ('.$name.')'] = ['id' => (string) ($existingRow['.id'] ?? ''), 'priority' => $fields['priority']];
+
+                continue;
+            }
+
+            $unchanged[] = 'RADIUS client ('.$name.')';
+        }
+
+        $desiredAddresses = collect($desired)->pluck('address')->all();
+        $remove = [];
+
+        foreach ($existing as $row) {
+            $address = (string) ($row['address'] ?? '');
+
+            if ($address === '' || in_array($address, $desiredAddresses, true) || ! in_array($address, $managedAddresses, true)) {
+                continue;
+            }
+
+            $remove['Remove stale RADIUS client ('.$address.')'] = (string) ($row['.id'] ?? '');
+        }
+
+        return ['add' => $add, 'update' => $update, 'remove' => $remove, 'unchanged' => $unchanged];
+    }
+
+    /**
+     * The RADIUS clients actually on this router right now. Falls back to an
+     * empty list -- meaning every desired entry gets attempted as an "add",
+     * the same behavior as before syncRadiusClients() existed -- if the
+     * router can't be reached to list them; a failed listing shouldn't block
+     * the sync itself (mirrors existingWalledGardenHosts()).
+     *
+     * @return list<array<string,mixed>>
+     */
+    private function existingRadiusClients(Router $router): array
+    {
+        try {
+            $rows = $this->client($router, 8)->query(new Query('/radius/print'))->read();
+
+            return collect($rows)->filter(fn ($row) => is_array($row) && filled($row['address'] ?? null))->values()->all();
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * Makes sure this router has actually joined the ZeroTier network its
+     * tunnel_mode requires -- a no-op (zero steps, no connection attempt)
+     * for a router that doesn't use ZeroTier at all. Enabling the ZeroTier
+     * service and joining a specific network are two separate RouterOS
+     * steps (confirmed live 2026-08-19: a router can have ZeroTier enabled
+     * with a real node identity yet never have run "/zerotier interface add"
+     * at all, leaving it authorized on the controller but never actually
+     * connected) -- this mirrors MikroTikProvisioningService::zeroTierLines()
+     * (`/zerotier enable zt1` + `/zerotier interface add network=... instance=zt1`)
+     * but checks the router's actual current state first via
+     * existingZeroTierState(), so re-running this after the network is
+     * already joined is a safe no-op rather than a second, likely-rejected
+     * "add" attempt.
+     *
+     * @return array{success: bool, steps: list<array{label: string, success: bool, error: ?string}>}
+     */
+    public function syncZeroTierNetworkMembership(Router $router): array
+    {
+        if (! $this->isConfigured($router)) {
+            return [
+                'success' => false,
+                'steps' => [['label' => 'ZeroTier network membership', 'success' => false, 'error' => 'No RouterOS API credentials generated for this router yet.']],
+            ];
+        }
+
+        if (! in_array($router->tunnel_mode, ['wireguard_zerotier', 'zerotier'], true)) {
+            return ['success' => true, 'steps' => []];
+        }
+
+        $instance = self::ZEROTIER_INSTANCE_NAME;
+
+        try {
+            $state = $this->existingZeroTierState($router, $instance);
+        } catch (\Throwable $e) {
+            return ['success' => false, 'steps' => [['label' => 'ZeroTier network membership', 'success' => false, 'error' => $e->getMessage()]]];
+        }
+
+        if ($state['instance_id'] === null) {
+            return [
+                'success' => false,
+                'steps' => [['label' => 'ZeroTier network membership', 'success' => false, 'error' => 'No ZeroTier instance named "'.$instance.'" found on this router -- confirm the "zerotier" package is installed (RouterOS 7.5+, ARM/ARM64 hardware only).']],
+            ];
+        }
+
+        $actions = self::zeroTierActionsNeeded($state);
+
+        if ($actions === []) {
+            return ['success' => true, 'steps' => [['label' => 'ZeroTier network membership', 'success' => true, 'error' => 'Already enabled and joined, skipped.']]];
+        }
+
+        $steps = [];
+
+        if (in_array('enable', $actions, true)) {
+            $steps['Enable ZeroTier ('.$instance.')'] = (new Query('/zerotier/enable'))->equal('numbers', $state['instance_id']);
+        }
+
+        if (in_array('join', $actions, true)) {
+            $steps['Join ZeroTier network'] = (new Query('/zerotier/interface/add'))
+                ->equal('network', (string) config('services.zerotier.network_id'))
+                ->equal('instance', $instance);
+        }
+
         return $this->runSteps($router, $steps);
     }
 
     /**
-     * One `/radius/add` step per enabled tunnel (WireGuard, ZeroTier, or
-     * both), with priority=1/priority=2 only when both are present -- the
-     * live-API mirror of MikroTikProvisioningService::radiusClientLines().
-     * RouterOS's own RADIUS client already fails over across multiple
-     * entries by priority natively, so this is all "use ZeroTier whenever
-     * WireGuard fails" needs on the RADIUS side.
+     * Which of ['enable', 'join'] this router's ZeroTier instance still
+     * needs -- pure, pulled out of syncZeroTierNetworkMembership() so it's
+     * unit testable without a live connection.
      *
-     * @return array<string, Query>
+     * @param  array{instance_id: ?string, instance_disabled: bool, network_joined: bool}  $state
+     * @return list<string>
      */
-    private function radiusClientSteps(Router $router, string $service): array
+    public static function zeroTierActionsNeeded(array $state): array
     {
-        $includesWireguard = in_array($router->tunnel_mode, ['wireguard', 'wireguard_zerotier'], true);
-        $includesZeroTier = in_array($router->tunnel_mode, ['wireguard_zerotier', 'zerotier'], true);
-        $steps = [];
-
-        if ($includesWireguard) {
-            $query = (new Query('/radius/add'))
-                ->equal('address', (string) config('services.radius.server_ip'))
-                ->equal('secret', (string) $router->shared_secret)
-                ->equal('service', $service)
-                ->equal('authentication-port', (string) config('services.radius.auth_port'))
-                ->equal('accounting-port', (string) config('services.radius.acct_port'))
-                ->equal('timeout', '1000ms');
-
-            if ($includesZeroTier) {
-                $query->equal('priority', '1');
-            }
-
-            $steps['Add RADIUS client (WireGuard)'] = $query;
+        if ($state['instance_id'] === null) {
+            return [];
         }
 
-        if ($includesZeroTier) {
-            $query = (new Query('/radius/add'))
-                ->equal('address', (string) config('services.zerotier.pi_ip'))
-                ->equal('secret', (string) $router->shared_secret)
-                ->equal('service', $service)
-                ->equal('authentication-port', (string) config('services.radius.auth_port'))
-                ->equal('accounting-port', (string) config('services.radius.acct_port'))
-                ->equal('timeout', '1000ms');
+        $actions = [];
 
-            if ($includesWireguard) {
-                $query->equal('priority', '2');
-            }
-
-            $steps['Add RADIUS client (ZeroTier)'] = $query;
+        if ($state['instance_disabled']) {
+            $actions[] = 'enable';
         }
 
-        return $steps;
+        if (! $state['network_joined']) {
+            $actions[] = 'join';
+        }
+
+        return $actions;
+    }
+
+    /**
+     * @return array{instance_id: ?string, instance_disabled: bool, network_joined: bool}
+     */
+    private function existingZeroTierState(Router $router, string $instance): array
+    {
+        $client = $this->client($router, 8);
+
+        $instanceRow = collect($client->query(new Query('/zerotier/print'))->read())
+            ->first(fn ($row) => is_array($row) && ($row['name'] ?? null) === $instance);
+
+        $networkId = (string) config('services.zerotier.network_id');
+
+        $joined = collect($client->query(new Query('/zerotier/interface/print'))->read())
+            ->contains(fn ($row) => is_array($row) && ($row['network'] ?? null) === $networkId);
+
+        return [
+            'instance_id' => $instanceRow['.id'] ?? null,
+            'instance_disabled' => $instanceRow !== null && ($instanceRow['disabled'] ?? 'true') !== 'no',
+            'network_joined' => $joined,
+        ];
     }
 
     /**
