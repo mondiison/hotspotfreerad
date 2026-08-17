@@ -13,6 +13,7 @@ use App\Support\RouterPortLayout;
 use App\Support\TenantAccess;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -221,7 +222,14 @@ class RoutersIndex extends Component
             return;
         }
 
-        $nodeId = $result['rows'][0]['address'] ?? null;
+        // Confirmed live (2026-08-19): "/zerotier print" has no plain "address"
+        // field -- the node's own ID is the part before the first ":" in
+        // "identity" (name="zt1" ... identity="<node-id>:0:<public-key-hex>:
+        // <private-key-hex>") or its public-only counterpart "identity.public"
+        // (same prefix, without the private key material -- preferred here
+        // purely so a partial failure never has private key bytes to leak).
+        $identity = $result['rows'][0]['identity.public'] ?? $result['rows'][0]['identity'] ?? null;
+        $nodeId = is_string($identity) && $identity !== '' ? Str::before($identity, ':') : null;
 
         if (blank($nodeId)) {
             $this->addError('zerotier_node_id', 'Router responded but no node-ID field was found in the output -- enter it manually from "/zerotier print" on the router console instead.');
@@ -229,7 +237,7 @@ class RoutersIndex extends Component
             return;
         }
 
-        $this->zerotier_node_id = (string) $nodeId;
+        $this->zerotier_node_id = $nodeId;
     }
 
     public function setPreset(string $field, string $value): void

@@ -8,6 +8,7 @@ use App\Models\Shop;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\RouterManagementService;
+use App\Services\RouterOsConnectionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -116,6 +117,77 @@ class RouterZeroTierProvisioningTest extends TestCase
             'nas_identifier' => 'unreachable-dual-router',
             // Reserved documentation-only address, guaranteed unreachable.
             'wireguard_internal_ip' => '192.0.2.20',
+            'shared_secret' => 'radius-secret',
+            'tunnel_mode' => 'wireguard_zerotier',
+        ]);
+
+        Livewire::actingAs($this->superAdmin())
+            ->test(RoutersIndex::class)
+            ->call('edit', $router->id)
+            ->call('fetchZeroTierNodeId')
+            ->assertHasErrors(['zerotier_node_id']);
+    }
+
+    public function test_fetch_zerotier_node_id_parses_the_id_from_the_identity_field(): void
+    {
+        // Real "/zerotier print detail" output, confirmed live (2026-08-19):
+        // there is no plain "address" field -- the node ID is the part
+        // before the first ":" in "identity"/"identity.public".
+        $this->mock(RouterOsConnectionService::class, function ($mock): void {
+            $mock->shouldReceive('isConfigured')->andReturn(true);
+            $mock->shouldReceive('runReadOnlyCommand')
+                ->with(\Mockery::type(Router::class), '/zerotier print')
+                ->andReturn([
+                    'success' => true,
+                    'rows' => [[
+                        'name' => 'zt1',
+                        'disabled' => 'no',
+                        'port' => '9993',
+                        'identity' => '69ae7250fc:0:b23acdb3c1c5dd6:47e598908c7cd60',
+                        'identity.public' => '69ae7250fc:0:b23acdb3c1c5dd6',
+                        'state' => 'running',
+                    ]],
+                ]);
+        });
+
+        $shop = $this->shop();
+
+        $router = Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'Reachable Dual Router',
+            'nas_identifier' => 'reachable-dual-router',
+            'wireguard_internal_ip' => '10.8.0.94',
+            'shared_secret' => 'radius-secret',
+            'tunnel_mode' => 'wireguard_zerotier',
+        ]);
+
+        Livewire::actingAs($this->superAdmin())
+            ->test(RoutersIndex::class)
+            ->call('edit', $router->id)
+            ->call('fetchZeroTierNodeId')
+            ->assertHasNoErrors(['zerotier_node_id'])
+            ->assertSet('zerotier_node_id', '69ae7250fc');
+    }
+
+    public function test_fetch_zerotier_node_id_errors_when_the_router_has_no_identity_yet(): void
+    {
+        $this->mock(RouterOsConnectionService::class, function ($mock): void {
+            $mock->shouldReceive('isConfigured')->andReturn(true);
+            $mock->shouldReceive('runReadOnlyCommand')
+                ->with(\Mockery::type(Router::class), '/zerotier print')
+                ->andReturn([
+                    'success' => true,
+                    'rows' => [['name' => 'zt1', 'disabled' => 'no', 'port' => '9993']],
+                ]);
+        });
+
+        $shop = $this->shop();
+
+        $router = Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'No Identity Router',
+            'nas_identifier' => 'no-identity-router',
+            'wireguard_internal_ip' => '10.8.0.95',
             'shared_secret' => 'radius-secret',
             'tunnel_mode' => 'wireguard_zerotier',
         ]);
