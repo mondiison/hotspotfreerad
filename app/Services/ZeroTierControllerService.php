@@ -20,6 +20,18 @@ use Illuminate\Support\Facades\Http;
  * caller handle it), this needs to be safely callable from a scheduled job
  * (ZeroTierMembershipSyncService) without an uncaught exception aborting the
  * whole run, mirroring RouterOsConnectionService's convention.
+ *
+ * Confirmed against a real controller (2026-08-19, live report) after this
+ * had never been exercised against a real Pi: `GET .../member` does NOT
+ * return an array of full member objects -- it returns a flat
+ * `{address: revision}` map (e.g. `{"aaaa111111": 3}`), so per-member detail
+ * (`authorized`/`ipAssignments`) needs a second GET per address, `.../member/
+ * {address}` -- the same endpoint `setAuthorized()` already POSTs to. That
+ * single-member response has `authorized`/`ipAssignments` as flat top-level
+ * fields, NOT nested under a `"config"` key -- both `listMembers()` and
+ * `setAuthorized()` originally assumed a `{"config": {...}}` wrapper (never
+ * verified live), which meant every authorize/deauthorize POST silently
+ * succeeded (HTTP 200) without actually changing anything on the controller.
  */
 class ZeroTierControllerService
 {
@@ -41,20 +53,29 @@ class ZeroTierControllerService
         }
 
         try {
-            $response = Http::withHeaders(['X-ZT1-Auth' => $token])
+            $addresses = Http::withHeaders(['X-ZT1-Auth' => $token])
                 ->acceptJson()
                 ->timeout(5)
                 ->get($this->baseUrl().'/controller/network/'.$networkId.'/member')
                 ->throw()
                 ->json();
 
-            $members = collect($response)
-                ->map(fn (array $member): array => [
-                    'node_id' => (string) ($member['nodeId'] ?? ''),
-                    'authorized' => (bool) ($member['config']['authorized'] ?? false),
-                    'ip_assignments' => (array) ($member['config']['ipAssignments'] ?? []),
-                ])
-                ->filter(fn (array $member): bool => $member['node_id'] !== '')
+            $members = collect($addresses)
+                ->keys()
+                ->map(function (string $nodeId) use ($token, $networkId): array {
+                    $member = Http::withHeaders(['X-ZT1-Auth' => $token])
+                        ->acceptJson()
+                        ->timeout(5)
+                        ->get($this->baseUrl().'/controller/network/'.$networkId.'/member/'.$nodeId)
+                        ->throw()
+                        ->json();
+
+                    return [
+                        'node_id' => $nodeId,
+                        'authorized' => (bool) ($member['authorized'] ?? false),
+                        'ip_assignments' => (array) ($member['ipAssignments'] ?? []),
+                    ];
+                })
                 ->values()
                 ->all();
 
@@ -101,17 +122,17 @@ class ZeroTierControllerService
             return ['success' => false, 'error' => 'ZEROTIER_NETWORK_ID is not configured.'];
         }
 
-        $config = ['authorized' => $authorized];
+        $payload = ['authorized' => $authorized];
 
         if ($authorized && filled($ip)) {
-            $config['ipAssignments'] = [$ip];
+            $payload['ipAssignments'] = [$ip];
         }
 
         try {
             Http::withHeaders(['X-ZT1-Auth' => $token])
                 ->acceptJson()
                 ->timeout(5)
-                ->post($this->baseUrl().'/controller/network/'.$networkId.'/member/'.$nodeId, ['config' => $config])
+                ->post($this->baseUrl().'/controller/network/'.$networkId.'/member/'.$nodeId, $payload)
                 ->throw();
 
             return ['success' => true];

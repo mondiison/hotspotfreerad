@@ -57,16 +57,24 @@ class ZeroTierControllerServiceTest extends TestCase
 
     public function test_list_members_maps_the_controller_response(): void
     {
+        // Real controller shape, confirmed live: the bulk list is a flat
+        // {address: revision} map, not an array of member objects -- full
+        // detail needs a second GET per address, whose response has
+        // authorized/ipAssignments as top-level fields (no "config" wrapper).
         Http::fake([
             'http://127.0.0.1:9993/controller/network/abcd1234abcd1234/member' => Http::response([
-                [
-                    'nodeId' => 'aaaa111111',
-                    'config' => ['authorized' => true, 'ipAssignments' => ['10.9.0.10']],
-                ],
-                [
-                    'nodeId' => 'bbbb222222',
-                    'config' => ['authorized' => false, 'ipAssignments' => []],
-                ],
+                'aaaa111111' => 3,
+                'bbbb222222' => 1,
+            ]),
+            'http://127.0.0.1:9993/controller/network/abcd1234abcd1234/member/aaaa111111' => Http::response([
+                'id' => 'aaaa111111',
+                'authorized' => true,
+                'ipAssignments' => ['10.9.0.10'],
+            ]),
+            'http://127.0.0.1:9993/controller/network/abcd1234abcd1234/member/bbbb222222' => Http::response([
+                'id' => 'bbbb222222',
+                'authorized' => false,
+                'ipAssignments' => [],
             ]),
         ]);
 
@@ -112,8 +120,8 @@ class ZeroTierControllerServiceTest extends TestCase
             $body = $request->data();
 
             return $request->url() === 'http://127.0.0.1:9993/controller/network/abcd1234abcd1234/member/aaaa111111'
-                && $body['config']['authorized'] === true
-                && $body['config']['ipAssignments'] === ['10.9.0.10'];
+                && $body['authorized'] === true
+                && $body['ipAssignments'] === ['10.9.0.10'];
         });
     }
 
@@ -130,7 +138,7 @@ class ZeroTierControllerServiceTest extends TestCase
         Http::assertSent(function ($request): bool {
             $body = $request->data();
 
-            return $body['config']['authorized'] === false;
+            return $body['authorized'] === false;
         });
     }
 }

@@ -102,8 +102,10 @@ Joining isn't enough on its own — like any device, the Pi now needs to be appr
 # Replace <network-id> with the ID from Step 3b, and <pi-node-id> with your Pi's ID from Step 2.
 curl -s -X POST "http://127.0.0.1:9993/controller/network/<network-id>/member/<pi-node-id>" \
   -H "X-ZT1-Auth: $(sudo cat /var/lib/zerotier-one/authtoken.secret)" \
-  -d '{"config": {"authorized": true, "ipAssignments": ["10.9.0.1"]}}'
+  -d '{"authorized": true, "ipAssignments": ["10.9.0.1"]}'
 ```
+
+The response should echo back `"authorized":true`. If it comes back `"authorized":false` instead, the command didn't take — see Troubleshooting below.
 
 Check it worked:
 
@@ -111,7 +113,7 @@ Check it worked:
 sudo zerotier-cli listnetworks
 ```
 
-You're looking for `OK` in that output, next to your network, with `10.9.0.1` listed as the address.
+You're looking for `OK` in that output, next to your network, with `10.9.0.1` listed as the address. If you instead see `ACCESS_DENIED`, the Pi has joined the network but the approval above hasn't taken effect yet — see Troubleshooting.
 
 ## Step 5 — Tell HotspotFreeRAD about it
 
@@ -152,6 +154,7 @@ If a device shows up on the network that this command doesn't recognize (a typo,
 
 ## If something goes wrong
 
+- **`listnetworks` still shows `ACCESS_DENIED` after running the approve command in Step 4** — re-run the approve command and actually read what it prints back this time. It should echo `"authorized":true`. If it instead comes back `"authorized":false`, the approval didn't take — the most common cause is a stray `"config"` wrapper around the fields (some older copies of this doc showed `-d '{"config": {"authorized": true, ...}}'`, which ZeroTier silently ignores instead of rejecting). The command above sends `"authorized"`/`"ipAssignments"` directly at the top level of the JSON body — no wrapper.
 - **"ZeroTier controller auth token not readable"** — the app (running as `www-data`) can't read the secret file from Step 3a. Check the path is right and try `sudo -u www-data cat /var/lib/zerotier-one/authtoken.secret` — if that fails, the file's permissions need loosening for that one user (same idea as the WireGuard permission grant in `docs/wireguard-server-setup.md`).
 - **A router's ID never gets approved** — double-check the ID saved on the router record in HotspotFreeRAD matches exactly what `/zerotier print` shows on the router. A single wrong character means you're approving an ID that doesn't exist, while the real one waits forever.
 - **A `wireguard_zerotier` router isn't failing over properly** — on the router itself, run `/radius print`. You should see two entries, one WireGuard and one ZeroTier. RouterOS handles switching between them on its own; there's no extra logic in the app to debug here.

@@ -117,7 +117,12 @@ class ZeroTierMembershipSyncServiceTest extends TestCase
 
         Http::fake([
             'http://127.0.0.1:9993/controller/network/abcd1234abcd1234/member' => Http::response([
-                ['nodeId' => 'unknown999999', 'config' => ['authorized' => false, 'ipAssignments' => []]],
+                'unknown999999' => 1,
+            ]),
+            'http://127.0.0.1:9993/controller/network/abcd1234abcd1234/member/unknown999999' => Http::response([
+                'id' => 'unknown999999',
+                'authorized' => false,
+                'ipAssignments' => [],
             ]),
         ]);
 
