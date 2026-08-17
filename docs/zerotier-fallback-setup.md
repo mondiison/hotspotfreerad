@@ -152,6 +152,8 @@ sudo -u www-data php artisan hotspot:sync-zerotier-members --dry-run
 
 If a device shows up on the network that this command doesn't recognize (a typo, a stray device, someone who forgot to save the ID), it's listed under "Unmatched nodes on the controller" instead of being silently approved or ignored — so you always have something concrete to check.
 
+**One expected entry here, confirmed live:** your Pi's own ID (the one you approved by hand in Step 4) will always show up as "unmatched" — the Pi itself isn't a `Router` record in HotspotFreeRAD, it's the controller, so the sync has no way to know what it is. Seeing it listed isn't a problem; it's just this command being honest that it doesn't recognize an ID it was never told about. Right after finishing this doc, before you've added any router through the wizard, "would authorize 0 node(s)" plus your Pi's ID listed as unmatched is the normal, expected result.
+
 ## If something goes wrong
 
 - **`listnetworks` still shows `ACCESS_DENIED` after running the approve command in Step 4** — re-run the approve command and actually read what it prints back this time. It should echo `"authorized":true`. If it instead comes back `"authorized":false`, the approval didn't take — the most common cause is a stray `"config"` wrapper around the fields (some older copies of this doc showed `-d '{"config": {"authorized": true, ...}}'`, which ZeroTier silently ignores instead of rejecting). The command above sends `"authorized"`/`"ipAssignments"` directly at the top level of the JSON body — no wrapper.
