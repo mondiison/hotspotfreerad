@@ -18,6 +18,16 @@ ZeroTier is a second kind of tunnel you're adding as a backup. Its whole selling
 
 After that, any router you mark as needing ZeroTier will use it automatically — either as a backup alongside WireGuard, or as its only connection if WireGuard genuinely can't work for that site.
 
+### Why are we installing our own network instead of just joining one?
+
+If you've used ZeroTier before, you might know the normal way: go to `my.zerotier.com`, click "Create Network," get an ID, done in 10 seconds — no installing anything on a server. So why isn't that what this doc has you do?
+
+Because of one thing: **approving new devices**. Every device that joins a ZeroTier network has to be individually approved before it's allowed to talk to anything else on that network — that's the security feature that stops a stranger from joining your network. On the normal website version, that approval is a manual click, by a human, on the website, every single time.
+
+That's fine for a handful of personal devices. It doesn't work for this app, where you might add a new router next month, or ten next year, and you don't want to have to remember to go and click "approve" on a website every time. So instead of using ZeroTier's website, **Step 1 installs that exact same "network" software directly on your Pi**, running privately for just you. It does the identical job — devices still join, still need approval — except now HotspotFreeRAD itself can click "approve" automatically, the moment a new router shows up, by talking to that software directly instead of a human clicking a website.
+
+Nothing about how the routers themselves connect is any different either way — this choice only changes *who* (a person on a website, or the app automatically) approves new devices.
+
 **One hardware catch:** ZeroTier only runs on newer MikroTik boards (ARM/ARM64 chips). Cheaper/older boards (MIPSBE/SMIPS) can't run it at all — nothing breaks, that router just isn't eligible for this feature and stays on WireGuard only. You'll pick this per-router in the router wizard later, not here.
 
 This whole setup takes about 15 minutes and you do it once.
@@ -148,10 +158,7 @@ If a device shows up on the network that this command doesn't recognize (a typo,
 - **"`/zerotier` package missing" on a router** — that router's hardware likely can't run it at all. Run `/system resource print` on it and check `architecture-name` — anything other than ARM/ARM64 means this feature isn't available on that board, and it should stay on plain WireGuard.
 - **The app can't reach the controller at all** — `ZEROTIER_CONTROLLER_URL` only works when the app and ZeroTier are running on the same machine, which is only true on the Pi in production. It will never work from a local dev machine unless you've also installed ZeroTier there.
 
-## Why it's built this way (optional background reading)
+## A couple of extra details, if you're curious
 
-You don't need this section to get the setup working — it's here for anyone curious about the reasoning.
-
-ZeroTier's own cloud dashboard ("ZeroTier Central") is how most people normally use it, but its free tier caps you at 10 devices and gives no programmatic access at all — automating approvals the way this app does would need a paid plan. Since routers need to be approved automatically rather than by someone clicking a website, this setup instead runs a small ZeroTier "controller" directly on the Pi. It's free, has no device limit, and only talks to the app over `localhost` — no ZeroTier account needed anywhere.
-
-RouterOS doesn't know or care whether a network was created this way or through Central — a network ID always contains its controller's identity, so nothing about how routers connect changes based on this choice.
+- ZeroTier's normal website dashboard also caps a free account at 10 devices — a second reason (on top of the manual-approval one explained above) this setup avoids it, since you might eventually have more than 10 routers.
+- Your routers don't know or care that this network lives on your Pi instead of ZeroTier's website — as far as any router is concerned, it's just a ZeroTier network like any other.
