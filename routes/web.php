@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\BillingController;
 use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\DocsController;
 use App\Http\Controllers\Admin\ExpenseCategoryController;
 use App\Http\Controllers\Admin\ExpenseController;
 use App\Http\Controllers\Admin\PackageController;
@@ -83,6 +84,7 @@ Route::middleware(['auth', AuthorizeTenantStaff::class])->prefix('admin')->name(
     Route::get('security', SecurityController::class)->name('security.index');
     Route::get('tools/script-generator', StandaloneScriptGeneratorController::class)->name('tools.script-generator');
     Route::get('tools/ptp-generator', StandalonePtpGeneratorController::class)->name('tools.ptp-generator');
+    Route::get('docs', DocsController::class)->name('docs.index');
     Route::get('billing', [BillingController::class, 'index'])->name('billing.index');
     Route::get('billing/plans/create', [BillingController::class, 'createPlan'])->name('billing.plans.create');
     Route::post('billing/plans', [BillingController::class, 'storePlan'])->name('billing.plans.store');

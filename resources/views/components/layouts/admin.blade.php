@@ -106,6 +106,7 @@
                                 ['label' => 'Tenants', 'route' => 'admin.tenants.index', 'icon' => 'building-storefront', 'super_admin' => true],
                                 ['label' => 'Shops', 'route' => 'admin.shops.index', 'icon' => 'building-storefront'],
                                 ['label' => 'Tools', 'route' => 'admin.tools.script-generator', 'icon' => 'wrench-screwdriver', 'super_admin' => true],
+                                ['label' => 'Docs', 'route' => 'admin.docs.index', 'icon' => 'book-open', 'super_admin' => true],
                                 ['label' => 'Users', 'route' => 'admin.users.index', 'icon' => 'users'],
                                 ['label' => 'Brand', 'route' => 'admin.brand.edit', 'icon' => 'swatch', 'tenant_admin' => true],
                             ],
