@@ -569,6 +569,12 @@
                                 <p class="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">Quick-fill the customer hotspot gateway, network, and DHCP pool.</p>
                             </div>
                         </div>
+
+                        <flux:field>
+                            <flux:checkbox wire:model.blur="provisioning_settings.route_lan_through_tunnel" label="Route this router's management/staff networks through the WireGuard tunnel" />
+                            <flux:description>Lets an external AP on the mgmt/staff VLAN (e.g. Ruijie) reach the Pi's RADIUS server for MAC authentication &mdash; without this, its requests never reach the Pi. Requires a one-time setup on the Pi first; see <code>docs/staff-wifi-access.md</code> and <code>docs/wireguard-server-setup.md</code>. Only enable this if the Mgmt/Staff networks above are unique to this router &mdash; two routers routing overlapping subnets through the tunnel will fail to save.</flux:description>
+                            <flux:error name="provisioning_settings.route_lan_through_tunnel" />
+                        </flux:field>
                     </div>
 
                     <div class="flex justify-between">

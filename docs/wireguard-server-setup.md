@@ -120,6 +120,66 @@ sudo -u www-data php artisan hotspot:sync-wireguard-peers --dry-run
 
 This should report `WireGuard sync on "wg-saas": would add N peer(s)...` for however many routers already exist, with no errors. Drop `--dry-run` to apply it immediately instead of waiting for the next scheduled run.
 
+## 9. Optional: route a router's LAN through the tunnel
+
+Skip this section unless you actually need it: an external AP (e.g. Ruijie) sitting on a router's management/staff VLAN reaching the Pi's FreeRADIUS server for RADIUS MAC-authentication — see `docs/staff-wifi-access.md`. Steps 1–8 above are everything a normal router needs; this is a separate, independent capability with its own on/off switch.
+
+**Why this needs more than widening AllowedIPs**: `wg set` (which is what steps 1–8's peer sync uses to add/update peers at runtime) does not create a kernel route the way `wg-quick up` would at startup from `[Peer]` blocks in the config file — and this Pi's `wg-saas.conf` has no `[Peer]` blocks at all (step 3), every peer is added purely at runtime. This has been invisible so far because every peer IP (`10.8.0.x`) already falls inside `wg-saas`'s own directly-connected `10.8.0.0/24` subnet, so the kernel routes it for free. A router's mgmt/staff VLAN (e.g. `192.168.10.0/24`) is not part of that subnet, so the Pi also needs an explicit `ip route` for the traffic to reach it at all — this is what the steps below set up.
+
+Register a dedicated route protocol name, so this app's own route-management never touches anything else in the Pi's routing table:
+
+```bash
+echo "200 hotspotfreerad" | sudo tee -a /etc/iproute2/rt_protos
+```
+
+Create the second wrapper script, mirroring `hotspotfreerad-wg-set-peer` from step 6 (stdin-driven, no CLI arguments, for the same sudoers-wildcard reason):
+
+```bash
+sudo tee /usr/local/sbin/hotspotfreerad-wg-set-route > /dev/null <<'EOF'
+#!/bin/sh
+set -e
+read -r ACTION
+read -r SUBNET
+case "$ACTION" in
+  add) exec ip route replace "$SUBNET" dev wg-saas proto hotspotfreerad ;;
+  del) exec ip route del "$SUBNET" dev wg-saas proto hotspotfreerad ;;
+  *) exit 1 ;;
+esac
+EOF
+
+sudo chmod 755 /usr/local/sbin/hotspotfreerad-wg-set-route
+```
+
+Add the corresponding sudoers lines to the same file from step 6:
+
+```bash
+sudo tee -a /etc/sudoers.d/hotspotfreerad-wireguard > /dev/null <<'EOF'
+www-data ALL=(root) NOPASSWD: /usr/bin/ip route show proto hotspotfreerad
+www-data ALL=(root) NOPASSWD: /usr/local/sbin/hotspotfreerad-wg-set-route
+EOF
+
+sudo visudo -c
+```
+
+Set `.env`:
+
+```env
+WIREGUARD_MANAGE_ROUTES=true
+```
+
+`WIREGUARD_MANAGE_ROUTES` is a separate flag from `WIREGUARD_MANAGE_PEERS` — false by default everywhere, and independently gateable, since this mechanism touches the Pi's kernel routing table specifically, a meaningfully different risk class from just updating WireGuard peer state.
+
+Verify:
+
+```bash
+cd /var/www/hotspotfreerad
+sudo -u www-data php artisan hotspot:sync-wireguard-routes --dry-run
+```
+
+This reports `would add N route(s)` for however many routers currently have "Route this router's management/staff networks through the WireGuard tunnel" enabled (Network plan step of the router wizard). Drop `--dry-run` to apply immediately.
+
+Every route this command ever adds or removes is tagged `proto hotspotfreerad` (`ip route show proto hotspotfreerad` to see them) — reconciliation only ever reads/writes routes carrying that tag, so unlike the peer sync (which deliberately never removes a peer), this can safely add *and* remove routes as routers opt in/out, without any risk of touching the interface's own connected route or anything added by hand. **This mechanism hasn't been verified against a real Pi yet** — confirm it behaves as expected the first time you actually enable it, the same as other "verify on real hardware" caveats in this codebase.
+
 ## From here on
 
 Adding a router is now just:
@@ -138,3 +198,5 @@ No SSH into the Pi, no manually copying a public key off the router.
 - **Same error, but running as root (e.g. `sudo php artisan hotspot:sync-wireguard-peers`) says `... no such device`** — this means the permission problem is gone (root can always run `wg`) but the `wg-saas` interface itself was never created. Go back to steps 1–4: install `wireguard`, generate the Pi's keypair, write `/etc/wireguard/wg-saas.conf`, then `sudo systemctl enable --now wg-quick@wg-saas` and confirm `sudo wg show wg-saas` shows the interface before touching the sync command again.
 - **Router still can't reach `10.8.0.1`** — check the port-forward in step 7, and confirm the router's own script ran without errors (`/interface wireguard print` on the router should show a handshake once the Pi-side peer exists). If port forwarding looks correctly configured but a handshake still never happens for any off-site router, suspect CGNAT (see step 7) — the peer will still register fine on the Pi's side (that part is purely local), it's the router's connection attempt from the outside that silently goes nowhere.
 - **If the router in question is physically on the same LAN as the Pi** (plugged into the same local network, not remote), don't chase port-forwarding or CGNAT at all — that only affects off-site routers. Use the router's **"WireGuard endpoint override"** field in HotspotFreeRAD instead, set to the Pi's LAN IP, so its script dials the Pi locally rather than through its own public IP (which commonly fails via NAT hairpin/loopback for UDP). See "Local Pi Behind The Same MikroTik" in `docs/router-onboarding.md`.
+- **A router's mgmt/staff VLAN can't reach the Pi even with "Route this router's management/staff networks through the WireGuard tunnel" enabled** — confirm step 9's setup was actually completed (`WIREGUARD_MANAGE_ROUTES=true`, the `rt_protos` line, the second wrapper script, the sudoers lines) and that `hotspot:sync-wireguard-routes --dry-run` reports no errors. If the route shows up (`ip route show proto hotspotfreerad`) but traffic still doesn't reach the Pi, check the router's own firewall forward chain isn't blocking that VLAN toward `wg-saas` (the generated script's default forward rules don't block mgmt/staff traffic, but a manually-added rule could).
+- **Router saving fails with "... overlaps ... both can't be routed through the same WireGuard tunnel"** — two routers both have "Route this router's management/staff networks through the WireGuard tunnel" enabled with the same or overlapping `mgmt_network`/`staff_network` subnet (every router defaults to the same literal subnet unless customized — see the Network plan step). Change one router's subnet to something that doesn't overlap before enabling the toggle on both.

@@ -107,13 +107,36 @@ class WireGuardPeerSyncService
     }
 
     /**
-     * @return array<string,string> WireGuard public key => allowed internal IP
+     * WireGuard public key => normalized (sorted, comma-joined) AllowedIPs CIDR list.
+     * Always includes the router's own `/32` tunnel IP. When
+     * `provisioning_settings.route_lan_through_tunnel` is enabled, also includes its
+     * mgmt/staff network CIDRs -- see RouterManagementService::lanRoutingOverlapRule()
+     * for the cross-router collision check that guards against two routers routing
+     * overlapping subnets through the same Pi WireGuard interface (AllowedIPs must be
+     * unique/non-overlapping per peer on a given interface).
+     *
+     * @return array<string,string>
      */
     public function desiredPeers(): array
     {
         return Router::query()
             ->whereNotNull('wireguard_public_key')
-            ->pluck('wireguard_internal_ip', 'wireguard_public_key')
+            ->get(['wireguard_public_key', 'wireguard_internal_ip', 'provisioning_settings'])
+            ->mapWithKeys(function (Router $router): array {
+                $allowedIps = [$router->wireguard_internal_ip.'/32'];
+
+                if ((bool) data_get($router->provisioning_settings, 'route_lan_through_tunnel')) {
+                    foreach (['mgmt_network', 'staff_network'] as $key) {
+                        $network = (string) data_get($router->provisioning_settings, $key, '');
+
+                        if ($network !== '') {
+                            $allowedIps[] = $network;
+                        }
+                    }
+                }
+
+                return [$router->wireguard_public_key => self::normalizeAllowedIps($allowedIps)];
+            })
             ->all();
     }
 
@@ -122,8 +145,12 @@ class WireGuardPeerSyncService
      * interface itself (private-key, public-key, listen-port, fwmark); every
      * line after that is one peer (public-key, preshared-key, endpoint,
      * allowed-ips, latest-handshake, transfer-rx, transfer-tx, keepalive).
+     * Column 3 (allowed-ips) is itself a comma-separated CIDR list, not a
+     * single address -- kept in full (normalized the same way as
+     * desiredPeers()) rather than truncated to the first entry, so a
+     * multi-CIDR peer is compared correctly for idempotency.
      *
-     * @return array<string,string> WireGuard public key => allowed IP
+     * @return array<string,string> WireGuard public key => normalized AllowedIPs CIDR list
      */
     private function parseDump(string $output): array
     {
@@ -138,13 +165,23 @@ class WireGuardPeerSyncService
             $columns = preg_split('/\s+/', trim($line));
             $publicKey = $columns[0] ?? null;
             $allowedIps = $columns[3] ?? '';
-            $ip = (string) str($allowedIps)->before('/');
 
-            if ($publicKey && $ip !== '' && $ip !== '(none)') {
-                $peers[$publicKey] = $ip;
+            if ($publicKey && $allowedIps !== '' && $allowedIps !== '(none)') {
+                $peers[$publicKey] = self::normalizeAllowedIps(explode(',', $allowedIps));
             }
         }
 
         return $peers;
+    }
+
+    /**
+     * @param  list<string>  $cidrs
+     */
+    private static function normalizeAllowedIps(array $cidrs): string
+    {
+        $cidrs = array_unique(array_map('trim', $cidrs));
+        sort($cidrs);
+
+        return implode(',', $cidrs);
     }
 }

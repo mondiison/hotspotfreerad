@@ -54,6 +54,19 @@ return [
         // Takes no CLI arguments (reads "public-key\nallowed-ip\n" from stdin) so the
         // sudoers NOPASSWD rule for it needs no wildcards -- see docs/wireguard-server-setup.md.
         'set_peer_script' => env('WIREGUARD_SET_PEER_SCRIPT', '/usr/local/sbin/hotspotfreerad-wg-set-peer'),
+        // Separate on/off switch from manage_peers -- this one touches the Pi's kernel
+        // routing table (adding/removing "ip route ... proto hotspotfreerad" entries for
+        // routers with provisioning_settings.route_lan_through_tunnel enabled), a
+        // meaningfully different risk class from just updating WireGuard peer state, so
+        // it gets its own explicit opt-in even though the proto tag makes removal safe.
+        'manage_routes' => (bool) env('WIREGUARD_MANAGE_ROUTES', false),
+        // Same stdin-driven, no-CLI-args shape as set_peer_script, for the same sudoers reason.
+        'set_route_script' => env('WIREGUARD_SET_ROUTE_SCRIPT', '/usr/local/sbin/hotspotfreerad-wg-set-route'),
+        // Custom protocol name every route this app manages is tagged with (registered
+        // once in /etc/iproute2/rt_protos -- see docs/wireguard-server-setup.md), so
+        // reconciliation can safely add/remove routes without ever touching anything
+        // else in the Pi's routing table.
+        'route_proto' => env('WIREGUARD_ROUTE_PROTO', 'hotspotfreerad'),
     ],
 
     'mikrotik' => [

@@ -37,7 +37,7 @@ class WireGuardPeerSyncServiceTest extends TestCase
         $this->assertNotEmpty($result['errors']);
     }
 
-    public function test_desired_peers_maps_public_key_to_internal_ip_for_routers_with_a_key(): void
+    public function test_desired_peers_maps_public_key_to_a_slash_32_allowed_ip_for_routers_with_a_key(): void
     {
         $tenant = Tenant::create(['company_name' => 'Demo ISP', 'owner_email' => 'owner@example.com']);
         $shop = Shop::create(['tenant_id' => $tenant->id, 'name' => 'Demo Shop']);
@@ -53,6 +53,54 @@ class WireGuardPeerSyncServiceTest extends TestCase
         $desired = app(WireGuardPeerSyncService::class)->desiredPeers();
 
         $this->assertArrayHasKey($router->wireguard_public_key, $desired);
-        $this->assertSame($router->wireguard_internal_ip, $desired[$router->wireguard_public_key]);
+        $this->assertSame('10.8.0.70/32', $desired[$router->wireguard_public_key]);
+    }
+
+    public function test_desired_peers_includes_mgmt_and_staff_networks_when_lan_routing_is_enabled(): void
+    {
+        $tenant = Tenant::create(['company_name' => 'Demo ISP', 'owner_email' => 'owner@example.com']);
+        $shop = Shop::create(['tenant_id' => $tenant->id, 'name' => 'Demo Shop']);
+
+        $router = Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'LAN Routing Router',
+            'nas_identifier' => 'lan-routing-router',
+            'wireguard_internal_ip' => '10.8.0.71',
+            'shared_secret' => 'radius-secret',
+            'provisioning_settings' => [
+                'route_lan_through_tunnel' => true,
+                'mgmt_network' => '192.168.11.0/24',
+                'staff_network' => '192.168.31.0/24',
+            ],
+        ]);
+
+        $desired = app(WireGuardPeerSyncService::class)->desiredPeers();
+
+        $this->assertSame(
+            '10.8.0.71/32,192.168.11.0/24,192.168.31.0/24',
+            $desired[$router->wireguard_public_key]
+        );
+    }
+
+    public function test_desired_peers_excludes_lan_networks_when_routing_is_disabled(): void
+    {
+        $tenant = Tenant::create(['company_name' => 'Demo ISP', 'owner_email' => 'owner@example.com']);
+        $shop = Shop::create(['tenant_id' => $tenant->id, 'name' => 'Demo Shop']);
+
+        $router = Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'No LAN Routing Router',
+            'nas_identifier' => 'no-lan-routing-router',
+            'wireguard_internal_ip' => '10.8.0.72',
+            'shared_secret' => 'radius-secret',
+            'provisioning_settings' => [
+                'route_lan_through_tunnel' => false,
+                'mgmt_network' => '192.168.12.0/24',
+            ],
+        ]);
+
+        $desired = app(WireGuardPeerSyncService::class)->desiredPeers();
+
+        $this->assertSame('10.8.0.72/32', $desired[$router->wireguard_public_key]);
     }
 }

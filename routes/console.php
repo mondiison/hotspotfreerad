@@ -17,6 +17,7 @@ use App\Services\RouterMetricSamplingService;
 use App\Services\RouterOsConnectionService;
 use App\Services\VoucherManagementService;
 use App\Services\WireGuardPeerSyncService;
+use App\Services\WireGuardRouteSyncService;
 use App\Services\ZeroTierMembershipSyncService;
 use App\Support\SchedulerHealth;
 use Illuminate\Foundation\Inspiring;
@@ -344,6 +345,41 @@ Artisan::command('hotspot:sync-zerotier-members {--dry-run}', function (ZeroTier
 })->purpose('Authorize known router ZeroTier nodes on the self-hosted controller and report any unmatched pending nodes');
 
 Schedule::command('hotspot:sync-zerotier-members')
+    ->everyFiveMinutes()
+    ->withoutOverlapping();
+
+Artisan::command('hotspot:sync-wireguard-routes {--dry-run}', function (WireGuardRouteSyncService $routes): int {
+    $dryRun = (bool) $this->option('dry-run');
+    $result = $routes->reconcile(dryRun: $dryRun);
+
+    if (! $result['enabled']) {
+        $this->info('WireGuard route management is disabled. Set WIREGUARD_MANAGE_ROUTES=true on the Pi (see docs/wireguard-server-setup.md) to enable it. No changes made.');
+
+        return Command::SUCCESS;
+    }
+
+    if (! $result['binary_available']) {
+        $this->error('Could not list routes with proto "'.config('services.wireguard.route_proto').'": '.implode(' ', $result['errors']));
+
+        return Command::FAILURE;
+    }
+
+    $added = count($result['added']);
+    $removed = count($result['removed']);
+    $errorCount = count($result['errors']);
+    $addedLabel = $dryRun ? 'would add' : 'added';
+    $removedLabel = $dryRun ? 'would remove' : 'removed';
+
+    $this->info("WireGuard route sync on \"{$result['interface']}\": {$addedLabel} {$added} route(s), {$removedLabel} {$removed} route(s), {$errorCount} error(s).");
+
+    foreach ($result['errors'] as $error) {
+        $this->error($error);
+    }
+
+    return $errorCount > 0 ? Command::FAILURE : Command::SUCCESS;
+})->purpose('Reconcile the Pi\'s kernel routes for routers with route_lan_through_tunnel enabled (adds and removes, scoped to a dedicated proto tag)');
+
+Schedule::command('hotspot:sync-wireguard-routes')
     ->everyFiveMinutes()
     ->withoutOverlapping();
 

@@ -500,6 +500,7 @@ class RoutersIndex extends Component
                 'provisioning_settings.staff_gateway', 'provisioning_settings.staff_network', 'provisioning_settings.staff_pool',
                 'provisioning_settings.pos_gateway', 'provisioning_settings.pos_network', 'provisioning_settings.pos_pool',
                 'provisioning_settings.pppoe_gateway',
+                'provisioning_settings.route_lan_through_tunnel',
             ],
             default => [],
         };

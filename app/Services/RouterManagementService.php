@@ -6,6 +6,7 @@ use App\Models\Router;
 use App\Models\Shop;
 use App\Models\User;
 use App\Support\BillingPlanLimits;
+use App\Support\CidrOverlap;
 use App\Support\RouterPortLayout;
 use App\Support\TenantAccess;
 use App\Support\WireGuardKeyPair;
@@ -20,6 +21,7 @@ class RouterManagementService
     public function __construct(
         private readonly RadiusProvisioningService $radius,
         private readonly WireGuardPeerSyncService $wireGuard,
+        private readonly WireGuardRouteSyncService $wireGuardRoutes,
         private readonly ZeroTierMembershipSyncService $zeroTier,
         private readonly ZeroTierControllerService $zeroTierController,
     ) {}
@@ -101,6 +103,10 @@ class RouterManagementService
             'provisioning_settings.enable_pppoe' => ['nullable', 'boolean'],
             'provisioning_settings.enable_realtime_qos' => ['nullable', 'boolean'],
             'provisioning_settings.enable_second_wan' => ['nullable', 'boolean'],
+            'provisioning_settings.route_lan_through_tunnel' => [
+                'nullable', 'boolean',
+                $this->lanRoutingOverlapRule($router, $provisioningSettings ?? []),
+            ],
             'is_online' => ['nullable', 'boolean'],
         ];
     }
@@ -136,6 +142,7 @@ class RouterManagementService
         $router = Router::create($this->normalize($data));
         $this->radius->syncRouter($router);
         $this->syncWireGuardPeers();
+        $this->syncWireGuardRoutes();
         $this->syncZeroTierMembership();
 
         return $router;
@@ -148,6 +155,7 @@ class RouterManagementService
         $router->update($this->normalize($data, $router));
         $this->radius->syncRouter($router);
         $this->syncWireGuardPeers();
+        $this->syncWireGuardRoutes();
         $this->syncZeroTierMembership();
 
         return $router;
@@ -165,6 +173,11 @@ class RouterManagementService
 
         $router->delete();
         $this->radius->deleteRouter($router);
+        // desiredRoutes() is computed fresh from the DB each run, so a router deleted
+        // above (whether or not it had route_lan_through_tunnel enabled) is already
+        // excluded by the time this runs -- this is what actually removes its subnet
+        // from the Pi's routing table, not a special-cased delete branch.
+        $this->syncWireGuardRoutes();
     }
 
     public function regenerateWireguardKey(Router $router, User $user): Router
@@ -283,6 +296,18 @@ class RouterManagementService
         }
     }
 
+    private function syncWireGuardRoutes(): void
+    {
+        $result = $this->wireGuardRoutes->reconcile();
+
+        if (($result['errors'] ?? []) !== []) {
+            Log::warning('WireGuard route sync after router save reported errors', [
+                'interface' => $result['interface'] ?? null,
+                'errors' => $result['errors'],
+            ]);
+        }
+    }
+
     private function syncZeroTierMembership(): void
     {
         $result = $this->zeroTier->reconcile();
@@ -351,6 +376,7 @@ class RouterManagementService
             'enable_pppoe' => $profile !== 'small_hotspot',
             'enable_realtime_qos' => true,
             'enable_second_wan' => false,
+            'route_lan_through_tunnel' => false,
         ];
     }
 
@@ -364,7 +390,7 @@ class RouterManagementService
         $settings = $settings + ['profile' => 'starlink_plaza'];
         $settings = array_replace($this->defaultProvisioningSettings((string) $settings['profile']), $settings);
 
-        foreach (['enable_builtin_wifi', 'enable_staff', 'enable_mgmt_wifi', 'enable_pos', 'enable_pppoe', 'enable_realtime_qos', 'enable_second_wan', 'ports_advanced_mode'] as $field) {
+        foreach (['enable_builtin_wifi', 'enable_staff', 'enable_mgmt_wifi', 'enable_pos', 'enable_pppoe', 'enable_realtime_qos', 'enable_second_wan', 'route_lan_through_tunnel', 'ports_advanced_mode'] as $field) {
             $settings[$field] = (bool) ($settings[$field] ?? false);
         }
 
@@ -435,6 +461,66 @@ class RouterManagementService
 
             if ($conflicts !== []) {
                 $fail(implode(' ', $conflicts));
+            }
+        };
+    }
+
+    /**
+     * Cross-field, cross-router validator attached to provisioning_settings.route_lan_through_tunnel.
+     * Every router's mgmt/staff network defaults to the exact same literal subnet regardless of
+     * profile (see defaultProvisioningSettings() below) and nothing else in this class enforces
+     * subnet uniqueness -- but WireGuard's AllowedIPs must be unique/non-overlapping per peer on
+     * a given interface, so routing two routers' overlapping subnets through the same Pi WireGuard
+     * interface would break cryptokey routing the moment a second router opts in. Only checked
+     * when the toggle is actually true -- a router that doesn't route its LAN through the tunnel
+     * can safely share a subnet with another router that also doesn't.
+     */
+    private function lanRoutingOverlapRule(?Router $router, array $provisioningSettings): Closure
+    {
+        return function (string $attribute, mixed $value, Closure $fail) use ($router, $provisioningSettings): void {
+            if (! $value) {
+                return;
+            }
+
+            $mgmtNetwork = (string) ($provisioningSettings['mgmt_network'] ?? '');
+            $staffNetwork = (string) ($provisioningSettings['staff_network'] ?? '');
+
+            foreach (['Management' => $mgmtNetwork, 'Staff' => $staffNetwork] as $label => $network) {
+                if ($network === '') {
+                    continue;
+                }
+
+                if (CidrOverlap::overlaps($network, '10.8.0.0/24')) {
+                    $fail("The {$label} network ({$network}) overlaps the WireGuard tunnel's own 10.8.0.0/24 range and can't be routed through it.");
+
+                    return;
+                }
+            }
+
+            $otherRouters = Router::query()
+                ->when($router, fn ($query) => $query->whereKeyNot($router->id))
+                ->get(['id', 'name', 'provisioning_settings']);
+
+            foreach ($otherRouters as $other) {
+                if (! (bool) data_get($other->provisioning_settings, 'route_lan_through_tunnel')) {
+                    continue;
+                }
+
+                foreach (['Management' => $mgmtNetwork, 'Staff' => $staffNetwork] as $label => $network) {
+                    if ($network === '') {
+                        continue;
+                    }
+
+                    foreach (['Management' => 'mgmt_network', 'Staff' => 'staff_network'] as $otherLabel => $otherKey) {
+                        $otherNetwork = (string) data_get($other->provisioning_settings, $otherKey, '');
+
+                        if ($otherNetwork !== '' && CidrOverlap::overlaps($network, $otherNetwork)) {
+                            $fail("This router's {$label} network ({$network}) overlaps \"{$other->name}\"'s {$otherLabel} network ({$otherNetwork}) -- both can't be routed through the same WireGuard tunnel. Change one of the subnets before enabling this for both.");
+
+                            return;
+                        }
+                    }
+                }
             }
         };
     }
