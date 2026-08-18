@@ -479,6 +479,7 @@ class RouterOsConnectionService
             ];
         }
 
+        $apiRestrictionResult = $this->syncApiServiceRestriction($router);
         $radiusResult = $this->syncRadiusClients($router, 'hotspot,ppp');
         $zeroTierResult = $this->syncZeroTierNetworkMembership($router);
 
@@ -493,8 +494,8 @@ class RouterOsConnectionService
         ];
 
         $result = $this->runSteps($router, $steps);
-        $result['steps'] = array_merge($radiusResult['steps'], $zeroTierResult['steps'], $result['steps']);
-        $result['success'] = $radiusResult['success'] && $zeroTierResult['success'] && $result['success'];
+        $result['steps'] = array_merge($apiRestrictionResult['steps'], $radiusResult['steps'], $zeroTierResult['steps'], $result['steps']);
+        $result['success'] = $apiRestrictionResult['success'] && $radiusResult['success'] && $zeroTierResult['success'] && $result['success'];
 
         $walledGardenResult = $this->syncWalledGarden($router);
         $loginPageResult = $this->pushHotspotLoginPage($router);
@@ -730,6 +731,7 @@ class RouterOsConnectionService
             ];
         }
 
+        $apiRestrictionResult = $this->syncApiServiceRestriction($router);
         $radiusResult = $this->syncRadiusClients($router, 'ppp');
         $zeroTierResult = $this->syncZeroTierNetworkMembership($router);
 
@@ -751,8 +753,8 @@ class RouterOsConnectionService
         ];
 
         $result = $this->runSteps($router, $steps);
-        $result['steps'] = array_merge($radiusResult['steps'], $zeroTierResult['steps'], $result['steps']);
-        $result['success'] = $radiusResult['success'] && $zeroTierResult['success'] && $result['success'];
+        $result['steps'] = array_merge($apiRestrictionResult['steps'], $radiusResult['steps'], $zeroTierResult['steps'], $result['steps']);
+        $result['success'] = $apiRestrictionResult['success'] && $radiusResult['success'] && $zeroTierResult['success'] && $result['success'];
 
         return $result;
     }
@@ -952,6 +954,91 @@ class RouterOsConnectionService
         } catch (\Throwable) {
             return [];
         }
+    }
+
+    /**
+     * Keeps this router's RouterOS API service (`/ip service` "api" entry)
+     * trusting the right tunnel subnet(s) for its current tunnel_mode --
+     * this restriction is otherwise only ever set once, at script time
+     * (MikroTikProvisioningService::apiServiceAddressRestriction(), reused
+     * here directly rather than duplicated), so a router that had ZeroTier
+     * added to it *after* its script was last pasted keeps trusting only
+     * the WireGuard subnet forever. Confirmed live 2026-08-19: a router
+     * moved to a genuinely remote site (no longer reachable over WireGuard
+     * at all, exactly the scenario ZeroTier exists for) still failed every
+     * API call over its now-working ZeroTier tunnel with a timeout --
+     * RouterOS silently drops a connection from an address outside this
+     * list rather than refusing it outright, which is indistinguishable
+     * from the tunnel itself being down without checking this specifically.
+     * As long as *either* tunnel is currently trusted, running this over
+     * that working path pushes a restriction covering both -- so a router
+     * that still has working WireGuard right now gets ZeroTier pre-trusted
+     * before it's ever needed, and a router already reachable only via
+     * ZeroTier gets WireGuard's subnet added back for whenever it returns.
+     * A router trusted on *neither* currently-working path can't be reached
+     * to fix this at all -- see docs/wireguard-server-setup.md /
+     * docs/zerotier-fallback-setup.md for the one-time manual console fix
+     * that's the only way out of that specific corner.
+     *
+     * @return array{success: bool, steps: list<array{label: string, success: bool, error: ?string}>}
+     */
+    public function syncApiServiceRestriction(Router $router): array
+    {
+        if (! $this->isConfigured($router)) {
+            return [
+                'success' => false,
+                'steps' => [['label' => 'API service address restriction', 'success' => false, 'error' => 'No RouterOS API credentials generated for this router yet.']],
+            ];
+        }
+
+        $desired = $this->provisioning->apiServiceAddressRestriction($router);
+
+        try {
+            $client = $this->client($router, 8);
+
+            $apiServiceRow = collect($client->query(new Query('/ip/service/print'))->read())
+                ->first(fn ($row) => is_array($row) && ($row['name'] ?? null) === 'api');
+        } catch (\Throwable $e) {
+            return ['success' => false, 'steps' => [['label' => 'API service address restriction', 'success' => false, 'error' => $e->getMessage()]]];
+        }
+
+        if ($apiServiceRow === null) {
+            return [
+                'success' => false,
+                'steps' => [['label' => 'API service address restriction', 'success' => false, 'error' => 'No "api" entry found under /ip/service -- this should always exist on a router with the RouterOS API enabled.']],
+            ];
+        }
+
+        $current = (string) ($apiServiceRow['address'] ?? '');
+
+        if (self::normalizeAddressList($current) === self::normalizeAddressList($desired)) {
+            return ['success' => true, 'steps' => [['label' => 'API service address restriction', 'success' => true, 'error' => 'Already correct on the router, skipped.']]];
+        }
+
+        $steps = [
+            'Update API service address restriction' => (new Query('/ip/service/set'))
+                ->equal('numbers', (string) ($apiServiceRow['.id'] ?? ''))
+                ->equal('address', $desired),
+        ];
+
+        return $this->runSteps($router, $steps);
+    }
+
+    /**
+     * A comma-separated CIDR list, order-independent and whitespace-trimmed
+     * -- pure, pulled out of syncApiServiceRestriction() so "is the router
+     * already correct" can be unit tested without a live connection and
+     * without false "differs" results just because RouterOS or this app
+     * happened to list the same two subnets in a different order.
+     *
+     * @return list<string>
+     */
+    public static function normalizeAddressList(string $addresses): array
+    {
+        $list = array_values(array_filter(array_map('trim', explode(',', $addresses))));
+        sort($list);
+
+        return $list;
     }
 
     /**

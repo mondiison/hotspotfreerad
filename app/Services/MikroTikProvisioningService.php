@@ -741,9 +741,16 @@ HTML;
      * include the ZeroTier /24 too once a router depends on that path, or
      * "Provision via API"/live monitoring/the ZeroTier-node-ID auto-fetch
      * button all silently fail: the tunnel itself works, but RouterOS's own
-     * firewall still only trusts the WireGuard subnet.
+     * firewall still only trusts the WireGuard subnet. Public since
+     * RouterOsConnectionService::syncApiServiceRestriction() reuses this
+     * exact logic to keep an already-provisioned router's live firewall
+     * trust-list in sync too, rather than only ever setting it once at
+     * script time -- a router provisioned before ZeroTier was added to it
+     * (or switched tunnel_mode afterward) never gets this updated
+     * otherwise, since it's not part of any of the other live provisioning
+     * steps.
      */
-    private function apiServiceAddressRestriction(Router $router): string
+    public function apiServiceAddressRestriction(Router $router): string
     {
         $ranges = array_filter([
             $this->includesWireguard($router) ? '10.8.0.0/24' : null,

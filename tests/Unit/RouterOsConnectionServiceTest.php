@@ -442,4 +442,23 @@ class RouterOsConnectionServiceTest extends TestCase
             ],
         ];
     }
+
+    #[DataProvider('addressListProvider')]
+    public function test_normalize_address_list(string $addresses, array $expected): void
+    {
+        $this->assertSame($expected, RouterOsConnectionService::normalizeAddressList($addresses));
+    }
+
+    public static function addressListProvider(): array
+    {
+        return [
+            'single subnet' => ['10.8.0.0/24', ['10.8.0.0/24']],
+            'two subnets already sorted' => ['10.8.0.0/24,10.9.0.0/24', ['10.8.0.0/24', '10.9.0.0/24']],
+            // Order must not matter -- RouterOS or this app listing the same
+            // two subnets in a different order must not look like a diff.
+            'two subnets in reverse order normalize the same' => ['10.9.0.0/24,10.8.0.0/24', ['10.8.0.0/24', '10.9.0.0/24']],
+            'whitespace around entries is trimmed' => ['10.8.0.0/24, 10.9.0.0/24', ['10.8.0.0/24', '10.9.0.0/24']],
+            'empty string' => ['', []],
+        ];
+    }
 }

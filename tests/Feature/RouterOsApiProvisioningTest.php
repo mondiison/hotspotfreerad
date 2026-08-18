@@ -244,13 +244,14 @@ class RouterOsApiProvisioningTest extends TestCase
 
         $result = app(RouterOsConnectionService::class)->provisionHotspot($router);
 
-        // RADIUS client, hotspot profile, portal walled-garden entry, one walled-garden
-        // entry per host in the shop's active gateway's PaymentGatewayCatalog list
-        // (flutterwave by default: *.flutterwave.com, *.ravepay.co), the Cloudflare
+        // API service address restriction sync, RADIUS client, hotspot profile,
+        // portal walled-garden entry, one walled-garden entry per host in the
+        // shop's active gateway's PaymentGatewayCatalog list (flutterwave by
+        // default: *.flutterwave.com, *.ravepay.co), the Cloudflare
         // walled-garden entry, the hotspot login page push, then the final
         // "point hotspot server" step.
         $this->assertFalse($result['success']);
-        $this->assertCount(8, $result['steps']);
+        $this->assertCount(9, $result['steps']);
         $this->assertFalse($result['steps'][0]['success']);
         $this->assertNotEmpty($result['steps'][0]['error']);
         $labels = array_column($result['steps'], 'label');
@@ -381,7 +382,7 @@ class RouterOsApiProvisioningTest extends TestCase
         $result = app(RouterOsConnectionService::class)->provisionPppoe($router);
 
         $this->assertFalse($result['success']);
-        $this->assertCount(4, $result['steps']);
+        $this->assertCount(5, $result['steps']);
         $this->assertFalse($result['steps'][0]['success']);
     }
 

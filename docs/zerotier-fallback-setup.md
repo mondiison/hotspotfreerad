@@ -169,6 +169,10 @@ If a device shows up on the network that this command doesn't recognize (a typo,
 - **A `wireguard_zerotier` router isn't failing over properly** — on the router itself, run `/radius print`. You should see two entries, one WireGuard and one ZeroTier. RouterOS handles switching between them on its own; there's no extra logic in the app to debug here.
 - **"`/zerotier` package missing" on a router** — that router's hardware likely can't run it at all. Run `/system resource print` on it and check `architecture-name` — anything other than ARM/ARM64 means this feature isn't available on that board, and it should stay on plain WireGuard.
 - **The app can't reach the controller at all** — `ZEROTIER_CONTROLLER_URL` only works when the app and ZeroTier are running on the same machine, which is only true on the Pi in production. It will never work from a local dev machine unless you've also installed ZeroTier there.
+- **"Test Connection" or "Provision via API" times out over ZeroTier, even though the ZeroTier tunnel itself shows `STATUS OK`** — confirmed live 2026-08-19: RouterOS's own RADIUS/API service has a *separate* firewall-style allow-list (`/ip service` → `api`) from the tunnel itself, and it only ever gets set once at script time. A router that had ZeroTier added to it *after* its script was last pasted (the normal path — add a router as WireGuard-only, switch its tunnel mode later) keeps trusting only the WireGuard subnet, so RouterOS silently drops the connection rather than refusing it, which looks identical to the tunnel being down. As of the same date, "Provision via API" fixes this automatically **as long as it can currently reach the router over *some* path** — click it while WireGuard still works (even briefly) and it pre-trusts ZeroTier too, before you ever need it. If the router is *already* stuck with no currently-trusted path at all, nothing can reach it to fix this remotely — run this once on the router console instead (adjust the ZeroTier subnet to match `ZEROTIER_IP_PREFIX`):
+  ```
+  /ip service set api address=10.8.0.0/24,10.9.0.0/24
+  ```
 
 ## A couple of extra details, if you're curious
 
