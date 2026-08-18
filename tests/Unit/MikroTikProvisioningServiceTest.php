@@ -534,7 +534,7 @@ class MikroTikProvisioningServiceTest extends TestCase
         $this->assertStringNotContainsString('priority=', $script);
     }
 
-    public function test_wireguard_zerotier_script_has_both_radius_entries_with_priority(): void
+    public function test_wireguard_zerotier_script_has_both_radius_entries_in_failover_order(): void
     {
         config([
             'services.radius.server_ip' => '10.8.0.1',
@@ -559,8 +559,17 @@ class MikroTikProvisioningServiceTest extends TestCase
 
         $this->assertStringContainsString('/interface wireguard add name=wg-saas', $script);
         $this->assertStringContainsString('/zerotier enable zt1', $script);
-        $this->assertStringContainsString('/radius add address=10.8.0.1 secret="radius-secret" service=hotspot,ppp authentication-port=1812 accounting-port=1813 timeout=1000ms priority=1', $script);
-        $this->assertStringContainsString('/radius add address=10.9.0.1 secret="radius-secret" service=hotspot,ppp authentication-port=1812 accounting-port=1813 timeout=1000ms priority=2', $script);
+
+        // RouterOS has no "priority" property on /radius at all (confirmed
+        // live 2026-08-19 -- it rejects one outright); failover order is
+        // purely list order, so WireGuard's line must appear before
+        // ZeroTier's for RouterOS to try it first.
+        $this->assertStringNotContainsString('priority=', $script);
+        $wireguardPos = strpos($script, '/radius add address=10.8.0.1 secret="radius-secret" service=hotspot,ppp authentication-port=1812 accounting-port=1813 timeout=1000ms');
+        $zerotierPos = strpos($script, '/radius add address=10.9.0.1 secret="radius-secret" service=hotspot,ppp authentication-port=1812 accounting-port=1813 timeout=1000ms');
+        $this->assertNotFalse($wireguardPos);
+        $this->assertNotFalse($zerotierPos);
+        $this->assertLessThan($zerotierPos, $wireguardPos);
     }
 
     public function test_api_service_address_restriction_includes_both_subnets_in_dual_mode(): void

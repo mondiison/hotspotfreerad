@@ -271,7 +271,7 @@ class RouterOsConnectionServiceTest extends TestCase
         $this->assertSame(['10.8.0.10'], RouterOsConnectionService::candidateHosts($router));
     }
 
-    public function test_desired_radius_clients_omits_priority_for_a_single_tunnel_router(): void
+    public function test_desired_radius_clients_for_a_single_tunnel_router(): void
     {
         config(['services.radius.server_ip' => '10.8.0.1', 'services.radius.auth_port' => 1812, 'services.radius.acct_port' => 1813]);
 
@@ -280,11 +280,11 @@ class RouterOsConnectionServiceTest extends TestCase
         $desired = RouterOsConnectionService::desiredRadiusClients($router, 'hotspot,ppp');
 
         $this->assertSame(['wireguard'], array_keys($desired));
-        $this->assertNull($desired['wireguard']['priority']);
+        $this->assertArrayNotHasKey('priority', $desired['wireguard']);
         $this->assertSame('10.8.0.1', $desired['wireguard']['address']);
     }
 
-    public function test_desired_radius_clients_sets_priority_for_a_dual_tunnel_router(): void
+    public function test_desired_radius_clients_for_a_dual_tunnel_router_lists_wireguard_before_zerotier(): void
     {
         config([
             'services.radius.server_ip' => '10.8.0.1',
@@ -297,54 +297,56 @@ class RouterOsConnectionServiceTest extends TestCase
 
         $desired = RouterOsConnectionService::desiredRadiusClients($router, 'ppp');
 
+        // Insertion order matters: RouterOS has no "priority" property on
+        // /radius (confirmed live 2026-08-19 -- it rejects one outright),
+        // so failover order is purely "tried in the order they were added",
+        // meaning WireGuard must be listed (and so added) before ZeroTier.
         $this->assertSame(['wireguard', 'zerotier'], array_keys($desired));
-        $this->assertSame('1', $desired['wireguard']['priority']);
-        $this->assertSame('2', $desired['zerotier']['priority']);
+        $this->assertArrayNotHasKey('priority', $desired['wireguard']);
+        $this->assertArrayNotHasKey('priority', $desired['zerotier']);
         $this->assertSame('10.9.0.1', $desired['zerotier']['address']);
     }
 
     public function test_plan_radius_client_changes_adds_a_missing_entry(): void
     {
-        $desired = ['wireguard' => ['address' => '10.8.0.1', 'priority' => null]];
+        $desired = ['wireguard' => ['address' => '10.8.0.1']];
 
         $plan = RouterOsConnectionService::planRadiusClientChanges($desired, [], ['10.8.0.1', '10.9.0.1']);
 
         $this->assertSame(['Add RADIUS client (WireGuard)' => $desired['wireguard']], $plan['add']);
-        $this->assertSame([], $plan['update']);
         $this->assertSame([], $plan['remove']);
         $this->assertSame([], $plan['unchanged']);
     }
 
-    public function test_plan_radius_client_changes_fixes_a_wrong_priority_on_an_existing_entry(): void
+    public function test_plan_radius_client_changes_adds_only_the_missing_entry_when_one_already_exists(): void
     {
         // Real scenario, confirmed live 2026-08-19: a router switched from
         // wireguard-only to wireguard_zerotier keeps its original WireGuard
-        // RADIUS entry with no priority set -- it now needs priority=1 so
-        // RouterOS tries it before the newly-added ZeroTier entry.
+        // RADIUS entry as-is -- there is no property on it left to fix, so
+        // it's simply left alone while the new ZeroTier entry gets added.
         $desired = [
-            'wireguard' => ['address' => '10.8.0.1', 'priority' => '1'],
-            'zerotier' => ['address' => '10.9.0.1', 'priority' => '2'],
+            'wireguard' => ['address' => '10.8.0.1'],
+            'zerotier' => ['address' => '10.9.0.1'],
         ];
         $existing = [
-            ['.id' => '*1', 'address' => '10.8.0.1', 'priority' => '0'],
+            ['.id' => '*1', 'address' => '10.8.0.1'],
         ];
 
         $plan = RouterOsConnectionService::planRadiusClientChanges($desired, $existing, ['10.8.0.1', '10.9.0.1']);
 
-        $this->assertSame(['id' => '*1', 'priority' => '1'], $plan['update']['Fix RADIUS client priority (WireGuard)']);
         $this->assertSame(['Add RADIUS client (ZeroTier)' => $desired['zerotier']], $plan['add']);
+        $this->assertSame(['RADIUS client (WireGuard)'], $plan['unchanged']);
         $this->assertSame([], $plan['remove']);
     }
 
     public function test_plan_radius_client_changes_leaves_an_already_correct_entry_alone(): void
     {
-        $desired = ['wireguard' => ['address' => '10.8.0.1', 'priority' => null]];
-        $existing = [['.id' => '*1', 'address' => '10.8.0.1', 'priority' => '']];
+        $desired = ['wireguard' => ['address' => '10.8.0.1']];
+        $existing = [['.id' => '*1', 'address' => '10.8.0.1']];
 
         $plan = RouterOsConnectionService::planRadiusClientChanges($desired, $existing, ['10.8.0.1']);
 
         $this->assertSame([], $plan['add']);
-        $this->assertSame([], $plan['update']);
         $this->assertSame([], $plan['remove']);
         $this->assertSame(['RADIUS client (WireGuard)'], $plan['unchanged']);
     }
@@ -354,10 +356,10 @@ class RouterOsConnectionServiceTest extends TestCase
         // Router reverted from wireguard_zerotier back to wireguard-only --
         // the old ZeroTier entry is no longer desired and should be removed,
         // since its address is one of this app's own known endpoints.
-        $desired = ['wireguard' => ['address' => '10.8.0.1', 'priority' => null]];
+        $desired = ['wireguard' => ['address' => '10.8.0.1']];
         $existing = [
-            ['.id' => '*1', 'address' => '10.8.0.1', 'priority' => ''],
-            ['.id' => '*2', 'address' => '10.9.0.1', 'priority' => ''],
+            ['.id' => '*1', 'address' => '10.8.0.1'],
+            ['.id' => '*2', 'address' => '10.9.0.1'],
         ];
 
         $plan = RouterOsConnectionService::planRadiusClientChanges($desired, $existing, ['10.8.0.1', '10.9.0.1']);
@@ -370,10 +372,10 @@ class RouterOsConnectionServiceTest extends TestCase
         // A RADIUS client an admin added by hand for something unrelated --
         // its address matches neither of this app's known Pi endpoints, so
         // it must never be removed regardless of what tunnel_mode says.
-        $desired = ['wireguard' => ['address' => '10.8.0.1', 'priority' => null]];
+        $desired = ['wireguard' => ['address' => '10.8.0.1']];
         $existing = [
-            ['.id' => '*1', 'address' => '10.8.0.1', 'priority' => ''],
-            ['.id' => '*9', 'address' => '203.0.113.50', 'priority' => ''],
+            ['.id' => '*1', 'address' => '10.8.0.1'],
+            ['.id' => '*9', 'address' => '203.0.113.50'],
         ];
 
         $plan = RouterOsConnectionService::planRadiusClientChanges($desired, $existing, ['10.8.0.1', '10.9.0.1']);
@@ -405,6 +407,38 @@ class RouterOsConnectionServiceTest extends TestCase
             'enabled but not joined -- confirmed live scenario: "/zerotier enable" was run by hand without ever joining the network' => [
                 ['instance_id' => '*1', 'instance_disabled' => false, 'network_joined' => false],
                 ['join'],
+            ],
+        ];
+    }
+
+    #[DataProvider('zeroTierStateProvider')]
+    public function test_map_zerotier_state(?array $instanceRow, bool $joined, array $expected): void
+    {
+        $this->assertSame($expected, RouterOsConnectionService::mapZeroTierState($instanceRow, $joined));
+    }
+
+    public static function zeroTierStateProvider(): array
+    {
+        return [
+            'no matching instance row at all' => [
+                null,
+                false,
+                ['instance_id' => null, 'instance_disabled' => false, 'network_joined' => false],
+            ],
+            'explicitly enabled (disabled=no), confirmed live output shape' => [
+                ['.id' => '*1', 'name' => 'zt1', 'disabled' => 'no', 'port' => '9993'],
+                false,
+                ['instance_id' => '*1', 'instance_disabled' => false, 'network_joined' => false],
+            ],
+            'explicitly disabled' => [
+                ['.id' => '*1', 'name' => 'zt1', 'disabled' => 'yes'],
+                false,
+                ['instance_id' => '*1', 'instance_disabled' => true, 'network_joined' => false],
+            ],
+            'disabled key entirely absent -- regression: must default to NOT disabled, not disabled' => [
+                ['.id' => '*1', 'name' => 'zt1', 'port' => '9993'],
+                true,
+                ['instance_id' => '*1', 'instance_disabled' => false, 'network_joined' => true],
             ],
         ];
     }

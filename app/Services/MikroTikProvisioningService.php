@@ -702,11 +702,19 @@ HTML;
     }
 
     /**
-     * One `/radius add` line per enabled tunnel, with priority=1/priority=2
-     * only when both are present -- RouterOS's own RADIUS client already
-     * fails over across multiple entries by priority natively, so this is
-     * all "use ZeroTier whenever WireGuard fails" needs on the RADIUS side,
-     * no custom health-check scripting required.
+     * One `/radius add` line per enabled tunnel -- RouterOS's own RADIUS
+     * client already fails over across multiple entries, tried in the order
+     * they appear in `/radius print` (there is no `priority` property on
+     * this menu at all -- confirmed live 2026-08-19: RouterOS rejected
+     * `priority=1`/`priority=2` outright with "unknown parameter priority",
+     * an assumption that had never actually been exercised against a real
+     * router before that report). Correct failover order falls out for free
+     * from emitting WireGuard's line before ZeroTier's line here -- as long
+     * as an entry is never removed and blindly re-added, list order (and so
+     * "try WireGuard before ZeroTier") is preserved with no explicit field
+     * needed. See RouterOsConnectionService::syncRadiusClients() for the
+     * live-API equivalent, which relies on the same "WireGuard already
+     * exists, ZeroTier gets appended after it" ordering.
      *
      * @return list<string>
      */
@@ -718,13 +726,11 @@ HTML;
         $lines = [];
 
         if ($this->includesWireguard($router)) {
-            $priority = $this->includesZeroTier($router) ? ' priority=1' : '';
-            $lines[] = '/radius add address='.config('services.radius.server_ip').' secret="'.$secret.'" service='.$service.' authentication-port='.$authPort.' accounting-port='.$acctPort.' timeout=1000ms'.$priority;
+            $lines[] = '/radius add address='.config('services.radius.server_ip').' secret="'.$secret.'" service='.$service.' authentication-port='.$authPort.' accounting-port='.$acctPort.' timeout=1000ms';
         }
 
         if ($this->includesZeroTier($router)) {
-            $priority = $this->includesWireguard($router) ? ' priority=2' : '';
-            $lines[] = '/radius add address='.config('services.zerotier.pi_ip').' secret="'.$secret.'" service='.$service.' authentication-port='.$authPort.' accounting-port='.$acctPort.' timeout=1000ms'.$priority;
+            $lines[] = '/radius add address='.config('services.zerotier.pi_ip').' secret="'.$secret.'" service='.$service.' authentication-port='.$authPort.' accounting-port='.$acctPort.' timeout=1000ms';
         }
 
         return $lines;

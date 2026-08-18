@@ -777,12 +777,20 @@ class RouterOsConnectionService
      * blindly ran `/radius/add` regardless of what already existed --
      * confirmed live 2026-08-19: switching tunnel_mode and re-provisioning
      * would have added a genuine duplicate WireGuard entry alongside the new
-     * ZeroTier one, and never fixed the existing entry's now-stale priority.
+     * ZeroTier one. There is no `priority` property on RouterOS's `/radius`
+     * menu at all (confirmed live the same day: RouterOS rejected it outright
+     * with "unknown parameter priority", an assumption -- also baked into
+     * radiusClientLines() until this fix -- that had never actually been
+     * exercised against a real router before that report) -- failover order
+     * is determined purely by list position, tried top to bottom, so
+     * "WireGuard before ZeroTier" falls out for free as long as WireGuard's
+     * entry (added first, whether by the original bootstrap script or an
+     * earlier run of this method) is never removed and blindly re-added.
      * Lists what's actually on the router first (existingRadiusClients()),
      * diffs it against the desired set (planRadiusClientChanges()), and only
-     * adds/fixes/removes what's actually wrong -- the same "list first, only
-     * touch what's missing" shape as syncWalledGarden(). Removal is scoped
-     * to entries whose address matches one of this app's own two known
+     * adds/removes what's actually wrong -- the same "list first, only touch
+     * what's missing" shape as syncWalledGarden(). Removal is scoped to
+     * entries whose address matches one of this app's own two known
      * endpoints (services.radius.server_ip / services.zerotier.pi_ip) --
      * mirroring the `proto` tag safety idea in WireGuardRouteSyncService --
      * so a RADIUS client an admin added by hand for something else entirely
@@ -813,17 +821,9 @@ class RouterOsConnectionService
         foreach ($plan['add'] as $label => $fields) {
             $query = new Query('/radius/add');
             foreach ($fields as $key => $value) {
-                if ($value !== null) {
-                    $query->equal($key, (string) $value);
-                }
+                $query->equal($key, (string) $value);
             }
             $steps[$label] = $query;
-        }
-
-        foreach ($plan['update'] as $label => $update) {
-            $steps[$label] = (new Query('/radius/set'))
-                ->equal('numbers', $update['id'])
-                ->equal('priority', $update['priority']);
         }
 
         foreach ($plan['remove'] as $label => $id) {
@@ -842,12 +842,14 @@ class RouterOsConnectionService
     /**
      * What this router's RADIUS clients SHOULD be, keyed by tunnel
      * ('wireguard'/'zerotier') -- pure, pulled out of syncRadiusClients() so
-     * it's unit testable without a live connection. `priority` is left null
-     * (never sent) when only one tunnel is enabled, matching
-     * MikroTikProvisioningService::radiusClientLines()'s "no priority field
-     * at all" behavior for a single-tunnel router.
+     * it's unit testable without a live connection. Iteration/insertion order
+     * matters here: WireGuard is always listed before ZeroTier, so a fresh
+     * dual-tunnel router provisioned via this method alone still ends up
+     * with WireGuard first in RouterOS's own `/radius print` list -- the
+     * only thing that actually determines failover order (see
+     * syncRadiusClients()'s docblock).
      *
-     * @return array<string, array{address: string, secret: string, service: string, authentication-port: string, accounting-port: string, timeout: string, priority: ?string}>
+     * @return array<string, array{address: string, secret: string, service: string, authentication-port: string, accounting-port: string, timeout: string}>
      */
     public static function desiredRadiusClients(Router $router, string $service): array
     {
@@ -863,7 +865,6 @@ class RouterOsConnectionService
                 'authentication-port' => (string) config('services.radius.auth_port'),
                 'accounting-port' => (string) config('services.radius.acct_port'),
                 'timeout' => '1000ms',
-                'priority' => $includesZeroTier ? '1' : null,
             ];
         }
 
@@ -875,7 +876,6 @@ class RouterOsConnectionService
                 'authentication-port' => (string) config('services.radius.auth_port'),
                 'accounting-port' => (string) config('services.radius.acct_port'),
                 'timeout' => '1000ms',
-                'priority' => $includesWireguard ? '2' : null,
             ];
         }
 
@@ -888,42 +888,34 @@ class RouterOsConnectionService
      * a live connection. Matches an existing entry to a desired one purely
      * by `address` (RouterOS matches a NAS/client definition by the
      * request's source IP, so address is the only field that meaningfully
-     * identifies "which tunnel is this entry for"). Only compares/fixes
-     * `priority` -- not secret/service/ports -- to keep this narrowly
-     * scoped to the actual bug this was built to fix rather than
-     * second-guessing every field on an entry that's otherwise fine.
+     * identifies "which tunnel is this entry for") -- if a match is found,
+     * the entry is left alone entirely, since there's nothing meaningful
+     * left to reconcile once `priority` turned out not to be a real
+     * property (see syncRadiusClients()'s docblock).
      *
-     * @param  array<string, array{address: string, secret: string, service: string, authentication-port: string, accounting-port: string, timeout: string, priority: ?string}>  $desired
+     * @param  array<string, array{address: string, secret: string, service: string, authentication-port: string, accounting-port: string, timeout: string}>  $desired
      * @param  list<array<string,mixed>>  $existing  raw "/radius print" rows
      * @param  list<string>  $managedAddresses  every address this app could ever desire (WireGuard + ZeroTier Pi IPs) -- an existing entry is only ever a remove candidate if its address is in this list, so a RADIUS client an admin added by hand for something unrelated is never touched
-     * @return array{add: array<string, array>, update: array<string, array{id: string, priority: string}>, remove: array<string, string>, unchanged: list<string>}
+     * @return array{add: array<string, array>, remove: array<string, string>, unchanged: list<string>}
      */
     public static function planRadiusClientChanges(array $desired, array $existing, array $managedAddresses): array
     {
         $names = ['wireguard' => 'WireGuard', 'zerotier' => 'ZeroTier'];
-        $existingByAddress = collect($existing)->keyBy(fn (array $row) => (string) ($row['address'] ?? ''));
+        $existingAddresses = collect($existing)->pluck('address')->map(fn ($address) => (string) $address)->all();
 
         $add = [];
-        $update = [];
         $unchanged = [];
 
         foreach ($desired as $key => $fields) {
             $name = $names[$key] ?? ucfirst($key);
-            $existingRow = $existingByAddress->get($fields['address']);
 
-            if ($existingRow === null) {
-                $add['Add RADIUS client ('.$name.')'] = $fields;
-
-                continue;
-            }
-
-            if ($fields['priority'] !== null && (string) ($existingRow['priority'] ?? '') !== $fields['priority']) {
-                $update['Fix RADIUS client priority ('.$name.')'] = ['id' => (string) ($existingRow['.id'] ?? ''), 'priority' => $fields['priority']];
+            if (in_array($fields['address'], $existingAddresses, true)) {
+                $unchanged[] = 'RADIUS client ('.$name.')';
 
                 continue;
             }
 
-            $unchanged[] = 'RADIUS client ('.$name.')';
+            $add['Add RADIUS client ('.$name.')'] = $fields;
         }
 
         $desiredAddresses = collect($desired)->pluck('address')->all();
@@ -939,7 +931,7 @@ class RouterOsConnectionService
             $remove['Remove stale RADIUS client ('.$address.')'] = (string) ($row['.id'] ?? '');
         }
 
-        return ['add' => $add, 'update' => $update, 'remove' => $remove, 'unchanged' => $unchanged];
+        return ['add' => $add, 'remove' => $remove, 'unchanged' => $unchanged];
     }
 
     /**
@@ -1070,9 +1062,26 @@ class RouterOsConnectionService
         $joined = collect($client->query(new Query('/zerotier/interface/print'))->read())
             ->contains(fn ($row) => is_array($row) && ($row['network'] ?? null) === $networkId);
 
+        return self::mapZeroTierState($instanceRow, $joined);
+    }
+
+    /**
+     * Pure row-mapping logic pulled out of existingZeroTierState() so it can
+     * be unit tested without a live connection. RouterOS's API frequently
+     * omits a boolean property entirely when it's at its "no"/false value
+     * rather than echoing it back explicitly -- confirmed live 2026-08-19: a
+     * router with a genuinely enabled instance still triggered an
+     * unnecessary (if harmless) "Enable" step here, traced to defaulting a
+     * missing "disabled" key to 'true' instead of 'no'.
+     *
+     * @param  array<string,mixed>|null  $instanceRow  the "/zerotier print" row matching this app's instance name, or null if none matched
+     * @return array{instance_id: ?string, instance_disabled: bool, network_joined: bool}
+     */
+    public static function mapZeroTierState(?array $instanceRow, bool $joined): array
+    {
         return [
             'instance_id' => $instanceRow['.id'] ?? null,
-            'instance_disabled' => $instanceRow !== null && ($instanceRow['disabled'] ?? 'true') !== 'no',
+            'instance_disabled' => $instanceRow !== null && ($instanceRow['disabled'] ?? 'no') === 'yes',
             'network_joined' => $joined,
         ];
     }
