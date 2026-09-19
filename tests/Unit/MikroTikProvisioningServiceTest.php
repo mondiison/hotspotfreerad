@@ -329,6 +329,29 @@ class MikroTikProvisioningServiceTest extends TestCase
         $this->assertStringNotContainsString('/queue type add name=pcq-hotspot-down kind=pcq', $script);
     }
 
+    public function test_the_ap_switch_trunk_port_only_admits_tagged_frames(): void
+    {
+        // Confirmed live 2026-09-19: without this, the trunk port's default
+        // PVID (1, since nothing else was ever set) let RouterOS silently
+        // accept untagged frames and auto-create a dynamic VLAN 1 entry for
+        // them -- with no DHCP server or L3 interface on VLAN 1, an
+        // external switch that hadn't actually applied its own VLAN
+        // tagging yet would look like a dead port instead of a diagnosable
+        // "still sending untagged" problem.
+        $router = new Router([
+            'nas_identifier' => 'trunk-test-router',
+            'wireguard_internal_ip' => '10.8.0.21',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        $script = app(MikroTikProvisioningService::class)->generateFreshInfrastructureScript($router);
+
+        $this->assertStringContainsString(
+            '/interface bridge port add bridge=$lanBridge interface=$trunkPort frame-types=admit-only-vlan-tagged',
+            $script
+        );
+    }
+
     public function test_it_generates_builtin_wifi_hotspot_script(): void
     {
         config([

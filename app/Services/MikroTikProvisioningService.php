@@ -99,6 +99,22 @@ SCRIPT;
 SCRIPT;
     }
 
+    /**
+     * $trunkPort's bridge port is added with `frame-types=admit-only-vlan-tagged`
+     * -- confirmed live 2026-09-19: without this, RouterOS still accepts
+     * untagged frames on the port (via its default PVID=1, since nothing
+     * else was ever set), and `vlan-filtering=yes` auto-creates a dynamic
+     * VLAN 1 entry to keep that legal rather than rejecting it outright.
+     * The trunk port is meant to carry ONLY tagged VLAN traffic from an
+     * external AP/switch -- if that device's own VLAN config isn't actually
+     * applied yet (a very real failure mode while bootstrapping a switch,
+     * confirmed live), its still-untagged traffic would otherwise silently
+     * land on VLAN 1 (which has no DHCP server, no L3 interface, nothing)
+     * instead of being cleanly and visibly dropped, making "is my switch
+     * sending tagged traffic yet?" much harder to diagnose than it needs to
+     * be. This property makes RouterOS drop untagged frames on this port
+     * outright, which is the actually-correct behavior for a pure trunk.
+     */
     public function generateFreshInfrastructureScript(Router $router, string $profile = 'starlink_plaza'): string
     {
         $router->loadMissing('shop.tenant');
@@ -282,7 +298,7 @@ SCRIPT;
             '/ip dhcp-client remove [find interface=$wan1]',
             '/ip dhcp-client add interface=$wan1 add-default-route=yes use-peer-dns=no disabled=no comment="Get WAN IP/default route from Starlink or ISP router"',
             '/interface bridge add name=$lanBridge protocol-mode=rstp vlan-filtering=no comment="MMS Radius LAN bridge"',
-            '/interface bridge port add bridge=$lanBridge interface=$trunkPort comment="AP/switch trunk carrying MMS Radius VLANs"',
+            '/interface bridge port add bridge=$lanBridge interface=$trunkPort frame-types=admit-only-vlan-tagged comment="AP/switch trunk carrying MMS Radius VLANs -- tagged only, untagged frames dropped"',
             '/interface bridge port add bridge=$lanBridge interface=$piPort pvid=$mgmtVlan comment="Pi/management access port, untagged VLAN 10 by default"',
             '/interface vlan add interface=$lanBridge name=vlan-mgmt vlan-id=$mgmtVlan',
             '/interface vlan add interface=$lanBridge name=vlan-hotspot vlan-id=$hotspotVlan',
