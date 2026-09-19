@@ -141,15 +141,32 @@ class ZeroTierControllerService
         }
     }
 
+    /**
+     * Confirmed live 2026-09-19: this used to check `File::exists()` only,
+     * which returns true for a file that exists but isn't readable by the
+     * web server's own user -- `File::get()` then throws an uncaught
+     * `ErrorException` (PHP's file_get_contents() permission-denied warning,
+     * promoted to an exception by Laravel's handler) straight out of this
+     * method, breaking the "never throws" contract documented on this class
+     * and surfacing as a bare 500 on completely unrelated actions (a router
+     * save, which calls into this via RouterManagementService's ZeroTier
+     * sync). `is_readable()` checks both existence and read permission in
+     * one call without throwing either way, and the read itself stays
+     * wrapped in case of a race between the check and the read.
+     */
     private function authToken(): ?string
     {
         $path = (string) config('services.zerotier.auth_token_path');
 
-        if (blank($path) || ! File::exists($path)) {
+        if (blank($path) || ! is_readable($path)) {
             return null;
         }
 
-        $token = trim(File::get($path));
+        try {
+            $token = trim(File::get($path));
+        } catch (\Throwable) {
+            return null;
+        }
 
         return $token !== '' ? $token : null;
     }

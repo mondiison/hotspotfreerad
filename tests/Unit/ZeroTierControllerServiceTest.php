@@ -45,6 +45,25 @@ class ZeroTierControllerServiceTest extends TestCase
         $this->assertNotEmpty($result['error']);
     }
 
+    public function test_list_members_fails_cleanly_when_the_token_file_exists_but_cannot_be_read(): void
+    {
+        // Confirmed live 2026-09-19: File::exists() alone doesn't catch
+        // this -- a file that exists but isn't readable by the web server's
+        // own user (permission denied) threw an uncaught ErrorException
+        // straight out of a router save (which triggers a ZeroTier sync via
+        // RouterManagementService), long after this method's own docblock
+        // promised it would never throw.
+        File::shouldReceive('get')
+            ->once()
+            ->andThrow(new \ErrorException('file_get_contents(): Failed to open stream: Permission denied'));
+        File::shouldReceive('delete')->andReturn(true); // tearDown() still runs against this same mocked facade
+
+        $result = app(ZeroTierControllerService::class)->listMembers();
+
+        $this->assertFalse($result['success']);
+        $this->assertNotEmpty($result['error']);
+    }
+
     public function test_list_members_fails_cleanly_when_the_network_id_is_not_configured(): void
     {
         config(['services.zerotier.network_id' => 'YOUR_ZEROTIER_NETWORK_ID']);
