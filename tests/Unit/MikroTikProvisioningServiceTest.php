@@ -260,6 +260,10 @@ class MikroTikProvisioningServiceTest extends TestCase
         $this->assertStringContainsString(':global piPort "ether3"', $script);
         $this->assertStringContainsString('/interface bridge port add bridge=$lanBridge interface=$piPort pvid=$mgmtVlan', $script);
         $this->assertStringContainsString('/interface bridge vlan add bridge=bridge-lan tagged=bridge-lan,ether2 untagged=ether3 vlan-ids=10', $script);
+        $this->assertStringContainsString('/interface list add name=MGMT-ACCESS', $script);
+        $this->assertStringContainsString('/interface list member add list=MGMT-ACCESS interface=$piPort', $script);
+        $this->assertStringContainsString('/tool mac-server set allowed-interface-list=MGMT-ACCESS', $script);
+        $this->assertStringContainsString('/tool mac-server mac-winbox set allowed-interface-list=MGMT-ACCESS', $script);
         $this->assertStringContainsString('/ip dhcp-server add name=dhcp-mgmt interface=vlan-mgmt', $script);
         $this->assertStringContainsString('/ip dhcp-client add interface=$wan1 add-default-route=yes use-peer-dns=no disabled=no', $script);
         $this->assertStringContainsString('/ip dhcp-server add name=dhcp-hotspot interface=vlan-hotspot', $script);
@@ -338,6 +342,36 @@ class MikroTikProvisioningServiceTest extends TestCase
             $script
         );
         $this->assertStringContainsString('/interface bridge port add bridge=$lanBridge interface=ether2 pvid=$mgmtVlan comment="Extra management access port"', $script);
+        $this->assertStringContainsString('/interface list member add list=MGMT-ACCESS interface=ether2', $script);
+    }
+
+    public function test_mac_server_is_locked_to_the_management_ports_not_wide_open(): void
+    {
+        // Confirmed live 2026-09-20: /ip firewall filter only ever sees IP traffic --
+        // Winbox's MAC-address "Neighbors" discovery (and MAC-Telnet) is a separate
+        // Layer 2 mechanism that bypasses the IP firewall entirely and is wide open on
+        // every interface by default, so a laptop on a non-mgmt port (e.g. an extra
+        // hotspot port) could still reach the router over Winbox by MAC address alone.
+        config([
+            'app.url' => 'https://mmsradius.com',
+            'services.radius.server_ip' => '10.8.0.1',
+            'services.wireguard.endpoint_host' => 'vpn.example.com',
+            'services.wireguard.endpoint_port' => 13231,
+            'services.wireguard.public_key' => 'server-public-key',
+            'services.mikrotik.hotspot_dns_name' => 'hotspot.local',
+        ]);
+
+        $router = new Router([
+            'nas_identifier' => 'mac-server-router',
+            'wireguard_internal_ip' => '10.8.0.33',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        $script = app(MikroTikProvisioningService::class)->generateFreshInfrastructureScript($router);
+
+        $this->assertStringNotContainsString('allowed-interface-list=all', $script);
+        $this->assertStringContainsString('/tool mac-server set allowed-interface-list=MGMT-ACCESS', $script);
+        $this->assertStringContainsString('/tool mac-server mac-winbox set allowed-interface-list=MGMT-ACCESS', $script);
     }
 
     public function test_extra_ports_merge_into_the_builtin_wifi_branchs_untagged_clauses(): void
