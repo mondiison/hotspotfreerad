@@ -270,14 +270,57 @@
                                     <flux:input wire:model.blur="provisioning_settings.pi_port" placeholder="ether3" />
                                     <flux:error name="provisioning_settings.pi_port" />
                                 </flux:field>
+
+                                <flux:field>
+                                    <flux:label>Extra management ports</flux:label>
+                                    <flux:input wire:model.blur="provisioning_settings.extra_mgmt_ports" placeholder="e.g. ether2" />
+                                    <flux:description>Comma-separated interface names, if this router needs more than one untagged management port.</flux:description>
+                                    <flux:error name="provisioning_settings.extra_mgmt_ports" />
+                                </flux:field>
+
+                                <flux:field>
+                                    <flux:label>Extra hotspot ports</flux:label>
+                                    <flux:input wire:model.blur="provisioning_settings.extra_hotspot_ports" placeholder="e.g. ether5,ether6,ether7" />
+                                    <flux:description>Comma-separated interface names, for non-VLAN-capable APs or direct testing.</flux:description>
+                                    <flux:error name="provisioning_settings.extra_hotspot_ports" />
+                                </flux:field>
+
+                                @if ($provisioning_settings['enable_staff'] ?? false)
+                                    <flux:field>
+                                        <flux:label>Extra staff ports</flux:label>
+                                        <flux:input wire:model.blur="provisioning_settings.extra_staff_ports" placeholder="e.g. ether9" />
+                                        <flux:error name="provisioning_settings.extra_staff_ports" />
+                                    </flux:field>
+                                @endif
+
+                                @if ($provisioning_settings['enable_pos'] ?? false)
+                                    <flux:field>
+                                        <flux:label>Extra POS ports</flux:label>
+                                        <flux:input wire:model.blur="provisioning_settings.extra_pos_ports" placeholder="e.g. ether10" />
+                                        <flux:error name="provisioning_settings.extra_pos_ports" />
+                                    </flux:field>
+                                @endif
                             </div>
                         @else
                             @php($portOptions = \App\Support\RouterPortLayout::portOptions((int) ($provisioning_settings['port_count'] ?? 8)))
+                            @php($extraPortRoles = [
+                                'Extra management port' => $provisioning_settings['extra_mgmt_port_numbers'] ?? '',
+                                'Extra hotspot port' => $provisioning_settings['extra_hotspot_port_numbers'] ?? '',
+                                'Extra staff port' => ($provisioning_settings['enable_staff'] ?? false) ? ($provisioning_settings['extra_staff_port_numbers'] ?? '') : '',
+                                'Extra POS port' => ($provisioning_settings['enable_pos'] ?? false) ? ($provisioning_settings['extra_pos_port_numbers'] ?? '') : '',
+                            ])
+                            @php($extraPortConflictRoles = [])
+                            @foreach ($extraPortRoles as $roleLabel => $csv)
+                                @foreach (array_filter(array_map('trim', explode(',', (string) $csv)), fn ($piece) => $piece !== '') as $i => $portNumber)
+                                    @php($extraPortConflictRoles["{$roleLabel} (#" . ($i + 1) . ')'] = (int) $portNumber)
+                                @endforeach
+                            @endforeach
                             @php($portConflicts = \App\Support\RouterPortLayout::conflictingRoles([
                                 'WAN 1' => $provisioning_settings['wan1_port_number'] ?? null,
                                 'WAN 2' => ($provisioning_settings['enable_second_wan'] ?? false) ? ($provisioning_settings['wan2_port_number'] ?? null) : null,
                                 'Trunk port' => $provisioning_settings['trunk_port_number'] ?? null,
                                 'Pi port' => $provisioning_settings['pi_port_number'] ?? null,
+                                ...$extraPortConflictRoles,
                             ]))
 
                             @if ($portConflicts !== [])
@@ -330,6 +373,36 @@
                                     </flux:select>
                                     <flux:error name="provisioning_settings.pi_port_number" />
                                 </flux:field>
+
+                                <flux:field>
+                                    <flux:label>Extra management ports</flux:label>
+                                    <flux:input wire:model.blur="provisioning_settings.extra_mgmt_port_numbers" placeholder="e.g. 2" />
+                                    <flux:description>Comma-separated port numbers, if this router needs more than one untagged management port.</flux:description>
+                                    <flux:error name="provisioning_settings.extra_mgmt_port_numbers" />
+                                </flux:field>
+
+                                <flux:field>
+                                    <flux:label>Extra hotspot ports</flux:label>
+                                    <flux:input wire:model.blur="provisioning_settings.extra_hotspot_port_numbers" placeholder="e.g. 5,6,7" />
+                                    <flux:description>Comma-separated port numbers, for non-VLAN-capable APs or direct testing.</flux:description>
+                                    <flux:error name="provisioning_settings.extra_hotspot_port_numbers" />
+                                </flux:field>
+
+                                @if ($provisioning_settings['enable_staff'] ?? false)
+                                    <flux:field>
+                                        <flux:label>Extra staff ports</flux:label>
+                                        <flux:input wire:model.blur="provisioning_settings.extra_staff_port_numbers" placeholder="e.g. 9" />
+                                        <flux:error name="provisioning_settings.extra_staff_port_numbers" />
+                                    </flux:field>
+                                @endif
+
+                                @if ($provisioning_settings['enable_pos'] ?? false)
+                                    <flux:field>
+                                        <flux:label>Extra POS ports</flux:label>
+                                        <flux:input wire:model.blur="provisioning_settings.extra_pos_port_numbers" placeholder="e.g. 10" />
+                                        <flux:error name="provisioning_settings.extra_pos_port_numbers" />
+                                    </flux:field>
+                                @endif
                             </div>
                         @endif
                     </div>

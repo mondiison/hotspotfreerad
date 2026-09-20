@@ -191,6 +191,84 @@ class RoutersWizardTest extends TestCase
             ->assertHasErrors('provisioning_settings.port_count');
     }
 
+    public function test_extra_port_conflicting_with_a_singular_role_fails_validation(): void
+    {
+        $shop = $this->shop();
+
+        Livewire::actingAs($this->superAdmin())
+            ->test(RoutersIndex::class)
+            ->call('create')
+            ->set('shop_id', (string) $shop->id)
+            ->set('name', 'Extra Port Collision Router')
+            ->set('nas_identifier', 'extra-port-collision-router')
+            ->set('wireguard_internal_ip', '10.8.0.90')
+            ->set('shared_secret', 'radius-secret')
+            ->call('nextStep')
+            ->set('provisioning_settings.port_count', 8)
+            ->set('provisioning_settings.wan1_port_number', 1)
+            ->set('provisioning_settings.extra_hotspot_port_numbers', '1')
+            ->call('nextStep')
+            ->assertHasErrors('provisioning_settings.port_count');
+    }
+
+    public function test_extra_port_higher_than_port_count_fails_validation(): void
+    {
+        $shop = $this->shop();
+
+        Livewire::actingAs($this->superAdmin())
+            ->test(RoutersIndex::class)
+            ->call('create')
+            ->set('shop_id', (string) $shop->id)
+            ->set('name', 'Extra Port Out Of Range Router')
+            ->set('nas_identifier', 'extra-port-out-of-range-router')
+            ->set('wireguard_internal_ip', '10.8.0.91')
+            ->set('shared_secret', 'radius-secret')
+            ->call('nextStep')
+            ->set('provisioning_settings.port_count', 4)
+            ->set('provisioning_settings.extra_hotspot_port_numbers', '9')
+            ->call('nextStep')
+            ->assertHasErrors('provisioning_settings.port_count');
+    }
+
+    public function test_duplicate_numbers_within_the_same_extra_port_list_fails_validation(): void
+    {
+        $shop = $this->shop();
+
+        Livewire::actingAs($this->superAdmin())
+            ->test(RoutersIndex::class)
+            ->call('create')
+            ->set('shop_id', (string) $shop->id)
+            ->set('name', 'Duplicate Extra Port Router')
+            ->set('nas_identifier', 'duplicate-extra-port-router')
+            ->set('wireguard_internal_ip', '10.8.0.92')
+            ->set('shared_secret', 'radius-secret')
+            ->call('nextStep')
+            ->set('provisioning_settings.port_count', 8)
+            ->set('provisioning_settings.extra_hotspot_port_numbers', '5,5')
+            ->call('nextStep')
+            ->assertHasErrors('provisioning_settings.port_count');
+    }
+
+    public function test_extra_staff_port_is_rejected_when_staff_is_disabled(): void
+    {
+        $shop = $this->shop();
+
+        Livewire::actingAs($this->superAdmin())
+            ->test(RoutersIndex::class)
+            ->call('create')
+            ->set('shop_id', (string) $shop->id)
+            ->set('name', 'Rejected Staff Port Router')
+            ->set('nas_identifier', 'rejected-staff-port-router')
+            ->set('wireguard_internal_ip', '10.8.0.93')
+            ->set('shared_secret', 'radius-secret')
+            ->set('provisioning_settings.enable_staff', false)
+            ->call('nextStep')
+            ->set('provisioning_settings.port_count', 8)
+            ->set('provisioning_settings.extra_staff_port_numbers', '9')
+            ->call('nextStep')
+            ->assertHasErrors('provisioning_settings.extra_staff_port_numbers');
+    }
+
     public function test_advanced_mode_accepts_raw_interface_names_without_port_count_bounds(): void
     {
         $shop = $this->shop();
@@ -246,6 +324,33 @@ class RoutersWizardTest extends TestCase
             ->assertSet('provisioning_settings.pi_port_number', 3);
     }
 
+    public function test_editing_a_router_with_extra_ports_pre_fills_the_extra_port_picker(): void
+    {
+        $shop = $this->shop();
+        $router = Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'Extra Ports Router',
+            'nas_identifier' => 'extra-ports-router',
+            'wireguard_internal_ip' => '10.8.0.94',
+            'shared_secret' => 'radius-secret',
+            'provisioning_settings' => [
+                'wan1' => 'ether1',
+                'wan2' => 'ether8',
+                'trunk_port' => 'ether2',
+                'pi_port' => 'ether3',
+                'extra_mgmt_ports' => 'ether9',
+                'extra_hotspot_ports' => 'ether5,ether6',
+            ],
+        ]);
+
+        Livewire::actingAs($this->superAdmin())
+            ->test(RoutersIndex::class)
+            ->call('edit', $router->id)
+            ->assertSet('provisioning_settings.ports_advanced_mode', false)
+            ->assertSet('provisioning_settings.extra_mgmt_port_numbers', '9')
+            ->assertSet('provisioning_settings.extra_hotspot_port_numbers', '5,6');
+    }
+
     public function test_editing_a_router_with_a_non_standard_interface_name_opens_in_advanced_mode(): void
     {
         $shop = $this->shop();
@@ -288,6 +393,7 @@ class RoutersWizardTest extends TestCase
                 'wan2' => 'ether8',
                 'trunk_port' => 'ether2',
                 'pi_port' => 'ether3',
+                'extra_hotspot_ports' => 'ether5,ether6',
             ],
         ]);
         $before = $router->fresh()->provisioning_settings;
@@ -305,6 +411,7 @@ class RoutersWizardTest extends TestCase
         $this->assertSame($before['trunk_port'], $after['trunk_port']);
         $this->assertSame($before['pi_port'], $after['pi_port']);
         $this->assertSame($before['profile'], $after['profile']);
+        $this->assertSame($before['extra_hotspot_ports'], $after['extra_hotspot_ports']);
     }
 
     public function test_billing_allowance_banner_is_visible_in_the_create_wizard(): void

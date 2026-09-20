@@ -69,4 +69,38 @@ class RouterPortLayoutTest extends TestCase
 
         $this->assertSame([], $conflicts);
     }
+
+    public function test_interface_names_from_number_list_parses_csv(): void
+    {
+        $this->assertSame(['ether5', 'ether6', 'ether7'], RouterPortLayout::interfaceNamesFromNumberList('5,6,7'));
+        $this->assertSame(['ether2'], RouterPortLayout::interfaceNamesFromNumberList('2'));
+        // Whitespace around entries is tolerated.
+        $this->assertSame(['ether5', 'ether6'], RouterPortLayout::interfaceNamesFromNumberList('5, 6'));
+    }
+
+    public function test_interface_names_from_number_list_returns_empty_for_blank_input(): void
+    {
+        $this->assertSame([], RouterPortLayout::interfaceNamesFromNumberList(null));
+        $this->assertSame([], RouterPortLayout::interfaceNamesFromNumberList(''));
+    }
+
+    public function test_port_numbers_from_interface_list_parses_csv(): void
+    {
+        $this->assertSame([5, 6, 7], RouterPortLayout::portNumbersFromInterfaceList('ether5,ether6,ether7'));
+        $this->assertSame([2], RouterPortLayout::portNumbersFromInterfaceList('ether2'));
+    }
+
+    public function test_port_numbers_from_interface_list_returns_empty_array_for_blank_input(): void
+    {
+        // Distinct from the "unparseable" null case -- blank input is a valid "no extra
+        // ports configured" state, not an error.
+        $this->assertSame([], RouterPortLayout::portNumbersFromInterfaceList(null));
+        $this->assertSame([], RouterPortLayout::portNumbersFromInterfaceList(''));
+    }
+
+    public function test_port_numbers_from_interface_list_returns_null_when_any_entry_is_unparseable(): void
+    {
+        $this->assertNull(RouterPortLayout::portNumbersFromInterfaceList('ether5,sfp-sfpplus1'));
+        $this->assertNull(RouterPortLayout::portNumbersFromInterfaceList('bridge1'));
+    }
 }

@@ -274,6 +274,100 @@ class MikroTikProvisioningServiceTest extends TestCase
         $this->assertStringNotContainsString('ssid="MMS Staff"', $script);
     }
 
+    public function test_extra_hotspot_ports_get_their_own_untagged_line_and_leave_the_shared_catch_all(): void
+    {
+        config([
+            'app.url' => 'https://mmsradius.com',
+            'services.radius.server_ip' => '10.8.0.1',
+            'services.wireguard.endpoint_host' => 'vpn.example.com',
+            'services.wireguard.endpoint_port' => 13231,
+            'services.wireguard.public_key' => 'server-public-key',
+            'services.mikrotik.hotspot_dns_name' => 'hotspot.local',
+        ]);
+
+        $router = new Router([
+            'nas_identifier' => 'extra-ports-router',
+            'wireguard_internal_ip' => '10.8.0.30',
+            'shared_secret' => 'radius-secret',
+            'provisioning_settings' => [
+                'extra_hotspot_ports' => 'ether5,ether6,ether7',
+            ],
+        ]);
+
+        $script = app(MikroTikProvisioningService::class)->generateFreshInfrastructureScript($router);
+
+        $this->assertStringContainsString(
+            '/interface bridge vlan add bridge=bridge-lan tagged=bridge-lan,ether2 untagged=ether5,ether6,ether7 vlan-ids=20',
+            $script
+        );
+        $this->assertStringContainsString('/interface bridge port add bridge=$lanBridge interface=ether5 pvid=$hotspotVlan comment="Extra hotspot access port"', $script);
+        $this->assertStringContainsString('/interface bridge port add bridge=$lanBridge interface=ether6 pvid=$hotspotVlan comment="Extra hotspot access port"', $script);
+        $this->assertStringContainsString('/interface bridge port add bridge=$lanBridge interface=ether7 pvid=$hotspotVlan comment="Extra hotspot access port"', $script);
+
+        // Hotspot's VLAN ID (20) must appear on exactly this one dedicated line -- never
+        // also inside the shared tagged-only catch-all line, which would double-emit it.
+        $this->assertStringNotContainsString('vlan-ids=20,', $script);
+        $this->assertStringNotContainsString(',20 ', $script);
+        $this->assertStringContainsString('vlan-ids=30,40,50', $script);
+    }
+
+    public function test_extra_mgmt_ports_merge_into_the_existing_mgmt_untagged_line(): void
+    {
+        config([
+            'app.url' => 'https://mmsradius.com',
+            'services.radius.server_ip' => '10.8.0.1',
+            'services.wireguard.endpoint_host' => 'vpn.example.com',
+            'services.wireguard.endpoint_port' => 13231,
+            'services.wireguard.public_key' => 'server-public-key',
+            'services.mikrotik.hotspot_dns_name' => 'hotspot.local',
+        ]);
+
+        $router = new Router([
+            'nas_identifier' => 'extra-mgmt-router',
+            'wireguard_internal_ip' => '10.8.0.31',
+            'shared_secret' => 'radius-secret',
+            'provisioning_settings' => [
+                'extra_mgmt_ports' => 'ether2',
+            ],
+        ]);
+
+        $script = app(MikroTikProvisioningService::class)->generateFreshInfrastructureScript($router);
+
+        $this->assertStringContainsString(
+            '/interface bridge vlan add bridge=bridge-lan tagged=bridge-lan,ether2 untagged=ether3,ether2 vlan-ids=10',
+            $script
+        );
+        $this->assertStringContainsString('/interface bridge port add bridge=$lanBridge interface=ether2 pvid=$mgmtVlan comment="Extra management access port"', $script);
+    }
+
+    public function test_extra_ports_merge_into_the_builtin_wifi_branchs_untagged_clauses(): void
+    {
+        config([
+            'app.url' => 'https://mmsradius.com',
+            'services.radius.server_ip' => '10.8.0.1',
+            'services.wireguard.endpoint_host' => 'vpn.example.com',
+            'services.wireguard.endpoint_port' => 13231,
+            'services.wireguard.public_key' => 'server-public-key',
+            'services.mikrotik.hotspot_dns_name' => 'hotspot.local',
+        ]);
+
+        $router = new Router([
+            'nas_identifier' => 'extra-ports-wifi-router',
+            'wireguard_internal_ip' => '10.8.0.32',
+            'shared_secret' => 'radius-secret',
+            'provisioning_settings' => [
+                'enable_builtin_wifi' => true,
+                'extra_hotspot_ports' => 'ether5',
+                'extra_staff_ports' => 'ether6',
+            ],
+        ]);
+
+        $script = app(MikroTikProvisioningService::class)->generateFreshInfrastructureScript($router);
+
+        $this->assertStringContainsString('untagged=wifi1,ether5 vlan-ids=20', $script);
+        $this->assertStringContainsString('untagged=wifi-staff,ether6 vlan-ids=30', $script);
+    }
+
     public function test_fresh_infrastructure_script_uses_router_specific_settings(): void
     {
         config([

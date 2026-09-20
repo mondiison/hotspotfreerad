@@ -63,6 +63,20 @@ class RouterManagementService
             'provisioning_settings.wan2' => ['nullable', 'string', 'max:40'],
             'provisioning_settings.trunk_port' => ['nullable', 'string', 'max:40'],
             'provisioning_settings.pi_port' => ['nullable', 'string', 'max:40'],
+            'provisioning_settings.extra_mgmt_port_numbers' => ['nullable', 'string', 'max:120', 'regex:/^\d+(,\s*\d+)*$/'],
+            'provisioning_settings.extra_hotspot_port_numbers' => ['nullable', 'string', 'max:120', 'regex:/^\d+(,\s*\d+)*$/'],
+            'provisioning_settings.extra_staff_port_numbers' => [
+                'nullable', 'string', 'max:120', 'regex:/^\d+(,\s*\d+)*$/',
+                Rule::prohibitedIf(fn () => ! (bool) data_get($provisioningSettings, 'enable_staff')),
+            ],
+            'provisioning_settings.extra_pos_port_numbers' => [
+                'nullable', 'string', 'max:120', 'regex:/^\d+(,\s*\d+)*$/',
+                Rule::prohibitedIf(fn () => ! (bool) data_get($provisioningSettings, 'enable_pos')),
+            ],
+            'provisioning_settings.extra_mgmt_ports' => ['nullable', 'string', 'max:200'],
+            'provisioning_settings.extra_hotspot_ports' => ['nullable', 'string', 'max:200'],
+            'provisioning_settings.extra_staff_ports' => ['nullable', 'string', 'max:200'],
+            'provisioning_settings.extra_pos_ports' => ['nullable', 'string', 'max:200'],
             'provisioning_settings.builtin_wifi_interface' => ['required_if:provisioning_settings.enable_builtin_wifi,true', 'nullable', 'string', 'max:40'],
             'provisioning_settings.staff_wifi_password' => [
                 Rule::requiredIf(fn () => (bool) data_get($provisioningSettings, 'enable_builtin_wifi') && (bool) data_get($provisioningSettings, 'enable_staff')),
@@ -337,6 +351,14 @@ class RouterManagementService
             'wan2' => 'ether8',
             'trunk_port' => 'ether2',
             'pi_port' => 'ether3',
+            'extra_mgmt_port_numbers' => '',
+            'extra_hotspot_port_numbers' => '',
+            'extra_staff_port_numbers' => '',
+            'extra_pos_port_numbers' => '',
+            'extra_mgmt_ports' => '',
+            'extra_hotspot_ports' => '',
+            'extra_staff_ports' => '',
+            'extra_pos_ports' => '',
             'builtin_wifi_interface' => 'wifi1',
             'staff_wifi_password' => 'MmsStaff2026!',
             'pos_wifi_password' => 'MmsPos2026!',
@@ -406,6 +428,12 @@ class RouterManagementService
      * "etherN" strings MikroTikProvisioningService actually reads (wan1/wan2/trunk_port/
      * pi_port) -- so that service needs no changes at all to keep consuming the same shape.
      * Left untouched in advanced mode, where the raw strings are trusted as typed.
+     *
+     * Also derives the plural extra_{mgmt,hotspot,staff,pos}_port_numbers (comma-separated,
+     * e.g. "5,6,7") into extra_{...}_ports (comma-separated interface names) the same way --
+     * added for a router needing more untagged access ports per VLAN than the 4 singular
+     * roles allow (e.g. a second untagged mgmt port for direct laptop testing, separate from
+     * the Pi's own port). See App\Support\RouterPortLayout::interfaceNamesFromNumberList().
      */
     private function derivePortInterfaceNames(array $settings): array
     {
@@ -421,6 +449,17 @@ class RouterManagementService
         ] as $stringKey => $numberKey) {
             if (! empty($settings[$numberKey])) {
                 $settings[$stringKey] = RouterPortLayout::interfaceName((int) $settings[$numberKey]);
+            }
+        }
+
+        foreach ([
+            'extra_mgmt_ports' => 'extra_mgmt_port_numbers',
+            'extra_hotspot_ports' => 'extra_hotspot_port_numbers',
+            'extra_staff_ports' => 'extra_staff_port_numbers',
+            'extra_pos_ports' => 'extra_pos_port_numbers',
+        ] as $stringKey => $numberKey) {
+            if (! empty($settings[$numberKey])) {
+                $settings[$stringKey] = implode(',', RouterPortLayout::interfaceNamesFromNumberList((string) $settings[$numberKey]));
             }
         }
 
@@ -448,6 +487,24 @@ class RouterManagementService
                 'Trunk port' => $provisioningSettings['trunk_port_number'] ?? null,
                 'Pi port' => $provisioningSettings['pi_port_number'] ?? null,
             ];
+
+            // Every individual number in each "extra ports" list gets its own labeled
+            // entry, so conflictingRoles() (unchanged, already handles arbitrary-length
+            // maps) catches both cross-role collisions AND duplicate numbers typed into
+            // the same list (e.g. "5,5") for free -- it flags any two entries sharing a
+            // port number regardless of label.
+            foreach ([
+                'Extra management port' => $provisioningSettings['extra_mgmt_port_numbers'] ?? null,
+                'Extra hotspot port' => $provisioningSettings['extra_hotspot_port_numbers'] ?? null,
+                'Extra staff port' => ($provisioningSettings['enable_staff'] ?? false) ? ($provisioningSettings['extra_staff_port_numbers'] ?? null) : null,
+                'Extra POS port' => ($provisioningSettings['enable_pos'] ?? false) ? ($provisioningSettings['extra_pos_port_numbers'] ?? null) : null,
+            ] as $roleLabel => $csv) {
+                $numbers = array_values(array_filter(array_map('trim', explode(',', (string) $csv)), fn (string $piece): bool => $piece !== ''));
+
+                foreach ($numbers as $i => $portNumber) {
+                    $roles["{$roleLabel} (#".($i + 1).')'] = (int) $portNumber;
+                }
+            }
 
             foreach ($roles as $role => $portNumber) {
                 if ($portNumber !== null && (int) $portNumber > $portCount) {

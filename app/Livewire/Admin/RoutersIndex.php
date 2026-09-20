@@ -469,8 +469,31 @@ class RoutersIndex extends Component
             $parsedPortNumbers[$numberKey] = $portNumber;
         }
 
-        $settings = array_merge($settings, $parsedPortNumbers);
-        $settings['port_count'] = max($parsedPortNumbers) + 2;
+        $extraRoleStringKeys = [
+            'extra_mgmt_port_numbers' => 'extra_mgmt_ports',
+            'extra_hotspot_port_numbers' => 'extra_hotspot_ports',
+            'extra_staff_port_numbers' => 'extra_staff_ports',
+            'extra_pos_port_numbers' => 'extra_pos_ports',
+        ];
+
+        $parsedExtraPortNumbers = [];
+        $allExtraPortNumbers = [];
+
+        foreach ($extraRoleStringKeys as $numberKey => $stringKey) {
+            $portNumbers = RouterPortLayout::portNumbersFromInterfaceList($settings[$stringKey] ?? null);
+
+            if ($portNumbers === null) {
+                $settings['ports_advanced_mode'] = true;
+
+                return $settings;
+            }
+
+            $parsedExtraPortNumbers[$numberKey] = implode(',', $portNumbers);
+            $allExtraPortNumbers = array_merge($allExtraPortNumbers, $portNumbers);
+        }
+
+        $settings = array_merge($settings, $parsedPortNumbers, $parsedExtraPortNumbers);
+        $settings['port_count'] = max(array_merge($parsedPortNumbers, $allExtraPortNumbers)) + 2;
 
         return $settings;
     }
@@ -490,6 +513,10 @@ class RoutersIndex extends Component
                 'provisioning_settings.trunk_port_number', 'provisioning_settings.pi_port_number',
                 'provisioning_settings.wan1', 'provisioning_settings.wan2',
                 'provisioning_settings.trunk_port', 'provisioning_settings.pi_port',
+                'provisioning_settings.extra_mgmt_port_numbers', 'provisioning_settings.extra_hotspot_port_numbers',
+                'provisioning_settings.extra_staff_port_numbers', 'provisioning_settings.extra_pos_port_numbers',
+                'provisioning_settings.extra_mgmt_ports', 'provisioning_settings.extra_hotspot_ports',
+                'provisioning_settings.extra_staff_ports', 'provisioning_settings.extra_pos_ports',
             ],
             3 => [
                 'provisioning_settings.enable_staff', 'provisioning_settings.enable_pos',

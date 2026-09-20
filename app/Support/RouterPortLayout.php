@@ -65,4 +65,55 @@ final class RouterPortLayout
 
         return $conflicts;
     }
+
+    /**
+     * The plural sibling of interfaceName() -- turns a comma-separated list of
+     * port numbers (e.g. "5,6,7", as typed into an "extra ports" picker field)
+     * into interface-name strings. Blank/null input is a valid "no extra ports
+     * configured" state, not an error -- returns [] rather than null.
+     *
+     * @return list<string>
+     */
+    public static function interfaceNamesFromNumberList(?string $csv, string $prefix = 'ether'): array
+    {
+        return collect(explode(',', (string) $csv))
+            ->map(fn (string $piece): string => trim($piece))
+            ->filter(fn (string $piece): bool => $piece !== '')
+            ->map(fn (string $piece): string => self::interfaceName((int) $piece, $prefix))
+            ->values()
+            ->all();
+    }
+
+    /**
+     * The plural sibling of portNumberFromInterfaceName() -- turns a
+     * comma-separated list of interface names back into port numbers, for
+     * pre-filling the picker UI when editing an already-saved router. Unlike
+     * the singular version, a single unparseable entry invalidates the WHOLE
+     * list (returns null) rather than silently dropping it -- mirroring
+     * RoutersIndex::routerProvisioningSettings()'s existing "any one
+     * non-standard interface name flips the router into advanced mode"
+     * behavior for the 4 singular port roles. Blank/null input is a valid
+     * "no extra ports" state and returns [] (not null).
+     *
+     * @return list<int>|null
+     */
+    public static function portNumbersFromInterfaceList(?string $csv, string $prefix = 'ether'): ?array
+    {
+        $pieces = collect(explode(',', (string) $csv))
+            ->map(fn (string $piece): string => trim($piece))
+            ->filter(fn (string $piece): bool => $piece !== '')
+            ->values();
+
+        if ($pieces->isEmpty()) {
+            return [];
+        }
+
+        $portNumbers = $pieces->map(fn (string $piece): ?int => self::portNumberFromInterfaceName($piece, $prefix));
+
+        if ($portNumbers->contains(null)) {
+            return null;
+        }
+
+        return $portNumbers->all();
+    }
 }

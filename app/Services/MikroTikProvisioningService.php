@@ -144,18 +144,46 @@ SCRIPT;
             $settings['enable_pos'] ? $settings['pos_vlan'] : null,
         ]);
 
-        $taggedVlans = implode(',', array_filter(
-            $allVlans,
-            fn ($vlan): bool => (string) $vlan !== (string) $settings['mgmt_vlan']
-        ));
         $lanBridgeName = 'bridge-lan';
         $taggedPorts = $lanBridgeName.','.$settings['trunk_port'];
+
+        $extraMgmtPorts = $this->extraPortInterfaces($settings, 'extra_mgmt_ports');
+        $extraHotspotPorts = $this->extraPortInterfaces($settings, 'extra_hotspot_ports');
+        $extraStaffPorts = $settings['enable_staff'] ? $this->extraPortInterfaces($settings, 'extra_staff_ports') : [];
+        $extraPosPorts = $settings['enable_pos'] ? $this->extraPortInterfaces($settings, 'extra_pos_ports') : [];
+
+        // Every VLAN below normally rides tagged-only on the shared catch-all line (no
+        // dedicated untagged member) -- pulling a VLAN's ID OUT of that shared line only
+        // when it actually has extra untagged ports keeps this byte-identical to the old
+        // output whenever no extras are configured, and avoids ever emitting the same
+        // "vlan-ids=" value on two separate bridge-vlan-table lines in the same script.
+        $taggedVlans = implode(',', array_filter($allVlans, function ($vlan) use ($settings, $extraHotspotPorts, $extraStaffPorts, $extraPosPorts): bool {
+            if ((string) $vlan === (string) $settings['mgmt_vlan']) {
+                return false;
+            }
+            if ($extraHotspotPorts !== [] && (string) $vlan === (string) $settings['hotspot_vlan']) {
+                return false;
+            }
+            if ($extraStaffPorts !== [] && (string) $vlan === (string) $settings['staff_vlan']) {
+                return false;
+            }
+            if ($extraPosPorts !== [] && (string) $vlan === (string) $settings['pos_vlan']) {
+                return false;
+            }
+
+            return true;
+        }));
+
+        $mgmtUntagged = implode(',', array_filter([$settings['pi_port'], ...$extraMgmtPorts]));
 
         $bridgeVlanLines = $enableBuiltinWifi
             ? $this->builtinWifiBridgeVlanLines($settings, $lanBridgeName, $taggedPorts, $builtinWifiInterface, $staffWifiInterface, $posWifiInterface, $mgmtWifiInterface)
             : array_filter([
-                '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' untagged='.$settings['pi_port'].' vlan-ids='.$settings['mgmt_vlan'],
+                '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' untagged='.$mgmtUntagged.' vlan-ids='.$settings['mgmt_vlan'],
                 $taggedVlans !== '' ? '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' vlan-ids='.$taggedVlans : null,
+                $extraHotspotPorts !== [] ? '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' untagged='.implode(',', $extraHotspotPorts).' vlan-ids='.$settings['hotspot_vlan'] : null,
+                ($settings['enable_staff'] && $extraStaffPorts !== []) ? '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' untagged='.implode(',', $extraStaffPorts).' vlan-ids='.$settings['staff_vlan'] : null,
+                ($settings['enable_pos'] && $extraPosPorts !== []) ? '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' untagged='.implode(',', $extraPosPorts).' vlan-ids='.$settings['pos_vlan'] : null,
             ]);
 
         $secondWanMember = $settings['enable_second_wan']
@@ -300,6 +328,10 @@ SCRIPT;
             '/interface bridge add name=$lanBridge protocol-mode=rstp vlan-filtering=no comment="MMS Radius LAN bridge"',
             '/interface bridge port add bridge=$lanBridge interface=$trunkPort frame-types=admit-only-vlan-tagged comment="AP/switch trunk carrying MMS Radius VLANs -- tagged only, untagged frames dropped"',
             '/interface bridge port add bridge=$lanBridge interface=$piPort pvid=$mgmtVlan comment="Pi/management access port, untagged VLAN 10 by default"',
+            ...array_map(fn (string $p): string => '/interface bridge port add bridge=$lanBridge interface='.$p.' pvid=$mgmtVlan comment="Extra management access port"', $extraMgmtPorts),
+            ...array_map(fn (string $p): string => '/interface bridge port add bridge=$lanBridge interface='.$p.' pvid=$hotspotVlan comment="Extra hotspot access port"', $extraHotspotPorts),
+            ...array_map(fn (string $p): string => '/interface bridge port add bridge=$lanBridge interface='.$p.' pvid=$staffVlan comment="Extra staff access port"', $extraStaffPorts),
+            ...array_map(fn (string $p): string => '/interface bridge port add bridge=$lanBridge interface='.$p.' pvid=$posVlan comment="Extra POS access port"', $extraPosPorts),
             '/interface vlan add interface=$lanBridge name=vlan-mgmt vlan-id=$mgmtVlan',
             '/interface vlan add interface=$lanBridge name=vlan-hotspot vlan-id=$hotspotVlan',
             $settings['enable_staff'] ? '/interface vlan add interface=$lanBridge name=vlan-staff vlan-id=$staffVlan' : '# Staff VLAN interface disabled',
@@ -572,16 +604,23 @@ HTML;
 
     private function builtinWifiBridgeVlanLines(array $settings, string $lanBridgeName, string $taggedPorts, string $hotspotWifiInterface, string $staffWifiInterface, string $posWifiInterface, string $mgmtWifiInterface): array
     {
-        $mgmtUntagged = implode(',', array_filter([$settings['pi_port'], $settings['enable_mgmt_wifi'] ? $mgmtWifiInterface : null]));
+        $mgmtUntagged = implode(',', array_filter([
+            $settings['pi_port'],
+            $settings['enable_mgmt_wifi'] ? $mgmtWifiInterface : null,
+            ...$this->extraPortInterfaces($settings, 'extra_mgmt_ports'),
+        ]));
+        $hotspotUntagged = implode(',', array_filter([$hotspotWifiInterface, ...$this->extraPortInterfaces($settings, 'extra_hotspot_ports')]));
+        $staffUntagged = implode(',', array_filter([$staffWifiInterface, ...$this->extraPortInterfaces($settings, 'extra_staff_ports')]));
+        $posUntagged = implode(',', array_filter([$posWifiInterface, ...$this->extraPortInterfaces($settings, 'extra_pos_ports')]));
         $pppoeTaggedOnly = $settings['enable_pppoe']
             ? $this->taggedVlanLine($lanBridgeName, $taggedPorts, $settings['pppoe_vlan'])
             : null;
 
         return array_filter([
             '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' untagged='.$mgmtUntagged.' vlan-ids='.$settings['mgmt_vlan'],
-            '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' untagged='.$hotspotWifiInterface.' vlan-ids='.$settings['hotspot_vlan'],
-            $settings['enable_staff'] ? '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' untagged='.$staffWifiInterface.' vlan-ids='.$settings['staff_vlan'] : null,
-            $settings['enable_pos'] ? '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' untagged='.$posWifiInterface.' vlan-ids='.$settings['pos_vlan'] : null,
+            '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' untagged='.$hotspotUntagged.' vlan-ids='.$settings['hotspot_vlan'],
+            $settings['enable_staff'] ? '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' untagged='.$staffUntagged.' vlan-ids='.$settings['staff_vlan'] : null,
+            $settings['enable_pos'] ? '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' untagged='.$posUntagged.' vlan-ids='.$settings['pos_vlan'] : null,
             $settings['enable_pppoe'] ? $pppoeTaggedOnly : null,
             '# If your AP/switch also needs tagged Staff/PPPoE/POS VLANs, keep the tagged ports above and use these virtual SSIDs only for MikroTik built-in Wi-Fi testing.',
         ]);
@@ -590,6 +629,25 @@ HTML;
     private function taggedVlanLine(string $lanBridgeName, string $taggedPorts, int|string $vlan): string
     {
         return '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' vlan-ids='.$vlan;
+    }
+
+    /**
+     * The interface names in a comma-separated "extra ports" string
+     * (e.g. "ether5,ether6,ether7") -- trims and drops empty entries. Needs
+     * no awareness of picker vs. advanced mode: RouterManagementService's
+     * derivePortInterfaceNames() has already normalized $settings[$key]
+     * into this shape by the time this service ever sees it, exactly like
+     * the singular trunk_port/pi_port fields already work.
+     *
+     * @return list<string>
+     */
+    private function extraPortInterfaces(array $settings, string $key): array
+    {
+        return collect(explode(',', (string) ($settings[$key] ?? '')))
+            ->map(fn (string $piece): string => trim($piece))
+            ->filter(fn (string $piece): bool => $piece !== '')
+            ->values()
+            ->all();
     }
 
     private function quote(?string $value): string
