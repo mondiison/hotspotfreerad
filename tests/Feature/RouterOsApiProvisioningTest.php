@@ -204,7 +204,7 @@ class RouterOsApiProvisioningTest extends TestCase
         $this->assertNotNull(session('status'));
     }
 
-    public function test_bootstrap_script_contains_only_identity_wireguard_and_api_user(): void
+    public function test_bootstrap_script_contains_identity_wan_wireguard_and_api_user(): void
     {
         config([
             'services.wireguard.endpoint_host' => 'vpn.example.com',
@@ -223,6 +223,11 @@ class RouterOsApiProvisioningTest extends TestCase
         $script = app(MikroTikProvisioningService::class)->generateBootstrapScript($router);
 
         $this->assertStringContainsString('/system identity set name="bootstrap-router"', $script);
+        // Confirmed live 2026-09-21: without WAN access set up here, neither WireGuard nor
+        // ZeroTier can dial out at all on a genuinely fresh/reset router with nothing left
+        // over from the factory config.
+        $this->assertStringContainsString(':global wan1 "ether1"', $script);
+        $this->assertStringContainsString('/ip dhcp-client add interface=$wan1 add-default-route=yes', $script);
         $this->assertStringContainsString('/interface wireguard peers add interface=wg-saas', $script);
         $this->assertStringContainsString('/ip address add address=10.8.0.74/24 interface=wg-saas', $script);
         $this->assertStringContainsString('/user add name="'.Router::API_USERNAME.'"', $script);
@@ -230,6 +235,27 @@ class RouterOsApiProvisioningTest extends TestCase
         $this->assertStringNotContainsString('/radius add', $script);
         $this->assertStringNotContainsString('/ip hotspot', $script);
         $this->assertStringNotContainsString('/ppp', $script);
+    }
+
+    public function test_bootstrap_wan_interface_list_creation_is_idempotent(): void
+    {
+        // The full Fresh Infrastructure Script also creates an "WAN" interface list
+        // unconditionally -- if a router gets the bootstrap script pasted first and the
+        // full script pasted afterward, re-running an unguarded "/interface list add"
+        // would hit a duplicate-name error. Bootstrap's own version is guarded so this
+        // stays paste-safe regardless of order.
+        $router = Router::create([
+            'shop_id' => $this->makeShop()->id,
+            'name' => 'Idempotent Bootstrap Router',
+            'nas_identifier' => 'idempotent-bootstrap-router',
+            'wireguard_internal_ip' => '10.8.0.75',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        $script = app(MikroTikProvisioningService::class)->generateBootstrapScript($router);
+
+        $this->assertStringContainsString(':if ([:len [/interface list find name=WAN]] = 0) do={ /interface list add name=WAN', $script);
+        $this->assertStringContainsString(':if ([:len [/interface list member find list=WAN interface=$wan1]] = 0) do={ /interface list member add list=WAN interface=$wan1 }', $script);
     }
 
     public function test_provision_hotspot_reports_a_clear_error_when_router_is_unreachable(): void

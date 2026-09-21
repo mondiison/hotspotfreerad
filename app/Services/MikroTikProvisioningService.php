@@ -38,14 +38,34 @@ class MikroTikProvisioningService
      * the API -- there's no way to reach the API before this runs, since
      * the API user itself is created by these lines.
      */
-    public function generateBootstrapScript(Router $router): string
+    /**
+     * Confirmed live 2026-09-21: this never set up WAN/internet access at all --
+     * on a genuinely fresh/reset router (no default bridge or DHCP client left
+     * over from the factory config) neither WireGuard nor ZeroTier had any path
+     * out, so a router pasted with just this script alone could never actually
+     * reach the Pi or ZeroTier's own root servers. Fixed by getting wan1 online
+     * first, exactly the way generateFreshInfrastructureScript() already does,
+     * mirrored here since bootstrap is meant to stand entirely on its own on a
+     * blank router rather than assume the full script runs afterward. The
+     * interface-list creation is guarded idempotently (unlike the full script's
+     * unguarded version) since a router that gets the full script pasted after
+     * this would otherwise hit a duplicate-list error re-running it.
+     */
+    public function generateBootstrapScript(Router $router, string $profile = 'starlink_plaza'): string
     {
+        $settings = $this->provisioningSettings($router, $profile);
         $nasIdentifier = $router->nas_identifier;
+        $wan1 = $settings['wan1'];
         $tunnelLines = implode("\n", array_merge($this->wireguardProvisioningLines($router), $this->zeroTierLines($router)));
         $apiUserLines = implode("\n", $this->apiUserProvisioningLines($router));
 
         return <<<SCRIPT
+:global wan1 "{$wan1}"
 /system identity set name="{$nasIdentifier}"
+:if ([:len [/interface list find name=WAN]] = 0) do={ /interface list add name=WAN comment="Internet uplinks such as Starlink" }
+:if ([:len [/interface list member find list=WAN interface=\$wan1]] = 0) do={ /interface list member add list=WAN interface=\$wan1 }
+/ip dhcp-client remove [find interface=\$wan1]
+/ip dhcp-client add interface=\$wan1 add-default-route=yes use-peer-dns=no disabled=no comment="Get WAN IP/default route so the tunnel below can actually dial out"
 {$tunnelLines}
 {$apiUserLines}
 SCRIPT;
