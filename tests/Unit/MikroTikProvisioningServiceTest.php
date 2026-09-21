@@ -681,8 +681,40 @@ class MikroTikProvisioningServiceTest extends TestCase
         $this->assertStringNotContainsString('/interface wireguard', $script);
         $this->assertStringContainsString('/zerotier enable zt1', $script);
         $this->assertStringContainsString('/zerotier interface add network=abcd1234abcd1234 instance=zt1', $script);
+        // Confirmed live 2026-09-21: joining the network alone leaves the router with no
+        // IP address bound to its ZeroTier interface at all -- the tunnel and controller
+        // authorization can both show fine while the RouterOS API is still unreachable
+        // over it, since nothing else ever assigns this address.
+        $this->assertStringContainsString('/ip address add address=10.9.0.41/24 interface=zerotier1 comment="MMS Radius ZeroTier IP"', $script);
         $this->assertStringContainsString('/radius add address=10.9.0.1 secret="radius-secret" service=hotspot,ppp', $script);
         $this->assertStringNotContainsString('priority=', $script);
+    }
+
+    public function test_zerotier_script_omits_the_ip_address_line_until_a_zerotier_ip_is_saved(): void
+    {
+        config([
+            'services.radius.server_ip' => '10.8.0.1',
+            'services.zerotier.pi_ip' => '10.9.0.1',
+            'services.zerotier.network_id' => 'abcd1234abcd1234',
+            'services.mikrotik.hotspot_dns_name' => 'hotspot.local',
+        ]);
+
+        $router = new Router([
+            'nas_identifier' => 'zerotier-no-ip-yet-router',
+            'wireguard_internal_ip' => '10.8.0.42',
+            'shared_secret' => 'radius-secret',
+            'tunnel_mode' => 'zerotier',
+        ]);
+
+        $script = app(MikroTikProvisioningService::class)->generateScript($router);
+
+        $this->assertStringContainsString('/zerotier interface add network=abcd1234abcd1234 instance=zt1', $script);
+        // This trailing comment only ever appears on the real /ip address add command
+        // (its absence confirms that command was correctly skipped, not emitted with a
+        // blank address) -- the explanatory fallback line below also mentions
+        // "interface=zerotier1" in passing, so checking for that alone isn't distinctive.
+        $this->assertStringNotContainsString('comment="MMS Radius ZeroTier IP"', $script);
+        $this->assertStringContainsString('re-generate this script to add the "/ip address add ... interface=zerotier1" line', $script);
     }
 
     public function test_wireguard_zerotier_script_has_both_radius_entries_in_failover_order(): void

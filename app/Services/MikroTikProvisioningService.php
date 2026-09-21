@@ -797,6 +797,23 @@ HTML;
      *
      * @return list<string>
      */
+    /**
+     * Confirmed live 2026-09-21: joining the network alone left the router with
+     * no IP address bound to its ZeroTier interface at all, even after the
+     * controller authorized it with an ipAssignments value -- that field is
+     * only auto-pushed to the client when the network's own v4AssignMode.zt is
+     * enabled, which this app deliberately leaves off (see
+     * ZeroTierControllerService's docblock: the app assigns IPs explicitly via
+     * $router->zerotier_ip instead of ZeroTier's own pool). Nothing applies
+     * that IP to the interface on its own, unlike WireGuard's own address line
+     * a few lines up -- this had no effect on the ZeroTier tunnel/authorization
+     * status itself (both showed fine), only on whether anything could
+     * actually reach the router's RouterOS API over it. "zerotier1" mirrors
+     * ZeroTierControllerService::ZEROTIER_INSTANCE_NAME's "zt1" assumption --
+     * confirmed true on the real hardware this was tested against (RouterOS
+     * auto-numbers its first ZeroTier interface object this way), not
+     * guaranteed universally.
+     */
     private function zeroTierLines(Router $router): array
     {
         if (! $this->includesZeroTier($router)) {
@@ -805,7 +822,7 @@ HTML;
 
         $networkId = config('services.zerotier.network_id');
 
-        return [
+        return array_filter([
             '',
             '# ZeroTier fallback tunnel. Requires the "zerotier" RouterOS package (RouterOS 7.5+,',
             '# ARM/ARM64 hardware ONLY -- upload the .npk and reboot BEFORE running this section;',
@@ -814,7 +831,10 @@ HTML;
             '/zerotier interface add network='.$networkId.' instance=zt1',
             '# This router\'s ZeroTier node ID only exists after the line above runs. Retrieve it',
             '# with "/zerotier print" and enter it into MMS Radius so it can be authorized.',
-        ];
+            filled($router->zerotier_ip)
+                ? '/ip address add address='.$router->zerotier_ip.'/24 interface=zerotier1 comment="MMS Radius ZeroTier IP"'
+                : '# Once this router has a saved ZeroTier IP in MMS Radius, re-generate this script to add the "/ip address add ... interface=zerotier1" line -- without it, the tunnel and authorization can show fine while the RouterOS API is still unreachable over it.',
+        ]);
     }
 
     /**

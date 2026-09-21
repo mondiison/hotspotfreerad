@@ -770,6 +770,14 @@ class RouterOsConnectionService
     private const ZEROTIER_INSTANCE_NAME = 'zt1';
 
     /**
+     * The interface name RouterOS auto-assigns the first (and, for this app's
+     * purposes, only) `/zerotier interface add` -- matches the same literal
+     * MikroTikProvisioningService::zeroTierLines() now assumes, confirmed on
+     * the same real hardware.
+     */
+    private const ZEROTIER_INTERFACE_NAME = 'zerotier1';
+
+    /**
      * Reconciles this router's `/radius` client entries against what its
      * `tunnel_mode` currently needs -- the live-API equivalent of
      * MikroTikProvisioningService::radiusClientLines(), except idempotent:
@@ -1104,15 +1112,24 @@ class RouterOsConnectionService
                 ->equal('instance', $instance);
         }
 
+        if (in_array('address', $actions, true) && filled($router->zerotier_ip)) {
+            $steps['Assign ZeroTier IP'] = (new Query('/ip/address/add'))
+                ->equal('address', $router->zerotier_ip.'/24')
+                ->equal('interface', self::ZEROTIER_INTERFACE_NAME);
+        }
+
         return $this->runSteps($router, $steps);
     }
 
     /**
-     * Which of ['enable', 'join'] this router's ZeroTier instance still
-     * needs -- pure, pulled out of syncZeroTierNetworkMembership() so it's
-     * unit testable without a live connection.
+     * Which of ['enable', 'join', 'address'] this router's ZeroTier instance
+     * still needs -- pure, pulled out of syncZeroTierNetworkMembership() so
+     * it's unit testable without a live connection. 'address' comes last
+     * deliberately: the interface it targets (ZEROTIER_INTERFACE_NAME) only
+     * exists once 'join' has actually run, and runSteps() executes steps in
+     * this order within one connection.
      *
-     * @param  array{instance_id: ?string, instance_disabled: bool, network_joined: bool}  $state
+     * @param  array{instance_id: ?string, instance_disabled: bool, network_joined: bool, address_assigned: bool}  $state
      * @return list<string>
      */
     public static function zeroTierActionsNeeded(array $state): array
@@ -1131,11 +1148,15 @@ class RouterOsConnectionService
             $actions[] = 'join';
         }
 
+        if (! $state['address_assigned']) {
+            $actions[] = 'address';
+        }
+
         return $actions;
     }
 
     /**
-     * @return array{instance_id: ?string, instance_disabled: bool, network_joined: bool}
+     * @return array{instance_id: ?string, instance_disabled: bool, network_joined: bool, address_assigned: bool}
      */
     private function existingZeroTierState(Router $router, string $instance): array
     {
@@ -1149,7 +1170,16 @@ class RouterOsConnectionService
         $joined = collect($client->query(new Query('/zerotier/interface/print'))->read())
             ->contains(fn ($row) => is_array($row) && ($row['network'] ?? null) === $networkId);
 
-        return self::mapZeroTierState($instanceRow, $joined);
+        // Confirmed live 2026-09-21: joining the network alone never puts an IP address
+        // on the resulting interface -- the controller's own ipAssignments value is only
+        // auto-pushed when the network's v4AssignMode.zt is on, which this app deliberately
+        // leaves off (IPs are assigned explicitly via $router->zerotier_ip instead). Without
+        // this, the tunnel and controller authorization can both look completely fine while
+        // nothing can actually reach the router's RouterOS API over it.
+        $addressAssigned = blank($router->zerotier_ip) || collect($client->query(new Query('/ip/address/print'))->read())
+            ->contains(fn ($row) => is_array($row) && str_starts_with((string) ($row['address'] ?? ''), $router->zerotier_ip.'/'));
+
+        return self::mapZeroTierState($instanceRow, $joined, $addressAssigned);
     }
 
     /**
@@ -1162,14 +1192,15 @@ class RouterOsConnectionService
      * missing "disabled" key to 'true' instead of 'no'.
      *
      * @param  array<string,mixed>|null  $instanceRow  the "/zerotier print" row matching this app's instance name, or null if none matched
-     * @return array{instance_id: ?string, instance_disabled: bool, network_joined: bool}
+     * @return array{instance_id: ?string, instance_disabled: bool, network_joined: bool, address_assigned: bool}
      */
-    public static function mapZeroTierState(?array $instanceRow, bool $joined): array
+    public static function mapZeroTierState(?array $instanceRow, bool $joined, bool $addressAssigned = false): array
     {
         return [
             'instance_id' => $instanceRow['.id'] ?? null,
             'instance_disabled' => $instanceRow !== null && ($instanceRow['disabled'] ?? 'no') === 'yes',
             'network_joined' => $joined,
+            'address_assigned' => $addressAssigned,
         ];
     }
 

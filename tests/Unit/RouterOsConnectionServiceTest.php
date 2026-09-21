@@ -393,20 +393,24 @@ class RouterOsConnectionServiceTest extends TestCase
     {
         return [
             'no instance found -- nothing to do until the package/instance exists' => [
-                ['instance_id' => null, 'instance_disabled' => true, 'network_joined' => false],
+                ['instance_id' => null, 'instance_disabled' => true, 'network_joined' => false, 'address_assigned' => false],
                 [],
             ],
-            'enabled and already joined -- nothing to do' => [
-                ['instance_id' => '*1', 'instance_disabled' => false, 'network_joined' => true],
+            'enabled, joined, and addressed -- nothing to do' => [
+                ['instance_id' => '*1', 'instance_disabled' => false, 'network_joined' => true, 'address_assigned' => true],
                 [],
             ],
-            'disabled and not joined -- both steps needed' => [
-                ['instance_id' => '*1', 'instance_disabled' => true, 'network_joined' => false],
-                ['enable', 'join'],
+            'disabled and not joined -- enable, join, and address all needed' => [
+                ['instance_id' => '*1', 'instance_disabled' => true, 'network_joined' => false, 'address_assigned' => false],
+                ['enable', 'join', 'address'],
             ],
             'enabled but not joined -- confirmed live scenario: "/zerotier enable" was run by hand without ever joining the network' => [
-                ['instance_id' => '*1', 'instance_disabled' => false, 'network_joined' => false],
-                ['join'],
+                ['instance_id' => '*1', 'instance_disabled' => false, 'network_joined' => false, 'address_assigned' => false],
+                ['join', 'address'],
+            ],
+            'joined but no IP bound -- confirmed live 2026-09-21: the controller\'s own ipAssignments value is never auto-pushed to the interface' => [
+                ['instance_id' => '*1', 'instance_disabled' => false, 'network_joined' => true, 'address_assigned' => false],
+                ['address'],
             ],
         ];
     }
@@ -423,22 +427,22 @@ class RouterOsConnectionServiceTest extends TestCase
             'no matching instance row at all' => [
                 null,
                 false,
-                ['instance_id' => null, 'instance_disabled' => false, 'network_joined' => false],
+                ['instance_id' => null, 'instance_disabled' => false, 'network_joined' => false, 'address_assigned' => false],
             ],
             'explicitly enabled (disabled=no), confirmed live output shape' => [
                 ['.id' => '*1', 'name' => 'zt1', 'disabled' => 'no', 'port' => '9993'],
                 false,
-                ['instance_id' => '*1', 'instance_disabled' => false, 'network_joined' => false],
+                ['instance_id' => '*1', 'instance_disabled' => false, 'network_joined' => false, 'address_assigned' => false],
             ],
             'explicitly disabled' => [
                 ['.id' => '*1', 'name' => 'zt1', 'disabled' => 'yes'],
                 false,
-                ['instance_id' => '*1', 'instance_disabled' => true, 'network_joined' => false],
+                ['instance_id' => '*1', 'instance_disabled' => true, 'network_joined' => false, 'address_assigned' => false],
             ],
             'disabled key entirely absent -- regression: must default to NOT disabled, not disabled' => [
                 ['.id' => '*1', 'name' => 'zt1', 'port' => '9993'],
                 true,
-                ['instance_id' => '*1', 'instance_disabled' => false, 'network_joined' => true],
+                ['instance_id' => '*1', 'instance_disabled' => false, 'network_joined' => true, 'address_assigned' => false],
             ],
         ];
     }
