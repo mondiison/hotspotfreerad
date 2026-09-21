@@ -411,4 +411,51 @@ class RouterOsApiProvisioningTest extends TestCase
 
         $this->assertNotNull(session('status'));
     }
+
+    public function test_a_successful_manual_provision_hotspot_click_marks_the_router_auto_provisioned(): void
+    {
+        $shop = $this->makeShop();
+        $user = User::factory()->create(['role' => 'super_admin', 'is_active' => true]);
+
+        $router = Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'Manually Provisioned Router',
+            'nas_identifier' => 'manually-provisioned-router',
+            'wireguard_internal_ip' => '192.0.2.11',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        $this->mock(RouterOsConnectionService::class, function ($mock): void {
+            $mock->shouldReceive('provisionHotspot')->once()->andReturn(['success' => true, 'steps' => []]);
+        });
+
+        $this->actingAs($user)->post(route('admin.routers.provision-hotspot', $router));
+
+        $this->assertNotNull($router->fresh()->auto_provisioned_at);
+    }
+
+    public function test_a_failed_manual_provision_hotspot_click_does_not_mark_the_router_auto_provisioned(): void
+    {
+        $shop = $this->makeShop();
+        $user = User::factory()->create(['role' => 'super_admin', 'is_active' => true]);
+
+        $router = Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'Failed Provision Router',
+            'nas_identifier' => 'failed-provision-router',
+            'wireguard_internal_ip' => '192.0.2.12',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        $this->mock(RouterOsConnectionService::class, function ($mock): void {
+            $mock->shouldReceive('provisionHotspot')->once()->andReturn([
+                'success' => false,
+                'steps' => [['label' => 'Add RADIUS client', 'success' => false, 'error' => 'Connection timed out']],
+            ]);
+        });
+
+        $this->actingAs($user)->post(route('admin.routers.provision-hotspot', $router));
+
+        $this->assertNull($router->fresh()->auto_provisioned_at);
+    }
 }

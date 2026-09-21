@@ -72,6 +72,11 @@ return [
     'mikrotik' => [
         'hotspot_dns_name' => env('HOTSPOT_DNS_NAME', 'hotspot.local'),
         'portal_url' => env('HOTSPOT_PORTAL_URL'),
+        // Off by default like every other automation flag in this app -- once on, a scheduled
+        // job (hotspot:auto-provision-routers) retries provisionHotspot()/provisionPppoe() for
+        // any router that has API credentials but hasn't completed provisioning yet, so pasting
+        // just the bootstrap script is enough; the rest lands automatically once reachable.
+        'auto_provision_routers' => (bool) env('AUTO_PROVISION_ROUTERS', false),
     ],
 
     'zerotier' => [

@@ -78,12 +78,19 @@
                             <div class="flex flex-col justify-between gap-3 md:flex-row md:items-start">
                                 <div>
                                     <h2 class="text-base font-semibold">Bootstrap Script</h2>
-                                    <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">The one script to paste by hand on a brand-new router: identity, WireGuard, and the RouterOS API user. Once it's applied and the router is reachable, push the rest of the hotspot or PPPoE config from the Hotspot Script / PPPoE Script tabs with one click &mdash; no more pasting required.</p>
+                                    <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">The one script to paste by hand on a brand-new router: identity, WireGuard, and the RouterOS API user. Once it's applied and the router is reachable, the app checks automatically every few minutes and pushes the rest of the hotspot/PPPoE config on its own &mdash; no more pasting, no need to come back and click anything. You can still push it immediately from the Hotspot Script / PPPoE Script tabs instead of waiting.</p>
                                 </div>
                                 <flux:badge color="blue">Paste this first</flux:badge>
                             </div>
                         </div>
                         <x-script-block>{{ $bootstrapScript }}</x-script-block>
+                        <div class="border-t border-zinc-200 dark:border-zinc-700 px-5 py-3 text-sm">
+                            @if ($router->auto_provisioned_at)
+                                <span class="text-emerald-600 dark:text-emerald-400">&check; Provisioning confirmed {{ $router->auto_provisioned_at->diffForHumans() }}</span>
+                            @else
+                                <span class="text-zinc-500 dark:text-zinc-400">Awaiting first connection &mdash; provisioning will complete automatically once this router is reachable.</span>
+                            @endif
+                        </div>
                     </section>
 
                     <section class="min-w-0 overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm">

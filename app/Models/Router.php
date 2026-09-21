@@ -50,6 +50,7 @@ class Router extends Model
             'is_online' => 'boolean',
             'last_seen_at' => 'datetime',
             'zerotier_authorized_at' => 'datetime',
+            'auto_provisioned_at' => 'datetime',
         ];
     }
 

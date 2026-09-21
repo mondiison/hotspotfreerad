@@ -13,6 +13,7 @@ use App\Services\PppoeSubscriberManagementService;
 use App\Services\PosDeviceManagementService;
 use App\Services\FreeRadiusClientSyncService;
 use App\Services\RadiusProvisioningService;
+use App\Services\RouterAutoProvisioningService;
 use App\Services\RouterMetricSamplingService;
 use App\Services\RouterOsConnectionService;
 use App\Services\VoucherManagementService;
@@ -380,6 +381,30 @@ Artisan::command('hotspot:sync-wireguard-routes {--dry-run}', function (WireGuar
 })->purpose('Reconcile the Pi\'s kernel routes for routers with route_lan_through_tunnel enabled (adds and removes, scoped to a dedicated proto tag)');
 
 Schedule::command('hotspot:sync-wireguard-routes')
+    ->everyFiveMinutes()
+    ->withoutOverlapping();
+
+Artisan::command('hotspot:auto-provision-routers {--dry-run}', function (RouterAutoProvisioningService $autoProvision): int {
+    $dryRun = (bool) $this->option('dry-run');
+    $result = $autoProvision->reconcile(dryRun: $dryRun);
+
+    if (! $result['enabled']) {
+        $this->info('Router auto-provisioning is disabled. Set AUTO_PROVISION_ROUTERS=true to enable it.');
+
+        return Command::SUCCESS;
+    }
+
+    $provisionedLabel = $dryRun ? 'would provision' : 'provisioned';
+    $this->info("Router auto-provisioning: {$provisionedLabel} ".count($result['provisioned'])." router(s), ".count($result['pending'])." still pending, ".count($result['errors']).' error(s).');
+
+    foreach ($result['errors'] as $error) {
+        $this->error($error);
+    }
+
+    return $result['errors'] !== [] ? Command::FAILURE : Command::SUCCESS;
+})->purpose('Auto-complete provisioning for routers whose bootstrap script has been applied and are now reachable');
+
+Schedule::command('hotspot:auto-provision-routers')
     ->everyFiveMinutes()
     ->withoutOverlapping();
 

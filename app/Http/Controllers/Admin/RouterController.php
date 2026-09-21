@@ -138,16 +138,37 @@ class RouterController extends Controller
     {
         TenantAccess::assertRouter($router, $request->user());
 
+        $result = $routerOs->provisionHotspot($router);
+        $this->markAutoProvisionedIfSuccessful($router, $result);
+
         return redirect()->route('admin.routers.show', $router)
-            ->with('status', $this->summarizeProvisioningResult($routerOs->provisionHotspot($router)));
+            ->with('status', $this->summarizeProvisioningResult($result));
     }
 
     public function provisionPppoe(Request $request, Router $router, RouterOsConnectionService $routerOs): RedirectResponse
     {
         TenantAccess::assertRouter($router, $request->user());
 
+        $result = $routerOs->provisionPppoe($router);
+        $this->markAutoProvisionedIfSuccessful($router, $result);
+
         return redirect()->route('admin.routers.show', $router)
-            ->with('status', $this->summarizeProvisioningResult($routerOs->provisionPppoe($router)));
+            ->with('status', $this->summarizeProvisioningResult($result));
+    }
+
+    /**
+     * A manual "Provision via API" click closes the same loop the background
+     * hotspot:auto-provision-routers job is trying to close -- marking it here
+     * too means the scheduled job doesn't waste a cycle re-attempting a router
+     * an admin already finished by hand.
+     *
+     * @param  array{success: bool, steps: list<array{label: string, success: bool, error: ?string}>}  $result
+     */
+    private function markAutoProvisionedIfSuccessful(Router $router, array $result): void
+    {
+        if ($result['success'] && $router->auto_provisioned_at === null) {
+            $router->forceFill(['auto_provisioned_at' => now()])->save();
+        }
     }
 
     /**
