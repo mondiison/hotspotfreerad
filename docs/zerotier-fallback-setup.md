@@ -80,13 +80,14 @@ curl -s -X POST "http://127.0.0.1:9993/controller/network/<node-id>000001" \
     "name": "hotspotfreerad",
     "private": true,
     "ipAssignmentPools": [],
-    "v4AssignMode": {"zt": false}
+    "v4AssignMode": {"zt": false},
+    "routes": [{"target": "10.9.0.0/24", "via": null}]
   }'
 ```
 
 If it worked, it prints back the network's settings as text (starting with `{"id":"...`). That whole 16-character ID (your Pi's ID plus the 6 characters you chose) is your **network ID** — write it down, you'll need it in Step 5.
 
-Don't worry about the exact meaning of every field in that command — the short version is: `"private": true` means routers can't just join on their own, they need your explicit approval first (which the app will end up doing automatically once it's set up). That's the whole point of self-hosting this instead of using a public ZeroTier network.
+Don't worry about the exact meaning of every field in that command — the short version is: `"private": true` means routers can't just join on their own, they need your explicit approval first (which the app will end up doing automatically once it's set up). That's the whole point of self-hosting this instead of using a public ZeroTier network. The `"routes"` line matters more than it looks: every device on this network gets a fixed address by hand (Step 4, and per-router later) rather than through ZeroTier's own auto-assign pool — but a hand-assigned address only actually gets applied locally if it falls inside a network route ZeroTier knows about. Skip this line and every device's `ipAssignments` will show as "authorized" on the controller forever without ever appearing on that device's own interface (confirmed live 2026-09-21 — see Troubleshooting if you already created your network without it).
 
 ## Step 4 — Let the Pi itself join the network
 
@@ -173,6 +174,18 @@ If a device shows up on the network that this command doesn't recognize (a typo,
   ```
   /ip service set api address=10.8.0.0/24,10.9.0.0/24
   ```
+- **A device shows `"authorized":true` and a real `ipAssignments` value on the controller, but `zerotier-cli listnetworks`/`ip addr` never actually show that address, even after a restart** — confirmed live 2026-09-21 on the Pi's own membership. ZeroTier pushes a hand-assigned address (`ipAssignments`) to a device, but the device only knows what subnet mask to apply it with if the network also has a matching **route** covering that address — with none configured, the assignment is accepted by the controller but silently never applied locally. If your network was created before the `"routes"` line was added to Step 3b's command above, add it now:
+  ```bash
+  curl -s -X POST "http://127.0.0.1:9993/controller/network/<network-id>" \
+    -H "X-ZT1-Auth: $(sudo cat /var/lib/zerotier-one/authtoken.secret)" \
+    -d '{"routes": [{"target": "10.9.0.0/24", "via": null}]}'
+  ```
+  A plain `systemctl restart zerotier-one` isn't enough to pick this up on an already-joined device (its cached `netconfRevision` doesn't advance from a restart alone) — force a fresh config pull instead:
+  ```bash
+  sudo zerotier-cli leave <network-id>
+  sudo zerotier-cli join <network-id>
+  ```
+  Leaving and rejoining doesn't lose the authorization/IP assignment already stored on the controller (that's keyed to the device's node ID, not re-created by joining) — check `sudo zerotier-cli -j listnetworks` afterward for `assignedAddresses` actually populated and `netconfRevision` having advanced.
 
 ## A couple of extra details, if you're curious
 
