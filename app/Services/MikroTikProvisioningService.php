@@ -46,10 +46,18 @@ class MikroTikProvisioningService
      * reach the Pi or ZeroTier's own root servers. Fixed by getting wan1 online
      * first, exactly the way generateFreshInfrastructureScript() already does,
      * mirrored here since bootstrap is meant to stand entirely on its own on a
-     * blank router rather than assume the full script runs afterward. The
-     * interface-list creation is guarded idempotently (unlike the full script's
-     * unguarded version) since a router that gets the full script pasted after
-     * this would otherwise hit a duplicate-list error re-running it.
+     * blank router rather than assume the full script runs afterward -- DNS
+     * included, not just the DHCP client/default route: `use-peer-dns=no` alone
+     * leaves the router with no DNS at all, which matters for real whenever
+     * services.wireguard.endpoint_host is a DDNS hostname rather than a raw IP
+     * (a live report caught this missing the same day, right after the first
+     * fix). The interface-list creation is guarded idempotently (unlike the
+     * full script's unguarded version) since a router that gets the full script
+     * pasted after this would otherwise hit a duplicate-list error re-running
+     * it. Masquerade is deliberately NOT added here -- it only rewrites traffic
+     * the router forwards on behalf of something else (LAN/hotspot clients),
+     * and bootstrap has no client networks configured yet; every packet
+     * bootstrap's own tunnels send already originates from the router itself.
      */
     public function generateBootstrapScript(Router $router, string $profile = 'starlink_plaza'): string
     {
@@ -62,6 +70,7 @@ class MikroTikProvisioningService
         return <<<SCRIPT
 :global wan1 "{$wan1}"
 /system identity set name="{$nasIdentifier}"
+/ip dns set allow-remote-requests=yes servers=1.1.1.1,8.8.8.8
 :if ([:len [/interface list find name=WAN]] = 0) do={ /interface list add name=WAN comment="Internet uplinks such as Starlink" }
 :if ([:len [/interface list member find list=WAN interface=\$wan1]] = 0) do={ /interface list member add list=WAN interface=\$wan1 }
 /ip dhcp-client remove [find interface=\$wan1]

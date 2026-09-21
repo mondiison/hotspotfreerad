@@ -227,6 +227,11 @@ class RouterOsApiProvisioningTest extends TestCase
         // ZeroTier can dial out at all on a genuinely fresh/reset router with nothing left
         // over from the factory config.
         $this->assertStringContainsString(':global wan1 "ether1"', $script);
+        // Confirmed live the same day: use-peer-dns=no on its own leaves the router with
+        // no DNS at all, which matters for real if the WireGuard endpoint below is a DDNS
+        // hostname rather than a raw IP -- a hostname WireGuard can never resolve means a
+        // tunnel that silently never connects, no error anywhere.
+        $this->assertStringContainsString('/ip dns set allow-remote-requests=yes servers=1.1.1.1,8.8.8.8', $script);
         $this->assertStringContainsString('/ip dhcp-client add interface=$wan1 add-default-route=yes', $script);
         $this->assertStringContainsString('/interface wireguard peers add interface=wg-saas', $script);
         $this->assertStringContainsString('/ip address add address=10.8.0.74/24 interface=wg-saas', $script);
