@@ -409,9 +409,17 @@ SCRIPT;
             '',
             '/ip firewall address-list add list=mms-hotspot-subnets address=$hotspotNetwork',
             $settings['enable_pos'] ? '/ip firewall address-list add list=mms-pos-subnets address=$posNetwork' : '# POS firewall list disabled',
+            // Confirmed live 2026-09-21: this always accepted "wg-saas" but never had a
+            // ZeroTier equivalent, so a ZeroTier-only router applying this script cut off
+            // its own RouterOS API access -- the catch-all "drop everything not WAN" rule
+            // below silently blocked the Pi's incoming connection on zerotier1, while the
+            // router's own outbound traffic (e.g. pinging the Pi) was unaffected since that's
+            // the forward/output path, not this input chain. Ping-to-Pi succeeding is NOT
+            // evidence the API is reachable -- confirmed the hard way on a live router.
             '/ip firewall filter add chain=input connection-state=established,related action=accept',
             '/ip firewall filter add chain=input connection-state=invalid action=drop',
-            '/ip firewall filter add chain=input in-interface=wg-saas action=accept comment="Allow MMS Radius tunnel"',
+            $this->includesWireguard($router) ? '/ip firewall filter add chain=input in-interface=wg-saas action=accept comment="Allow MMS Radius tunnel (WireGuard)"' : '# WireGuard tunnel input rule disabled -- this router does not use WireGuard',
+            $this->includesZeroTier($router) ? '/ip firewall filter add chain=input in-interface=zerotier1 action=accept comment="Allow MMS Radius tunnel (ZeroTier)"' : '# ZeroTier tunnel input rule disabled -- this router does not use ZeroTier',
             '/ip firewall filter add chain=input in-interface=vlan-mgmt action=accept comment="Allow management VLAN to router"',
             '/ip firewall filter add chain=input protocol=udp dst-port=53,67 action=accept comment="Allow DNS/DHCP from client VLANs"',
             '/ip firewall filter add chain=input in-interface=vlan-hotspot protocol=tcp dst-port=80,443,64872-64875 action=accept comment="Allow hotspot captive portal services"',

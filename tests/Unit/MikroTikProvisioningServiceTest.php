@@ -276,6 +276,39 @@ class MikroTikProvisioningServiceTest extends TestCase
         $this->assertStringContainsString('/system scheduler add name=mms-refresh-bandwidth interval=10m', $script);
         $this->assertStringNotContainsString('/interface wifi add name=$staffWifiInterface', $script);
         $this->assertStringNotContainsString('ssid="MMS Staff"', $script);
+        $this->assertStringContainsString('/ip firewall filter add chain=input in-interface=wg-saas action=accept comment="Allow MMS Radius tunnel (WireGuard)"', $script);
+        $this->assertStringNotContainsString('in-interface=zerotier1 action=accept', $script);
+    }
+
+    public function test_fresh_infrastructure_firewall_accepts_zerotier_instead_of_wireguard_for_a_zerotier_only_router(): void
+    {
+        config([
+            'app.url' => 'https://mmsradius.com',
+            'services.radius.server_ip' => '10.8.0.1',
+            'services.zerotier.pi_ip' => '10.9.0.1',
+            'services.zerotier.network_id' => 'abcd1234abcd1234',
+            'services.wireguard.endpoint_host' => 'vpn.example.com',
+            'services.wireguard.endpoint_port' => 13231,
+            'services.wireguard.public_key' => 'server-public-key',
+            'services.mikrotik.hotspot_dns_name' => 'hotspot.local',
+        ]);
+
+        $router = new Router([
+            'nas_identifier' => 'zerotier-only-fresh-infra',
+            'wireguard_internal_ip' => '10.8.0.41',
+            'shared_secret' => 'radius-secret',
+            'tunnel_mode' => 'zerotier',
+            'zerotier_ip' => '10.9.0.41',
+        ]);
+
+        $script = app(MikroTikProvisioningService::class)->generateFreshInfrastructureScript($router);
+
+        // Confirmed live 2026-09-21: a ZeroTier-only router applying this script lost RouterOS
+        // API access entirely -- the firewall's input chain only ever accepted "wg-saas", with
+        // no equivalent for "zerotier1", so the catch-all "drop everything not WAN" rule
+        // silently blocked the Pi's incoming API connection despite the tunnel itself being up.
+        $this->assertStringContainsString('/ip firewall filter add chain=input in-interface=zerotier1 action=accept comment="Allow MMS Radius tunnel (ZeroTier)"', $script);
+        $this->assertStringNotContainsString('in-interface=wg-saas action=accept', $script);
     }
 
     public function test_extra_hotspot_ports_get_their_own_untagged_line_and_leave_the_shared_catch_all(): void
