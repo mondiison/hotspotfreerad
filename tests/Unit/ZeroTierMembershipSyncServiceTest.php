@@ -111,6 +111,34 @@ class ZeroTierMembershipSyncServiceTest extends TestCase
         $this->assertNotNull($router->zerotier_authorized_at);
     }
 
+    public function test_authorize_router_works_even_when_member_management_is_disabled(): void
+    {
+        config(['services.zerotier.manage_members' => false]);
+
+        $router = $this->makeRouter('zerotier', 'zzzz444444', '10.9.0.23');
+
+        Http::fake([
+            'http://127.0.0.1:9993/controller/network/abcd1234abcd1234/member/*' => Http::response(['nodeId' => 'zzzz444444', 'authorized' => true]),
+        ]);
+
+        $result = app(ZeroTierMembershipSyncService::class)->authorizeRouter($router);
+
+        $this->assertTrue($result['success']);
+
+        $router->refresh();
+        $this->assertNotNull($router->zerotier_authorized_at);
+    }
+
+    public function test_authorize_router_fails_cleanly_without_a_saved_node_id(): void
+    {
+        $router = $this->makeRouter('zerotier', null, null);
+
+        $result = app(ZeroTierMembershipSyncService::class)->authorizeRouter($router);
+
+        $this->assertFalse($result['success']);
+        $this->assertStringContainsString('no saved ZeroTier node ID', $result['error']);
+    }
+
     public function test_reconcile_reports_a_controller_node_it_cannot_attribute_to_any_router(): void
     {
         config(['services.zerotier.manage_members' => true]);

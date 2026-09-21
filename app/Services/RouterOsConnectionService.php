@@ -1107,8 +1107,21 @@ class RouterOsConnectionService
         }
 
         $needsJoin = in_array('join', $actions, true);
+        $needsRejoin = in_array('rejoin', $actions, true);
 
-        if ($needsJoin) {
+        // Confirmed live 2026-09-21: RouterOS caches a network's authorization state on its
+        // own interface object and never re-requests it on its own just because the controller
+        // authorized the node afterward -- a router that was ACCESS_DENIED the moment it first
+        // joined (the normal case: it joins before its node ID has been approved in MMS Radius)
+        // stays ACCESS_DENIED forever otherwise, even once nothing else is actually wrong.
+        // Removing and re-adding the interface is what forces a fresh request, mirroring the
+        // leave/rejoin fix this same bug needed on the Pi's own ZeroTier membership.
+        if ($needsRejoin) {
+            $steps['Remove stale ZeroTier network join'] = (new Query('/zerotier/interface/remove'))
+                ->equal('numbers', (string) $state['interface_id']);
+        }
+
+        if ($needsJoin || $needsRejoin) {
             $steps['Join ZeroTier network'] = (new Query('/zerotier/interface/add'))
                 ->equal('network', (string) config('services.zerotier.network_id'))
                 ->equal('instance', $instance);
@@ -1127,9 +1140,11 @@ class RouterOsConnectionService
         // actually finished registering the resulting interface -- addressing it in the same
         // breath the join step just ran in was rejected outright ("input does not match any
         // value of interface") even though the interface name itself was correct. Only needed
-        // when this call is the one that just joined; an already-joined router's interface has
-        // had plenty of time to exist by now.
-        if ($needsJoin) {
+        // when this call is the one that just (re)joined; an already-joined router's interface
+        // has had plenty of time to exist by now. A rejoin also invalidates whatever address was
+        // previously bound (removing the interface removes its addresses too), which is exactly
+        // why zeroTierActionsNeeded() always forces 'address' back on whenever 'rejoin' fires.
+        if ($needsJoin || $needsRejoin) {
             sleep(3);
         }
 
@@ -1146,14 +1161,17 @@ class RouterOsConnectionService
     }
 
     /**
-     * Which of ['enable', 'join', 'address'] this router's ZeroTier instance
-     * still needs -- pure, pulled out of syncZeroTierNetworkMembership() so
-     * it's unit testable without a live connection. 'address' comes last
+     * Which of ['enable', 'join', 'rejoin', 'address'] this router's ZeroTier
+     * instance still needs -- pure, pulled out of syncZeroTierNetworkMembership()
+     * so it's unit testable without a live connection. 'address' comes last
      * deliberately: the interface it targets (ZEROTIER_INTERFACE_NAME) only
-     * exists once 'join' has actually run, and runSteps() executes steps in
-     * this order within one connection.
+     * exists once 'join'/'rejoin' has actually run, and runSteps() executes
+     * steps in this order within one connection. 'rejoin' always forces
+     * 'address' back on too -- confirmed live 2026-09-21: removing the
+     * interface (what 'rejoin' does) also removes any address bound to it, so
+     * an already-address_assigned router still needs it re-applied afterward.
      *
-     * @param  array{instance_id: ?string, instance_disabled: bool, network_joined: bool, address_assigned: bool}  $state
+     * @param  array{instance_id: ?string, instance_disabled: bool, network_joined: bool, network_authorized: bool, interface_id: ?string, address_assigned: bool}  $state
      * @return list<string>
      */
     public static function zeroTierActionsNeeded(array $state): array
@@ -1168,11 +1186,21 @@ class RouterOsConnectionService
             $actions[] = 'enable';
         }
 
+        $needsRejoin = false;
+
         if (! $state['network_joined']) {
             $actions[] = 'join';
+        } elseif (! $state['network_authorized']) {
+            // Confirmed live 2026-09-21: a router that joined before its node ID was
+            // approved in MMS Radius (the normal order of events) sits on RouterOS's own
+            // cached ACCESS_DENIED forever, even once the controller authorizes it --
+            // RouterOS never re-requests network status on its own. Removing and
+            // re-adding the interface is what forces a fresh request.
+            $actions[] = 'rejoin';
+            $needsRejoin = true;
         }
 
-        if (! $state['address_assigned']) {
+        if (! $state['address_assigned'] || $needsRejoin) {
             $actions[] = 'address';
         }
 
@@ -1180,7 +1208,7 @@ class RouterOsConnectionService
     }
 
     /**
-     * @return array{instance_id: ?string, instance_disabled: bool, network_joined: bool, address_assigned: bool}
+     * @return array{instance_id: ?string, instance_disabled: bool, network_joined: bool, network_authorized: bool, interface_id: ?string, address_assigned: bool}
      */
     private function existingZeroTierState(Router $router, string $instance): array
     {
@@ -1191,8 +1219,8 @@ class RouterOsConnectionService
 
         $networkId = (string) config('services.zerotier.network_id');
 
-        $joined = collect($client->query(new Query('/zerotier/interface/print'))->read())
-            ->contains(fn ($row) => is_array($row) && ($row['network'] ?? null) === $networkId);
+        $interfaceRow = collect($client->query(new Query('/zerotier/interface/print'))->read())
+            ->first(fn ($row) => is_array($row) && ($row['network'] ?? null) === $networkId);
 
         // Confirmed live 2026-09-21: joining the network alone never puts an IP address
         // on the resulting interface -- the controller's own ipAssignments value is only
@@ -1203,7 +1231,7 @@ class RouterOsConnectionService
         $addressAssigned = blank($router->zerotier_ip) || collect($client->query(new Query('/ip/address/print'))->read())
             ->contains(fn ($row) => is_array($row) && str_starts_with((string) ($row['address'] ?? ''), $router->zerotier_ip.'/'));
 
-        return self::mapZeroTierState($instanceRow, $joined, $addressAssigned);
+        return self::mapZeroTierState($instanceRow, $interfaceRow, $addressAssigned);
     }
 
     /**
@@ -1215,15 +1243,25 @@ class RouterOsConnectionService
      * unnecessary (if harmless) "Enable" step here, traced to defaulting a
      * missing "disabled" key to 'true' instead of 'no'.
      *
+     * $interfaceRow's own "status" property (confirmed live 2026-09-21 against
+     * a real RouterOS 7 router: `/zerotier interface print detail` -- the raw
+     * API property is `status`, value uppercase `"OK"` when genuinely
+     * authorized) drives 'network_authorized' separately from 'network_joined'
+     * -- the interface can exist (joined) while still sitting on a cached
+     * ACCESS_DENIED from before the controller approved it.
+     *
      * @param  array<string,mixed>|null  $instanceRow  the "/zerotier print" row matching this app's instance name, or null if none matched
-     * @return array{instance_id: ?string, instance_disabled: bool, network_joined: bool, address_assigned: bool}
+     * @param  array<string,mixed>|null  $interfaceRow  the "/zerotier interface print" row matching this router's configured network, or null if not joined at all
+     * @return array{instance_id: ?string, instance_disabled: bool, network_joined: bool, network_authorized: bool, interface_id: ?string, address_assigned: bool}
      */
-    public static function mapZeroTierState(?array $instanceRow, bool $joined, bool $addressAssigned = false): array
+    public static function mapZeroTierState(?array $instanceRow, ?array $interfaceRow, bool $addressAssigned = false): array
     {
         return [
             'instance_id' => $instanceRow['.id'] ?? null,
             'instance_disabled' => $instanceRow !== null && ($instanceRow['disabled'] ?? 'no') === 'yes',
-            'network_joined' => $joined,
+            'network_joined' => $interfaceRow !== null,
+            'network_authorized' => $interfaceRow !== null && strtoupper((string) ($interfaceRow['status'] ?? '')) === 'OK',
+            'interface_id' => $interfaceRow['.id'] ?? null,
             'address_assigned' => $addressAssigned,
         ];
     }

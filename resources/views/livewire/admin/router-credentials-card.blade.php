@@ -70,4 +70,34 @@
             </div>
         </div>
     </flux:modal>
+
+    @if (in_array($router->tunnel_mode, ['wireguard_zerotier', 'zerotier'], true))
+        <div class="mt-4">
+            <dt class="text-zinc-500 dark:text-zinc-400">ZeroTier</dt>
+            @if ($router->zerotier_node_id)
+                <dd class="font-mono text-xs">{{ $router->zerotier_node_id }} &rarr; {{ $router->zerotier_ip ?: 'no IP saved' }}</dd>
+                <dd class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                    @if ($router->zerotier_authorized_at)
+                        Authorized {{ $router->zerotier_authorized_at->diffForHumans() }}. The background sync re-checks every 5 minutes &mdash; use the button below instead of waiting if the router still shows ACCESS_DENIED.
+                    @else
+                        Not authorized yet.
+                    @endif
+                </dd>
+                <dd class="mt-2">
+                    <button
+                        type="button"
+                        wire:click="authorizeZeroTier"
+                        wire:loading.attr="disabled"
+                        wire:target="authorizeZeroTier"
+                        class="text-xs font-medium text-blue-600 hover:underline disabled:cursor-wait disabled:opacity-60"
+                    >
+                        <span wire:loading.remove wire:target="authorizeZeroTier">Authorize &amp; connect now</span>
+                        <span wire:loading wire:target="authorizeZeroTier">Authorizing...</span>
+                    </button>
+                </dd>
+            @else
+                <dd class="text-xs text-amber-600">No node ID saved yet &mdash; enable ZeroTier on the physical router, then copy the ID from "/zerotier print detail" into this router's edit form.</dd>
+            @endif
+        </div>
+    @endif
 </div>

@@ -393,56 +393,65 @@ class RouterOsConnectionServiceTest extends TestCase
     {
         return [
             'no instance found -- nothing to do until the package/instance exists' => [
-                ['instance_id' => null, 'instance_disabled' => true, 'network_joined' => false, 'address_assigned' => false],
+                ['instance_id' => null, 'instance_disabled' => true, 'network_joined' => false, 'network_authorized' => false, 'interface_id' => null, 'address_assigned' => false],
                 [],
             ],
-            'enabled, joined, and addressed -- nothing to do' => [
-                ['instance_id' => '*1', 'instance_disabled' => false, 'network_joined' => true, 'address_assigned' => true],
+            'enabled, joined, authorized, and addressed -- nothing to do' => [
+                ['instance_id' => '*1', 'instance_disabled' => false, 'network_joined' => true, 'network_authorized' => true, 'interface_id' => '*A', 'address_assigned' => true],
                 [],
             ],
             'disabled and not joined -- enable, join, and address all needed' => [
-                ['instance_id' => '*1', 'instance_disabled' => true, 'network_joined' => false, 'address_assigned' => false],
+                ['instance_id' => '*1', 'instance_disabled' => true, 'network_joined' => false, 'network_authorized' => false, 'interface_id' => null, 'address_assigned' => false],
                 ['enable', 'join', 'address'],
             ],
             'enabled but not joined -- confirmed live scenario: "/zerotier enable" was run by hand without ever joining the network' => [
-                ['instance_id' => '*1', 'instance_disabled' => false, 'network_joined' => false, 'address_assigned' => false],
+                ['instance_id' => '*1', 'instance_disabled' => false, 'network_joined' => false, 'network_authorized' => false, 'interface_id' => null, 'address_assigned' => false],
                 ['join', 'address'],
             ],
-            'joined but no IP bound -- confirmed live 2026-09-21: the controller\'s own ipAssignments value is never auto-pushed to the interface' => [
-                ['instance_id' => '*1', 'instance_disabled' => false, 'network_joined' => true, 'address_assigned' => false],
+            'joined and authorized but no IP bound -- confirmed live 2026-09-21: the controller\'s own ipAssignments value is never auto-pushed to the interface' => [
+                ['instance_id' => '*1', 'instance_disabled' => false, 'network_joined' => true, 'network_authorized' => true, 'interface_id' => '*A', 'address_assigned' => false],
                 ['address'],
+            ],
+            'joined but stuck ACCESS_DENIED -- confirmed live 2026-09-21: RouterOS never re-requests network status on its own once the controller authorizes the node afterward, so rejoin is forced (and address along with it, since removing the interface drops its address too)' => [
+                ['instance_id' => '*1', 'instance_disabled' => false, 'network_joined' => true, 'network_authorized' => false, 'interface_id' => '*A', 'address_assigned' => true],
+                ['rejoin', 'address'],
             ],
         ];
     }
 
     #[DataProvider('zeroTierStateProvider')]
-    public function test_map_zerotier_state(?array $instanceRow, bool $joined, array $expected): void
+    public function test_map_zerotier_state(?array $instanceRow, ?array $interfaceRow, array $expected): void
     {
-        $this->assertSame($expected, RouterOsConnectionService::mapZeroTierState($instanceRow, $joined));
+        $this->assertSame($expected, RouterOsConnectionService::mapZeroTierState($instanceRow, $interfaceRow));
     }
 
     public static function zeroTierStateProvider(): array
     {
         return [
-            'no matching instance row at all' => [
+            'no matching instance row at all, not joined' => [
                 null,
-                false,
-                ['instance_id' => null, 'instance_disabled' => false, 'network_joined' => false, 'address_assigned' => false],
+                null,
+                ['instance_id' => null, 'instance_disabled' => false, 'network_joined' => false, 'network_authorized' => false, 'interface_id' => null, 'address_assigned' => false],
             ],
-            'explicitly enabled (disabled=no), confirmed live output shape' => [
+            'explicitly enabled (disabled=no), confirmed live output shape, not joined' => [
                 ['.id' => '*1', 'name' => 'zt1', 'disabled' => 'no', 'port' => '9993'],
-                false,
-                ['instance_id' => '*1', 'instance_disabled' => false, 'network_joined' => false, 'address_assigned' => false],
+                null,
+                ['instance_id' => '*1', 'instance_disabled' => false, 'network_joined' => false, 'network_authorized' => false, 'interface_id' => null, 'address_assigned' => false],
             ],
             'explicitly disabled' => [
                 ['.id' => '*1', 'name' => 'zt1', 'disabled' => 'yes'],
-                false,
-                ['instance_id' => '*1', 'instance_disabled' => true, 'network_joined' => false, 'address_assigned' => false],
+                null,
+                ['instance_id' => '*1', 'instance_disabled' => true, 'network_joined' => false, 'network_authorized' => false, 'interface_id' => null, 'address_assigned' => false],
             ],
-            'disabled key entirely absent -- regression: must default to NOT disabled, not disabled' => [
+            'disabled key entirely absent -- regression: must default to NOT disabled, not disabled; joined and authorized -- confirmed live 2026-09-21 raw "/zerotier interface print" status property, uppercase "OK"' => [
                 ['.id' => '*1', 'name' => 'zt1', 'port' => '9993'],
-                true,
-                ['instance_id' => '*1', 'instance_disabled' => false, 'network_joined' => true, 'address_assigned' => false],
+                ['.id' => '*A', 'network' => 'abcd1234abcd1234', 'status' => 'OK'],
+                ['instance_id' => '*1', 'instance_disabled' => false, 'network_joined' => true, 'network_authorized' => true, 'interface_id' => '*A', 'address_assigned' => false],
+            ],
+            'joined but status is anything other than "OK" -- the exact denied string was never confirmed live, so this only asserts the not-equal-OK branch, not a specific value' => [
+                ['.id' => '*1', 'name' => 'zt1', 'disabled' => 'no'],
+                ['.id' => '*A', 'network' => 'abcd1234abcd1234', 'status' => 'ACCESS_DENIED'],
+                ['instance_id' => '*1', 'instance_disabled' => false, 'network_joined' => true, 'network_authorized' => false, 'interface_id' => '*A', 'address_assigned' => false],
             ],
         ];
     }

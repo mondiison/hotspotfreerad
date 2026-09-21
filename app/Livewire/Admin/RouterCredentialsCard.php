@@ -5,6 +5,7 @@ namespace App\Livewire\Admin;
 use App\Models\Router;
 use App\Services\RouterManagementService;
 use App\Services\RouterOsConnectionService;
+use App\Services\ZeroTierMembershipSyncService;
 use Flux\Flux;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
@@ -85,6 +86,44 @@ class RouterCredentialsCard extends Component
                 ? 'RouterOS reports identity "'.$result['identity'].'".'
                 : $result['error'],
             variant: $result['success'] ? 'success' : 'danger',
+        );
+    }
+
+    /**
+     * Manual "don't wait for the 5-minute cycle" button: authorizes this
+     * router's saved node ID on the ZeroTier controller right now, then
+     * immediately pushes syncZeroTierNetworkMembership() over the live
+     * RouterOS API so the router re-requests its network status instead of
+     * sitting on a stale ACCESS_DENIED until the next scheduled sync (or
+     * another manual "Provision via API" click) comes along. Combines what
+     * was previously two separate manual steps (hotspot:sync-zerotier-members,
+     * then remove/re-add the interface by hand on the router console) into
+     * one click.
+     */
+    public function authorizeZeroTier(ZeroTierMembershipSyncService $zeroTierMembers, RouterOsConnectionService $routerOs): void
+    {
+        $router = Router::find($this->routerId);
+
+        if (! $router) {
+            return;
+        }
+
+        $authorize = $zeroTierMembers->authorizeRouter($router);
+
+        if (! $authorize['success']) {
+            Flux::toast(heading: 'Could not authorize', text: $authorize['error'], variant: 'danger');
+
+            return;
+        }
+
+        $sync = $routerOs->syncZeroTierNetworkMembership($router);
+
+        Flux::toast(
+            heading: $sync['success'] ? 'Authorized and connected' : 'Authorized, but the router-side sync had trouble',
+            text: $sync['success']
+                ? 'Approved on the ZeroTier controller and pushed live to the router -- check "/zerotier interface print" on the router for STATUS "OK".'
+                : collect($sync['steps'])->map(fn (array $step): string => ($step['success'] ? 'OK' : 'FAILED').' - '.$step['label'].($step['error'] ? ' ('.$step['error'].')' : ''))->implode(' | '),
+            variant: $sync['success'] ? 'success' : 'danger',
         );
     }
 

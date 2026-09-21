@@ -85,6 +85,35 @@ class ZeroTierMembershipSyncService
     }
 
     /**
+     * Authorizes a single router on demand, regardless of
+     * `services.zerotier.manage_members` -- an admin clicking a button on
+     * that router's own page is an explicit, scoped action, the same
+     * "on-demand works even with the background flag off" exception
+     * `hotspot:resync-walled-garden` already carves out for itself. Exists so
+     * a fresh router doesn't have to sit ACCESS_DENIED for up to 5 minutes
+     * waiting on the next `hotspot:sync-zerotier-members` cycle after its
+     * node ID is saved.
+     *
+     * @return array{success: bool, error: ?string}
+     */
+    public function authorizeRouter(Router $router): array
+    {
+        if (blank($router->zerotier_node_id)) {
+            return ['success' => false, 'error' => 'This router has no saved ZeroTier node ID yet.'];
+        }
+
+        $authorize = $this->controller->authorizeMember($router);
+
+        if (! $authorize['success']) {
+            return ['success' => false, 'error' => $authorize['error']];
+        }
+
+        $router->forceFill(['zerotier_authorized_at' => now()])->save();
+
+        return ['success' => true, 'error' => null];
+    }
+
+    /**
      * @return array<string,string> ZeroTier node ID => assigned IP
      */
     public function desiredNodes(): array
