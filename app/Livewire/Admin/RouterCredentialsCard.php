@@ -7,6 +7,7 @@ use App\Services\RouterManagementService;
 use App\Services\RouterOsConnectionService;
 use App\Services\ZeroTierMembershipSyncService;
 use Flux\Flux;
+use Illuminate\Validation\Rule;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
 
@@ -19,9 +20,12 @@ class RouterCredentialsCard extends Component
 
     public bool $showRegenerateApiCredentialsModal = false;
 
+    public ?string $zerotierNodeId = null;
+
     public function mount(Router $router): void
     {
         $this->routerId = $router->id;
+        $this->zerotierNodeId = $router->zerotier_node_id;
     }
 
     public function confirmRegenerateWireguardKey(): void
@@ -86,6 +90,49 @@ class RouterCredentialsCard extends Component
                 ? 'RouterOS reports identity "'.$result['identity'].'".'
                 : $result['error'],
             variant: $result['success'] ? 'success' : 'danger',
+        );
+    }
+
+    /**
+     * Saves just the ZeroTier node ID right here on the router's own page --
+     * previously this needed the full 4-step edit wizard (Identity step)
+     * just to update one field, which is real friction on a router that gets
+     * reset repeatedly during testing and needs a fresh node ID pasted in
+     * every time. Clearing zerotier_authorized_at when the ID actually
+     * changes matters here specifically: this card displays "Authorized X
+     * ago" straight off that timestamp, and leaving it in place after typing
+     * in a brand-new ID would misleadingly claim the NEW node is already
+     * authorized when it never has been.
+     */
+    public function saveZeroTierNodeId(): void
+    {
+        $router = Router::find($this->routerId);
+
+        if (! $router) {
+            return;
+        }
+
+        $validated = validator(
+            ['zerotier_node_id' => $this->zerotierNodeId],
+            ['zerotier_node_id' => ['nullable', 'string', 'max:16', Rule::unique('routers')->ignore($router)]],
+        )->validate();
+
+        $newNodeId = filled($validated['zerotier_node_id']) ? trim($validated['zerotier_node_id']) : null;
+        $changed = $newNodeId !== $router->zerotier_node_id;
+
+        $router->forceFill([
+            'zerotier_node_id' => $newNodeId,
+            'zerotier_authorized_at' => $changed ? null : $router->zerotier_authorized_at,
+        ])->save();
+
+        $this->zerotierNodeId = $newNodeId;
+
+        Flux::toast(
+            heading: 'ZeroTier node ID saved',
+            text: $changed && $newNodeId !== null
+                ? 'Cleared the previous authorization timestamp since the ID changed -- click "Authorize & connect now" below.'
+                : 'Saved.',
+            variant: 'success',
         );
     }
 

@@ -156,6 +156,16 @@ class RouterController extends Controller
             ->with('status', $this->summarizeProvisioningResult($result));
     }
 
+    public function pushFreshInfrastructure(Request $request, Router $router, MikroTikProvisioningService $mikroTik, RouterOsConnectionService $routerOs): RedirectResponse
+    {
+        TenantAccess::assertRouter($router, $request->user());
+
+        $result = $routerOs->pushFreshInfrastructureScript($router, $mikroTik->generateFreshInfrastructureScript($router));
+
+        return redirect()->route('admin.routers.show', $router)
+            ->with('status', $this->summarizeProvisioningResult($result));
+    }
+
     /**
      * A manual "Provision via API" click closes the same loop the background
      * hotspot:auto-provision-routers job is trying to close -- marking it here

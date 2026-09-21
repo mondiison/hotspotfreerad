@@ -489,4 +489,64 @@ class RouterOsApiProvisioningTest extends TestCase
 
         $this->assertNull($router->fresh()->auto_provisioned_at);
     }
+
+    public function test_push_fresh_infrastructure_script_reports_a_clear_error_when_router_is_unreachable(): void
+    {
+        $router = Router::create([
+            'shop_id' => $this->makeShop()->id,
+            'name' => 'Unreachable Fresh Infra Router',
+            'nas_identifier' => 'unreachable-fresh-infra-router',
+            'wireguard_internal_ip' => '192.0.2.13',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        $result = app(RouterOsConnectionService::class)->pushFreshInfrastructureScript($router, '/system identity set name="test"');
+
+        $this->assertFalse($result['success']);
+        $this->assertCount(1, $result['steps']);
+        $this->assertFalse($result['steps'][0]['success']);
+        $this->assertNotEmpty($result['steps'][0]['error']);
+    }
+
+    public function test_push_fresh_infrastructure_without_api_credentials_reports_a_clear_error(): void
+    {
+        $router = Router::create([
+            'shop_id' => $this->makeShop()->id,
+            'name' => 'No Credentials Router',
+            'nas_identifier' => 'no-credentials-fresh-infra-router',
+            'wireguard_internal_ip' => '192.0.2.14',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        $router->forceFill(['api_username' => null, 'api_password' => null])->save();
+
+        $result = app(RouterOsConnectionService::class)->pushFreshInfrastructureScript($router, '/system identity set name="test"');
+
+        $this->assertFalse($result['success']);
+        $this->assertStringContainsString('No RouterOS API credentials', $result['steps'][0]['error']);
+    }
+
+    public function test_push_fresh_infrastructure_route_redirects_with_a_status_message(): void
+    {
+        $shop = $this->makeShop();
+        $user = User::factory()->create(['role' => 'super_admin', 'is_active' => true]);
+
+        $router = Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'Fresh Infra Route Router',
+            'nas_identifier' => 'fresh-infra-route-router',
+            'wireguard_internal_ip' => '192.0.2.15',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        $this->mock(RouterOsConnectionService::class, function ($mock): void {
+            $mock->shouldReceive('pushFreshInfrastructureScript')->once()->andReturn(['success' => true, 'steps' => []]);
+        });
+
+        $this->actingAs($user)
+            ->post(route('admin.routers.push-fresh-infrastructure', $router))
+            ->assertRedirect(route('admin.routers.show', $router));
+
+        $this->assertNotNull(session('status'));
+    }
 }

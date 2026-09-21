@@ -171,7 +171,15 @@ sudo freeradius -X</code></pre>
                                     <h2 class="text-base font-semibold">Fresh MikroTik Infrastructure Script</h2>
                                     <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Use this for new/no-default-config routers. It prepares VLANs, Starlink-friendly PCQ queues, POS access, PPPoE, hotspot, WireGuard, and RADIUS.</p>
                                 </div>
-                                <flux:badge color="amber">Review variables first</flux:badge>
+                                <div class="flex items-center gap-3">
+                                    <flux:badge color="amber">Review variables first</flux:badge>
+                                    @if ($router->api_username)
+                                        <form method="POST" action="{{ route('admin.routers.push-fresh-infrastructure', $router) }}" onsubmit="return confirm('This pushes the FULL VLAN/bridge/hotspot/POS/staff/QoS/firewall configuration live to the router over the API -- the same effect as pasting this whole script by hand. Only run this on a router that has not had it applied yet: unlike \'Provision via API\' elsewhere on this page, this is NOT safe to run twice -- running it again will create duplicate VLANs, firewall rules, and DHCP servers, the same as pasting the script twice. Continue?');">
+                                            @csrf
+                                            <button type="submit" class="rounded-md border border-zinc-200 dark:border-zinc-700 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-zinc-50 dark:hover:bg-zinc-800">Push via API (run once)</button>
+                                        </form>
+                                    @endif
+                                </div>
                             </div>
                         </div>
                         <x-script-block>{{ $freshInfrastructureScript }}</x-script-block>

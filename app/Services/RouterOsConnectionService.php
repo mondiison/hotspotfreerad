@@ -579,6 +579,113 @@ class RouterOsConnectionService
         return trim($directory ?? self::DEFAULT_HOTSPOT_DIRECTORY, '/');
     }
 
+    private const FRESH_INFRASTRUCTURE_SCRIPT_NAME = 'mms-radius-fresh-infra';
+
+    /**
+     * Pushes MikroTikProvisioningService::generateFreshInfrastructureScript()'s
+     * output (VLANs, bridge, management/hotspot/POS/staff networks, QoS,
+     * firewall -- everything a fresh router needs beyond what the Bootstrap
+     * Script/provisionHotspot()/provisionPppoe() cover) and runs it live,
+     * instead of it being copy-pasted onto the router console by hand.
+     *
+     * Deliberately NOT idempotent, unlike every other live-API action in
+     * this file. Most of what the generated script does (bridge VLAN
+     * entries, DHCP servers, the hotspot profile/server, queue types,
+     * firewall rules) are plain "add" commands with no "does this already
+     * exist?" check -- the same as pasting the script by hand. Running this
+     * twice on the same router creates duplicate objects, exactly as
+     * re-pasting the script manually would; there is no equivalent of
+     * syncWalledGarden()'s "list what's there, only add what's missing"
+     * here. This is meant for a router that hasn't had it applied yet, not
+     * a repeatable sync.
+     *
+     * Implemented via RouterOS's own /system script object rather than
+     * translating the generated script's ~50 lines (:global variables, :if
+     * guards) into individual API Query calls one-for-one -- uploading and
+     * running it through /system/script/add + /system/script/run executes
+     * the EXACT same script RouterOS's own terminal would from a paste, with
+     * identical behavior, and needs no per-line reimplementation. Any
+     * leftover script object from a previous attempt that didn't finish
+     * cleanly (e.g. the connection dropped mid-run) is removed first so this
+     * always starts from a known state; the object is removed again after a
+     * successful run so nothing is left behind on the router either way.
+     *
+     * Not yet confirmed live -- RouterOS's exact required `policy=` for a
+     * script object executing this range of commands (interface/ip/queue
+     * add/set) hasn't been exercised against real hardware. The policy
+     * string below mirrors this app's own API user's granted policy
+     * (apiUserProvisioningLines()) minus the rights that user is itself
+     * denied (reboot, winbox, password, web, sniff, romon, rest-api, ssh,
+     * telnet, local, policy) -- a script's policy can't exceed what the
+     * running user already has, so this is the widest set that could
+     * possibly be granted.
+     *
+     * @return array{success: bool, steps: list<array{label: string, success: bool, error: ?string}>}
+     */
+    public function pushFreshInfrastructureScript(Router $router, string $scriptContent): array
+    {
+        if (! $this->isConfigured($router)) {
+            return [
+                'success' => false,
+                'steps' => [['label' => 'Push Fresh Infrastructure Script', 'success' => false, 'error' => 'No RouterOS API credentials generated for this router yet.']],
+            ];
+        }
+
+        try {
+            $client = $this->client($router, 30);
+        } catch (\Throwable $e) {
+            return ['success' => false, 'steps' => [['label' => 'Push Fresh Infrastructure Script', 'success' => false, 'error' => $e->getMessage()]]];
+        }
+
+        $steps = [];
+        $scriptName = self::FRESH_INFRASTRUCTURE_SCRIPT_NAME;
+
+        try {
+            $leftover = collect($client->query(new Query('/system/script/print'))->read())
+                ->first(fn ($row) => is_array($row) && ($row['name'] ?? null) === $scriptName);
+
+            if ($leftover !== null) {
+                $client->query((new Query('/system/script/remove'))->equal('numbers', $leftover['.id']))->read(false);
+            }
+
+            $addRaw = $client->query(
+                (new Query('/system/script/add'))
+                    ->equal('name', $scriptName)
+                    ->equal('policy', 'read,write,test,sensitive,ftp,api')
+                    ->equal('source', $scriptContent)
+            )->read(false);
+
+            if ($trapMessage = self::extractTrapMessage($addRaw)) {
+                throw new \RuntimeException('Could not upload the script: '.$trapMessage);
+            }
+
+            $steps[] = ['label' => 'Upload Fresh Infrastructure Script', 'success' => true, 'error' => null];
+
+            $uploaded = collect($client->query(new Query('/system/script/print'))->read())
+                ->first(fn ($row) => is_array($row) && ($row['name'] ?? null) === $scriptName);
+
+            if ($uploaded === null) {
+                throw new \RuntimeException('Script was uploaded but could not be found afterward to run it.');
+            }
+
+            $runRaw = $client->query((new Query('/system/script/run'))->equal('numbers', $uploaded['.id']))->read(false);
+
+            if ($trapMessage = self::extractTrapMessage($runRaw)) {
+                throw new \RuntimeException('The script ran but reported an error: '.$trapMessage);
+            }
+
+            $steps[] = ['label' => 'Run Fresh Infrastructure Script', 'success' => true, 'error' => null];
+
+            $client->query((new Query('/system/script/remove'))->equal('numbers', $uploaded['.id']))->read(false);
+
+            return ['success' => true, 'steps' => $steps];
+        } catch (\Throwable $e) {
+            $steps[] = ['label' => 'Push Fresh Infrastructure Script', 'success' => false, 'error' => $e->getMessage()];
+
+            return ['success' => false, 'steps' => $steps];
+        }
+    }
+
     /**
      * Every directory RouterOS's own file storage actually has, so an admin
      * can see the real layout of a router instead of guessing whether

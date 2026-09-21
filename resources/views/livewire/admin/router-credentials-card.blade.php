@@ -73,16 +73,38 @@
 
     @if (in_array($router->tunnel_mode, ['wireguard_zerotier', 'zerotier'], true))
         <div class="mt-4">
-            <dt class="text-zinc-500 dark:text-zinc-400">ZeroTier</dt>
+            <dt class="text-zinc-500 dark:text-zinc-400">ZeroTier node ID</dt>
+            <dd class="mt-1 flex flex-wrap items-center gap-2">
+                <input
+                    type="text"
+                    wire:model="zerotierNodeId"
+                    placeholder="e.g. a943bf5013"
+                    maxlength="16"
+                    class="w-36 rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-2 py-1 font-mono text-xs"
+                />
+                <button
+                    type="button"
+                    wire:click="saveZeroTierNodeId"
+                    wire:loading.attr="disabled"
+                    wire:target="saveZeroTierNodeId"
+                    class="text-xs font-medium text-blue-600 hover:underline disabled:cursor-wait disabled:opacity-60"
+                >
+                    <span wire:loading.remove wire:target="saveZeroTierNodeId">Save</span>
+                    <span wire:loading wire:target="saveZeroTierNodeId">Saving...</span>
+                </button>
+            </dd>
+            @error('zerotier_node_id')
+                <dd class="mt-1 text-xs text-red-600">{{ $message }}</dd>
+            @enderror
+            <dd class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                IP: {{ $router->zerotier_ip ?: 'no IP saved' }} &mdash;
+                @if ($router->zerotier_authorized_at)
+                    authorized {{ $router->zerotier_authorized_at->diffForHumans() }}.
+                @else
+                    not authorized yet.
+                @endif
+            </dd>
             @if ($router->zerotier_node_id)
-                <dd class="font-mono text-xs">{{ $router->zerotier_node_id }} &rarr; {{ $router->zerotier_ip ?: 'no IP saved' }}</dd>
-                <dd class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                    @if ($router->zerotier_authorized_at)
-                        Authorized {{ $router->zerotier_authorized_at->diffForHumans() }}. The background sync re-checks every 5 minutes &mdash; use the button below instead of waiting if the router still shows ACCESS_DENIED.
-                    @else
-                        Not authorized yet.
-                    @endif
-                </dd>
                 <dd class="mt-2">
                     <button
                         type="button"
@@ -96,7 +118,7 @@
                     </button>
                 </dd>
             @else
-                <dd class="text-xs text-amber-600">No node ID saved yet &mdash; enable ZeroTier on the physical router, then copy the ID from "/zerotier print detail" into this router's edit form.</dd>
+                <dd class="mt-1 text-xs text-amber-600">No node ID saved yet &mdash; enable ZeroTier on the physical router, copy the ID from "/zerotier print detail", paste it above, and click Save.</dd>
             @endif
         </div>
     @endif
