@@ -1106,19 +1106,43 @@ class RouterOsConnectionService
             $steps['Enable ZeroTier ('.$instance.')'] = (new Query('/zerotier/enable'))->equal('numbers', $state['instance_id']);
         }
 
-        if (in_array('join', $actions, true)) {
+        $needsJoin = in_array('join', $actions, true);
+
+        if ($needsJoin) {
             $steps['Join ZeroTier network'] = (new Query('/zerotier/interface/add'))
                 ->equal('network', (string) config('services.zerotier.network_id'))
                 ->equal('instance', $instance);
         }
 
-        if (in_array('address', $actions, true) && filled($router->zerotier_ip)) {
-            $steps['Assign ZeroTier IP'] = (new Query('/ip/address/add'))
-                ->equal('address', $router->zerotier_ip.'/24')
-                ->equal('interface', self::ZEROTIER_INTERFACE_NAME);
+        // Skip the connection entirely rather than opening one just to run zero steps --
+        // the common case going forward is a router that's already enabled and joined,
+        // only ever missing its address.
+        $result = $steps === [] ? ['success' => true, 'steps' => []] : $this->runSteps($router, $steps);
+
+        if (! in_array('address', $actions, true) || blank($router->zerotier_ip)) {
+            return $result;
         }
 
-        return $this->runSteps($router, $steps);
+        // Confirmed live 2026-09-21: "/zerotier/interface/add" returns before RouterOS has
+        // actually finished registering the resulting interface -- addressing it in the same
+        // breath the join step just ran in was rejected outright ("input does not match any
+        // value of interface") even though the interface name itself was correct. Only needed
+        // when this call is the one that just joined; an already-joined router's interface has
+        // had plenty of time to exist by now.
+        if ($needsJoin) {
+            sleep(3);
+        }
+
+        $addressResult = $this->runSteps($router, [
+            'Assign ZeroTier IP' => (new Query('/ip/address/add'))
+                ->equal('address', $router->zerotier_ip.'/24')
+                ->equal('interface', self::ZEROTIER_INTERFACE_NAME),
+        ]);
+
+        $result['steps'] = array_merge($result['steps'], $addressResult['steps']);
+        $result['success'] = $result['success'] && $addressResult['success'];
+
+        return $result;
     }
 
     /**

@@ -813,6 +813,16 @@ HTML;
      * confirmed true on the real hardware this was tested against (RouterOS
      * auto-numbers its first ZeroTier interface object this way), not
      * guaranteed universally.
+     *
+     * A second issue surfaced immediately after fixing the first, also
+     * confirmed live 2026-09-21: "/zerotier interface add" returns control to
+     * the next script line before RouterOS has actually finished registering
+     * the resulting interface, so the very next line addressing it failed
+     * outright ("input does not match any value of interface") even though
+     * "zerotier1" was confirmed to be the correct, eventual name. `:delay 3s`
+     * gives RouterOS time to finish before the address line runs -- a
+     * generous, deliberately simple fixed wait rather than a polling loop,
+     * since this only costs a few seconds once during bootstrap.
      */
     private function zeroTierLines(Router $router): array
     {
@@ -831,6 +841,9 @@ HTML;
             '/zerotier interface add network='.$networkId.' instance=zt1',
             '# This router\'s ZeroTier node ID only exists after the line above runs. Retrieve it',
             '# with "/zerotier print" and enter it into MMS Radius so it can be authorized.',
+            filled($router->zerotier_ip)
+                ? ':delay 3s'
+                : null,
             filled($router->zerotier_ip)
                 ? '/ip address add address='.$router->zerotier_ip.'/24 interface=zerotier1 comment="MMS Radius ZeroTier IP"'
                 : '# Once this router has a saved ZeroTier IP in MMS Radius, re-generate this script to add the "/ip address add ... interface=zerotier1" line -- without it, the tunnel and authorization can show fine while the RouterOS API is still unreachable over it.',
