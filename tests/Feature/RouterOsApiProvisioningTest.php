@@ -292,6 +292,25 @@ class RouterOsApiProvisioningTest extends TestCase
         $this->assertFalse($lastStep['success']);
     }
 
+    public function test_provision_hotspot_uses_a_routers_saved_login_directory_without_changing_step_shape(): void
+    {
+        $router = Router::create([
+            'shop_id' => $this->makeShop()->id,
+            'name' => 'Saved Directory Router',
+            'nas_identifier' => 'saved-directory-router',
+            'wireguard_internal_ip' => '192.0.2.16',
+            'shared_secret' => 'radius-secret',
+            'hotspot_login_directory' => 'hotspot',
+        ]);
+
+        $result = app(RouterOsConnectionService::class)->provisionHotspot($router);
+
+        $this->assertFalse($result['success']);
+        $this->assertCount(11, $result['steps']);
+        $labels = array_column($result['steps'], 'label');
+        $this->assertContains('Push hotspot login page', $labels);
+    }
+
     public function test_provision_hotspot_walled_gardens_the_shops_active_payment_gateway(): void
     {
         $shop = $this->makeShop();

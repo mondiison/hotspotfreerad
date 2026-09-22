@@ -491,19 +491,26 @@ class RouterOsConnectionService
         // already there, matching the idempotent shape every other step here already has.
         $existingProfileId = $this->existingHotspotProfileId($router, 'saas-prof');
 
+        // Confirmed live 2026-09-22, alongside the idempotency fix above: this also
+        // hardcoded "flash/hotspot" regardless of where pushHotspotLoginPage() (below) was
+        // actually told to push the file -- a router with a saved hotspot_login_directory
+        // override had its login.html living in one directory while this profile still
+        // pointed RouterOS's HTTP server at a different one, so nobody could ever log in.
+        $htmlDirectory = filled($router->hotspot_login_directory) ? $router->hotspot_login_directory : self::DEFAULT_HOTSPOT_DIRECTORY;
+
         $profileQuery = $existingProfileId !== null
             ? (new Query('/ip/hotspot/profile/set'))
                 ->equal('numbers', $existingProfileId)
                 ->equal('use-radius', 'yes')
                 ->equal('login-by', 'http-chap,cookie,mac-cookie')
-                ->equal('html-directory', 'flash/hotspot')
+                ->equal('html-directory', $htmlDirectory)
                 ->equal('dns-name', (string) config('services.mikrotik.hotspot_dns_name'))
                 ->equal('radius-accounting', 'yes')
             : (new Query('/ip/hotspot/profile/add'))
                 ->equal('name', 'saas-prof')
                 ->equal('use-radius', 'yes')
                 ->equal('login-by', 'http-chap,cookie,mac-cookie')
-                ->equal('html-directory', 'flash/hotspot')
+                ->equal('html-directory', $htmlDirectory)
                 ->equal('dns-name', (string) config('services.mikrotik.hotspot_dns_name'))
                 ->equal('radius-accounting', 'yes');
 
@@ -516,7 +523,14 @@ class RouterOsConnectionService
         $result['success'] = $apiRestrictionResult['success'] && $radiusResult['success'] && $zeroTierResult['success'] && $result['success'];
 
         $walledGardenResult = $this->syncWalledGarden($router);
-        $loginPageResult = $this->pushHotspotLoginPage($router);
+        // $router->hotspot_login_directory is null for a router freshly onboarded through
+        // this app, which is exactly when pushHotspotLoginPage()'s own default
+        // (DEFAULT_HOTSPOT_DIRECTORY) is correct -- passing it through here just means a
+        // router whose admin saved a different directory (via the "Hotspot Login Page"
+        // section on the Live tab) keeps getting THAT directory on every future
+        // "Provision via API"/auto-provisioning push too, instead of this method silently
+        // reverting to the wrong default every time.
+        $loginPageResult = $this->pushHotspotLoginPage($router, $router->hotspot_login_directory);
         $profileStep = $this->applyHotspotProfile($router);
 
         $result['steps'] = array_merge($result['steps'], $walledGardenResult['steps'], $loginPageResult['steps']);

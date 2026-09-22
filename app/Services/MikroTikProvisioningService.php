@@ -92,13 +92,14 @@ SCRIPT;
         $portalHost = parse_url($portalUrl, PHP_URL_HOST) ?: config('services.mikrotik.hotspot_dns_name');
         $hotspotDnsName = config('services.mikrotik.hotspot_dns_name');
         $walledGardenLines = implode("\n", $this->walledGardenLines($router, $portalHost));
+        $htmlDirectory = $this->hotspotLoginDirectory($router);
 
         return <<<SCRIPT
 /system identity set name="{$nasIdentifier}"
 {$tunnelLines}
 {$apiUserLines}
 {$radiusLines}
-/ip hotspot profile add name=saas-prof use-radius=yes login-by=http-pap,http-chap,cookie,mac-cookie html-directory=flash/hotspot dns-name={$hotspotDnsName}
+/ip hotspot profile add name=saas-prof use-radius=yes login-by=http-pap,http-chap,cookie,mac-cookie html-directory={$htmlDirectory} dns-name={$hotspotDnsName}
 /ip hotspot profile set saas-prof radius-accounting=yes
 # Points any existing hotspot server at this profile. If none exists yet, this is a no-op --
 # run "/ip hotspot setup" first (or select saas-prof as its profile), then re-run this line.
@@ -389,7 +390,7 @@ SCRIPT;
             '/ip dhcp-server add name=dhcp-hotspot interface=vlan-hotspot address-pool=pool-hotspot lease-time=30m disabled=no',
             '/ip dhcp-server network add address=$hotspotNetwork gateway='.str($settings['hotspot_gateway'])->before('/').' dns-server='.str($settings['hotspot_gateway'])->before('/'),
             '# DHCP for MMS Hotspot is served from vlan-hotspot. Do not attach hotspot DHCP directly to wifi1/ether ports because bridge member ports become slave interfaces.',
-            '/ip hotspot profile add name=mms-hotspot-profile use-radius=yes login-by=http-pap,http-chap,cookie,mac-cookie html-directory=flash/hotspot dns-name='.$hotspotDnsName.' radius-accounting=yes',
+            '/ip hotspot profile add name=mms-hotspot-profile use-radius=yes login-by=http-pap,http-chap,cookie,mac-cookie html-directory='.$this->hotspotLoginDirectory($router).' dns-name='.$hotspotDnsName.' radius-accounting=yes',
             '/ip hotspot add name=mms-hotspot interface=vlan-hotspot address-pool=pool-hotspot profile=mms-hotspot-profile disabled=no',
             ...$this->walledGardenLines($router, $portalHost),
         ], $staffLines, $posLines, $pppoeLines, [
@@ -1026,6 +1027,28 @@ HTML;
             ':if ([:len [/user find name="'.$username.'"]] = 0) do={ /user add name="'.$username.'" password="'.$password.'" group=mmsradius-api-group comment="MMS Radius API provisioning" } else={ /user set [find name="'.$username.'"] password="'.$password.'" group=mmsradius-api-group comment="MMS Radius API provisioning" }',
             '/ip service set api disabled=no port=8728 address='.$this->apiServiceAddressRestriction($router),
         ];
+    }
+
+    /**
+     * The `html-directory` value every hotspot profile this service generates
+     * (`saas-prof` in generateScript(), `mms-hotspot-profile` in
+     * generateFreshInfrastructureScript()) uses. Confirmed live 2026-09-22 as
+     * a real, previously-unnoticed source of "can't log in after pasting the
+     * script" reports: both used to hardcode "flash/hotspot" regardless of
+     * where a router's login.html actually lives -- RouterOsConnectionService
+     * ::pushHotspotLoginPage() already reads $router->hotspot_login_directory
+     * (set via the "Hotspot Login Page" Live-tab section, or blank for a
+     * router that's never needed a custom one) to know WHERE to push the
+     * file, but the PROFILE's own html-directory property never used that
+     * same saved value, so the two could silently drift out of sync -- a
+     * router serving login.html from "hotspot" but whose profile still says
+     * "flash/hotspot" fails to log anyone in, since RouterOS's HTTP server
+     * looks for the file in the directory the active profile names, not
+     * wherever it actually was written.
+     */
+    private function hotspotLoginDirectory(Router $router): string
+    {
+        return filled($router->hotspot_login_directory) ? $router->hotspot_login_directory : 'flash/hotspot';
     }
 
     /**

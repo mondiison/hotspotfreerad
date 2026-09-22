@@ -48,6 +48,47 @@ class MikroTikProvisioningServiceTest extends TestCase
         $this->assertStringContainsString('/ip hotspot walled-garden add dst-host=*.wa.me action=allow', $script);
         $this->assertStringContainsString('/ip hotspot set [find] profile=saas-prof', $script);
         $this->assertStringContainsString('login-by=http-pap,http-chap,cookie,mac-cookie', $script);
+        $this->assertStringContainsString('html-directory=flash/hotspot', $script);
+    }
+
+    /**
+     * Confirmed live 2026-09-22: this router's saved directory (set via the
+     * "Hotspot Login Page" Live-tab section after RouterOS reported its real
+     * login.html location as something other than flash/hotspot) kept
+     * getting silently reverted back to "flash/hotspot" on every script
+     * regeneration/provision, since neither generateScript() nor
+     * generateFreshInfrastructureScript() nor provisionHotspot() ever read
+     * hotspot_login_directory for the profile's own html-directory property
+     * -- only pushHotspotLoginPage()'s file destination respected it. A
+     * profile whose html-directory doesn't match where the file actually
+     * lives means nobody can log in, since RouterOS's HTTP server looks in
+     * the directory the active profile names.
+     */
+    public function test_hotspot_scripts_use_the_routers_saved_login_directory(): void
+    {
+        config([
+            'app.url' => 'https://portal.example.com',
+            'services.radius.server_ip' => '10.8.0.1',
+            'services.wireguard.endpoint_host' => 'vpn.example.com',
+            'services.wireguard.endpoint_port' => 13231,
+            'services.wireguard.public_key' => 'server-public-key',
+            'services.mikrotik.hotspot_dns_name' => 'hotspot.local',
+        ]);
+
+        $router = new Router([
+            'nas_identifier' => 'custom-directory-router',
+            'wireguard_internal_ip' => '10.8.0.20',
+            'shared_secret' => 'radius-secret',
+            'hotspot_login_directory' => 'hotspot',
+        ]);
+
+        $hotspotScript = app(MikroTikProvisioningService::class)->generateScript($router);
+        $freshInfraScript = app(MikroTikProvisioningService::class)->generateFreshInfrastructureScript($router);
+
+        $this->assertStringContainsString('html-directory=hotspot ', $hotspotScript);
+        $this->assertStringNotContainsString('html-directory=flash/hotspot', $hotspotScript);
+        $this->assertStringContainsString('html-directory=hotspot ', $freshInfraScript);
+        $this->assertStringNotContainsString('html-directory=flash/hotspot', $freshInfraScript);
     }
 
     public function test_scripts_use_the_routers_endpoint_override_when_set(): void
