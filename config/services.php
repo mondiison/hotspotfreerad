@@ -70,7 +70,18 @@ return [
     ],
 
     'mikrotik' => [
-        'hotspot_dns_name' => env('HOTSPOT_DNS_NAME', 'hotspot.local'),
+        // Confirmed live 2026-09-22: ".local" is reserved for mDNS/Bonjour on iOS,
+        // macOS, and many Android resolvers -- those devices never send a normal
+        // unicast DNS query for a ".local" name to the router at all (only local
+        // multicast discovery, which nothing here answers), so MikroTik's own hotspot
+        // DNS interception -- which relies on intercepting a normal DNS query -- never
+        // even sees the request. The device can never resolve this name, the
+        // link-login-only GET never reaches the router, and the device stays stuck
+        // unauthenticated forever: exactly the "Opening internet access" <-> "Access
+        // provisioned" loop this was traced to. Any real subdomain works instead,
+        // since this only ever needs to resolve via MikroTik's own local interception
+        // for still-unauthenticated hotspot clients, never a real public DNS record.
+        'hotspot_dns_name' => env('HOTSPOT_DNS_NAME', 'hotspot.example.com'),
         'portal_url' => env('HOTSPOT_PORTAL_URL'),
         // Off by default like every other automation flag in this app -- once on, a scheduled
         // job (hotspot:auto-provision-routers) retries provisionHotspot()/provisionPppoe() for
