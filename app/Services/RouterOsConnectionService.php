@@ -498,18 +498,32 @@ class RouterOsConnectionService
         // pointed RouterOS's HTTP server at a different one, so nobody could ever log in.
         $htmlDirectory = filled($router->hotspot_login_directory) ? $router->hotspot_login_directory : self::DEFAULT_HOTSPOT_DIRECTORY;
 
+        // Confirmed live 2026-09-22: this hardcoded login-by omitted "http-pap" entirely,
+        // unlike both script generators (MikroTikProvisioningService::generateScript()/
+        // generateFreshInfrastructureScript()), which correctly include it. http-pap is the
+        // method that accepts a plain, directly-submitted username/password -- exactly what
+        // hotspot.access-granted.blade.php's login form sends -- while http-chap requires a
+        // router-issued challenge/response handshake the form never performs. With http-pap
+        // missing, RouterOS never recognized the login submission as valid at all and just
+        // re-served the static login.html page, before ever reaching a RADIUS check -- this
+        // was the actual root cause of a redirect loop that survived several other genuine
+        // fixes (DNS name, link-login-only capture, GET vs POST) because none of them
+        // addressed this. Every router provisioned live via "Provision via API" since this
+        // profile-management code was written has been missing http-pap.
+        $loginBy = 'http-pap,http-chap,cookie,mac-cookie';
+
         $profileQuery = $existingProfileId !== null
             ? (new Query('/ip/hotspot/profile/set'))
                 ->equal('numbers', $existingProfileId)
                 ->equal('use-radius', 'yes')
-                ->equal('login-by', 'http-chap,cookie,mac-cookie')
+                ->equal('login-by', $loginBy)
                 ->equal('html-directory', $htmlDirectory)
                 ->equal('dns-name', (string) config('services.mikrotik.hotspot_dns_name'))
                 ->equal('radius-accounting', 'yes')
             : (new Query('/ip/hotspot/profile/add'))
                 ->equal('name', 'saas-prof')
                 ->equal('use-radius', 'yes')
-                ->equal('login-by', 'http-chap,cookie,mac-cookie')
+                ->equal('login-by', $loginBy)
                 ->equal('html-directory', $htmlDirectory)
                 ->equal('dns-name', (string) config('services.mikrotik.hotspot_dns_name'))
                 ->equal('radius-accounting', 'yes');
