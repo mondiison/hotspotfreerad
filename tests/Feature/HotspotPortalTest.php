@@ -221,15 +221,15 @@ class HotspotPortalTest extends TestCase
     }
 
     /**
-     * Confirmed live 2026-09-22: a <form method="POST" action="http://..."> auto-submitted
-     * from this HTTPS portal to MikroTik's plain-HTTP login endpoint hit Chrome's "this form
-     * is not secure" interstitial, which an invisible JS auto-submit can never click through --
-     * the login POST silently never reached MikroTik, leaving the device stuck looping between
-     * this page and MikroTik's own login page. Fixed to use a plain <a href> GET navigation
-     * (MikroTik's documented "login-only" GET method) instead of a cross-scheme form submission,
-     * since a normal link/navigation to an HTTP URL from an HTTPS page triggers no such warning.
+     * A GET request to link-login-only was tried instead of this POST form (to dodge a
+     * suspected but never actually confirmed browser "insecure form" warning for HTTPS ->
+     * HTTP form submissions), but live testing (Chrome DevTools) showed RouterOS just
+     * serving the static login.html file again for that GET -- cache/expires headers, no
+     * login processed -- confirming this RouterOS version does not treat a GET to
+     * link-login-only as a login submission at all. Reverted back to a real POST form,
+     * confirmed live 2026-09-22 to be what MikroTik's login-only method actually needs.
      */
-    public function test_access_granted_uses_a_get_link_not_a_cross_scheme_form_post(): void
+    public function test_access_granted_posts_username_and_password_to_mikrotiks_login_endpoint(): void
     {
         [$router, $package] = $this->routerWithPackage();
 
@@ -246,11 +246,14 @@ class HotspotPortalTest extends TestCase
 
         $response
             ->assertOk()
-            ->assertDontSee('<form', false)
-            ->assertSee('<a', false)
+            ->assertSee('<form', false)
+            ->assertSee('method="POST"', false)
+            ->assertSee('action="http://10.5.50.1/login"', false)
             ->assertSee('id="mikrotik-login"', false)
-            ->assertSee('href="http://10.5.50.1/login?username=AA%3ABB%3ACC%3ADD%3AEE%3AFF&amp;password=authenticated_device_pass&amp;popup=true&amp;dst=http%3A%2F%2Fexample.com"', false)
-            ->assertSee('window.location.replace', false);
+            ->assertSee('name="username" value="AA:BB:CC:DD:EE:FF"', false)
+            ->assertSee('name="password" value="authenticated_device_pass"', false)
+            ->assertSee('name="dst" value="http://example.com"', false)
+            ->assertSee('.submit()', false);
     }
 
     public function test_portal_prefers_mikrotik_login_only_url_for_auto_connect(): void
