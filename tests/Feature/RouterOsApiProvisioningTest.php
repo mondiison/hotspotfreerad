@@ -278,11 +278,11 @@ class RouterOsApiProvisioningTest extends TestCase
         // API service address restriction sync, RADIUS client, hotspot profile,
         // portal walled-garden entry, one walled-garden entry per host in the
         // shop's active gateway's PaymentGatewayCatalog list (flutterwave by
-        // default: *.flutterwave.com, *.ravepay.co), the Cloudflare
-        // walled-garden entry, the hotspot login page push, then the final
-        // "point hotspot server" step.
+        // default: *.flutterwave.com, *.ravepay.co), the Cloudflare walled-garden
+        // entry, the wa.me/*.wa.me walled-garden entries, the hotspot login page
+        // push, then the final "point hotspot server" step.
         $this->assertFalse($result['success']);
-        $this->assertCount(9, $result['steps']);
+        $this->assertCount(11, $result['steps']);
         $this->assertFalse($result['steps'][0]['success']);
         $this->assertNotEmpty($result['steps'][0]['error']);
         $labels = array_column($result['steps'], 'label');
@@ -311,6 +311,8 @@ class RouterOsApiProvisioningTest extends TestCase
 
         $this->assertContains('Add walled-garden entry (*.squadco.com)', $labels);
         $this->assertContains('Add walled-garden entry (*.cloudflare.com)', $labels);
+        $this->assertContains('Add walled-garden entry (wa.me)', $labels);
+        $this->assertContains('Add walled-garden entry (*.wa.me)', $labels);
         $this->assertNotContains('Add walled-garden entry (*.flutterwave.com)', $labels);
     }
 
@@ -385,6 +387,7 @@ class RouterOsApiProvisioningTest extends TestCase
         $this->assertStringContainsString('$(mac)', $html);
         $this->assertStringContainsString('$(identity)', $html);
         $this->assertStringContainsString('$(link-login)', $html);
+        $this->assertStringContainsString('$(link-login-only)', $html);
         $this->assertStringContainsString('$(link-orig)', $html);
         $this->assertStringContainsString('window.location.replace(portal)', $html);
     }

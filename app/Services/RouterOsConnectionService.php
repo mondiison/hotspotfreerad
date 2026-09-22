@@ -483,14 +483,32 @@ class RouterOsConnectionService
         $radiusResult = $this->syncRadiusClients($router, 'hotspot,ppp');
         $zeroTierResult = $this->syncZeroTierNetworkMembership($router);
 
-        $steps = [
-            'Add hotspot profile' => (new Query('/ip/hotspot/profile/add'))
+        // Confirmed live 2026-09-22: this was a plain, unconditional /add -- the router's
+        // very first successful provisionHotspot() run created "saas-prof" fine, but every
+        // subsequent "Provision via API" click (or auto-provisioning retry) then failed this
+        // one step forever after with "server profile with such name already exists", even
+        // though nothing was actually wrong. Checks first and updates in place if it's
+        // already there, matching the idempotent shape every other step here already has.
+        $existingProfileId = $this->existingHotspotProfileId($router, 'saas-prof');
+
+        $profileQuery = $existingProfileId !== null
+            ? (new Query('/ip/hotspot/profile/set'))
+                ->equal('numbers', $existingProfileId)
+                ->equal('use-radius', 'yes')
+                ->equal('login-by', 'http-chap,cookie,mac-cookie')
+                ->equal('html-directory', 'flash/hotspot')
+                ->equal('dns-name', (string) config('services.mikrotik.hotspot_dns_name'))
+                ->equal('radius-accounting', 'yes')
+            : (new Query('/ip/hotspot/profile/add'))
                 ->equal('name', 'saas-prof')
                 ->equal('use-radius', 'yes')
                 ->equal('login-by', 'http-chap,cookie,mac-cookie')
                 ->equal('html-directory', 'flash/hotspot')
                 ->equal('dns-name', (string) config('services.mikrotik.hotspot_dns_name'))
-                ->equal('radius-accounting', 'yes'),
+                ->equal('radius-accounting', 'yes');
+
+        $steps = [
+            'Add hotspot profile' => $profileQuery,
         ];
 
         $result = $this->runSteps($router, $steps);
@@ -506,6 +524,25 @@ class RouterOsConnectionService
         $result['success'] = $result['success'] && $walledGardenResult['success'] && $loginPageResult['success'] && $profileStep['success'];
 
         return $result;
+    }
+
+    /**
+     * The `.id` of an existing `/ip/hotspot/profile` row named `$name`, or
+     * null if none exists yet (or the router can't currently be reached --
+     * failing open to "doesn't exist" here just means provisionHotspot()
+     * falls back to attempting an `/add`, the same behavior this had before
+     * this check existed).
+     */
+    private function existingHotspotProfileId(Router $router, string $name): ?string
+    {
+        try {
+            $row = collect($this->client($router, 8)->query(new Query('/ip/hotspot/profile/print'))->read())
+                ->first(fn ($r) => is_array($r) && ($r['name'] ?? null) === $name);
+
+            return $row['.id'] ?? null;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**
@@ -764,6 +801,8 @@ class RouterOsConnectionService
         }
 
         $entries['Add walled-garden entry (*.cloudflare.com)'] = '*.cloudflare.com';
+        $entries['Add walled-garden entry (wa.me)'] = 'wa.me';
+        $entries['Add walled-garden entry (*.wa.me)'] = '*.wa.me';
 
         $existingHosts = $this->existingWalledGardenHosts($router);
         $missingEntries = self::missingWalledGardenEntries($entries, $existingHosts);

@@ -537,11 +537,27 @@ HTML;
      * gateways, or RADIUS provisioning at all. RouterOS doesn't redirect
      * hotspot logins to an external URL on its own; the html-directory file
      * has to do that itself. This is a minimal stub that carries MikroTik's
-     * own login-time variables ($(mac)/$(identity)/$(link-login)/$(link-orig)
-     * -- substituted by RouterOS when it serves the file, not by this app)
-     * straight into the real portal URL. It has no per-router content --
-     * every router fetches the exact same file, since there's only one
-     * portal host per install -- see loginPageUrl()/pushHotspotLoginPage().
+     * own login-time variables ($(mac)/$(identity)/$(link-login)/
+     * $(link-login-only)/$(link-orig) -- substituted by RouterOS when it
+     * serves the file, not by this app) straight into the real portal URL.
+     * It has no per-router content -- every router fetches the exact same
+     * file, since there's only one portal host per install -- see
+     * loginPageUrl()/pushHotspotLoginPage().
+     *
+     * $(link-login-only) is the critical one, confirmed live 2026-09-22 as
+     * the actual root cause of a customer-facing redirect loop: this stub
+     * never captured it at all (an oversight since this file was first
+     * written -- neither the code nor this docblock ever mentioned it), so
+     * PortalController::mikrotikLoginUrl()'s own preference for
+     * link-login-only over link-login (it checks link-login-only first) was
+     * never actually reachable -- every login attempt fell back to
+     * link-login, MikroTik's standard interactive login endpoint, which
+     * expects the router's own CHAP-challenge page flow rather than a
+     * directly-submitted plain username/password. link-login-only is
+     * MikroTik's documented endpoint specifically for external/automated
+     * login pages like this one, accepting a plain username/password
+     * directly with no challenge handshake required -- exactly what
+     * hotspot.access-granted.blade.php submits.
      */
     public function hotspotLoginPageHtml(): string
     {
@@ -565,6 +581,7 @@ HTML;
             + '?mac=' + encodeURIComponent('\$(mac)')
             + '&nasid=' + encodeURIComponent('\$(identity)')
             + '&link-login=' + encodeURIComponent('\$(link-login)')
+            + '&link-login-only=' + encodeURIComponent('\$(link-login-only)')
             + '&link-orig=' + encodeURIComponent('\$(link-orig)');
 
         document.getElementById('portal-link').href = portal;
