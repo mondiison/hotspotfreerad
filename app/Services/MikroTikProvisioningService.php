@@ -1032,6 +1032,14 @@ HTML;
 
         $lines[] = '/ip hotspot walled-garden add dst-host=*.cloudflare.com action=allow';
 
+        // The "Message support" link on hotspot.payment-failed points here. Confirmed live
+        // 2026-09-22: an unauthenticated device clicking it got net::ERR_CONNECTION_CLOSED --
+        // the same HTTPS-outside-the-walled-garden connection reset documented above for
+        // payment gateway domains, just never noticed for this one since it's not gateway-
+        // specific and so was never covered by PaymentGatewayCatalog::walledGardenHosts().
+        $lines[] = '/ip hotspot walled-garden add dst-host=*.wa.me action=allow';
+        $lines[] = '/ip hotspot walled-garden add dst-host=wa.me action=allow';
+
         return $lines;
     }
 }

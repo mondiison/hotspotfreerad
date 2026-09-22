@@ -220,6 +220,39 @@ class HotspotPortalTest extends TestCase
             ->assertDontSee('Choose internet access');
     }
 
+    /**
+     * Confirmed live 2026-09-22: a <form method="POST" action="http://..."> auto-submitted
+     * from this HTTPS portal to MikroTik's plain-HTTP login endpoint hit Chrome's "this form
+     * is not secure" interstitial, which an invisible JS auto-submit can never click through --
+     * the login POST silently never reached MikroTik, leaving the device stuck looping between
+     * this page and MikroTik's own login page. Fixed to use a plain <a href> GET navigation
+     * (MikroTik's documented "login-only" GET method) instead of a cross-scheme form submission,
+     * since a normal link/navigation to an HTTP URL from an HTTPS page triggers no such warning.
+     */
+    public function test_access_granted_uses_a_get_link_not_a_cross_scheme_form_post(): void
+    {
+        [$router, $package] = $this->routerWithPackage();
+
+        Subscription::create([
+            'shop_id' => $router->shop_id,
+            'package_id' => $package->id,
+            'mac_address' => 'AA:BB:CC:DD:EE:FF',
+            'starts_at' => now()->subMinutes(5),
+            'expires_at' => now()->addHour(),
+            'is_throttled' => false,
+        ]);
+
+        $response = $this->get('/hotspot/portal?mac=AA:BB:CC:DD:EE:FF&nasid='.$router->nas_identifier.'&link-login-only='.urlencode('http://10.5.50.1/login').'&link-orig='.urlencode('http://example.com'));
+
+        $response
+            ->assertOk()
+            ->assertDontSee('<form', false)
+            ->assertSee('<a', false)
+            ->assertSee('id="mikrotik-login"', false)
+            ->assertSee('href="http://10.5.50.1/login?username=AA%3ABB%3ACC%3ADD%3AEE%3AFF&amp;password=authenticated_device_pass&amp;popup=true&amp;dst=http%3A%2F%2Fexample.com"', false)
+            ->assertSee('window.location.replace', false);
+    }
+
     public function test_portal_prefers_mikrotik_login_only_url_for_auto_connect(): void
     {
         [$router, $package] = $this->routerWithPackage();
