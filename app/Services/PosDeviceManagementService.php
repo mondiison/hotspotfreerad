@@ -7,7 +7,6 @@ use App\Models\Payment;
 use App\Models\PosDevice;
 use App\Models\Shop;
 use App\Models\User;
-use App\Support\PaymentCommission;
 use App\Support\TenantAccess;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
@@ -104,16 +103,20 @@ class PosDeviceManagementService
      * Records the payment collected for one registration/renewal cycle --
      * the amount is always the selected package's own price, never a
      * freely-typed figure, so it can't drift from what the package actually
-     * lists. Reuses PaymentCommission::forShop() so a POS payment folds into
-     * the same commission/wallet math and Sales/Payment reports every other
-     * Payment row already does (SalesReportService::query() only filters on
-     * status=successful, with no provider restriction, so this shows up
-     * there with zero report-side changes needed).
+     * lists. Sales/Payment reports need zero changes to pick this up
+     * (SalesReportService::query() only filters on status=successful, with
+     * no provider restriction).
+     *
+     * Deliberately charges NO platform commission, regardless of the
+     * tenant's billing_model/commission_rate -- unlike a real gateway
+     * payment, the platform never actually touches this money at all (it's
+     * collected by the tenant directly from the terminal owner, outside the
+     * app), so there's nothing for a commission cut to come out of.
+     * tenant_net_amount always equals the full amount.
      */
     private function recordPayment(PosDevice $device, User $user): Payment
     {
         $price = (float) $device->package->price;
-        $commission = PaymentCommission::forShop($device->shop, $price);
 
         return Payment::create([
             'shop_id' => $device->shop_id,
@@ -125,11 +128,11 @@ class PosDeviceManagementService
             'currency' => $device->package->currency,
             'status' => 'successful',
             'paid_at' => now(),
-            'gross_amount' => $commission['gross_amount'],
-            'platform_fee_amount' => $commission['platform_fee_amount'],
-            'tenant_net_amount' => $commission['tenant_net_amount'],
-            'commission_rate' => $commission['commission_rate'],
-            'billing_model' => $commission['billing_model'],
+            'gross_amount' => round($price, 2),
+            'platform_fee_amount' => 0,
+            'tenant_net_amount' => round($price, 2),
+            'commission_rate' => 0,
+            'billing_model' => 'manual',
             'payload' => ['recorded_by_user_id' => $user->id, 'device_name' => $device->device_name],
         ]);
     }

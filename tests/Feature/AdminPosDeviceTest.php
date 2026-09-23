@@ -120,10 +120,12 @@ class AdminPosDeviceTest extends TestCase
      * planned, unbuilt work). Confirms every renewal creates its OWN
      * payment row (a full history, not just the latest), the amount always
      * comes from the package's own price rather than anything editable, and
-     * a commission-billing tenant's platform fee/net split is applied the
-     * same way a real gateway payment's would be.
+     * -- per direct follow-up request -- NO platform commission is ever
+     * deducted, even for a tenant on commission billing, since the platform
+     * never actually touches this money (collected by the tenant directly
+     * from the terminal owner, outside the app).
      */
-    public function test_each_renewal_records_its_own_payment_using_the_package_price(): void
+    public function test_each_renewal_records_its_own_payment_using_the_package_price_with_no_commission(): void
     {
         [$user, $shop, $package] = $this->tenantSetup();
         $shop->tenant->update(['billing_model' => 'commission', 'commission_rate' => 10]);
@@ -147,10 +149,9 @@ class AdminPosDeviceTest extends TestCase
         $payment = Payment::where('pos_device_id', $device->id)->latest('id')->first();
         $this->assertSame('1500.00', $payment->amount);
         $this->assertSame('1500.00', $payment->gross_amount);
-        $this->assertSame('150.00', $payment->platform_fee_amount);
-        $this->assertSame('1350.00', $payment->tenant_net_amount);
-        $this->assertSame('10.00', $payment->commission_rate);
-        $this->assertSame('commission', $payment->billing_model);
+        $this->assertSame('0.00', $payment->platform_fee_amount);
+        $this->assertSame('1500.00', $payment->tenant_net_amount);
+        $this->assertSame('0.00', $payment->commission_rate);
     }
 
     public function test_tenant_admin_cannot_manage_another_tenants_pos_device(): void
