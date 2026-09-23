@@ -89,12 +89,15 @@ class RouterAutoProvisioningService
         // script generator does), so it's always called here rather than
         // duplicating that same default-true logic in a second place.
         $posResult = $this->routerOs->provisionPos($router);
-        // provisionStaffWifi() no-ops internally too, whenever built-in Wi-Fi or
-        // both Staff/Management SSIDs are disabled -- always calling it here is
-        // what actually closes the "trusted-device access list isn't pushed to
-        // the router automatically" gap docs/staff-wifi-access.md used to flag,
-        // the same 5-minute-cycle mechanism that already keeps WireGuard peers/
-        // ZeroTier membership/POS MAC-auth in sync without a manual click.
+        // provisionStaffWifi() maintains Staff's MAC-auth hotspot regardless of
+        // enable_builtin_wifi (works with or without wireless, matching POS) and
+        // Management's unconditionally (its VLAN is core/always present) -- only
+        // the wifi access-list sync step within it needs a built-in radio.
+        // Always calling it here is what actually closes the "trusted-device
+        // enforcement isn't pushed to the router automatically" gap
+        // docs/staff-wifi-access.md used to flag, the same 5-minute-cycle
+        // mechanism that already keeps WireGuard peers/ZeroTier membership/POS
+        // MAC-auth in sync without a manual click.
         $staffWifiResult = $this->routerOs->provisionStaffWifi($router);
 
         if ($hotspotResult['success'] && $pppoeResult['success'] && $posResult['success'] && $staffWifiResult['success']) {

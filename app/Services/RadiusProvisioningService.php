@@ -34,6 +34,27 @@ class RadiusProvisioningService
      */
     public const POS_MAC_AUTH_PASSWORD = 'MmsPosMacAuth2026!';
 
+    /**
+     * Confirmed live 2026-09-23: generateStaffScript()'s new MAC-auth
+     * hotspot for the Staff/Management VLANs (mirroring POS's own, bound to
+     * vlan-staff/vlan-mgmt so trusted-device enforcement works whether a
+     * device reaches those VLANs via built-in Wi-Fi, an external AP, or a
+     * directly wired port) needs the exact same fixed, non-MAC
+     * Cleartext-Password POS_MAC_AUTH_PASSWORD above does, for the identical
+     * CHAP-hash reason. provisionTrustedWifiDevice() used to store the
+     * device's own MAC as its Cleartext-Password too -- fine for the
+     * external-AP RADIUS MAC-auth path this app never directly drives
+     * (docs/staff-wifi-access.md), which typically sends the MAC as a plain
+     * PAP password an AP controller can usually be told to send instead as
+     * a fixed shared value, but wrong for RouterOS's own hotspot CHAP
+     * exchange the same way POS's MAC-as-password was. Since radcheck only
+     * holds one Cleartext-Password per username, this fixed value now wins
+     * for both paths -- an external AP controller doing RADIUS MAC-auth
+     * against this app's RADIUS server should be configured to send this
+     * fixed password for MAC-auth requests instead of the device's own MAC.
+     */
+    public const TRUSTED_WIFI_MAC_AUTH_PASSWORD = 'MmsTrustedWifi2026!';
+
     public function syncRouter(Router $router): void
     {
         DB::table('nas')->updateOrInsert(
@@ -279,7 +300,7 @@ class RadiusProvisioningService
             ],
             [
                 'op' => ':=',
-                'value' => $macAddress,
+                'value' => self::TRUSTED_WIFI_MAC_AUTH_PASSWORD,
             ]
         );
 

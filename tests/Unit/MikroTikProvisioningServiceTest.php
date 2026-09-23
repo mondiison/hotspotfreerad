@@ -393,7 +393,6 @@ class MikroTikProvisioningServiceTest extends TestCase
                 'staff_wifi_password' => 'MmsStaff2026!',
                 'mgmt_wifi_password' => 'MmsMgmt2026!',
                 'extra_staff_ports' => 'ether6',
-                'extra_mgmt_ports' => 'ether2',
                 'enable_builtin_wifi' => true,
                 'enable_staff' => true,
                 'enable_mgmt_wifi' => true,
@@ -409,10 +408,13 @@ class MikroTikProvisioningServiceTest extends TestCase
         $this->assertStringContainsString('/interface bridge port add bridge=bridge-lan interface=ether6 pvid=30 comment="Extra staff access port"', $script);
         $this->assertStringContainsString('/interface bridge vlan add bridge=bridge-lan tagged=bridge-lan,ether4 untagged=wifi-staff,ether6 vlan-ids=30', $script);
         $this->assertStringContainsString('/ip address add address=192.168.30.1/24 interface=vlan-staff', $script);
+        $this->assertStringContainsString('/ip hotspot profile add name=mms-staff-profile use-radius=yes login-by=mac mac-auth-password="MmsTrustedWifi2026!" radius-accounting=yes', $script);
+        $this->assertStringContainsString('/ip hotspot add name=mms-staff interface=vlan-staff address-pool=pool-staff profile=mms-staff-profile disabled=no', $script);
 
         $this->assertStringContainsString('/interface wifi security add name=mms-mgmt-sec authentication-types=wpa2-psk,wpa3-psk passphrase="MmsMgmt2026!"', $script);
         $this->assertStringContainsString('/interface wifi add name=wifi-mgmt master-interface=wifi1 configuration=mms-mgmt-cfg disabled=no', $script);
-        $this->assertStringContainsString('/interface bridge port add bridge=bridge-lan interface=ether2 pvid=10 comment="Extra management access port"', $script);
+        $this->assertStringContainsString('/ip hotspot profile add name=mms-mgmt-profile use-radius=yes login-by=mac mac-auth-password="MmsTrustedWifi2026!" radius-accounting=yes', $script);
+        $this->assertStringContainsString('/ip hotspot add name=mms-mgmt interface=vlan-mgmt address-pool=pool-mgmt profile=mms-mgmt-profile disabled=no', $script);
         $this->assertStringNotContainsString('/interface vlan add interface=bridge-lan name=vlan-mgmt', $script);
 
         $this->assertStringContainsString('/interface wifi access-list remove [find interface=wifi-staff]', $script);
@@ -423,13 +425,24 @@ class MikroTikProvisioningServiceTest extends TestCase
         $this->assertStringNotContainsString('/interface wifi access-list add interface=wifi-mgmt action=reject', $script);
     }
 
-    public function test_staff_script_explains_itself_without_builtin_wifi(): void
+    /**
+     * Regression test for a live 2026-09-23 report: an admin had configured
+     * an extra Staff access port specifically to test with a wired device,
+     * but generateStaffScript() only ever returned an explanatory comment
+     * without enable_builtin_wifi, generating nothing usable at all. Fixed
+     * to match generatePosScript()'s shape -- VLAN/addressing/extra-ports/
+     * MAC-auth hotspot are created regardless of wireless, only the virtual
+     * Wi-Fi SSID itself stays conditional.
+     */
+    public function test_staff_script_creates_infrastructure_and_mac_auth_hotspot_without_builtin_wifi(): void
     {
         $router = new Router([
             'nas_identifier' => 'wired-router',
             'wireguard_internal_ip' => '10.8.0.12',
             'shared_secret' => 'radius-secret',
             'provisioning_settings' => [
+                'trunk_port' => 'ether4',
+                'extra_staff_ports' => 'ether6',
                 'enable_builtin_wifi' => false,
                 'enable_staff' => true,
             ],
@@ -437,10 +450,16 @@ class MikroTikProvisioningServiceTest extends TestCase
 
         $script = app(MikroTikProvisioningService::class)->generateStaffScript($router);
 
-        $this->assertStringContainsString('does not use MikroTik\'s built-in Wi-Fi', $script);
-        $this->assertStringContainsString('docs/staff-wifi-access.md', $script);
-        $this->assertStringNotContainsString('/interface vlan add', $script);
+        $this->assertStringContainsString('/interface vlan add interface=bridge-lan name=vlan-staff vlan-id=30', $script);
+        $this->assertStringContainsString('/interface bridge port add bridge=bridge-lan interface=ether6 pvid=30 comment="Extra staff access port"', $script);
+        $this->assertStringContainsString('/interface bridge vlan add bridge=bridge-lan tagged=bridge-lan,ether4 untagged=ether6 vlan-ids=30', $script);
+        $this->assertStringContainsString('/ip hotspot profile add name=mms-staff-profile use-radius=yes login-by=mac mac-auth-password="MmsTrustedWifi2026!" radius-accounting=yes', $script);
+        $this->assertStringContainsString('/ip hotspot add name=mms-staff interface=vlan-staff address-pool=pool-staff profile=mms-staff-profile disabled=no', $script);
+        $this->assertStringContainsString('/ip hotspot profile add name=mms-mgmt-profile use-radius=yes login-by=mac mac-auth-password="MmsTrustedWifi2026!" radius-accounting=yes', $script);
+
         $this->assertStringNotContainsString('/interface wifi security add', $script);
+        $this->assertStringNotContainsString('/interface wifi configuration add', $script);
+        $this->assertStringContainsString('the MAC-auth hotspot above is still enforcing regardless', $script);
     }
 
     public function test_it_generates_a_fresh_infrastructure_script_for_starlink_plaza_networks(): void

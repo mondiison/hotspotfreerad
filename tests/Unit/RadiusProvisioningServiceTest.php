@@ -303,7 +303,7 @@ class RadiusProvisioningServiceTest extends TestCase
             'username' => 'AA:BB:CC:DD:EE:FF',
             'attribute' => 'Cleartext-Password',
             'op' => ':=',
-            'value' => 'AA:BB:CC:DD:EE:FF',
+            'value' => RadiusProvisioningService::TRUSTED_WIFI_MAC_AUTH_PASSWORD,
         ]);
         $this->assertSame('AA:BB:CC:DD:EE:FF', $device->refresh()->mac_address);
         $this->assertNotNull($device->last_provisioned_at);

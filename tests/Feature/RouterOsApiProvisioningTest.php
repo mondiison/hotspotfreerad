@@ -398,11 +398,22 @@ class RouterOsApiProvisioningTest extends TestCase
         $this->assertFalse($result['success']);
         $labels = array_column($result['steps'], 'label');
         $this->assertContains('Check Staff VLAN infrastructure', $labels);
+        $this->assertContains('Apply Staff MAC-auth hotspot', $labels);
         $this->assertContains('Sync MMS Staff trusted-device access list', $labels);
+        $this->assertContains('Apply Management MAC-auth hotspot', $labels);
         $this->assertContains('Sync MMS Mgmt trusted-device access list', $labels);
     }
 
-    public function test_provision_staff_wifi_is_a_no_op_without_builtin_wifi(): void
+    /**
+     * Regression test for a live 2026-09-23 report: an admin had configured
+     * an extra Staff access port to test with a wired device, but
+     * provisionStaffWifi() no-opped entirely without enable_builtin_wifi --
+     * matching the same gap generateStaffScript() had. The MAC-auth hotspot
+     * (works with or without wireless, mirroring POS) is now still
+     * attempted; only the wifi access-list sync step -- genuinely
+     * wireless-radio-only -- is skipped.
+     */
+    public function test_provision_staff_wifi_still_applies_mac_auth_hotspot_without_builtin_wifi(): void
     {
         $router = Router::create([
             'shop_id' => $this->makeShop()->id,
@@ -410,12 +421,36 @@ class RouterOsApiProvisioningTest extends TestCase
             'nas_identifier' => 'no-builtin-wifi-router',
             'wireguard_internal_ip' => '192.0.2.10',
             'shared_secret' => 'radius-secret',
-            'provisioning_settings' => ['enable_builtin_wifi' => false],
+            'provisioning_settings' => ['enable_builtin_wifi' => false, 'enable_staff' => true],
         ]);
 
         $result = app(RouterOsConnectionService::class)->provisionStaffWifi($router);
 
-        $this->assertSame(['success' => true, 'steps' => []], $result);
+        $this->assertFalse($result['success']);
+        $labels = array_column($result['steps'], 'label');
+        $this->assertContains('Check Staff VLAN infrastructure', $labels);
+        $this->assertContains('Apply Staff MAC-auth hotspot', $labels);
+        $this->assertContains('Apply Management MAC-auth hotspot', $labels);
+        $this->assertNotContains('Sync MMS Staff trusted-device access list', $labels);
+        $this->assertNotContains('Sync MMS Mgmt trusted-device access list', $labels);
+    }
+
+    public function test_provision_staff_wifi_is_a_no_op_when_staff_is_disabled(): void
+    {
+        $router = Router::create([
+            'shop_id' => $this->makeShop()->id,
+            'name' => 'Staff Disabled Router',
+            'nas_identifier' => 'staff-disabled-router',
+            'wireguard_internal_ip' => '192.0.2.11',
+            'shared_secret' => 'radius-secret',
+            'provisioning_settings' => ['enable_staff' => false, 'enable_mgmt_wifi' => false],
+        ]);
+
+        $result = app(RouterOsConnectionService::class)->provisionStaffWifi($router);
+
+        $this->assertFalse($result['success']);
+        $labels = array_column($result['steps'], 'label');
+        $this->assertSame(['Apply Management MAC-auth hotspot'], $labels);
     }
 
     public function test_push_hotspot_login_page_reports_a_clear_error_when_router_is_unreachable(): void

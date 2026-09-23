@@ -214,15 +214,47 @@ SCRIPT;
     /**
      * Mirrors generatePosScript()'s self-sufficiency reasoning, for the same
      * reason: enable_staff can be flipped on after Fresh Infrastructure
-     * Script was last applied, leaving vlan-staff/pool-staff/dhcp-staff and
-     * the virtual Staff Wi-Fi SSID missing entirely. Management is treated
-     * differently, deliberately -- vlan-mgmt/pool-mgmt/dhcp-mgmt are core
-     * infrastructure Fresh Infrastructure Script always creates
+     * Script was last applied, leaving vlan-staff/pool-staff/dhcp-staff
+     * missing entirely. Management is treated differently, deliberately --
+     * vlan-mgmt/pool-mgmt/dhcp-mgmt (and its own extra untagged ports) are
+     * core infrastructure Fresh Infrastructure Script always creates
      * unconditionally (the Pi itself needs an address on that VLAN
-     * regardless of wireless), so re-creating them here on the common,
-     * already-provisioned case would just fail noisily for no benefit.
-     * Only Management's wireless SSID (enable_mgmt_wifi) is genuinely
-     * optional/self-sufficient here, the same way Staff's whole VLAN is.
+     * regardless of wireless), so re-creating any of that here on the
+     * common, already-provisioned case would just fail noisily for no
+     * benefit or create genuine duplicates.
+     *
+     * Confirmed live 2026-09-23: this used to gate the ENTIRE method behind
+     * enable_builtin_wifi, returning only an explanatory comment when a
+     * router had no built-in Wi-Fi radio -- even though an admin had
+     * legitimately configured an extra Staff access port specifically to
+     * test with a wired device or external AP bridged into vlan-staff.
+     * Unlike POS, whose VLAN/addressing/MAC-auth hotspot were always
+     * self-sufficient regardless of wireless, Staff's entire section was
+     * wrongly treated as wireless-only. Fixed to match POS's shape exactly:
+     * the VLAN/addressing/extra-ports/MAC-auth hotspot below are now always
+     * created whenever enable_staff is on, with ONLY the virtual Wi-Fi SSID
+     * itself (security/configuration/interface/bridge port) staying
+     * conditional on enable_builtin_wifi, since that part is genuinely
+     * wireless-specific. Management gets the same treatment for its own
+     * MAC-auth hotspot, unconditionally -- its VLAN is core/always present,
+     * so there's no reason its trusted-device enforcement should depend on
+     * wireless either.
+     *
+     * The MAC-auth hotspot mechanism (mirroring POS's mms-pos-profile/
+     * mms-pos exactly, just bound to vlan-staff/vlan-mgmt) is what actually
+     * makes "with or without built-in Wi-Fi" meaningful here -- it works
+     * whether a device reaches the VLAN via the router's own radio, an
+     * external AP bridged into an extra access port, or a directly wired
+     * connection, the same way POS's already does. The /interface wifi
+     * access-list section stays wireless-radio-only by nature (RouterOS has
+     * no equivalent for a wired port), so it's still skipped -- with an
+     * explanatory note that the MAC-auth hotspot above is still enforcing
+     * regardless -- when there's no built-in Wi-Fi. Not yet confirmed
+     * against real hardware, in particular that adding a hotspot server on
+     * vlan-mgmt doesn't interfere with the router's own Winbox/SSH/API
+     * management access on that same VLAN -- verify before relying on this
+     * in production, the same caution this codebase applies to other
+     * freshly-added RouterOS behavior.
      *
      * The trailing access-list section is deliberately its own safely
      * re-pastable block (clears both SSIDs' existing entries, then rebuilds
@@ -243,28 +275,13 @@ SCRIPT;
         $enableStaff = (bool) $settings['enable_staff'];
         $enableMgmtWifi = (bool) $settings['enable_mgmt_wifi'];
 
-        if (! $enableBuiltinWifi) {
-            return <<<'SCRIPT'
-            # This router does not use MikroTik's built-in Wi-Fi (enable_builtin_wifi
-            # is off in Network plan), so the /interface wifi access-list mechanism
-            # below does not apply -- it only works for SSIDs this app hosts directly
-            # on the router's own radio.
-            #
-            # For an external AP (the recommended production setup), configure your AP
-            # controller's own RADIUS MAC-auth against this app's RADIUS server instead.
-            # Registering a device under Trusted Wi-Fi Devices already writes it into
-            # FreeRADIUS either way -- see docs/staff-wifi-access.md's "External APs"
-            # section for the AP-controller-side setup this app cannot do for you.
-            SCRIPT;
-        }
-
         $tunnelLines = implode("\n", array_merge($this->wireguardProvisioningLines($router), $this->zeroTierLines($router)));
         $apiUserLines = implode("\n", $this->apiUserProvisioningLines($router));
 
         $extraStaffPorts = $enableStaff ? $this->extraPortInterfaces($settings, 'extra_staff_ports') : [];
-        $extraMgmtPorts = $enableMgmtWifi ? $this->extraPortInterfaces($settings, 'extra_mgmt_ports') : [];
+        $trustedWifiMacAuthPassword = $this->quote(RadiusProvisioningService::TRUSTED_WIFI_MAC_AUTH_PASSWORD);
 
-        $staffWifiLines = $enableStaff ? [
+        $staffWifiLines = ($enableStaff && $enableBuiltinWifi) ? [
             '/interface wifi security add name=mms-staff-sec authentication-types=wpa2-psk,wpa3-psk passphrase="'.$this->quote($settings['staff_wifi_password']).'"',
             '/interface wifi configuration add name=mms-staff-cfg mode=ap ssid="MMS Staff" security=mms-staff-sec country=Nigeria',
             '/interface wifi add name=wifi-staff master-interface='.$settings['builtin_wifi_interface'].' configuration=mms-staff-cfg disabled=no',
@@ -276,7 +293,7 @@ SCRIPT;
             $extraStaffPorts
         );
 
-        $staffUntaggedMembers = implode(',', array_filter(['wifi-staff', ...$extraStaffPorts]));
+        $staffUntaggedMembers = implode(',', array_filter([($enableStaff && $enableBuiltinWifi) ? 'wifi-staff' : null, ...$extraStaffPorts]));
         $staffBridgeVlanLine = $staffUntaggedMembers !== ''
             ? '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' untagged='.$staffUntaggedMembers.' vlan-ids='.$settings['staff_vlan']
             : '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' vlan-ids='.$settings['staff_vlan'];
@@ -291,27 +308,50 @@ SCRIPT;
                 '/ip pool add name=pool-staff ranges='.$settings['staff_pool'],
                 '/ip dhcp-server add name=dhcp-staff interface=vlan-staff address-pool=pool-staff lease-time=8h disabled=no',
                 '/ip dhcp-server network add address='.$settings['staff_network'].' gateway='.str($settings['staff_gateway'])->before('/').' dns-server='.str($settings['staff_gateway'])->before('/'),
+                '# MAC-auth hotspot: only a MAC address registered as an active Trusted Wi-Fi',
+                '# Device (network=staff) is granted access past this VLAN -- works whether the',
+                '# device reaches vlan-staff via built-in Wi-Fi, an external AP bridged into an',
+                '# extra staff port, or a directly wired connection, the same way POS already',
+                '# works with or without wireless. mac-auth-password is explicit, not left blank,',
+                '# for the same reason POS needs it (RouterOS\'s "defaults to the client\'s MAC"',
+                '# blank behavior does not send a CHAP-hashable password matching the MAC).',
+                '/ip hotspot profile add name=mms-staff-profile use-radius=yes login-by=mac mac-auth-password="'.$trustedWifiMacAuthPassword.'" radius-accounting=yes',
+                '/ip hotspot add name=mms-staff interface=vlan-staff address-pool=pool-staff profile=mms-staff-profile disabled=no',
+                '/ip firewall filter add chain=input in-interface=vlan-staff protocol=tcp dst-port=80,443,64872-64875 action=accept comment="Allow Staff MAC-auth hotspot services" place-before=[find action=drop in-interface-list=!WAN]',
             ]
         ) : ['# Staff VLAN/SSID is disabled for this router profile.'];
         $staffSection = implode("\n", $staffSectionLines);
 
-        $mgmtWifiLines = $enableMgmtWifi ? array_merge(
-            [
-                '/interface wifi security add name=mms-mgmt-sec authentication-types=wpa2-psk,wpa3-psk passphrase="'.$this->quote($settings['mgmt_wifi_password']).'"',
-                '/interface wifi configuration add name=mms-mgmt-cfg mode=ap ssid="MMS Mgmt" security=mms-mgmt-sec country=Nigeria',
-                '/interface wifi add name=wifi-mgmt master-interface='.$settings['builtin_wifi_interface'].' configuration=mms-mgmt-cfg disabled=no',
-                '/interface bridge port add bridge='.$lanBridgeName.' interface=wifi-mgmt pvid='.$settings['mgmt_vlan'].' comment="Virtual management Wi-Fi for lab testing"',
-            ],
-            array_map(
-                fn (string $port): string => '/interface bridge port add bridge='.$lanBridgeName.' interface='.$port.' pvid='.$settings['mgmt_vlan'].' comment="Extra management access port"',
-                $extraMgmtPorts
-            )
-        ) : ['# Management Wi-Fi SSID is disabled for this router profile (Network plan\'s "Enable management Wi-Fi").'];
-        $mgmtSection = implode("\n", $mgmtWifiLines);
+        $mgmtWifiLines = ($enableMgmtWifi && $enableBuiltinWifi) ? [
+            '/interface wifi security add name=mms-mgmt-sec authentication-types=wpa2-psk,wpa3-psk passphrase="'.$this->quote($settings['mgmt_wifi_password']).'"',
+            '/interface wifi configuration add name=mms-mgmt-cfg mode=ap ssid="MMS Mgmt" security=mms-mgmt-sec country=Nigeria',
+            '/interface wifi add name=wifi-mgmt master-interface='.$settings['builtin_wifi_interface'].' configuration=mms-mgmt-cfg disabled=no',
+            '/interface bridge port add bridge='.$lanBridgeName.' interface=wifi-mgmt pvid='.$settings['mgmt_vlan'].' comment="Virtual management Wi-Fi for lab testing"',
+        ] : ['# Management Wi-Fi SSID is disabled for this router profile (Network plan\'s "Enable management Wi-Fi").'];
+
+        $mgmtHotspotLines = [
+            '# MAC-auth hotspot for the management VLAN -- same mechanism as Staff above,',
+            '# scoped to network=mgmt Trusted Wi-Fi Devices. Management VLAN/addressing is',
+            '# core infrastructure created unconditionally elsewhere, so only the MAC-auth',
+            '# hotspot itself is added here, not the VLAN.',
+            '/ip hotspot profile add name=mms-mgmt-profile use-radius=yes login-by=mac mac-auth-password="'.$trustedWifiMacAuthPassword.'" radius-accounting=yes',
+            '/ip hotspot add name=mms-mgmt interface=vlan-mgmt address-pool=pool-mgmt profile=mms-mgmt-profile disabled=no',
+            '/ip firewall filter add chain=input in-interface=vlan-mgmt protocol=tcp dst-port=80,443,64872-64875 action=accept comment="Allow Management MAC-auth hotspot services" place-before=[find action=drop in-interface-list=!WAN]',
+        ];
+
+        $mgmtSection = implode("\n", array_merge($mgmtWifiLines, $mgmtHotspotLines));
 
         $accessListLines = array_merge(
-            $enableStaff ? $this->wifiAccessListLines($router, 'wifi-staff', 'MMS Staff', TrustedWifiDevice::NETWORK_STAFF) : ['# Staff SSID is disabled -- no access list to generate.'],
-            $enableMgmtWifi ? $this->wifiAccessListLines($router, 'wifi-mgmt', 'MMS Mgmt', TrustedWifiDevice::NETWORK_MGMT) : ['# Management Wi-Fi SSID is disabled -- no access list to generate.']
+            ($enableStaff && $enableBuiltinWifi) ? $this->wifiAccessListLines($router, 'wifi-staff', 'MMS Staff', TrustedWifiDevice::NETWORK_STAFF) : [
+                $enableStaff
+                    ? '# No built-in Wi-Fi radio on this router, so there\'s no wifi access-list to manage for Staff -- the MAC-auth hotspot above is still enforcing regardless.'
+                    : '# Staff SSID is disabled -- no access list to generate.',
+            ],
+            ($enableMgmtWifi && $enableBuiltinWifi) ? $this->wifiAccessListLines($router, 'wifi-mgmt', 'MMS Mgmt', TrustedWifiDevice::NETWORK_MGMT) : [
+                $enableMgmtWifi
+                    ? '# No built-in Wi-Fi radio on this router, so there\'s no wifi access-list to manage for Management -- the MAC-auth hotspot above is still enforcing regardless.'
+                    : '# Management Wi-Fi SSID is disabled -- no access list to generate.',
+            ]
         );
         $accessListSection = implode("\n", $accessListLines);
 
@@ -319,13 +359,15 @@ SCRIPT;
         /system identity set name="{$nasIdentifier}"
         {$tunnelLines}
         {$apiUserLines}
-        # Creates the Staff VLAN/Wi-Fi/ports/addressing -- NOT idempotent, same as the
-        # Fresh Infrastructure Script itself. Do not paste this twice, or if this
-        # router's Fresh Infrastructure Script has already included Staff (enable_staff
-        # was already on when it was last generated/applied).
+        # Requires a RADIUS client for the "hotspot" service already added (Hotspot
+        # Script tab, or the Bootstrap/Fresh Infrastructure scripts) -- Staff/Management
+        # share that RADIUS client, so this script does not add a second one.
+        # Creates the Staff VLAN/Wi-Fi/ports/addressing/MAC-auth hotspot -- NOT
+        # idempotent, same as the Fresh Infrastructure Script itself. Do not paste
+        # this twice, or if this router's Fresh Infrastructure Script has already
+        # included Staff (enable_staff was already on when it was last
+        # generated/applied).
         {$staffSection}
-        # Management VLAN/addressing is core infrastructure Fresh Infrastructure Script
-        # always creates unconditionally -- only its wireless SSID is created here.
         {$mgmtSection}
         # Re-run everything below any time a Trusted Wi-Fi Device is added, edited, or
         # removed to pick up the change -- clears and rebuilds each SSID's access list

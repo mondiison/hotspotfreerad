@@ -7,6 +7,8 @@ use App\Models\Shop;
 use App\Models\Tenant;
 use App\Models\TrustedWifiDevice;
 use App\Models\User;
+use App\Services\RadiusProvisioningService;
+use App\Services\TrustedWifiDeviceManagementService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -54,7 +56,7 @@ class AdminTrustedWifiDeviceTest extends TestCase
         $this->assertDatabaseHas('radcheck', [
             'username' => 'AA:BB:CC:DD:EE:FF',
             'attribute' => 'Cleartext-Password',
-            'value' => 'AA:BB:CC:DD:EE:FF',
+            'value' => RadiusProvisioningService::TRUSTED_WIFI_MAC_AUTH_PASSWORD,
         ]);
     }
 
@@ -69,7 +71,7 @@ class AdminTrustedWifiDeviceTest extends TestCase
             'mac_address' => 'AA:BB:CC:DD:EE:22',
             'is_active' => true,
         ]);
-        app(\App\Services\TrustedWifiDeviceManagementService::class)->syncSystem($device);
+        app(TrustedWifiDeviceManagementService::class)->syncSystem($device);
 
         Livewire::actingAs($user)
             ->test(TrustedWifiDevicesIndex::class)

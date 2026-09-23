@@ -376,7 +376,7 @@ sudo freeradius -X</code></pre>
                             <div class="flex flex-col justify-between gap-3 md:flex-row md:items-start">
                                 <div>
                                     <h2 class="text-base font-semibold">RouterOS Staff &amp; Management Wi-Fi Script</h2>
-                                    <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Creates the Staff and Management SSIDs (VLAN, addressing, and untagged ports included) on MikroTik's built-in Wi-Fi, then restricts each to only devices registered and active under Trusted Wi-Fi Devices -- even with the correct Wi-Fi password. Requires "This router has built-in Wi-Fi" enabled in Network plan; for an external AP, see the AP / SSID Guide tab and <code>docs/staff-wifi-access.md</code> instead. Apply live over the API independently of the Hotspot/PPPoE/POS scripts, or paste by hand.</p>
+                                    <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Binds a MAC-auth hotspot to the Staff/Management VLANs -- only a MAC address registered and active under Trusted Wi-Fi Devices gets access, whether the device reaches the VLAN via MikroTik's built-in Wi-Fi, an external AP bridged into an extra access port, or a directly wired connection (the same way POS already works with or without wireless). When "This router has built-in Wi-Fi" is on, the script also creates the virtual SSID itself plus a second, wireless-only access-list layer. Apply live over the API independently of the Hotspot/PPPoE/POS scripts, or paste by hand.</p>
                                 </div>
                                 @if ($router->api_username)
                                     <flux:modal.trigger name="provision-staff-confirm">
@@ -386,7 +386,7 @@ sudo freeradius -X</code></pre>
                                         <div class="space-y-5">
                                             <div>
                                                 <flux:heading size="lg">Provision Staff/Management Wi-Fi via API</flux:heading>
-                                                <flux:text class="mt-2">This pushes the trusted-device access list for the Staff and Management SSIDs to the router live over the API -- it does not touch the customer hotspot, PPPoE, or POS. Re-run any time after registering, editing, or removing a Trusted Wi-Fi Device; the scheduled auto-provisioning sync also does this automatically every few minutes.</flux:text>
+                                                <flux:text class="mt-2">This pushes the Staff/Management MAC-auth hotspot and, when this router has built-in Wi-Fi, the trusted-device access list too -- it does not touch the customer hotspot, PPPoE, or POS. Re-run any time after registering, editing, or removing a Trusted Wi-Fi Device; the scheduled auto-provisioning sync also does this automatically every few minutes.</flux:text>
                                             </div>
                                             <div class="flex justify-end gap-3">
                                                 <flux:modal.close>
@@ -408,10 +408,11 @@ sudo freeradius -X</code></pre>
                     <section class="min-w-0 overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
                         <h2 class="text-base font-semibold">Staff / Management Wi-Fi Notes</h2>
                         <ul class="mt-4 space-y-3 text-sm text-zinc-600 dark:text-zinc-400">
-                            <li>Register each staff/admin device's MAC address under <a href="{{ route('admin.trusted-wifi-devices.index') }}" wire:navigate class="text-blue-600 hover:underline">Trusted Wi-Fi Devices</a> (network: Staff or Management) -- an unregistered MAC will not pass the access list once this is applied, even with the correct Wi-Fi password.</li>
-                            <li>If no devices are registered yet for a network, its access list is left open (no default-deny) so a brand-new setup can't accidentally lock out the admin's own device before anything has been registered.</li>
-                            <li>"Provision via API" only syncs the trusted-device list itself -- it does not create the Staff/Management SSID if it doesn't exist yet. Paste this script by hand first (or re-run Fresh Infrastructure Script) if either SSID is missing.</li>
-                            <li>This only applies to MikroTik's own built-in Wi-Fi radio. External APs (the recommended production setup) need their own controller configured for RADIUS MAC-auth instead -- see <code>docs/staff-wifi-access.md</code>.</li>
+                            <li>Register each staff/admin device's MAC address under <a href="{{ route('admin.trusted-wifi-devices.index') }}" wire:navigate class="text-blue-600 hover:underline">Trusted Wi-Fi Devices</a> (network: Staff or Management) -- an unregistered MAC will not get access once this is applied, whether it's connecting over built-in Wi-Fi, an external AP, or a wired port.</li>
+                            <li>The MAC-auth hotspot works with or without "This router has built-in Wi-Fi" -- it's bound to the VLAN itself, the same way POS's already does. The wifi access-list is an additional, wireless-only layer on top of it.</li>
+                            <li>If no devices are registered yet for a network, its wifi access-list is left open (no default-deny) so a brand-new setup can't accidentally lock out the admin's own device before anything has been registered. The MAC-auth hotspot has no such exception -- it always requires a registered MAC.</li>
+                            <li>"Provision via API" syncs the MAC-auth hotspot and (when built-in Wi-Fi is on) the wifi access-list -- it does not create the Staff/Management SSID itself if it doesn't exist yet. Paste this script by hand first (or re-run Fresh Infrastructure Script) if a wireless SSID is missing.</li>
+                            <li>Requires a RADIUS client for the "hotspot" service already added (Hotspot Script tab, or the Bootstrap/Fresh Infrastructure scripts) -- Staff/Management share that RADIUS client rather than adding their own.</li>
                         </ul>
                     </section>
                 </flux:tab.panel>

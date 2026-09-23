@@ -803,23 +803,26 @@ class RouterOsConnectionService
 
     /**
      * The live-API counterpart to MikroTikProvisioningService::
-     * generateStaffScript(), scoped the same deliberately-narrower way
-     * provisionPos()'s own live-API side is scoped relative to
-     * generatePosScript(): the VLAN/pool/DHCP existence checks
-     * (ensureStaffInfrastructure()) are simple, safe-to-run-every-cycle
-     * "does this exist" checks, but creating the virtual Wi-Fi SSID itself
-     * (security + configuration + interface + bridge port) is NOT attempted
-     * live here, matching POS's own precedent of deferring that harder,
-     * bridge-vlan-table-adjacent work to the paste-by-hand script. If the
-     * SSID doesn't exist yet, syncWifiAccessList()'s step below will just
-     * fail plainly (interface not found) rather than silently no-opping.
+     * generateStaffScript(). Confirmed live 2026-09-23 this used to no-op
+     * entirely without enable_builtin_wifi, even though a router with an
+     * extra Staff access port configured (for a wired device or external AP
+     * bridged into vlan-staff) has real, working infrastructure this method
+     * could and should be maintaining -- the same gap the script generator
+     * had, fixed the same way: the VLAN/pool/DHCP existence checks
+     * (ensureStaffInfrastructure()) and the MAC-auth hotspot profile/server
+     * (applyMacAuthHotspotServer(), mirroring provisionPos()'s own
+     * applyPosHotspotServer() exactly) now always run whenever enable_staff
+     * is on, regardless of wireless -- this is what actually makes Staff
+     * enforcement work with or without built-in Wi-Fi, the same way POS
+     * already does. Management gets the same MAC-auth hotspot
+     * unconditionally too, since its VLAN is core/always assumed present.
      *
-     * The trusted-device access list itself IS synced live here, though --
-     * unlike SSID creation, it reduces to a single per-interface list-then-
-     * replace operation (well-scoped, no bridge-vlan reconciliation needed),
-     * and closing the "not pushed to the router automatically" gap
-     * documented in docs/staff-wifi-access.md is this method's whole reason
-     * for existing.
+     * Creating the virtual Wi-Fi SSID itself (security + configuration +
+     * interface + bridge port) is still NOT attempted live, matching POS's
+     * own precedent of deferring that harder, bridge-vlan-table-adjacent
+     * work to the paste-by-hand script -- and the wifi access-list sync
+     * step is still skipped entirely without enable_builtin_wifi, since
+     * that mechanism is genuinely wireless-radio-only.
      *
      * @return array{success: bool, steps: list<array{label: string, success: bool, error: ?string}>}
      */
@@ -828,7 +831,7 @@ class RouterOsConnectionService
         if (! $this->isConfigured($router)) {
             return [
                 'success' => false,
-                'steps' => [['label' => 'Staff/Management Wi-Fi trusted-device access list', 'success' => false, 'error' => 'No RouterOS API credentials generated for this router yet.']],
+                'steps' => [['label' => 'Staff/Management Wi-Fi trusted-device enforcement', 'success' => false, 'error' => 'No RouterOS API credentials generated for this router yet.']],
             ];
         }
 
@@ -837,10 +840,6 @@ class RouterOsConnectionService
         $enableStaff = (bool) ($settings['enable_staff'] ?? true);
         $enableMgmtWifi = (bool) ($settings['enable_mgmt_wifi'] ?? false);
 
-        if (! $enableBuiltinWifi || (! $enableStaff && ! $enableMgmtWifi)) {
-            return ['success' => true, 'steps' => []];
-        }
-
         $result = ['success' => true, 'steps' => []];
 
         if ($enableStaff) {
@@ -848,18 +847,114 @@ class RouterOsConnectionService
             $result['steps'] = array_merge($result['steps'], $infraResult['steps']);
             $result['success'] = $result['success'] && $infraResult['success'];
 
-            $step = $this->syncWifiAccessList($router, 'wifi-staff', 'MMS Staff', TrustedWifiDevice::NETWORK_STAFF);
-            $result['steps'][] = $step;
-            $result['success'] = $result['success'] && $step['success'];
+            $hotspotStep = $this->applyMacAuthHotspotServer(
+                $router,
+                'Apply Staff MAC-auth hotspot',
+                'mms-staff-profile',
+                'mms-staff',
+                'vlan-staff',
+                'pool-staff',
+            );
+            $result['steps'][] = $hotspotStep;
+            $result['success'] = $result['success'] && $hotspotStep['success'];
+
+            if ($enableBuiltinWifi) {
+                $step = $this->syncWifiAccessList($router, 'wifi-staff', 'MMS Staff', TrustedWifiDevice::NETWORK_STAFF);
+                $result['steps'][] = $step;
+                $result['success'] = $result['success'] && $step['success'];
+            }
         }
 
-        if ($enableMgmtWifi) {
+        // Management's VLAN/pool are core infrastructure, assumed already
+        // present (see ensureStaffInfrastructure()'s own docblock) -- so its
+        // MAC-auth hotspot is attempted unconditionally rather than gated
+        // behind enable_mgmt_wifi, the same "core, always there" reasoning
+        // already applied to the VLAN itself.
+        $mgmtHotspotStep = $this->applyMacAuthHotspotServer(
+            $router,
+            'Apply Management MAC-auth hotspot',
+            'mms-mgmt-profile',
+            'mms-mgmt',
+            'vlan-mgmt',
+            'pool-mgmt',
+        );
+        $result['steps'][] = $mgmtHotspotStep;
+        $result['success'] = $result['success'] && $mgmtHotspotStep['success'];
+
+        if ($enableMgmtWifi && $enableBuiltinWifi) {
             $step = $this->syncWifiAccessList($router, 'wifi-mgmt', 'MMS Mgmt', TrustedWifiDevice::NETWORK_MGMT);
             $result['steps'][] = $step;
             $result['success'] = $result['success'] && $step['success'];
         }
 
         return $result;
+    }
+
+    /**
+     * Idempotent add-or-set of a MAC-auth hotspot profile/server pair,
+     * mirroring provisionPos()'s applyPosHotspotServer() exactly but shared
+     * across Staff and Management (both new, written together, so sharing
+     * this doesn't carry the "don't refactor working, heavily-tested code"
+     * risk POS's own existing method is deliberately left alone for). Safe
+     * to create the hotspot object itself (unlike applyHotspotProfile() for
+     * the customer hotspot) since vlan-staff/vlan-mgmt and their pools are
+     * fixed names this app's own script generator always uses, never a
+     * router-specific choice from a manual `/ip hotspot setup`.
+     *
+     * @return array{label: string, success: bool, error: ?string}
+     */
+    private function applyMacAuthHotspotServer(Router $router, string $label, string $profileName, string $hotspotName, string $interfaceName, string $addressPool): array
+    {
+        try {
+            $client = $this->client($router, 8);
+
+            $existingProfileId = collect($client->query(new Query('/ip/hotspot/profile/print'))->read())
+                ->first(fn ($row) => is_array($row) && ($row['name'] ?? null) === $profileName)['.id'] ?? null;
+
+            $profileQuery = $existingProfileId !== null
+                ? (new Query('/ip/hotspot/profile/set'))
+                    ->equal('numbers', $existingProfileId)
+                    ->equal('use-radius', 'yes')
+                    ->equal('login-by', 'mac')
+                    ->equal('mac-auth-password', RadiusProvisioningService::TRUSTED_WIFI_MAC_AUTH_PASSWORD)
+                    ->equal('radius-accounting', 'yes')
+                : (new Query('/ip/hotspot/profile/add'))
+                    ->equal('name', $profileName)
+                    ->equal('use-radius', 'yes')
+                    ->equal('login-by', 'mac')
+                    ->equal('mac-auth-password', RadiusProvisioningService::TRUSTED_WIFI_MAC_AUTH_PASSWORD)
+                    ->equal('radius-accounting', 'yes');
+
+            $raw = $client->query($profileQuery)->read(false);
+
+            if ($trapMessage = self::extractTrapMessage($raw)) {
+                throw new \RuntimeException($trapMessage);
+            }
+
+            $existingHotspot = collect($client->query(new Query('/ip/hotspot/print'))->read())
+                ->first(fn ($row) => is_array($row) && ($row['interface'] ?? null) === $interfaceName);
+
+            $hotspotQuery = $existingHotspot !== null
+                ? (new Query('/ip/hotspot/set'))
+                    ->equal('numbers', $existingHotspot['.id'])
+                    ->equal('profile', $profileName)
+                : (new Query('/ip/hotspot/add'))
+                    ->equal('name', $hotspotName)
+                    ->equal('interface', $interfaceName)
+                    ->equal('address-pool', $addressPool)
+                    ->equal('profile', $profileName)
+                    ->equal('disabled', 'no');
+
+            $raw = $client->query($hotspotQuery)->read(false);
+
+            if ($trapMessage = self::extractTrapMessage($raw)) {
+                throw new \RuntimeException($trapMessage);
+            }
+
+            return ['label' => $label, 'success' => true, 'error' => null];
+        } catch (\Throwable $e) {
+            return ['label' => $label, 'success' => false, 'error' => $e->getMessage()];
+        }
     }
 
     /**
