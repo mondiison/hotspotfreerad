@@ -546,7 +546,7 @@ class HotspotPortalTest extends TestCase
             'payment_method' => 'card',
         ])
             ->assertOk()
-            ->assertSee('Card checkout needs the tenant Flutterwave secret key');
+            ->assertSee('Card checkout needs the tenant gateway secret key');
 
         $payment = Payment::firstOrFail();
 
@@ -577,7 +577,7 @@ class HotspotPortalTest extends TestCase
             'payment_method' => 'card',
         ])
             ->assertOk()
-            ->assertSee('Flutterwave rejected the saved card checkout secret key');
+            ->assertSee('The payment gateway rejected the saved card checkout secret key');
     }
 
     public function test_card_checkout_accepts_secret_key_pasted_with_bearer_prefix(): void
@@ -895,7 +895,7 @@ class HotspotPortalTest extends TestCase
 
         $this->get(route('hotspot.payment.callback', [
             'status' => 'succeeded',
-            'reference' => $payment->tx_ref,
+            'tx_ref' => $payment->tx_ref,
             'id' => 'ord_12345',
         ]))
             ->assertOk()
