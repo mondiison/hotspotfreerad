@@ -29,6 +29,8 @@ class BillingPlanManagementService
             'package_limit' => ['nullable', 'integer', 'min:1'],
             'features' => ['nullable', 'string', 'max:5000'],
             'is_active' => ['nullable', 'boolean'],
+            'supports_wallet' => ['nullable', 'boolean'],
+            'wallet_commission_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
         ];
     }
 
@@ -36,6 +38,7 @@ class BillingPlanManagementService
     {
         return $this->normalize($request->validate($this->rules($plan)) + [
             'is_active' => false,
+            'supports_wallet' => false,
         ]);
     }
 
@@ -73,6 +76,8 @@ class BillingPlanManagementService
         $data['slug'] = Str::slug(($data['slug'] ?? null) ?: $data['name']);
         $data['currency'] = strtoupper($data['currency']);
         $data['is_active'] = (bool) ($data['is_active'] ?? false);
+        $data['supports_wallet'] = (bool) ($data['supports_wallet'] ?? false);
+        $data['wallet_commission_rate'] = filled($data['wallet_commission_rate'] ?? null) ? (float) $data['wallet_commission_rate'] : null;
         $features = is_array($data['features'] ?? null)
             ? $data['features']
             : preg_split('/\r\n|\r|\n/', (string) ($data['features'] ?? ''));

@@ -11,6 +11,8 @@ use Illuminate\Support\Str;
 
 class FlutterwaveService
 {
+    public function __construct(private readonly PlatformPaymentSettingsService $platformSettings) {}
+
     /**
      * @throws RequestException
      */
@@ -228,7 +230,9 @@ class FlutterwaveService
 
     public function webhookIsValid(?string $signature, ?Payment $payment = null): bool
     {
-        $secretHash = $payment?->shop?->flutterwave_webhook_secret;
+        $secretHash = $this->usesWalletCredentials($payment)
+            ? $this->platformSettings->webhookSecretHash()
+            : $payment?->shop?->flutterwave_webhook_secret;
 
         return filled($secretHash) && hash_equals((string) $secretHash, (string) $signature);
     }
@@ -245,6 +249,13 @@ class FlutterwaveService
 
     public function credentialSource(Payment $payment): array
     {
+        if ($this->usesWalletCredentials($payment)) {
+            return [
+                'source' => 'platform',
+                'label' => 'MMS Radius platform gateway',
+            ];
+        }
+
         if (filled($payment->shop?->flutterwave_client_id) && filled($payment->shop?->flutterwave_client_secret)) {
             return [
                 'source' => 'tenant',
@@ -260,6 +271,18 @@ class FlutterwaveService
 
     public function hostedCheckoutCredentialSource(Payment $payment): array
     {
+        // No platform-level equivalent of a hosted-checkout (card) secret key exists
+        // yet -- deliberately left unconfigured for wallet-mode shops rather than risk
+        // silently falling back to a stale tenant-owned key a shop may have configured
+        // before switching to wallet mode. Card checkout is simply unavailable for
+        // wallet-mode payments until platform-level card credentials are added.
+        if ($this->usesWalletCredentials($payment)) {
+            return [
+                'source' => 'unconfigured',
+                'label' => 'Card checkout is not available for platform wallet payments yet',
+            ];
+        }
+
         if (filled($payment->shop?->flutterwave_secret_key)) {
             return [
                 'source' => 'tenant',
@@ -380,6 +403,10 @@ class FlutterwaveService
 
     private function clientId(Payment $payment): string
     {
+        if ($this->usesWalletCredentials($payment)) {
+            return (string) $this->platformSettings->clientId();
+        }
+
         if ($this->credentialSource($payment)['source'] === 'tenant') {
             return (string) $payment->shop->flutterwave_client_id;
         }
@@ -389,6 +416,10 @@ class FlutterwaveService
 
     private function clientSecret(Payment $payment): string
     {
+        if ($this->usesWalletCredentials($payment)) {
+            return (string) $this->platformSettings->clientSecret();
+        }
+
         if ($this->credentialSource($payment)['source'] === 'tenant') {
             return (string) $payment->shop->flutterwave_client_secret;
         }
@@ -398,11 +429,22 @@ class FlutterwaveService
 
     private function hostedCheckoutSecretKey(Payment $payment): string
     {
+        // See hostedCheckoutCredentialSource()'s docblock -- wallet-mode shops never
+        // get a hosted-checkout (card) secret key, platform-level or tenant-owned.
+        if ($this->usesWalletCredentials($payment)) {
+            return '';
+        }
+
         if (filled($payment->shop?->flutterwave_secret_key)) {
             return $this->normalizeSecretKey((string) $payment->shop->flutterwave_secret_key);
         }
 
         return '';
+    }
+
+    private function usesWalletCredentials(?Payment $payment): bool
+    {
+        return (bool) $payment?->shop?->tenant?->wallet_enabled;
     }
 
     private function normalizeSecretKey(string $secretKey): string

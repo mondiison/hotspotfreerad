@@ -67,6 +67,24 @@
                 <flux:error name="features" />
             </flux:field>
 
+            <section class="md:col-span-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4">
+                <h2 class="text-sm font-semibold text-zinc-950 dark:text-zinc-100">Tenant wallet</h2>
+                <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Lets a tenant on this plan route customer payments through the platform's own gateway instead of setting up their own, with their cut tracked in an in-app wallet.</p>
+
+                <div class="mt-4 grid gap-5 md:grid-cols-2">
+                    <div class="md:col-span-2">
+                        <flux:checkbox name="supports_wallet" value="1" :checked="(bool) old('supports_wallet', $plan->supports_wallet ?? false)" label="Include wallet feature on this plan" />
+                    </div>
+
+                    <flux:field>
+                        <flux:label>Wallet commission rate (%)</flux:label>
+                        <flux:input type="number" step="0.01" min="0" max="100" name="wallet_commission_rate" value="{{ old('wallet_commission_rate', $plan->wallet_commission_rate) }}" placeholder="e.g. 5" />
+                        <flux:description>The platform's cut of every wallet-routed payment for tenants on this plan.</flux:description>
+                        <flux:error name="wallet_commission_rate" />
+                    </flux:field>
+                </div>
+            </section>
+
             <div class="md:col-span-2">
                 <flux:checkbox name="is_active" value="1" :checked="(bool) old('is_active', $plan->is_active ?? true)" label="Active plan" />
             </div>

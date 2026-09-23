@@ -15,6 +15,8 @@ class BillingPlan extends Model
             'monthly_price' => 'decimal:2',
             'features' => 'array',
             'is_active' => 'boolean',
+            'supports_wallet' => 'boolean',
+            'wallet_commission_rate' => 'decimal:2',
         ];
     }
 

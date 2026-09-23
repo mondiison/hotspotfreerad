@@ -9,7 +9,9 @@ use App\Models\Shop;
 use App\Models\Tenant;
 use App\Models\TenantBillingSubscription;
 use App\Models\User;
+use App\Support\BillingPlanLimits;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
 class BillingPlanLimitTest extends TestCase
@@ -178,6 +180,47 @@ class BillingPlanLimitTest extends TestCase
             ->assertSee('4');
     }
 
+    public function test_assert_can_enable_wallet_throws_without_a_subscription(): void
+    {
+        $tenant = $this->tenant();
+        $user = $this->tenantAdmin($tenant);
+
+        $this->expectException(ValidationException::class);
+
+        BillingPlanLimits::assertCanEnableWallet($user);
+    }
+
+    public function test_assert_can_enable_wallet_throws_when_the_plan_does_not_support_it(): void
+    {
+        $tenant = $this->tenant();
+        $this->subscribeTenant($tenant, ['supports_wallet' => false]);
+        $user = $this->tenantAdmin($tenant);
+
+        $this->expectException(ValidationException::class);
+
+        BillingPlanLimits::assertCanEnableWallet($user);
+    }
+
+    public function test_assert_can_enable_wallet_passes_for_an_eligible_active_subscription(): void
+    {
+        $tenant = $this->tenant();
+        $this->subscribeTenant($tenant, ['supports_wallet' => true, 'wallet_commission_rate' => 5]);
+        $user = $this->tenantAdmin($tenant);
+
+        BillingPlanLimits::assertCanEnableWallet($user);
+
+        $this->assertTrue(true);
+    }
+
+    public function test_assert_can_enable_wallet_is_a_no_op_for_super_admin(): void
+    {
+        $user = User::factory()->create(['role' => 'super_admin', 'is_active' => true]);
+
+        BillingPlanLimits::assertCanEnableWallet($user);
+
+        $this->assertTrue(true);
+    }
+
     private function tenant(): Tenant
     {
         return Tenant::create([
@@ -205,6 +248,8 @@ class BillingPlanLimitTest extends TestCase
             'shop_limit' => $limits['shop_limit'] ?? null,
             'router_limit' => $limits['router_limit'] ?? null,
             'package_limit' => $limits['package_limit'] ?? null,
+            'supports_wallet' => $limits['supports_wallet'] ?? false,
+            'wallet_commission_rate' => $limits['wallet_commission_rate'] ?? null,
             'is_active' => true,
         ]);
 

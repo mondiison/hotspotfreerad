@@ -31,6 +31,10 @@ class Shop extends Model
 
     public function paymentGateway(): string
     {
+        if ($this->tenant?->wallet_enabled) {
+            return PaymentGatewayCatalog::FLUTTERWAVE;
+        }
+
         return $this->payment_gateway ?: PaymentGatewayCatalog::FLUTTERWAVE;
     }
 

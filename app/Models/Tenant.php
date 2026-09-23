@@ -40,6 +40,7 @@ class Tenant extends Model
             'public_site_enabled' => 'boolean',
             'public_site_slides' => 'array',
             'payment_gateway_settings' => 'encrypted:array',
+            'wallet_enabled' => 'boolean',
         ];
     }
 
@@ -71,6 +72,16 @@ class Tenant extends Model
     public function currentBillingSubscription(): HasOne
     {
         return $this->hasOne(TenantBillingSubscription::class)->latestOfMany();
+    }
+
+    public function wallet(): HasOne
+    {
+        return $this->hasOne(Wallet::class);
+    }
+
+    public function walletWithdrawals(): HasMany
+    {
+        return $this->hasMany(WalletWithdrawal::class);
     }
 
     public function publicUrl(): string

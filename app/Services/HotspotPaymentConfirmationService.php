@@ -19,6 +19,7 @@ class HotspotPaymentConfirmationService
         private readonly RadiusProvisioningService $radius,
         private readonly SquadService $squad,
         private readonly StripeService $stripe,
+        private readonly WalletService $wallet,
     ) {}
 
     public function verifyAndGrant(Payment $payment, string $providerReference, string $resourceType = 'order'): ?Subscription
@@ -85,6 +86,10 @@ class HotspotPaymentConfirmationService
             );
 
             $this->radius->grantSubscriptionAccess($subscription, self::ACCESS_PASSWORD);
+
+            if ($payment->shop->tenant?->wallet_enabled) {
+                $this->wallet->creditForPayment($payment->fresh(['shop.tenant', 'package']));
+            }
 
             return $subscription;
         });

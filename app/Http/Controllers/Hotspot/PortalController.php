@@ -260,14 +260,27 @@ class PortalController extends Controller
                 ]
             );
 
+            // A wallet-mode tenant's checkout amount depends on wallet_commission_bearer
+            // (does the customer or the tenant absorb the platform's commission?) --
+            // forWalletCheckout() returns a "charged_amount" the raw forShop() snapshot
+            // has no equivalent of, so "amount" is set from the commission array itself
+            // rather than always being the raw package price.
+            $commission = $router->shop->tenant?->wallet_enabled
+                ? PaymentCommission::forWalletCheckout($router->shop, (float) $package->price)
+                : PaymentCommission::forShop($router->shop, (float) $package->price);
+
             return Payment::create([
                 'shop_id' => $router->shop_id,
                 'package_id' => $package->id,
                 'customer_id' => $customer->id,
                 'provider' => $router->shop->paymentGateway(),
                 'tx_ref' => 'HSF-'.now()->format('YmdHis').'-'.Str::upper(Str::random(8)),
-                'amount' => $package->price,
-                ...PaymentCommission::forShop($router->shop, (float) $package->price),
+                'amount' => $commission['charged_amount'] ?? $package->price,
+                'gross_amount' => $commission['gross_amount'],
+                'platform_fee_amount' => $commission['platform_fee_amount'],
+                'tenant_net_amount' => $commission['tenant_net_amount'],
+                'commission_rate' => $commission['commission_rate'],
+                'billing_model' => $commission['billing_model'],
                 'currency' => $package->currency,
                 'status' => 'pending',
                 'payload' => [

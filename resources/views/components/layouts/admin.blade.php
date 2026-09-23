@@ -96,6 +96,8 @@
                                 ['label' => 'Payments', 'route' => 'admin.payments.index', 'icon' => 'banknotes'],
                                 ['label' => 'Billing', 'route' => 'admin.billing.index', 'icon' => 'credit-card'],
                                 ['label' => 'Payment Setup', 'route' => 'admin.payment-settings.index', 'icon' => 'building-library', 'tenant_admin' => true],
+                                ['label' => 'Wallet', 'route' => 'admin.wallet.index', 'icon' => 'wallet', 'tenant_admin' => true],
+                                ['label' => 'Wallet Withdrawals', 'route' => 'admin.wallet-withdrawals.index', 'icon' => 'arrow-down-tray', 'super_admin' => true],
                                 ['label' => 'Expenses', 'route' => 'admin.expenses.index', 'icon' => 'receipt-percent'],
                                 ['label' => 'Reports', 'route' => 'admin.reports.sales', 'icon' => 'chart-bar'],
                             ],

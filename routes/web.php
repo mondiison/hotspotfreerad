@@ -26,6 +26,8 @@ use App\Http\Controllers\Admin\TopologyController;
 use App\Http\Controllers\Admin\TrustedWifiDeviceController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\VoucherController;
+use App\Http\Controllers\Admin\WalletController;
+use App\Http\Controllers\Admin\WalletWithdrawalController;
 use App\Http\Controllers\Auth\ForcePasswordChangeController;
 use App\Http\Controllers\Auth\ForgotPasswordController;
 use App\Http\Controllers\Auth\LoginController;
@@ -131,6 +133,8 @@ Route::middleware(['auth', AuthorizeTenantStaff::class])->prefix('admin')->name(
     Route::get('reports/sales/export', [SalesReportController::class, 'export'])->name('reports.sales.export');
     Route::get('payment-settings', [PaymentSettingsController::class, 'index'])->name('payment-settings.index');
     Route::put('payment-settings/{shop}', [PaymentSettingsController::class, 'update'])->name('payment-settings.update');
+    Route::get('wallet', [WalletController::class, 'index'])->name('wallet.index');
+    Route::get('wallet-withdrawals', [WalletWithdrawalController::class, 'index'])->name('wallet-withdrawals.index');
 });
 
 Route::get('/{tenant:slug}', TenantPublicSiteController::class)->name('tenant.public-site');

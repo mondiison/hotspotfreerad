@@ -9,6 +9,7 @@ use App\Models\Router;
 use App\Models\Shop;
 use App\Models\Subscription;
 use App\Models\Tenant;
+use App\Models\Wallet;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
@@ -912,6 +913,145 @@ class HotspotPortalTest extends TestCase
         $this->assertDatabaseHas('radcheck', [
             'username' => 'AA:BB:CC:DD:EE:FF',
             'attribute' => 'Cleartext-Password',
+        ]);
+    }
+
+    public function test_wallet_mode_tenant_bears_commission_charges_package_price_and_nets_the_wallet(): void
+    {
+        [$router, $package] = $this->routerWithPackage([
+            'wallet_enabled' => true,
+            'billing_model' => 'commission',
+            'commission_rate' => 10,
+            'wallet_commission_bearer' => 'tenant',
+        ]);
+
+        $this->post(route('hotspot.pay'), [
+            'mac' => 'AA:BB:CC:DD:EE:FF',
+            'nasid' => $router->nas_identifier,
+            'package_id' => $package->id,
+            'email' => 'customer@example.com',
+        ]);
+
+        $payment = Payment::firstOrFail();
+        $this->assertSame('flutterwave', $payment->provider);
+        $this->assertEquals(500, $payment->amount);
+        $this->assertEquals(500, $payment->gross_amount);
+        $this->assertEquals(50, $payment->platform_fee_amount);
+        $this->assertEquals(450, $payment->tenant_net_amount);
+
+        // Deliberately no shop-level flutterwave_client_id/secret set here -- wallet
+        // mode must resolve credentials from the platform's own settings, not the
+        // tenant's (which don't exist for this shop at all).
+        $this->configureFlutterwave();
+        Http::fake([
+            'idp.flutterwave.com/*' => Http::response([
+                'access_token' => 'FLW_V4_TOKEN',
+                'expires_in' => 600,
+            ]),
+            'developersandbox-api.flutterwave.com/orders/ord_wallet_1' => Http::response([
+                'status' => 'success',
+                'data' => [
+                    'id' => 'ord_wallet_1',
+                    'status' => 'succeeded',
+                    'reference' => $payment->tx_ref,
+                    'amount' => 500,
+                    'currency' => 'NGN',
+                ],
+            ]),
+        ]);
+
+        $this->get(route('hotspot.payment.callback', [
+            'status' => 'succeeded',
+            'tx_ref' => $payment->tx_ref,
+            'id' => 'ord_wallet_1',
+        ]))
+            ->assertOk()
+            ->assertSee('Access provisioned');
+
+        $this->assertDatabaseHas('payments', [
+            'id' => $payment->id,
+            'status' => 'successful',
+        ]);
+
+        $wallet = Wallet::where('tenant_id', $router->shop->tenant_id)->firstOrFail();
+        $this->assertEquals(450, $wallet->balance);
+        $this->assertSame(2, $wallet->transactions()->count());
+        $this->assertDatabaseHas('wallet_transactions', [
+            'wallet_id' => $wallet->id,
+            'payment_id' => $payment->id,
+            'type' => 'credit',
+            'amount' => 500,
+        ]);
+        $this->assertDatabaseHas('wallet_transactions', [
+            'wallet_id' => $wallet->id,
+            'payment_id' => $payment->id,
+            'type' => 'debit',
+            'amount' => 50,
+        ]);
+    }
+
+    public function test_wallet_mode_customer_bears_commission_charges_extra_and_credits_full_price(): void
+    {
+        [$router, $package] = $this->routerWithPackage([
+            'wallet_enabled' => true,
+            'billing_model' => 'commission',
+            'commission_rate' => 10,
+            'wallet_commission_bearer' => 'customer',
+        ]);
+
+        $this->post(route('hotspot.pay'), [
+            'mac' => 'AA:BB:CC:DD:EE:FF',
+            'nasid' => $router->nas_identifier,
+            'package_id' => $package->id,
+            'email' => 'customer@example.com',
+        ]);
+
+        $payment = Payment::firstOrFail();
+        $this->assertEquals(550, $payment->amount);
+        $this->assertEquals(550, $payment->gross_amount);
+        $this->assertEquals(50, $payment->platform_fee_amount);
+        $this->assertEquals(500, $payment->tenant_net_amount);
+
+        $this->configureFlutterwave();
+        Http::fake([
+            'idp.flutterwave.com/*' => Http::response([
+                'access_token' => 'FLW_V4_TOKEN',
+                'expires_in' => 600,
+            ]),
+            'developersandbox-api.flutterwave.com/orders/ord_wallet_2' => Http::response([
+                'status' => 'success',
+                'data' => [
+                    'id' => 'ord_wallet_2',
+                    'status' => 'succeeded',
+                    'reference' => $payment->tx_ref,
+                    'amount' => 550,
+                    'currency' => 'NGN',
+                ],
+            ]),
+        ]);
+
+        $this->get(route('hotspot.payment.callback', [
+            'status' => 'succeeded',
+            'tx_ref' => $payment->tx_ref,
+            'id' => 'ord_wallet_2',
+        ]))
+            ->assertOk()
+            ->assertSee('Access provisioned');
+
+        $wallet = Wallet::where('tenant_id', $router->shop->tenant_id)->firstOrFail();
+        $this->assertEquals(500, $wallet->balance);
+        $this->assertSame(2, $wallet->transactions()->count());
+        $this->assertDatabaseHas('wallet_transactions', [
+            'wallet_id' => $wallet->id,
+            'payment_id' => $payment->id,
+            'type' => 'credit',
+            'amount' => 550,
+        ]);
+        $this->assertDatabaseHas('wallet_transactions', [
+            'wallet_id' => $wallet->id,
+            'payment_id' => $payment->id,
+            'type' => 'debit',
+            'amount' => 50,
         ]);
     }
 

@@ -23,6 +23,38 @@ class BillingPlanLimits
         self::assertWithinLimit($user, 'package_limit', 'packages', 'packages');
     }
 
+    public static function assertCanEnableWallet(User $user): void
+    {
+        if ($user->isSuperAdmin()) {
+            return;
+        }
+
+        $tenant = Tenant::query()->with('currentBillingSubscription.billingPlan')->findOrFail($user->tenant_id);
+        $subscription = $tenant->currentBillingSubscription;
+        $plan = $subscription?->billingPlan;
+
+        if (! $subscription || ! $plan || ! in_array($subscription->status, ['active', 'trialing'], true)) {
+            throw ValidationException::withMessages([
+                'billing' => 'Your tenant needs an active platform billing subscription before enabling the wallet.',
+            ]);
+        }
+
+        $periodEnded = $subscription->current_period_ends_at && $subscription->current_period_ends_at->isPast();
+        $trialEnded = $subscription->status === 'trialing' && $subscription->trial_ends_at && $subscription->trial_ends_at->isPast();
+
+        if ($periodEnded || $trialEnded) {
+            throw ValidationException::withMessages([
+                'billing' => 'Your platform billing subscription has expired. Renew it before enabling the wallet.',
+            ]);
+        }
+
+        if (! $plan->supports_wallet) {
+            throw ValidationException::withMessages([
+                'billing' => "Your {$plan->name} plan does not include the wallet feature. Upgrade your platform billing plan to enable it.",
+            ]);
+        }
+    }
+
     public static function usageSummary(User $user, string $resource): ?array
     {
         if ($user->isSuperAdmin()) {
