@@ -2,9 +2,9 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
-use Illuminate\Database\Eloquent\Model;
 
 class Payment extends Model
 {
@@ -36,6 +36,11 @@ class Payment extends Model
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class);
+    }
+
+    public function posDevice(): BelongsTo
+    {
+        return $this->belongsTo(PosDevice::class);
     }
 
     public function voucher(): BelongsTo

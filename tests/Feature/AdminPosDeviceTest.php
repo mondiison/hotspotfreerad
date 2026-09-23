@@ -4,10 +4,12 @@ namespace Tests\Feature;
 
 use App\Livewire\Admin\PosDevicesIndex;
 use App\Models\Package;
+use App\Models\Payment;
 use App\Models\PosDevice;
 use App\Models\Shop;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\PosDeviceManagementService;
 use App\Services\RadiusProvisioningService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -65,6 +67,17 @@ class AdminPosDeviceTest extends TestCase
             'username' => 'AA:BB:CC:DD:EE:FF',
             'priority' => 1,
         ]);
+
+        $device = PosDevice::where('mac_address', 'AA:BB:CC:DD:EE:FF')->firstOrFail();
+        $this->assertDatabaseHas('payments', [
+            'pos_device_id' => $device->id,
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'provider' => PosDeviceManagementService::POS_PAYMENT_PROVIDER,
+            'amount' => '1500.00',
+            'currency' => 'NGN',
+            'status' => 'successful',
+        ]);
     }
 
     public function test_renew_extends_pos_device_and_keeps_radius_synced(): void
@@ -93,6 +106,51 @@ class AdminPosDeviceTest extends TestCase
             'username' => 'AA:BB:CC:DD:EE:11',
             'attribute' => 'Cleartext-Password',
         ]);
+        $this->assertDatabaseHas('payments', [
+            'pos_device_id' => $device->id,
+            'amount' => '1500.00',
+            'status' => 'successful',
+        ]);
+    }
+
+    /**
+     * Regression/feature test for the 2026-09-23 addition of POS payment
+     * tracking (previously POS renewal was entirely free with zero Payment
+     * trail -- docs/current-project-status.md already listed this as
+     * planned, unbuilt work). Confirms every renewal creates its OWN
+     * payment row (a full history, not just the latest), the amount always
+     * comes from the package's own price rather than anything editable, and
+     * a commission-billing tenant's platform fee/net split is applied the
+     * same way a real gateway payment's would be.
+     */
+    public function test_each_renewal_records_its_own_payment_using_the_package_price(): void
+    {
+        [$user, $shop, $package] = $this->tenantSetup();
+        $shop->tenant->update(['billing_model' => 'commission', 'commission_rate' => 10]);
+
+        $device = PosDevice::create([
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'device_name' => 'Counter POS',
+            'mac_address' => 'AA:BB:CC:DD:EE:66',
+            'starts_at' => now()->subMonth(),
+            'expires_at' => now()->subDay(),
+            'is_active' => true,
+        ]);
+
+        $component = Livewire::actingAs($user)->test(PosDevicesIndex::class);
+        $component->call('renew', $device->id)->assertHasNoErrors();
+        $component->call('renew', $device->id)->assertHasNoErrors();
+
+        $this->assertSame(2, Payment::where('pos_device_id', $device->id)->count());
+
+        $payment = Payment::where('pos_device_id', $device->id)->latest('id')->first();
+        $this->assertSame('1500.00', $payment->amount);
+        $this->assertSame('1500.00', $payment->gross_amount);
+        $this->assertSame('150.00', $payment->platform_fee_amount);
+        $this->assertSame('1350.00', $payment->tenant_net_amount);
+        $this->assertSame('10.00', $payment->commission_rate);
+        $this->assertSame('commission', $payment->billing_model);
     }
 
     public function test_tenant_admin_cannot_manage_another_tenants_pos_device(): void

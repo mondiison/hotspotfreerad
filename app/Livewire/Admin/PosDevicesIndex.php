@@ -110,8 +110,9 @@ class PosDevicesIndex extends Component
             $devices->update($device, $data, auth()->user());
             $this->savedMessage = 'POS device updated and synced to RADIUS.';
         } else {
-            $devices->create($data, auth()->user());
-            $this->savedMessage = 'POS device registered and synced to RADIUS.';
+            $created = $devices->create($data, auth()->user());
+            $created->loadMissing('package');
+            $this->savedMessage = 'POS device registered and synced to RADIUS. Payment of '.$created->package->currency.' '.number_format((float) $created->package->price, 2).' recorded.';
         }
 
         $this->showFormModal = false;
@@ -122,9 +123,10 @@ class PosDevicesIndex extends Component
     public function renew(int $deviceId, PosDeviceManagementService $devices): void
     {
         $device = PosDevice::with('package')->findOrFail($deviceId);
-        $devices->renew($device, auth()->user());
+        $renewed = $devices->renew($device, auth()->user());
+        $renewed->loadMissing('package');
 
-        $this->savedMessage = 'POS access renewed and synced to RADIUS.';
+        $this->savedMessage = 'POS access renewed and synced to RADIUS. Payment of '.$renewed->package->currency.' '.number_format((float) $renewed->package->price, 2).' recorded.';
     }
 
     public function sync(int $deviceId, PosDeviceManagementService $devices): void

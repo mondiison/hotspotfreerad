@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class PosDevice extends Model
 {
@@ -27,6 +28,11 @@ class PosDevice extends Model
     public function package(): BelongsTo
     {
         return $this->belongsTo(Package::class);
+    }
+
+    public function payments(): HasMany
+    {
+        return $this->hasMany(Payment::class);
     }
 
     public function isCurrentlyActive(): bool

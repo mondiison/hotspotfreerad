@@ -3,15 +3,37 @@
 namespace App\Services;
 
 use App\Models\Package;
+use App\Models\Payment;
 use App\Models\PosDevice;
 use App\Models\Shop;
 use App\Models\User;
+use App\Support\PaymentCommission;
 use App\Support\TenantAccess;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class PosDeviceManagementService
 {
+    /**
+     * Provider tag for a POS payment recorded here -- distinct from
+     * PaymentGatewayCatalog::MANUAL_BANK ('manual_bank'), which is a
+     * customer-facing hosted-checkout gateway a hotspot customer pays
+     * through directly. This one is never charged online at all: POS device
+     * registration/renewal is an admin-only action (docs/current-project-status.md
+     * already listed "Add POS payment tracking when tenant sells/renews POS
+     * access" as planned, unbuilt work) where the tenant collects payment
+     * from the terminal owner outside the app (cash, bank transfer, etc.)
+     * and just needs an accounting record -- so this Payment row is created
+     * already `status=successful`/`paid_at=now()`, never routed through
+     * verifyAndGrant()'s gateway-verification flow the way a real online
+     * payment is. Not registered in PaymentGatewayCatalog (that catalog is
+     * specifically for online checkout gateways) -- PaymentReportService::
+     * providerLabel()'s fallback already renders an unregistered provider
+     * as a readable "Pos Manual" without needing an entry there.
+     */
+    public const POS_PAYMENT_PROVIDER = 'pos_manual';
+
     public function __construct(private readonly RadiusProvisioningService $radius) {}
 
     public function rules(User $user, ?PosDevice $device = null): array
@@ -38,6 +60,8 @@ class PosDeviceManagementService
     public function create(array $data, User $user): PosDevice
     {
         $device = PosDevice::create($this->normalize($data, $user));
+        $device->loadMissing('shop', 'package');
+        $this->recordPayment($device, $user);
         $this->syncSystem($device);
 
         return $device;
@@ -60,7 +84,7 @@ class PosDeviceManagementService
     public function renew(PosDevice $device, User $user): PosDevice
     {
         TenantAccess::assertPosDevice($device, $user);
-        $device->loadMissing('package');
+        $device->loadMissing('package', 'shop');
 
         $startsAt = now();
         $baseExpiry = $device->expires_at?->isFuture() ? $device->expires_at : $startsAt;
@@ -71,7 +95,43 @@ class PosDeviceManagementService
             'is_active' => true,
         ])->save();
 
+        $this->recordPayment($device, $user);
+
         return $this->syncSystem($device);
+    }
+
+    /**
+     * Records the payment collected for one registration/renewal cycle --
+     * the amount is always the selected package's own price, never a
+     * freely-typed figure, so it can't drift from what the package actually
+     * lists. Reuses PaymentCommission::forShop() so a POS payment folds into
+     * the same commission/wallet math and Sales/Payment reports every other
+     * Payment row already does (SalesReportService::query() only filters on
+     * status=successful, with no provider restriction, so this shows up
+     * there with zero report-side changes needed).
+     */
+    private function recordPayment(PosDevice $device, User $user): Payment
+    {
+        $price = (float) $device->package->price;
+        $commission = PaymentCommission::forShop($device->shop, $price);
+
+        return Payment::create([
+            'shop_id' => $device->shop_id,
+            'package_id' => $device->package_id,
+            'pos_device_id' => $device->id,
+            'provider' => self::POS_PAYMENT_PROVIDER,
+            'tx_ref' => 'POS-'.$device->id.'-'.now()->format('YmdHis').'-'.Str::upper(Str::random(6)),
+            'amount' => $price,
+            'currency' => $device->package->currency,
+            'status' => 'successful',
+            'paid_at' => now(),
+            'gross_amount' => $commission['gross_amount'],
+            'platform_fee_amount' => $commission['platform_fee_amount'],
+            'tenant_net_amount' => $commission['tenant_net_amount'],
+            'commission_rate' => $commission['commission_rate'],
+            'billing_model' => $commission['billing_model'],
+            'payload' => ['recorded_by_user_id' => $user->id, 'device_name' => $device->device_name],
+        ]);
     }
 
     public function sync(PosDevice $device, User $user): PosDevice
