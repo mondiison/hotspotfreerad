@@ -352,24 +352,56 @@ class RoutersWizardTest extends TestCase
     }
 
     /**
-     * Regression test for a live 2026-09-23 report: opening the edit wizard
-     * always reset "Total Ethernet ports" to a small computed number instead
-     * of showing what was actually saved. routerProvisioningSettings() used
-     * to unconditionally overwrite port_count with (max role port number) + 2,
-     * discarding the saved value outright -- a 24-port switch where only
-     * ports 1/8/2/3 are role-assigned would open showing 10, not 24.
+     * Regression test for a live 2026-09-23 report, fixed twice: opening the
+     * edit wizard always reset "Total Ethernet ports" to a small computed
+     * number instead of showing what was actually saved.
+     * routerProvisioningSettings() first unconditionally overwrote
+     * port_count with (max role port number) + 2, discarding the saved
+     * value outright. A first attempted fix turned that into a "floor"
+     * (max($saved, $computed)) instead, but that still won in most cases --
+     * wan2_port_number defaults to 8 and is always included in that max()
+     * even when the router's second WAN is disabled, so the floor itself
+     * was almost always >= 10 regardless of what was actually saved. This
+     * router deliberately saves a port_count (6) *smaller* than that
+     * default-wan2-driven floor (10) specifically to catch that -- a
+     * genuinely saved value, however small, must always win now.
      */
     public function test_editing_a_router_keeps_its_saved_port_count_instead_of_resetting_it(): void
     {
         $shop = $this->shop();
         $router = Router::create([
             'shop_id' => $shop->id,
-            'name' => 'Big Switch Router',
-            'nas_identifier' => 'big-switch-router',
+            'name' => 'Small Switch Router',
+            'nas_identifier' => 'small-switch-router',
             'wireguard_internal_ip' => '10.8.0.95',
             'shared_secret' => 'radius-secret',
             'provisioning_settings' => [
-                'port_count' => 24,
+                'port_count' => 6,
+                'wan1' => 'ether1',
+                'wan2' => 'ether8',
+                'trunk_port' => 'ether2',
+                'pi_port' => 'ether3',
+                'enable_second_wan' => false,
+            ],
+        ]);
+
+        Livewire::actingAs($this->superAdmin())
+            ->test(RoutersIndex::class)
+            ->call('edit', $router->id)
+            ->assertSet('provisioning_settings.ports_advanced_mode', false)
+            ->assertSet('provisioning_settings.port_count', 6);
+    }
+
+    public function test_editing_a_router_without_a_saved_port_count_gets_a_sane_computed_default(): void
+    {
+        $shop = $this->shop();
+        $router = Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'Legacy No Port Count Router',
+            'nas_identifier' => 'legacy-no-port-count-router',
+            'wireguard_internal_ip' => '10.8.0.96',
+            'shared_secret' => 'radius-secret',
+            'provisioning_settings' => [
                 'wan1' => 'ether1',
                 'wan2' => 'ether8',
                 'trunk_port' => 'ether2',
@@ -381,7 +413,7 @@ class RoutersWizardTest extends TestCase
             ->test(RoutersIndex::class)
             ->call('edit', $router->id)
             ->assertSet('provisioning_settings.ports_advanced_mode', false)
-            ->assertSet('provisioning_settings.port_count', 24);
+            ->assertSet('provisioning_settings.port_count', 10);
     }
 
     public function test_editing_a_router_with_a_non_standard_interface_name_opens_in_advanced_mode(): void

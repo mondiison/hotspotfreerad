@@ -493,15 +493,24 @@ class RoutersIndex extends Component
         }
 
         $settings = array_merge($settings, $parsedPortNumbers, $parsedExtraPortNumbers);
-        // Confirmed live 2026-09-23: this used to unconditionally overwrite
-        // port_count with the derived-from-role-ports minimum, discarding
-        // whatever the admin had actually saved (e.g. 24 on a 24-port
-        // switch where only 4 ports are role-assigned) -- every edit-wizard
-        // open silently reset "Total Ethernet ports" back down to a smaller
-        // computed number. Now only raises it as a floor when the saved
-        // value is missing or too small to cover the ports actually in use.
-        $minPortCount = max(array_merge($parsedPortNumbers, $allExtraPortNumbers)) + 2;
-        $settings['port_count'] = max((int) ($settings['port_count'] ?? 0), $minPortCount);
+
+        // Confirmed live 2026-09-23, twice: this used to unconditionally
+        // overwrite port_count with (max role port number) + 2, discarding
+        // whatever the admin had actually saved. A first fix changed the
+        // overwrite into a "floor" (max($saved, $computed)) instead, but
+        // that still won for most routers -- wan2_port_number defaults to
+        // 8 (RouterManagementService::defaultProvisioningSettings()) and is
+        // always included in this max() even when the router's second WAN
+        // is disabled and that port number is functionally irrelevant, so
+        // the "floor" was itself almost always >= 10 regardless of what was
+        // actually saved. Only ever derive/override port_count here when
+        // the router's OWN saved settings never explicitly had the key at
+        // all (e.g. a router created before this field existed) -- any
+        // router that has ever saved a real value, however small, now has
+        // it trusted completely.
+        if (! array_key_exists('port_count', (array) $router->provisioning_settings)) {
+            $settings['port_count'] = max(array_merge($parsedPortNumbers, $allExtraPortNumbers)) + 2;
+        }
 
         return $settings;
     }
