@@ -212,6 +212,131 @@ SCRIPT;
     }
 
     /**
+     * Mirrors generatePosScript()'s self-sufficiency reasoning, for the same
+     * reason: enable_staff can be flipped on after Fresh Infrastructure
+     * Script was last applied, leaving vlan-staff/pool-staff/dhcp-staff and
+     * the virtual Staff Wi-Fi SSID missing entirely. Management is treated
+     * differently, deliberately -- vlan-mgmt/pool-mgmt/dhcp-mgmt are core
+     * infrastructure Fresh Infrastructure Script always creates
+     * unconditionally (the Pi itself needs an address on that VLAN
+     * regardless of wireless), so re-creating them here on the common,
+     * already-provisioned case would just fail noisily for no benefit.
+     * Only Management's wireless SSID (enable_mgmt_wifi) is genuinely
+     * optional/self-sufficient here, the same way Staff's whole VLAN is.
+     *
+     * The trailing access-list section is deliberately its own safely
+     * re-pastable block (clears both SSIDs' existing entries, then rebuilds
+     * from MMS Radius's current Trusted Wi-Fi Devices), unlike every other
+     * section of this script and of generateFreshInfrastructureScript()
+     * itself -- this is the section meant to be re-run every time a device
+     * is registered, edited, or removed, so it can't carry the same
+     * "NOT idempotent, do not paste twice" caveat the VLAN/Wi-Fi creation
+     * sections above it do.
+     */
+    public function generateStaffScript(Router $router, string $profile = 'starlink_plaza'): string
+    {
+        $nasIdentifier = $router->nas_identifier;
+        $settings = $this->provisioningSettings($router, $profile);
+        $lanBridgeName = 'bridge-lan';
+        $taggedPorts = $lanBridgeName.','.$settings['trunk_port'];
+        $enableBuiltinWifi = (bool) $settings['enable_builtin_wifi'];
+        $enableStaff = (bool) $settings['enable_staff'];
+        $enableMgmtWifi = (bool) $settings['enable_mgmt_wifi'];
+
+        if (! $enableBuiltinWifi) {
+            return <<<'SCRIPT'
+            # This router does not use MikroTik's built-in Wi-Fi (enable_builtin_wifi
+            # is off in Network plan), so the /interface wifi access-list mechanism
+            # below does not apply -- it only works for SSIDs this app hosts directly
+            # on the router's own radio.
+            #
+            # For an external AP (the recommended production setup), configure your AP
+            # controller's own RADIUS MAC-auth against this app's RADIUS server instead.
+            # Registering a device under Trusted Wi-Fi Devices already writes it into
+            # FreeRADIUS either way -- see docs/staff-wifi-access.md's "External APs"
+            # section for the AP-controller-side setup this app cannot do for you.
+            SCRIPT;
+        }
+
+        $tunnelLines = implode("\n", array_merge($this->wireguardProvisioningLines($router), $this->zeroTierLines($router)));
+        $apiUserLines = implode("\n", $this->apiUserProvisioningLines($router));
+
+        $extraStaffPorts = $enableStaff ? $this->extraPortInterfaces($settings, 'extra_staff_ports') : [];
+        $extraMgmtPorts = $enableMgmtWifi ? $this->extraPortInterfaces($settings, 'extra_mgmt_ports') : [];
+
+        $staffWifiLines = $enableStaff ? [
+            '/interface wifi security add name=mms-staff-sec authentication-types=wpa2-psk,wpa3-psk passphrase="'.$this->quote($settings['staff_wifi_password']).'"',
+            '/interface wifi configuration add name=mms-staff-cfg mode=ap ssid="MMS Staff" security=mms-staff-sec country=Nigeria',
+            '/interface wifi add name=wifi-staff master-interface='.$settings['builtin_wifi_interface'].' configuration=mms-staff-cfg disabled=no',
+            '/interface bridge port add bridge='.$lanBridgeName.' interface=wifi-staff pvid='.$settings['staff_vlan'].' comment="Virtual staff/admin Wi-Fi"',
+        ] : [];
+
+        $staffExtraPortLines = array_map(
+            fn (string $port): string => '/interface bridge port add bridge='.$lanBridgeName.' interface='.$port.' pvid='.$settings['staff_vlan'].' comment="Extra staff access port"',
+            $extraStaffPorts
+        );
+
+        $staffUntaggedMembers = implode(',', array_filter(['wifi-staff', ...$extraStaffPorts]));
+        $staffBridgeVlanLine = $staffUntaggedMembers !== ''
+            ? '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' untagged='.$staffUntaggedMembers.' vlan-ids='.$settings['staff_vlan']
+            : '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' vlan-ids='.$settings['staff_vlan'];
+
+        $staffSectionLines = $enableStaff ? array_merge(
+            ['/interface vlan add interface='.$lanBridgeName.' name=vlan-staff vlan-id='.$settings['staff_vlan']],
+            $staffWifiLines,
+            $staffExtraPortLines,
+            [$staffBridgeVlanLine],
+            [
+                '/ip address add address='.$settings['staff_gateway'].' interface=vlan-staff comment="Password staff/admin SSID VLAN"',
+                '/ip pool add name=pool-staff ranges='.$settings['staff_pool'],
+                '/ip dhcp-server add name=dhcp-staff interface=vlan-staff address-pool=pool-staff lease-time=8h disabled=no',
+                '/ip dhcp-server network add address='.$settings['staff_network'].' gateway='.str($settings['staff_gateway'])->before('/').' dns-server='.str($settings['staff_gateway'])->before('/'),
+            ]
+        ) : ['# Staff VLAN/SSID is disabled for this router profile.'];
+        $staffSection = implode("\n", $staffSectionLines);
+
+        $mgmtWifiLines = $enableMgmtWifi ? array_merge(
+            [
+                '/interface wifi security add name=mms-mgmt-sec authentication-types=wpa2-psk,wpa3-psk passphrase="'.$this->quote($settings['mgmt_wifi_password']).'"',
+                '/interface wifi configuration add name=mms-mgmt-cfg mode=ap ssid="MMS Mgmt" security=mms-mgmt-sec country=Nigeria',
+                '/interface wifi add name=wifi-mgmt master-interface='.$settings['builtin_wifi_interface'].' configuration=mms-mgmt-cfg disabled=no',
+                '/interface bridge port add bridge='.$lanBridgeName.' interface=wifi-mgmt pvid='.$settings['mgmt_vlan'].' comment="Virtual management Wi-Fi for lab testing"',
+            ],
+            array_map(
+                fn (string $port): string => '/interface bridge port add bridge='.$lanBridgeName.' interface='.$port.' pvid='.$settings['mgmt_vlan'].' comment="Extra management access port"',
+                $extraMgmtPorts
+            )
+        ) : ['# Management Wi-Fi SSID is disabled for this router profile (Network plan\'s "Enable management Wi-Fi").'];
+        $mgmtSection = implode("\n", $mgmtWifiLines);
+
+        $accessListLines = array_merge(
+            $enableStaff ? $this->wifiAccessListLines($router, 'wifi-staff', 'MMS Staff', TrustedWifiDevice::NETWORK_STAFF) : ['# Staff SSID is disabled -- no access list to generate.'],
+            $enableMgmtWifi ? $this->wifiAccessListLines($router, 'wifi-mgmt', 'MMS Mgmt', TrustedWifiDevice::NETWORK_MGMT) : ['# Management Wi-Fi SSID is disabled -- no access list to generate.']
+        );
+        $accessListSection = implode("\n", $accessListLines);
+
+        return <<<SCRIPT
+        /system identity set name="{$nasIdentifier}"
+        {$tunnelLines}
+        {$apiUserLines}
+        # Creates the Staff VLAN/Wi-Fi/ports/addressing -- NOT idempotent, same as the
+        # Fresh Infrastructure Script itself. Do not paste this twice, or if this
+        # router's Fresh Infrastructure Script has already included Staff (enable_staff
+        # was already on when it was last generated/applied).
+        {$staffSection}
+        # Management VLAN/addressing is core infrastructure Fresh Infrastructure Script
+        # always creates unconditionally -- only its wireless SSID is created here.
+        {$mgmtSection}
+        # Re-run everything below any time a Trusted Wi-Fi Device is added, edited, or
+        # removed to pick up the change -- clears and rebuilds each SSID's access list
+        # from scratch, so unlike the sections above, re-pasting this part is safe.
+        /interface wifi access-list remove [find interface=wifi-staff]
+        /interface wifi access-list remove [find interface=wifi-mgmt]
+        {$accessListSection}
+        SCRIPT;
+    }
+
+    /**
      * $pppoeInterface used to be a hardcoded generic "bridge1" placeholder
      * the admin had to manually retype before pasting -- while
      * generateFreshInfrastructureScript()'s own PPPoE section already
@@ -874,7 +999,7 @@ HTML;
 
         $lines = [
             "# Only these MMS Radius-registered devices may join {$ssidLabel}, even with the correct password.",
-            "# Verify access-list behavior on your exact RouterOS/wifi-package version before relying on it in production.",
+            '# Verify access-list behavior on your exact RouterOS/wifi-package version before relying on it in production.',
         ];
 
         foreach ($devices as $device) {

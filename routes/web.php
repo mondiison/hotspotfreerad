@@ -9,8 +9,8 @@ use App\Http\Controllers\Admin\PackageController;
 use App\Http\Controllers\Admin\PaymentController;
 use App\Http\Controllers\Admin\PaymentSettingsController;
 use App\Http\Controllers\Admin\PosDeviceController;
-use App\Http\Controllers\Admin\ProfileController;
 use App\Http\Controllers\Admin\PppoeSubscriberController;
+use App\Http\Controllers\Admin\ProfileController;
 use App\Http\Controllers\Admin\RouterController;
 use App\Http\Controllers\Admin\SalesReportController;
 use App\Http\Controllers\Admin\SecurityActivityController;
@@ -109,6 +109,7 @@ Route::middleware(['auth', AuthorizeTenantStaff::class])->prefix('admin')->name(
     Route::post('routers/{router}/provision-hotspot', [RouterController::class, 'provisionHotspot'])->name('routers.provision-hotspot');
     Route::post('routers/{router}/provision-pppoe', [RouterController::class, 'provisionPppoe'])->name('routers.provision-pppoe');
     Route::post('routers/{router}/provision-pos', [RouterController::class, 'provisionPos'])->name('routers.provision-pos');
+    Route::post('routers/{router}/provision-staff-wifi', [RouterController::class, 'provisionStaffWifi'])->name('routers.provision-staff-wifi');
     Route::post('routers/{router}/push-fresh-infrastructure', [RouterController::class, 'pushFreshInfrastructure'])->name('routers.push-fresh-infrastructure');
     Route::get('topology', [TopologyController::class, 'index'])->name('topology.index');
     Route::resource('routers', RouterController::class);

@@ -378,6 +378,46 @@ class RouterOsApiProvisioningTest extends TestCase
         $this->assertSame(['success' => true, 'steps' => []], $result);
     }
 
+    public function test_provision_staff_wifi_reports_a_clear_error_when_router_is_unreachable(): void
+    {
+        $router = Router::create([
+            'shop_id' => $this->makeShop()->id,
+            'name' => 'Unreachable Staff Router',
+            'nas_identifier' => 'unreachable-staff-router',
+            'wireguard_internal_ip' => '192.0.2.9',
+            'shared_secret' => 'radius-secret',
+            'provisioning_settings' => [
+                'enable_builtin_wifi' => true,
+                'enable_staff' => true,
+                'enable_mgmt_wifi' => true,
+            ],
+        ]);
+
+        $result = app(RouterOsConnectionService::class)->provisionStaffWifi($router);
+
+        $this->assertFalse($result['success']);
+        $labels = array_column($result['steps'], 'label');
+        $this->assertContains('Check Staff VLAN infrastructure', $labels);
+        $this->assertContains('Sync MMS Staff trusted-device access list', $labels);
+        $this->assertContains('Sync MMS Mgmt trusted-device access list', $labels);
+    }
+
+    public function test_provision_staff_wifi_is_a_no_op_without_builtin_wifi(): void
+    {
+        $router = Router::create([
+            'shop_id' => $this->makeShop()->id,
+            'name' => 'No Builtin Wifi Router',
+            'nas_identifier' => 'no-builtin-wifi-router',
+            'wireguard_internal_ip' => '192.0.2.10',
+            'shared_secret' => 'radius-secret',
+            'provisioning_settings' => ['enable_builtin_wifi' => false],
+        ]);
+
+        $result = app(RouterOsConnectionService::class)->provisionStaffWifi($router);
+
+        $this->assertSame(['success' => true, 'steps' => []], $result);
+    }
+
     public function test_push_hotspot_login_page_reports_a_clear_error_when_router_is_unreachable(): void
     {
         $router = Router::create([

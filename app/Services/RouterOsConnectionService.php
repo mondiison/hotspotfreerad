@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Router;
+use App\Models\TrustedWifiDevice;
 use App\Support\PaymentGatewayCatalog;
 use RouterOS\Client;
 use RouterOS\Config;
@@ -10,9 +11,7 @@ use RouterOS\Query;
 
 class RouterOsConnectionService
 {
-    public function __construct(private readonly MikroTikProvisioningService $provisioning)
-    {
-    }
+    public function __construct(private readonly MikroTikProvisioningService $provisioning) {}
 
     /**
      * Short timeouts so a "Test Connection" click or a monitoring page load
@@ -794,6 +793,241 @@ class RouterOsConnectionService
 
             if ($trapMessage = self::extractTrapMessage($raw)) {
                 throw new \RuntimeException($trapMessage);
+            }
+
+            return ['label' => $label, 'success' => true, 'error' => null];
+        } catch (\Throwable $e) {
+            return ['label' => $label, 'success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * The live-API counterpart to MikroTikProvisioningService::
+     * generateStaffScript(), scoped the same deliberately-narrower way
+     * provisionPos()'s own live-API side is scoped relative to
+     * generatePosScript(): the VLAN/pool/DHCP existence checks
+     * (ensureStaffInfrastructure()) are simple, safe-to-run-every-cycle
+     * "does this exist" checks, but creating the virtual Wi-Fi SSID itself
+     * (security + configuration + interface + bridge port) is NOT attempted
+     * live here, matching POS's own precedent of deferring that harder,
+     * bridge-vlan-table-adjacent work to the paste-by-hand script. If the
+     * SSID doesn't exist yet, syncWifiAccessList()'s step below will just
+     * fail plainly (interface not found) rather than silently no-opping.
+     *
+     * The trusted-device access list itself IS synced live here, though --
+     * unlike SSID creation, it reduces to a single per-interface list-then-
+     * replace operation (well-scoped, no bridge-vlan reconciliation needed),
+     * and closing the "not pushed to the router automatically" gap
+     * documented in docs/staff-wifi-access.md is this method's whole reason
+     * for existing.
+     *
+     * @return array{success: bool, steps: list<array{label: string, success: bool, error: ?string}>}
+     */
+    public function provisionStaffWifi(Router $router): array
+    {
+        if (! $this->isConfigured($router)) {
+            return [
+                'success' => false,
+                'steps' => [['label' => 'Staff/Management Wi-Fi trusted-device access list', 'success' => false, 'error' => 'No RouterOS API credentials generated for this router yet.']],
+            ];
+        }
+
+        $settings = (array) $router->provisioning_settings;
+        $enableBuiltinWifi = (bool) ($settings['enable_builtin_wifi'] ?? false);
+        $enableStaff = (bool) ($settings['enable_staff'] ?? true);
+        $enableMgmtWifi = (bool) ($settings['enable_mgmt_wifi'] ?? false);
+
+        if (! $enableBuiltinWifi || (! $enableStaff && ! $enableMgmtWifi)) {
+            return ['success' => true, 'steps' => []];
+        }
+
+        $result = ['success' => true, 'steps' => []];
+
+        if ($enableStaff) {
+            $infraResult = $this->ensureStaffInfrastructure($router);
+            $result['steps'] = array_merge($result['steps'], $infraResult['steps']);
+            $result['success'] = $result['success'] && $infraResult['success'];
+
+            $step = $this->syncWifiAccessList($router, 'wifi-staff', 'MMS Staff', TrustedWifiDevice::NETWORK_STAFF);
+            $result['steps'][] = $step;
+            $result['success'] = $result['success'] && $step['success'];
+        }
+
+        if ($enableMgmtWifi) {
+            $step = $this->syncWifiAccessList($router, 'wifi-mgmt', 'MMS Mgmt', TrustedWifiDevice::NETWORK_MGMT);
+            $result['steps'][] = $step;
+            $result['success'] = $result['success'] && $step['success'];
+        }
+
+        return $result;
+    }
+
+    /**
+     * Mirrors ensurePosInfrastructure() exactly, for Staff instead of POS --
+     * see that method's own docblock for why this is scoped to just these
+     * four simple, uniquely-named objects. Management has no equivalent:
+     * vlan-mgmt/pool-mgmt/dhcp-mgmt are core infrastructure
+     * generateFreshInfrastructureScript() always creates unconditionally,
+     * so a router reachable over the API at all has almost certainly
+     * already had them created some other way.
+     *
+     * @return array{success: bool, steps: list<array{label: string, success: bool, error: ?string}>}
+     */
+    private function ensureStaffInfrastructure(Router $router): array
+    {
+        $settings = $this->provisioning->provisioningSettings($router, (string) (((array) $router->provisioning_settings)['profile'] ?? 'starlink_plaza'));
+
+        $staffVlan = (string) $settings['staff_vlan'];
+        $staffGateway = (string) $settings['staff_gateway'];
+        $staffNetwork = (string) $settings['staff_network'];
+        $staffPool = (string) $settings['staff_pool'];
+        $staffGatewayIp = str($staffGateway)->before('/')->toString();
+
+        try {
+            $client = $this->client($router, 8);
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'steps' => [['label' => 'Check Staff VLAN infrastructure', 'success' => false, 'error' => $e->getMessage()]],
+            ];
+        }
+
+        $steps = [];
+
+        $vlanExists = collect($client->query(new Query('/interface/vlan/print'))->read())
+            ->contains(fn ($row) => is_array($row) && ($row['name'] ?? null) === 'vlan-staff');
+
+        if (! $vlanExists) {
+            $steps['Create Staff VLAN interface'] = (new Query('/interface/vlan/add'))
+                ->equal('interface', 'bridge-lan')
+                ->equal('name', 'vlan-staff')
+                ->equal('vlan-id', $staffVlan);
+        }
+
+        $addressExists = collect($client->query(new Query('/ip/address/print'))->read())
+            ->contains(fn ($row) => is_array($row) && ($row['interface'] ?? null) === 'vlan-staff');
+
+        if (! $addressExists) {
+            $steps['Create Staff VLAN IP address'] = (new Query('/ip/address/add'))
+                ->equal('address', $staffGateway)
+                ->equal('interface', 'vlan-staff');
+        }
+
+        $poolExists = collect($client->query(new Query('/ip/pool/print'))->read())
+            ->contains(fn ($row) => is_array($row) && ($row['name'] ?? null) === 'pool-staff');
+
+        if (! $poolExists) {
+            $steps['Create Staff address pool'] = (new Query('/ip/pool/add'))
+                ->equal('name', 'pool-staff')
+                ->equal('ranges', $staffPool);
+        }
+
+        $dhcpServerExists = collect($client->query(new Query('/ip/dhcp-server/print'))->read())
+            ->contains(fn ($row) => is_array($row) && ($row['name'] ?? null) === 'dhcp-staff');
+
+        if (! $dhcpServerExists) {
+            $steps['Create Staff DHCP server'] = (new Query('/ip/dhcp-server/add'))
+                ->equal('name', 'dhcp-staff')
+                ->equal('interface', 'vlan-staff')
+                ->equal('address-pool', 'pool-staff')
+                ->equal('lease-time', '8h')
+                ->equal('disabled', 'no');
+        }
+
+        $dhcpNetworkExists = collect($client->query(new Query('/ip/dhcp-server/network/print'))->read())
+            ->contains(fn ($row) => is_array($row) && ($row['address'] ?? null) === $staffNetwork);
+
+        if (! $dhcpNetworkExists) {
+            $steps['Create Staff DHCP network'] = (new Query('/ip/dhcp-server/network/add'))
+                ->equal('address', $staffNetwork)
+                ->equal('gateway', $staffGatewayIp)
+                ->equal('dns-server', $staffGatewayIp);
+        }
+
+        if ($steps === []) {
+            return ['success' => true, 'steps' => []];
+        }
+
+        return $this->runSteps($router, $steps);
+    }
+
+    /**
+     * Reconciles one SSID's `/interface/wifi/access-list` against MMS
+     * Radius's current Trusted Wi-Fi Devices for that shop/network --
+     * removes every existing entry for this interface (one at a time, by
+     * `.id`, rather than a single bulk `numbers=` call, matching this file's
+     * existing per-row pattern elsewhere) and re-adds the current desired
+     * state: one accept entry per active, non-expired device, followed by a
+     * single catch-all reject -- unless zero devices are registered, in
+     * which case no reject is added at all, so a brand-new SSID doesn't
+     * silently lock out every device before anything has been registered
+     * (mirrors MikroTikProvisioningService::wifiAccessListLines()'s own
+     * "no devices yet" behavior exactly). A full remove-then-rebuild is used
+     * instead of a true diff deliberately -- ordering matters here (the
+     * reject entry must always sort last, or a device added after it would
+     * never be reached), and a real-world trusted-device list is small
+     * enough that this is cheap and avoids an entire class of ordering bugs
+     * a partial diff would need to get right. Not yet confirmed against real
+     * hardware -- in particular, whether `/interface/wifi/access-list/print`
+     * actually surfaces `interface` the way this assumes, the same "not yet
+     * confirmed" caveat this file already carries for other freshly-added
+     * RouterOS behavior.
+     *
+     * @return array{label: string, success: bool, error: ?string}
+     */
+    private function syncWifiAccessList(Router $router, string $interfaceName, string $ssidLabel, string $network): array
+    {
+        $label = "Sync {$ssidLabel} trusted-device access list";
+
+        try {
+            $client = $this->client($router, 8);
+
+            $existingIds = collect($client->query(new Query('/interface/wifi/access-list/print'))->read())
+                ->filter(fn ($row) => is_array($row) && ($row['interface'] ?? null) === $interfaceName)
+                ->pluck('.id')
+                ->filter()
+                ->values();
+
+            foreach ($existingIds as $id) {
+                $raw = $client->query((new Query('/interface/wifi/access-list/remove'))->equal('numbers', $id))->read(false);
+
+                if ($trapMessage = self::extractTrapMessage($raw)) {
+                    throw new \RuntimeException($trapMessage);
+                }
+            }
+
+            $devices = TrustedWifiDevice::query()
+                ->where('shop_id', $router->shop_id)
+                ->where('network', $network)
+                ->get()
+                ->filter(fn (TrustedWifiDevice $device): bool => $device->isCurrentlyActive());
+
+            foreach ($devices as $device) {
+                $comment = trim($device->device_name.($device->owner_name ? ' ('.$device->owner_name.')' : ''));
+                $raw = $client->query(
+                    (new Query('/interface/wifi/access-list/add'))
+                        ->equal('interface', $interfaceName)
+                        ->equal('mac-address', $device->mac_address)
+                        ->equal('action', 'accept')
+                        ->equal('comment', $comment)
+                )->read(false);
+
+                if ($trapMessage = self::extractTrapMessage($raw)) {
+                    throw new \RuntimeException($trapMessage);
+                }
+            }
+
+            if ($devices->isNotEmpty()) {
+                $raw = $client->query(
+                    (new Query('/interface/wifi/access-list/add'))
+                        ->equal('interface', $interfaceName)
+                        ->equal('action', 'reject')
+                        ->equal('comment', "Default-deny: only registered {$ssidLabel} devices may join")
+                )->read(false);
+
+                if ($trapMessage = self::extractTrapMessage($raw)) {
+                    throw new \RuntimeException($trapMessage);
+                }
             }
 
             return ['label' => $label, 'success' => true, 'error' => null];

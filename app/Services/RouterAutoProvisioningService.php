@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Router;
+use Illuminate\Database\Eloquent\Collection;
 
 /**
  * Closes the gap between "paste the bootstrap script" and "push the rest of
@@ -50,9 +51,9 @@ class RouterAutoProvisioningService
     }
 
     /**
-     * @return \Illuminate\Database\Eloquent\Collection<int, Router>
+     * @return Collection<int, Router>
      */
-    private function pendingRouters(): \Illuminate\Database\Eloquent\Collection
+    private function pendingRouters(): Collection
     {
         return Router::query()
             ->whereNotNull('api_username')
@@ -88,8 +89,15 @@ class RouterAutoProvisioningService
         // script generator does), so it's always called here rather than
         // duplicating that same default-true logic in a second place.
         $posResult = $this->routerOs->provisionPos($router);
+        // provisionStaffWifi() no-ops internally too, whenever built-in Wi-Fi or
+        // both Staff/Management SSIDs are disabled -- always calling it here is
+        // what actually closes the "trusted-device access list isn't pushed to
+        // the router automatically" gap docs/staff-wifi-access.md used to flag,
+        // the same 5-minute-cycle mechanism that already keeps WireGuard peers/
+        // ZeroTier membership/POS MAC-auth in sync without a manual click.
+        $staffWifiResult = $this->routerOs->provisionStaffWifi($router);
 
-        if ($hotspotResult['success'] && $pppoeResult['success'] && $posResult['success']) {
+        if ($hotspotResult['success'] && $pppoeResult['success'] && $posResult['success'] && $staffWifiResult['success']) {
             $router->forceFill(['auto_provisioned_at' => now()])->save();
             $result['provisioned'][] = $router->name;
 
@@ -106,7 +114,7 @@ class RouterAutoProvisioningService
         // from "reachable but a step genuinely failed" by inspecting error text --
         // that kind of string-matching has been a real source of bugs in this
         // codebase before, so every failed step is just reported plainly.
-        foreach (array_merge($hotspotResult['steps'], $pppoeResult['steps'], $posResult['steps']) as $step) {
+        foreach (array_merge($hotspotResult['steps'], $pppoeResult['steps'], $posResult['steps'], $staffWifiResult['steps']) as $step) {
             if (! $step['success'] && $step['error'] !== null) {
                 $result['errors'][] = "{$router->name}: {$step['label']} - {$step['error']}";
             }

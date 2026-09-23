@@ -361,6 +361,88 @@ class MikroTikProvisioningServiceTest extends TestCase
         $this->assertStringContainsString('/interface bridge vlan add bridge=bridge-lan tagged=bridge-lan,'.'ether2 vlan-ids=50', $script);
     }
 
+    public function test_staff_script_creates_staff_and_management_wifi_with_ports_and_access_list(): void
+    {
+        config([
+            'services.wireguard.endpoint_host' => 'vpn.example.com',
+            'services.wireguard.endpoint_port' => 13231,
+            'services.wireguard.public_key' => 'server-public-key',
+        ]);
+
+        $tenant = Tenant::create(['company_name' => 'Demo ISP', 'owner_email' => 'owner@example.com']);
+        $shop = Shop::create(['tenant_id' => $tenant->id, 'name' => 'Demo Shop', 'location_city' => 'Lagos']);
+
+        TrustedWifiDevice::create([
+            'shop_id' => $shop->id,
+            'network' => TrustedWifiDevice::NETWORK_STAFF,
+            'device_name' => "Manager's Laptop",
+            'mac_address' => 'AA:BB:CC:DD:EE:FF',
+            'is_active' => true,
+        ]);
+
+        $router = Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'Main Router',
+            'nas_identifier' => 'bebeji-router01',
+            'wireguard_internal_ip' => '10.8.0.11',
+            'shared_secret' => 'radius-secret',
+            'provisioning_settings' => [
+                'profile' => 'starlink_plaza',
+                'trunk_port' => 'ether4',
+                'builtin_wifi_interface' => 'wifi1',
+                'staff_wifi_password' => 'MmsStaff2026!',
+                'mgmt_wifi_password' => 'MmsMgmt2026!',
+                'extra_staff_ports' => 'ether6',
+                'extra_mgmt_ports' => 'ether2',
+                'enable_builtin_wifi' => true,
+                'enable_staff' => true,
+                'enable_mgmt_wifi' => true,
+            ],
+        ]);
+
+        $script = app(MikroTikProvisioningService::class)->generateStaffScript($router);
+
+        $this->assertStringContainsString('/interface vlan add interface=bridge-lan name=vlan-staff vlan-id=30', $script);
+        $this->assertStringContainsString('/interface wifi security add name=mms-staff-sec authentication-types=wpa2-psk,wpa3-psk passphrase="MmsStaff2026!"', $script);
+        $this->assertStringContainsString('/interface wifi configuration add name=mms-staff-cfg mode=ap ssid="MMS Staff" security=mms-staff-sec country=Nigeria', $script);
+        $this->assertStringContainsString('/interface wifi add name=wifi-staff master-interface=wifi1 configuration=mms-staff-cfg disabled=no', $script);
+        $this->assertStringContainsString('/interface bridge port add bridge=bridge-lan interface=ether6 pvid=30 comment="Extra staff access port"', $script);
+        $this->assertStringContainsString('/interface bridge vlan add bridge=bridge-lan tagged=bridge-lan,ether4 untagged=wifi-staff,ether6 vlan-ids=30', $script);
+        $this->assertStringContainsString('/ip address add address=192.168.30.1/24 interface=vlan-staff', $script);
+
+        $this->assertStringContainsString('/interface wifi security add name=mms-mgmt-sec authentication-types=wpa2-psk,wpa3-psk passphrase="MmsMgmt2026!"', $script);
+        $this->assertStringContainsString('/interface wifi add name=wifi-mgmt master-interface=wifi1 configuration=mms-mgmt-cfg disabled=no', $script);
+        $this->assertStringContainsString('/interface bridge port add bridge=bridge-lan interface=ether2 pvid=10 comment="Extra management access port"', $script);
+        $this->assertStringNotContainsString('/interface vlan add interface=bridge-lan name=vlan-mgmt', $script);
+
+        $this->assertStringContainsString('/interface wifi access-list remove [find interface=wifi-staff]', $script);
+        $this->assertStringContainsString('/interface wifi access-list remove [find interface=wifi-mgmt]', $script);
+        $this->assertStringContainsString('/interface wifi access-list add interface=wifi-staff mac-address=AA:BB:CC:DD:EE:FF action=accept comment="Manager\'s Laptop"', $script);
+        $this->assertStringContainsString('/interface wifi access-list add interface=wifi-staff action=reject comment="Default-deny: only registered MMS Staff devices may join"', $script);
+        $this->assertStringContainsString('No trusted MMS Mgmt devices registered', $script);
+        $this->assertStringNotContainsString('/interface wifi access-list add interface=wifi-mgmt action=reject', $script);
+    }
+
+    public function test_staff_script_explains_itself_without_builtin_wifi(): void
+    {
+        $router = new Router([
+            'nas_identifier' => 'wired-router',
+            'wireguard_internal_ip' => '10.8.0.12',
+            'shared_secret' => 'radius-secret',
+            'provisioning_settings' => [
+                'enable_builtin_wifi' => false,
+                'enable_staff' => true,
+            ],
+        ]);
+
+        $script = app(MikroTikProvisioningService::class)->generateStaffScript($router);
+
+        $this->assertStringContainsString('does not use MikroTik\'s built-in Wi-Fi', $script);
+        $this->assertStringContainsString('docs/staff-wifi-access.md', $script);
+        $this->assertStringNotContainsString('/interface vlan add', $script);
+        $this->assertStringNotContainsString('/interface wifi security add', $script);
+    }
+
     public function test_it_generates_a_fresh_infrastructure_script_for_starlink_plaza_networks(): void
     {
         config([
