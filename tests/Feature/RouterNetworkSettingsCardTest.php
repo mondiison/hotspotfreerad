@@ -33,6 +33,7 @@ class RouterNetworkSettingsCardTest extends TestCase
     public function test_it_loads_existing_settings_for_the_pos_network(): void
     {
         $router = $this->makeRouter([
+            'enable_pos' => true,
             'pos_ssid' => 'Cafe Till',
             'pos_vlan' => 55,
             'pos_gateway' => '192.168.55.1/24',
@@ -133,6 +134,7 @@ class RouterNetworkSettingsCardTest extends TestCase
     public function test_saving_pos_settings_updates_only_pos_keys(): void
     {
         $router = $this->makeRouter([
+            'enable_pos' => true,
             'hotspot_ssid' => 'MMS Hotspot',
             'hotspot_vlan' => 20,
             'pos_ssid' => 'MMS POS',
@@ -225,7 +227,7 @@ class RouterNetworkSettingsCardTest extends TestCase
 
     public function test_a_malformed_extra_port_list_is_rejected_in_simple_mode(): void
     {
-        $router = $this->makeRouter(['ports_advanced_mode' => false]);
+        $router = $this->makeRouter(['enable_pos' => true, 'ports_advanced_mode' => false]);
 
         Livewire::test(RouterNetworkSettingsCard::class, ['router' => $router, 'network' => 'pos'])
             ->set('vlan', 50)
@@ -242,7 +244,7 @@ class RouterNetworkSettingsCardTest extends TestCase
             'trunk_port_number' => 2,
             'pi_port_number' => 3,
             'ports_advanced_mode' => false,
-            'enable_pos' => false,
+            'enable_pos' => true,
         ]);
 
         Livewire::test(RouterNetworkSettingsCard::class, ['router' => $router, 'network' => 'pos'])
@@ -252,6 +254,33 @@ class RouterNetworkSettingsCardTest extends TestCase
             ->assertHasErrors(['extraPorts']);
 
         $this->assertArrayNotHasKey('extra_pos_port_numbers', $router->fresh()->provisioning_settings ?? []);
+    }
+
+    /**
+     * Confirmed live 2026-09-23: this card used to let extraPorts be saved
+     * regardless of enable_pos, which silently poisoned a router's settings
+     * (a non-blank extra_pos_port_numbers while enable_pos stayed false) and
+     * broke the wizard's own step-2-to-3 validation on that router with no
+     * visible error message, since the wizard hides the "Extra POS port"
+     * input entirely while POS is disabled. This is the regression test for
+     * that fix: saving POS settings on a POS-disabled router must never
+     * write a non-blank extra_pos_port_numbers/extra_pos_ports, regardless
+     * of what was typed into the (now-disabled) field.
+     */
+    public function test_saving_pos_settings_never_poisons_extra_ports_while_pos_is_disabled(): void
+    {
+        $router = $this->makeRouter(['enable_pos' => false]);
+
+        Livewire::test(RouterNetworkSettingsCard::class, ['router' => $router, 'network' => 'pos'])
+            ->set('vlan', 50)
+            ->set('extraPorts', '7')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $settings = $router->fresh()->provisioning_settings;
+
+        $this->assertSame('', $settings['extra_pos_port_numbers']);
+        $this->assertSame('', $settings['extra_pos_ports']);
     }
 
     public function test_saving_never_makes_a_live_routeros_call(): void

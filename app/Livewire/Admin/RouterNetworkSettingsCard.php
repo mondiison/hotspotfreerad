@@ -88,6 +88,7 @@ class RouterNetworkSettingsCard extends Component
         $prefix = $this->network;
         $existing = (array) $router->provisioning_settings;
         $advanced = (bool) ($existing['ports_advanced_mode'] ?? false);
+        $extraPortsEditable = $this->extraPortsEditable($existing);
 
         $rules = [
             'vlan' => ['required', 'integer', 'min:1', 'max:4094'],
@@ -103,7 +104,7 @@ class RouterNetworkSettingsCard extends Component
             $rules['pool'] = ['nullable', 'string', 'max:64'];
         }
 
-        if ($this->supportsExtraPorts()) {
+        if ($extraPortsEditable) {
             $rules['extraPorts'] = $advanced
                 ? ['nullable', 'string', 'max:200']
                 : ['nullable', 'string', 'max:120', 'regex:/^\d+(,\s*\d+)*$/'];
@@ -129,7 +130,18 @@ class RouterNetworkSettingsCard extends Component
         }
 
         if ($this->supportsExtraPorts()) {
-            $extraPorts = $validated['extraPorts'] ?? '';
+            // Confirmed live 2026-09-23: RouterManagementService::rules() requires
+            // extra_pos_port_numbers to be BLANK whenever enable_pos is false
+            // (Rule::prohibitedIf) -- this card used to let extraPorts be saved
+            // regardless, which silently poisoned a router's settings (a
+            // non-blank value while enable_pos stayed false) and broke the
+            // wizard's own step-2-to-3 validation on that router with no
+            // visible error, since the wizard hides the "Extra POS port" input
+            // entirely while POS is disabled. Forced blank here whenever this
+            // network isn't actually enabled, matching that constraint exactly
+            // instead of the earlier "pre-configure before enabling" design,
+            // which turned out to directly contradict it.
+            $extraPorts = $extraPortsEditable ? ($validated['extraPorts'] ?? '') : '';
 
             if ($advanced) {
                 $updated["extra_{$prefix}_ports"] = $extraPorts;
@@ -152,29 +164,20 @@ class RouterNetworkSettingsCard extends Component
                 : ($existing["{$prefix}_wifi_password"] ?? '');
         }
 
-        if ($this->supportsExtraPorts()) {
+        if ($extraPortsEditable) {
             // Reuses the exact same cross-field conflict check the full wizard
             // runs (RouterManagementService::portConflictRule(), now public
             // for exactly this) -- built against a copy of the router's full
-            // existing settings with just this network's fields overridden,
-            // so a saved extra port here still can't collide with another
-            // role's port. portConflictRule() only checks a role's extra-ports
-            // list when that role's own enable_* flag is true -- forced true
-            // here for JUST this conflict check (not persisted) so editing
-            // POS's ports still catches a collision even on a router where
-            // enable_pos happens to be off right now (pre-configuring before
-            // flipping it on later shouldn't let an unsafe port number slip
-            // through unchecked).
-            $forConflictCheck = $updated;
-            if ($prefix === 'pos') {
-                $forConflictCheck['enable_pos'] = true;
-            }
-
+            // existing settings with just this network's fields overridden, so
+            // a saved extra port here still can't collide with another role's
+            // port. A blank extraPorts value (the $extraPortsEditable-false
+            // branch above) never reaches here -- portConflictRule() itself
+            // no-ops on a blank value, so there's nothing to check.
             $conflictError = null;
-            $conflictRule = $routers->portConflictRule($forConflictCheck);
+            $conflictRule = $routers->portConflictRule($updated);
             $conflictRule(
                 'provisioning_settings.port_count',
-                $forConflictCheck['port_count'] ?? null,
+                $updated['port_count'] ?? null,
                 function (string $message) use (&$conflictError): void {
                     $conflictError = $message;
                 }
@@ -233,6 +236,27 @@ class RouterNetworkSettingsCard extends Component
         return $this->network === 'pos';
     }
 
+    /**
+     * Whether extra untagged ports can actually be set right now for this
+     * network -- true for hotspot unconditionally (no enable_hotspot flag
+     * exists, it's always on), but for POS only when enable_pos is currently
+     * true, matching RouterManagementService::rules()'s own
+     * Rule::prohibitedIf(!enable_pos) constraint on extra_pos_port_numbers
+     * exactly. See the note in save() for why this matters.
+     */
+    public function extraPortsEditable(array $settings): bool
+    {
+        if (! $this->supportsExtraPorts()) {
+            return false;
+        }
+
+        if ($this->network === 'pos') {
+            return (bool) ($settings['enable_pos'] ?? false);
+        }
+
+        return true;
+    }
+
     private function loadFromRouter(Router $router): void
     {
         $settings = (array) $router->provisioning_settings;
@@ -257,7 +281,7 @@ class RouterNetworkSettingsCard extends Component
             $this->pool = (string) ($settings["{$prefix}_pool"] ?? '');
         }
 
-        if ($this->supportsExtraPorts()) {
+        if ($this->extraPortsEditable($settings)) {
             $advanced = (bool) ($settings['ports_advanced_mode'] ?? false);
             $this->extraPorts = $advanced
                 ? (string) ($settings["extra_{$prefix}_ports"] ?? '')
@@ -274,6 +298,7 @@ class RouterNetworkSettingsCard extends Component
             'router' => $router,
             'builtinWifiEnabled' => (bool) ($settings['enable_builtin_wifi'] ?? false),
             'portsAdvancedMode' => (bool) ($settings['ports_advanced_mode'] ?? false),
+            'extraPortsEditable' => $this->extraPortsEditable($settings),
         ]);
     }
 }

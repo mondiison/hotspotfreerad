@@ -44,8 +44,12 @@
                 @if ($this->supportsExtraPorts())
                     <flux:field>
                         <flux:label>Extra untagged ports</flux:label>
-                        <flux:input wire:model="extraPorts" placeholder="{{ $portsAdvancedMode ? 'e.g. ether5,ether6' : 'e.g. 5,6' }}" />
-                        <flux:description>{{ $portsAdvancedMode ? 'Advanced mode: raw interface names.' : 'Port numbers, comma-separated.' }}</flux:description>
+                        <flux:input wire:model="extraPorts" placeholder="{{ $portsAdvancedMode ? 'e.g. ether5,ether6' : 'e.g. 5,6' }}" :disabled="! $extraPortsEditable" />
+                        @if ($extraPortsEditable)
+                            <flux:description>{{ $portsAdvancedMode ? 'Advanced mode: raw interface names.' : 'Port numbers, comma-separated.' }}</flux:description>
+                        @else
+                            <flux:description>{{ $this->label() }} is currently disabled on this router (wizard's Features step) &mdash; extra ports can only be set while it's enabled.</flux:description>
+                        @endif
                         <flux:error name="extraPorts" />
                     </flux:field>
                 @endif
