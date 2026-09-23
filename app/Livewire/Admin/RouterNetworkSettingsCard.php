@@ -11,20 +11,28 @@ use Livewire\Component;
 
 /**
  * Lets an admin adjust one section's SSID/VLAN/addressing/ports directly from
- * that section's own tab on the router show page (Hotspot Script / POS
- * Script), instead of needing the full 4-step router wizard for a single
- * field. Reused for both networks rather than two near-identical components,
- * since the field shape is the same shape (SSID/VLAN/gateway/network/pool/
- * extra ports) apart from POS's Wi-Fi password. Mirrors the small-embedded-
- * Livewire-island pattern RouterCredentialsCard already established on this
- * same (otherwise plain Blade) page -- no Livewire conversion needed for the
- * rest of the page.
+ * that section's own tab on the router show page (Hotspot Script / PPPoE
+ * Script / POS Script), instead of needing the full 4-step router wizard for
+ * a single field. Reused for all three networks rather than near-identical
+ * components per network, since the field shape mostly overlaps -- SSID and
+ * extra untagged ports only apply to hotspot/pos (PPPoE has no SSID at all,
+ * being wired/PPP dial-in rather than Wi-Fi, and is deliberately excluded
+ * from the extra-access-port model -- see supportsSsid()/supportsExtraPorts()
+ * /supportsAddressPool()), and the Wi-Fi password only applies to pos.
+ * Mirrors the small-embedded-Livewire-island pattern RouterCredentialsCard
+ * already established on this same (otherwise plain Blade) page -- no
+ * Livewire conversion needed for the rest of the page.
  *
  * Deliberately save-only: it never pushes live to the router itself. Saving
- * updates provisioning_settings and refreshes the generated script text on
- * the tab; pushing that live stays a separate, explicit "Provision via API"
- * click, matching how the full wizard already separates "save" from
- * "provision".
+ * updates provisioning_settings; pushing that live stays a separate,
+ * explicit "Provision via API" click, matching how the full wizard already
+ * separates "save" from "provision". None of these fields (SSID/VLAN/
+ * addressing/ports) are actually read by this network's own incremental
+ * script (generateScript()/generatePppoeScript()/generatePosScript() only
+ * read RADIUS/profile settings) -- they only affect the Fresh Infrastructure
+ * Script, which is what actually creates the VLAN/addressing/Wi-Fi
+ * configuration. The card's own copy says this plainly rather than implying
+ * the tab it lives on will visibly change.
  */
 class RouterNetworkSettingsCard extends Component
 {
@@ -81,77 +89,102 @@ class RouterNetworkSettingsCard extends Component
         $existing = (array) $router->provisioning_settings;
         $advanced = (bool) ($existing['ports_advanced_mode'] ?? false);
 
-        $validated = $this->validate([
-            'ssid' => ['nullable', 'string', 'max:32'],
+        $rules = [
             'vlan' => ['required', 'integer', 'min:1', 'max:4094'],
             'gateway' => ['nullable', 'string', 'max:32'],
-            'networkCidr' => ['nullable', 'string', 'max:32'],
-            'pool' => ['nullable', 'string', 'max:64'],
-            'extraPorts' => $advanced
+        ];
+
+        if ($this->supportsSsid()) {
+            $rules['ssid'] = ['nullable', 'string', 'max:32'];
+        }
+
+        if ($this->supportsAddressPool()) {
+            $rules['networkCidr'] = ['nullable', 'string', 'max:32'];
+            $rules['pool'] = ['nullable', 'string', 'max:64'];
+        }
+
+        if ($this->supportsExtraPorts()) {
+            $rules['extraPorts'] = $advanced
                 ? ['nullable', 'string', 'max:200']
-                : ['nullable', 'string', 'max:120', 'regex:/^\d+(,\s*\d+)*$/'],
-            'wifiPassword' => $prefix === 'pos'
-                ? ['nullable', 'string', 'min:8', 'max:63']
-                : ['nullable'],
-        ]);
+                : ['nullable', 'string', 'max:120', 'regex:/^\d+(,\s*\d+)*$/'];
+        }
+
+        if ($this->supportsWifiPassword()) {
+            $rules['wifiPassword'] = ['nullable', 'string', 'min:8', 'max:63'];
+        }
+
+        $validated = $this->validate($rules);
 
         $updated = $existing;
-        $updated["{$prefix}_ssid"] = $validated['ssid'];
         $updated["{$prefix}_vlan"] = $validated['vlan'];
-        $updated["{$prefix}_gateway"] = $validated['gateway'];
-        $updated["{$prefix}_network"] = $validated['networkCidr'];
-        $updated["{$prefix}_pool"] = $validated['pool'];
+        $updated["{$prefix}_gateway"] = $validated['gateway'] ?? '';
 
-        if ($advanced) {
-            $updated["extra_{$prefix}_ports"] = $validated['extraPorts'];
-            $updated["extra_{$prefix}_port_numbers"] = implode(
-                ',',
-                RouterPortLayout::portNumbersFromInterfaceList($validated['extraPorts']) ?? []
-            );
-        } else {
-            $updated["extra_{$prefix}_port_numbers"] = $validated['extraPorts'];
-            $updated["extra_{$prefix}_ports"] = implode(
-                ',',
-                RouterPortLayout::interfaceNamesFromNumberList($validated['extraPorts'])
-            );
+        if ($this->supportsSsid()) {
+            $updated["{$prefix}_ssid"] = $validated['ssid'] ?? '';
         }
 
-        if ($prefix === 'pos') {
-            $updated['pos_wifi_password'] = $validated['wifiPassword'] !== ''
-                ? $validated['wifiPassword']
-                : ($existing['pos_wifi_password'] ?? '');
+        if ($this->supportsAddressPool()) {
+            $updated["{$prefix}_network"] = $validated['networkCidr'] ?? '';
+            $updated["{$prefix}_pool"] = $validated['pool'] ?? '';
         }
 
-        // Reuses the exact same cross-field conflict check the full wizard
-        // runs (RouterManagementService::portConflictRule(), now public for
-        // exactly this) -- built against a copy of the router's full existing
-        // settings with just this network's fields overridden, so a saved
-        // extra port here still can't collide with another role's port.
-        // portConflictRule() only checks a role's extra-ports list when that
-        // role's own enable_* flag is true -- forced true here for JUST this
-        // conflict check (not persisted) so editing POS's ports still catches
-        // a collision even on a router where enable_pos happens to be off
-        // right now (pre-configuring before flipping it on later shouldn't
-        // let an unsafe port number slip through unchecked).
-        $forConflictCheck = $updated;
-        if ($prefix === 'pos') {
-            $forConflictCheck['enable_pos'] = true;
-        }
+        if ($this->supportsExtraPorts()) {
+            $extraPorts = $validated['extraPorts'] ?? '';
 
-        $conflictError = null;
-        $conflictRule = $routers->portConflictRule($forConflictCheck);
-        $conflictRule(
-            'provisioning_settings.port_count',
-            $forConflictCheck['port_count'] ?? null,
-            function (string $message) use (&$conflictError): void {
-                $conflictError = $message;
+            if ($advanced) {
+                $updated["extra_{$prefix}_ports"] = $extraPorts;
+                $updated["extra_{$prefix}_port_numbers"] = implode(
+                    ',',
+                    RouterPortLayout::portNumbersFromInterfaceList($extraPorts) ?? []
+                );
+            } else {
+                $updated["extra_{$prefix}_port_numbers"] = $extraPorts;
+                $updated["extra_{$prefix}_ports"] = implode(
+                    ',',
+                    RouterPortLayout::interfaceNamesFromNumberList($extraPorts)
+                );
             }
-        );
+        }
 
-        if ($conflictError !== null) {
-            $this->addError('extraPorts', $conflictError);
+        if ($this->supportsWifiPassword()) {
+            $updated["{$prefix}_wifi_password"] = filled($validated['wifiPassword'] ?? null)
+                ? $validated['wifiPassword']
+                : ($existing["{$prefix}_wifi_password"] ?? '');
+        }
 
-            return;
+        if ($this->supportsExtraPorts()) {
+            // Reuses the exact same cross-field conflict check the full wizard
+            // runs (RouterManagementService::portConflictRule(), now public
+            // for exactly this) -- built against a copy of the router's full
+            // existing settings with just this network's fields overridden,
+            // so a saved extra port here still can't collide with another
+            // role's port. portConflictRule() only checks a role's extra-ports
+            // list when that role's own enable_* flag is true -- forced true
+            // here for JUST this conflict check (not persisted) so editing
+            // POS's ports still catches a collision even on a router where
+            // enable_pos happens to be off right now (pre-configuring before
+            // flipping it on later shouldn't let an unsafe port number slip
+            // through unchecked).
+            $forConflictCheck = $updated;
+            if ($prefix === 'pos') {
+                $forConflictCheck['enable_pos'] = true;
+            }
+
+            $conflictError = null;
+            $conflictRule = $routers->portConflictRule($forConflictCheck);
+            $conflictRule(
+                'provisioning_settings.port_count',
+                $forConflictCheck['port_count'] ?? null,
+                function (string $message) use (&$conflictError): void {
+                    $conflictError = $message;
+                }
+            );
+
+            if ($conflictError !== null) {
+                $this->addError('extraPorts', $conflictError);
+
+                return;
+            }
         }
 
         $router->forceFill(['provisioning_settings' => $updated])->save();
@@ -159,32 +192,77 @@ class RouterNetworkSettingsCard extends Component
         $this->showEditModal = false;
 
         Flux::toast(
-            heading: ucfirst($prefix).' settings saved',
-            text: 'Click "Provision via API" on this tab when you\'re ready to push these changes to the router.',
+            heading: $this->label().' settings saved',
+            text: 'See the Fresh Infrastructure Script tab for the updated script, and push it via API (or paste it) when ready.',
             variant: 'success',
         );
 
+        // A full reload so the Fresh Infrastructure Script tab -- the one
+        // that actually reads these settings, see this class's own docblock
+        // -- reflects the change; it's rendered once by the controller at
+        // page load, not reactively by this Livewire island.
         $this->redirect(route('admin.routers.show', $router));
+    }
+
+    public function label(): string
+    {
+        return match ($this->network) {
+            'pos' => 'POS',
+            'pppoe' => 'PPPoE',
+            default => 'Hotspot',
+        };
+    }
+
+    public function supportsSsid(): bool
+    {
+        return in_array($this->network, ['hotspot', 'pos'], true);
+    }
+
+    public function supportsAddressPool(): bool
+    {
+        return in_array($this->network, ['hotspot', 'pos'], true);
+    }
+
+    public function supportsExtraPorts(): bool
+    {
+        return in_array($this->network, ['hotspot', 'pos'], true);
+    }
+
+    public function supportsWifiPassword(): bool
+    {
+        return $this->network === 'pos';
     }
 
     private function loadFromRouter(Router $router): void
     {
         $settings = (array) $router->provisioning_settings;
         $prefix = $this->network;
-        $defaultSsid = $prefix === 'pos' ? 'MMS POS' : 'MMS Hotspot';
-        $defaultVlan = $prefix === 'pos' ? 50 : 20;
+        $defaultVlan = match ($prefix) {
+            'pos' => 50,
+            'pppoe' => 40,
+            default => 20,
+        };
 
-        $this->ssid = (string) ($settings["{$prefix}_ssid"] ?? $defaultSsid);
         $this->vlan = (int) ($settings["{$prefix}_vlan"] ?? $defaultVlan);
         $this->gateway = (string) ($settings["{$prefix}_gateway"] ?? '');
-        $this->networkCidr = (string) ($settings["{$prefix}_network"] ?? '');
-        $this->pool = (string) ($settings["{$prefix}_pool"] ?? '');
         $this->wifiPassword = '';
 
-        $advanced = (bool) ($settings['ports_advanced_mode'] ?? false);
-        $this->extraPorts = $advanced
-            ? (string) ($settings["extra_{$prefix}_ports"] ?? '')
-            : (string) ($settings["extra_{$prefix}_port_numbers"] ?? '');
+        if ($this->supportsSsid()) {
+            $defaultSsid = $prefix === 'pos' ? 'MMS POS' : 'MMS Hotspot';
+            $this->ssid = (string) ($settings["{$prefix}_ssid"] ?? $defaultSsid);
+        }
+
+        if ($this->supportsAddressPool()) {
+            $this->networkCidr = (string) ($settings["{$prefix}_network"] ?? '');
+            $this->pool = (string) ($settings["{$prefix}_pool"] ?? '');
+        }
+
+        if ($this->supportsExtraPorts()) {
+            $advanced = (bool) ($settings['ports_advanced_mode'] ?? false);
+            $this->extraPorts = $advanced
+                ? (string) ($settings["extra_{$prefix}_ports"] ?? '')
+                : (string) ($settings["extra_{$prefix}_port_numbers"] ?? '');
+        }
     }
 
     public function render()

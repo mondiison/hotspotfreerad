@@ -252,6 +252,8 @@ sudo freeradius -X</code></pre>
                 </flux:tab.panel>
 
                 <flux:tab.panel name="pppoe" class="space-y-6">
+                    <livewire:admin.router-network-settings-card :router="$router" network="pppoe" :key="'pppoe-settings-'.$router->id" />
+
                     <section class="min-w-0 overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm">
                         <div class="border-b border-zinc-200 dark:border-zinc-700 px-5 py-4">
                             <div class="flex flex-col justify-between gap-3 md:flex-row md:items-start">
@@ -313,7 +315,7 @@ sudo freeradius -X</code></pre>
                         <h2 class="text-base font-semibold">PPPoE Notes</h2>
                         <ul class="mt-4 space-y-3 text-sm text-zinc-600 dark:text-zinc-400">
                             <li>Use PPPoE for fixed subscribers with username/password credentials.</li>
-                            <li>Change <code>interface=bridge1</code> in the script to the subscriber VLAN or LAN bridge.</li>
+                            <li>Assumes the PPPoE VLAN already exists (Fresh Infrastructure Script tab). If this router doesn't use that VLAN scheme, change <code>interface=vlan-pppoe</code> in the script to the subscriber VLAN or LAN bridge.</li>
                             <li>Set bandwidth on the package in MMS Radius. FreeRADIUS sends it to MikroTik as <code>Mikrotik-Rate-Limit</code>.</li>
                             <li>Customer CPE WAN mode should be PPPoE client.</li>
                         </ul>

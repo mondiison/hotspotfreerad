@@ -62,7 +62,7 @@ class RouterProvisioningPageTest extends TestCase
             ->assertSee('AP / SSID / VLAN Guide')
             ->assertSee('RouterOS PPPoE Script')
             ->assertSee('/ppp aaa set use-radius=yes accounting=yes interim-update=5m')
-            ->assertSee('/interface pppoe-server server add interface=bridge1 service-name=mms-radius')
+            ->assertSee('/interface pppoe-server server add interface=vlan-pppoe service-name=mms-radius')
             ->assertSee('Config In Use')
             ->assertSee('MikroTik login.html')
             ->assertSee('https://public.example.com/hotspot/portal')

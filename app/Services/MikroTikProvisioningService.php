@@ -140,13 +140,25 @@ SCRIPT;
 SCRIPT;
     }
 
+    /**
+     * $pppoeInterface used to be a hardcoded generic "bridge1" placeholder
+     * the admin had to manually retype before pasting -- while
+     * generateFreshInfrastructureScript()'s own PPPoE section already
+     * creates and binds the PPPoE server to a fixed "vlan-pppoe" interface
+     * (see its own $pppoeLines). Changed to reference that same fixed name
+     * instead, matching generatePosScript()'s "assumes the fresh
+     * infrastructure script already created this VLAN" pattern -- so a
+     * router that's already had Fresh Infrastructure Script applied needs
+     * no manual edit here anymore. A router that never uses this app's own
+     * VLAN scheme at all can still retype the interface, same as before.
+     */
     public function generatePppoeScript(Router $router): string
     {
         $nasIdentifier = $router->nas_identifier;
         $tunnelLines = implode("\n", array_merge($this->wireguardProvisioningLines($router), $this->zeroTierLines($router)));
         $apiUserLines = implode("\n", $this->apiUserProvisioningLines($router));
         $radiusLines = implode("\n", $this->radiusClientLines($router, 'ppp'));
-        $pppoeInterface = 'bridge1';
+        $pppoeInterface = 'vlan-pppoe';
 
         return <<<SCRIPT
 /system identity set name="{$nasIdentifier}"
@@ -157,6 +169,7 @@ SCRIPT;
 # PPPoE bandwidth is controlled by MMS Radius packages through Mikrotik-Rate-Limit.
 # Keep this profile generic; do not hard-code rate-limit here unless you want a router-side override.
 /ppp profile add name=mms-pppoe-profile only-one=yes change-tcp-mss=yes
+# Requires the PPPoE VLAN already set up (Fresh Infrastructure Script's PPPoE section). If this router doesn't use that VLAN scheme, change {$pppoeInterface} to the correct subscriber VLAN or LAN bridge.
 /interface pppoe-server server add interface={$pppoeInterface} service-name=mms-radius default-profile=mms-pppoe-profile authentication=pap,chap,mschap1,mschap2 disabled=no
 SCRIPT;
     }

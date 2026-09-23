@@ -272,7 +272,7 @@ class MikroTikProvisioningServiceTest extends TestCase
         $this->assertStringContainsString('/ppp aaa set use-radius=yes accounting=yes interim-update=5m', $script);
         $this->assertStringContainsString('Mikrotik-Rate-Limit', $script);
         $this->assertStringNotContainsString('rate-limit=', $script);
-        $this->assertStringContainsString('/interface pppoe-server server add interface=bridge1 service-name=mms-radius', $script);
+        $this->assertStringContainsString('/interface pppoe-server server add interface=vlan-pppoe service-name=mms-radius', $script);
     }
 
     public function test_it_generates_a_routeros_pos_script(): void

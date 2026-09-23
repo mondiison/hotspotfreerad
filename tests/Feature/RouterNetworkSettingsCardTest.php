@@ -63,6 +63,73 @@ class RouterNetworkSettingsCardTest extends TestCase
             ->assertSet('vlan', 21);
     }
 
+    public function test_it_loads_existing_settings_for_the_pppoe_network(): void
+    {
+        $router = $this->makeRouter([
+            'pppoe_vlan' => 45,
+            'pppoe_gateway' => '172.16.45.1/24',
+        ]);
+
+        Livewire::test(RouterNetworkSettingsCard::class, ['router' => $router, 'network' => 'pppoe'])
+            ->assertSet('vlan', 45)
+            ->assertSet('gateway', '172.16.45.1/24');
+    }
+
+    public function test_pppoe_card_does_not_expose_ssid_password_or_extra_ports_fields(): void
+    {
+        $router = $this->makeRouter();
+
+        $component = Livewire::test(RouterNetworkSettingsCard::class, ['router' => $router, 'network' => 'pppoe']);
+
+        $this->assertFalse($component->instance()->supportsSsid());
+        $this->assertFalse($component->instance()->supportsAddressPool());
+        $this->assertFalse($component->instance()->supportsExtraPorts());
+        $this->assertFalse($component->instance()->supportsWifiPassword());
+        $component->assertDontSee('Wi-Fi password')
+            ->assertDontSee('DHCP pool')
+            ->assertDontSee('Extra untagged ports');
+    }
+
+    public function test_saving_pppoe_settings_updates_only_pppoe_keys(): void
+    {
+        $router = $this->makeRouter([
+            'hotspot_vlan' => 20,
+            'pos_vlan' => 50,
+            'pppoe_vlan' => 40,
+        ]);
+
+        Livewire::test(RouterNetworkSettingsCard::class, ['router' => $router, 'network' => 'pppoe'])
+            ->set('vlan', 46)
+            ->set('gateway', '172.16.46.1/24')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $settings = $router->fresh()->provisioning_settings;
+
+        $this->assertSame(46, $settings['pppoe_vlan']);
+        $this->assertSame('172.16.46.1/24', $settings['pppoe_gateway']);
+        $this->assertArrayNotHasKey('pppoe_ssid', $settings);
+        $this->assertArrayNotHasKey('extra_pppoe_port_numbers', $settings);
+        $this->assertSame(20, $settings['hotspot_vlan']);
+        $this->assertSame(50, $settings['pos_vlan']);
+    }
+
+    public function test_saving_pppoe_settings_never_makes_a_live_routeros_call(): void
+    {
+        $router = $this->makeRouter();
+
+        $this->mock(RouterOsConnectionService::class, function ($mock): void {
+            $mock->shouldNotReceive('provisionHotspot');
+            $mock->shouldNotReceive('provisionPos');
+            $mock->shouldNotReceive('provisionPppoe');
+        });
+
+        Livewire::test(RouterNetworkSettingsCard::class, ['router' => $router, 'network' => 'pppoe'])
+            ->set('vlan', 47)
+            ->call('save')
+            ->assertHasNoErrors();
+    }
+
     public function test_saving_pos_settings_updates_only_pos_keys(): void
     {
         $router = $this->makeRouter([
