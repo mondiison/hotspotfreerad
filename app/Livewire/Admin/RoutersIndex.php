@@ -493,7 +493,15 @@ class RoutersIndex extends Component
         }
 
         $settings = array_merge($settings, $parsedPortNumbers, $parsedExtraPortNumbers);
-        $settings['port_count'] = max(array_merge($parsedPortNumbers, $allExtraPortNumbers)) + 2;
+        // Confirmed live 2026-09-23: this used to unconditionally overwrite
+        // port_count with the derived-from-role-ports minimum, discarding
+        // whatever the admin had actually saved (e.g. 24 on a 24-port
+        // switch where only 4 ports are role-assigned) -- every edit-wizard
+        // open silently reset "Total Ethernet ports" back down to a smaller
+        // computed number. Now only raises it as a floor when the saved
+        // value is missing or too small to cover the ports actually in use.
+        $minPortCount = max(array_merge($parsedPortNumbers, $allExtraPortNumbers)) + 2;
+        $settings['port_count'] = max((int) ($settings['port_count'] ?? 0), $minPortCount);
 
         return $settings;
     }

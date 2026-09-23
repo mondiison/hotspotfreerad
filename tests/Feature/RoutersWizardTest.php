@@ -351,6 +351,39 @@ class RoutersWizardTest extends TestCase
             ->assertSet('provisioning_settings.extra_hotspot_port_numbers', '5,6');
     }
 
+    /**
+     * Regression test for a live 2026-09-23 report: opening the edit wizard
+     * always reset "Total Ethernet ports" to a small computed number instead
+     * of showing what was actually saved. routerProvisioningSettings() used
+     * to unconditionally overwrite port_count with (max role port number) + 2,
+     * discarding the saved value outright -- a 24-port switch where only
+     * ports 1/8/2/3 are role-assigned would open showing 10, not 24.
+     */
+    public function test_editing_a_router_keeps_its_saved_port_count_instead_of_resetting_it(): void
+    {
+        $shop = $this->shop();
+        $router = Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'Big Switch Router',
+            'nas_identifier' => 'big-switch-router',
+            'wireguard_internal_ip' => '10.8.0.95',
+            'shared_secret' => 'radius-secret',
+            'provisioning_settings' => [
+                'port_count' => 24,
+                'wan1' => 'ether1',
+                'wan2' => 'ether8',
+                'trunk_port' => 'ether2',
+                'pi_port' => 'ether3',
+            ],
+        ]);
+
+        Livewire::actingAs($this->superAdmin())
+            ->test(RoutersIndex::class)
+            ->call('edit', $router->id)
+            ->assertSet('provisioning_settings.ports_advanced_mode', false)
+            ->assertSet('provisioning_settings.port_count', 24);
+    }
+
     public function test_editing_a_router_with_a_non_standard_interface_name_opens_in_advanced_mode(): void
     {
         $shop = $this->shop();

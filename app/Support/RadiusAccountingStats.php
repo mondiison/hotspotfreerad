@@ -15,6 +15,29 @@ class RadiusAccountingStats
         return Schema::hasTable('radacct');
     }
 
+    /**
+     * Confirmed live 2026-09-23: a ZeroTier-only (or dual-mode) router's
+     * actual RADIUS traffic can arrive at FreeRADIUS from its ZeroTier IP
+     * rather than wireguard_internal_ip -- RadiusProvisioningService::
+     * syncRouter() already accounts for this by writing a second `nas` row
+     * keyed to zerotier_ip, but this class only ever matched `radacct.
+     * nasipaddress` against wireguard_internal_ip, so a router that never
+     * actually sends traffic over WireGuard (tunnel_mode=zerotier) showed
+     * "No accounting yet"/"Last seen never" permanently regardless of real
+     * activity, since its accounting rows are keyed to an IP this class
+     * never checked. Every method below now matches against both possible
+     * IPs, the same dual-IP awareness `syncRadiusClients()`/
+     * `apiServiceAddressRestriction()` already have elsewhere in this
+     * codebase for exactly this "which IP did this router actually use"
+     * concern.
+     *
+     * @return list<string>
+     */
+    private function nasIpsFor(Router $router): array
+    {
+        return array_values(array_filter([$router->wireguard_internal_ip, $router->zerotier_ip]));
+    }
+
     public function refreshRouterHealth(EloquentCollection $routers): EloquentCollection
     {
         if (! $this->hasAccounting() || $routers->isEmpty()) {
@@ -24,14 +47,16 @@ class RadiusAccountingStats
         }
 
         $routers->each(function (Router $router): void {
+            $nasIps = $this->nasIpsFor($router);
+
             $latestSession = DB::table('radacct')
-                ->where('nasipaddress', $router->wireguard_internal_ip)
+                ->whereIn('nasipaddress', $nasIps)
                 ->orderByRaw('COALESCE(acctupdatetime, acctstarttime) desc')
                 ->first();
 
             $lastSeenAt = $latestSession?->acctupdatetime ?? $latestSession?->acctstarttime;
             $hasActiveSession = DB::table('radacct')
-                ->where('nasipaddress', $router->wireguard_internal_ip)
+                ->whereIn('nasipaddress', $nasIps)
                 ->whereNull('acctstoptime')
                 ->exists();
             if (! $latestSession) {
@@ -97,7 +122,7 @@ class RadiusAccountingStats
             ->limit($limit)
             ->get()
             ->map(function ($session) use ($routers) {
-                $router = $routers->firstWhere('wireguard_internal_ip', $session->nasipaddress);
+                $router = $routers->first(fn (Router $router): bool => in_array($session->nasipaddress, $this->nasIpsFor($router), true));
                 $session->router_name = $router?->name ?? $session->nasipaddress;
                 $session->shop_name = $router?->shop?->name;
                 $session->total_bytes = (int) ($session->acctinputoctets ?? 0) + (int) ($session->acctoutputoctets ?? 0);
@@ -112,6 +137,8 @@ class RadiusAccountingStats
             return null;
         }
 
-        return DB::table('radacct')->whereIn('nasipaddress', $routers->pluck('wireguard_internal_ip')->all());
+        $nasIps = $routers->flatMap(fn (Router $router): array => $this->nasIpsFor($router))->unique()->values()->all();
+
+        return DB::table('radacct')->whereIn('nasipaddress', $nasIps);
     }
 }
