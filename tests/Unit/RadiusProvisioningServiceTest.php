@@ -3,6 +3,7 @@
 namespace Tests\Unit;
 
 use App\Models\Package;
+use App\Models\PosDevice;
 use App\Models\PppoeSubscriber;
 use App\Models\Router;
 use App\Models\Shop;
@@ -306,6 +307,57 @@ class RadiusProvisioningServiceTest extends TestCase
         $service->revokeTrustedWifiDevice($device);
 
         $this->assertDatabaseMissing('radcheck', ['username' => 'AA:BB:CC:DD:EE:FF']);
+    }
+
+    /**
+     * Regression test for a live 2026-09-23 bug: provisionPosDevice() used
+     * to also write a second radcheck row (attribute=Calling-Station-Id),
+     * which FreeRADIUS treats as an extra check-item the Access-Request must
+     * satisfy -- confirmed live to reject a real MAC-auth attempt outright
+     * ("login failed: invalid username or password" in RouterOS's own
+     * hotspot log) even though the device's MAC/password were correct.
+     * Removed to match provisionTrustedWifiDevice()'s simpler, already-
+     * working shape for the same MAC-as-username-and-password pattern.
+     */
+    public function test_it_provisions_and_revokes_a_pos_device_without_a_calling_station_id_check_item(): void
+    {
+        $package = $this->package();
+        $device = PosDevice::create([
+            'shop_id' => $package->shop_id,
+            'package_id' => $package->id,
+            'device_name' => 'Front Till',
+            'mac_address' => 'de:f7:bb:d6:57:b0',
+            'is_active' => true,
+            'starts_at' => now(),
+            'expires_at' => now()->addMonth(),
+        ]);
+
+        $service = app(RadiusProvisioningService::class);
+        $service->provisionPosDevice($device);
+        $package->refresh();
+
+        $this->assertDatabaseHas('radcheck', [
+            'username' => 'DE:F7:BB:D6:57:B0',
+            'attribute' => 'Cleartext-Password',
+            'op' => ':=',
+            'value' => 'DE:F7:BB:D6:57:B0',
+        ]);
+        $this->assertDatabaseMissing('radcheck', [
+            'username' => 'DE:F7:BB:D6:57:B0',
+            'attribute' => 'Calling-Station-Id',
+        ]);
+        $this->assertDatabaseHas('radusergroup', [
+            'username' => 'DE:F7:BB:D6:57:B0',
+            'groupname' => $package->radius_group_name,
+            'priority' => 1,
+        ]);
+        $this->assertSame('DE:F7:BB:D6:57:B0', $device->refresh()->mac_address);
+        $this->assertNotNull($device->last_provisioned_at);
+
+        $service->revokePosDevice($device);
+
+        $this->assertDatabaseMissing('radcheck', ['username' => 'DE:F7:BB:D6:57:B0']);
+        $this->assertDatabaseMissing('radusergroup', ['username' => 'DE:F7:BB:D6:57:B0']);
     }
 
     private function createRadiusTables(): void

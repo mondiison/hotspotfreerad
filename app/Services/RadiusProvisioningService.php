@@ -142,6 +142,24 @@ class RadiusProvisioningService
         DB::table('radusergroup')->where('username', $macAddress)->delete();
     }
 
+    /**
+     * Confirmed live 2026-09-23: this used to also write a second radcheck
+     * row with attribute=Calling-Station-Id, on top of Cleartext-Password.
+     * FreeRADIUS treats every radcheck row for a username as a check-item
+     * the Access-Request must satisfy -- so that row wasn't just metadata,
+     * it required the request's own Calling-Station-Id attribute (as
+     * RouterOS actually sends it) to exactly match $macAddress too, a
+     * format never verified against real hardware (unlike username, which
+     * RouterOS's own radius-mac-format setting explicitly governs).
+     * Confirmed live via RouterOS's hotspot log ("trying to log in by mac" /
+     * "login failed: invalid username or password") and a direct radcheck
+     * query showing the row was present with the expected value -- the
+     * reject was real, not a missing-data issue, and removing this second
+     * check-item is what fixed it. provisionTrustedWifiDevice() below
+     * already uses the simpler, proven-working shape (Cleartext-Password
+     * only) for the exact same MAC-as-username-and-password RADIUS MAC-auth
+     * pattern, just for a different network -- this now matches it.
+     */
     public function provisionPosDevice(PosDevice $device): void
     {
         $device->loadMissing('package');
@@ -153,17 +171,6 @@ class RadiusProvisioningService
             [
                 'username' => $macAddress,
                 'attribute' => 'Cleartext-Password',
-            ],
-            [
-                'op' => ':=',
-                'value' => $macAddress,
-            ]
-        );
-
-        DB::table('radcheck')->updateOrInsert(
-            [
-                'username' => $macAddress,
-                'attribute' => 'Calling-Station-Id',
             ],
             [
                 'op' => ':=',
