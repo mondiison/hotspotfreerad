@@ -67,6 +67,7 @@
                     <flux:tab name="fresh-infra" icon="sparkles">Fresh Infrastructure Script</flux:tab>
                     <flux:tab name="hotspot" icon="wifi">Hotspot Script</flux:tab>
                     <flux:tab name="pppoe" icon="signal">PPPoE Script</flux:tab>
+                    <flux:tab name="pos" icon="credit-card">POS Script</flux:tab>
                     <flux:tab name="ap-guide" icon="book-open">AP / SSID Guide</flux:tab>
                     <flux:tab name="live" icon="bolt">Live</flux:tab>
                     <flux:tab name="insight" icon="cpu-chip">Insight</flux:tab>
@@ -281,6 +282,35 @@ sudo freeradius -X</code></pre>
                             <li>Change <code>interface=bridge1</code> in the script to the subscriber VLAN or LAN bridge.</li>
                             <li>Set bandwidth on the package in MMS Radius. FreeRADIUS sends it to MikroTik as <code>Mikrotik-Rate-Limit</code>.</li>
                             <li>Customer CPE WAN mode should be PPPoE client.</li>
+                        </ul>
+                    </section>
+                </flux:tab.panel>
+
+                <flux:tab.panel name="pos" class="space-y-6">
+                    <section class="min-w-0 overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm">
+                        <div class="border-b border-zinc-200 dark:border-zinc-700 px-5 py-4">
+                            <div class="flex flex-col justify-between gap-3 md:flex-row md:items-start">
+                                <div>
+                                    <h2 class="text-base font-semibold">RouterOS POS Script</h2>
+                                    <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Binds the POS SSID to MAC-auth against MMS Radius -- only a MAC address registered and active in POS Devices gets past this VLAN, even though every device shares the same Wi-Fi password to associate. Requires the POS VLAN already set up (Fresh Infrastructure Script tab) and the Hotspot Script already applied at least once for its shared RADIUS client. Apply live over the API independently of the Hotspot/PPPoE scripts, or paste by hand.</p>
+                                </div>
+                                @if ($router->api_username)
+                                    <form method="POST" action="{{ route('admin.routers.provision-pos', $router) }}" onsubmit="return confirm('This pushes only the POS MAC-auth hotspot profile and server to the router live over the API -- it does not touch the customer hotspot or PPPoE. Continue?');">
+                                        @csrf
+                                        <button type="submit" class="rounded-md border border-zinc-200 dark:border-zinc-700 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-zinc-50 dark:hover:bg-zinc-800">Provision via API</button>
+                                    </form>
+                                @endif
+                            </div>
+                        </div>
+                        <x-script-block>{{ $posScript }}</x-script-block>
+                    </section>
+
+                    <section class="min-w-0 overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
+                        <h2 class="text-base font-semibold">POS Notes</h2>
+                        <ul class="mt-4 space-y-3 text-sm text-zinc-600 dark:text-zinc-400">
+                            <li>Register each POS terminal's MAC address under <a href="{{ route('admin.pos-devices.index') }}" wire:navigate class="text-blue-600 hover:underline">POS Devices</a> before relying on this -- an unregistered MAC will not pass MAC-auth once this is applied.</li>
+                            <li>Renewing or letting a device expire in POS Devices takes effect the next time it associates -- no re-provisioning needed for that.</li>
+                            <li>If this router has never had the Hotspot Script (or Bootstrap/Fresh Infrastructure scripts) applied, POS MAC-auth will fail RADIUS lookups even if this push itself reports success -- POS shares that RADIUS client rather than adding its own.</li>
                         </ul>
                     </section>
                 </flux:tab.panel>

@@ -275,6 +275,33 @@ class MikroTikProvisioningServiceTest extends TestCase
         $this->assertStringContainsString('/interface pppoe-server server add interface=bridge1 service-name=mms-radius', $script);
     }
 
+    public function test_it_generates_a_routeros_pos_script(): void
+    {
+        config([
+            'services.wireguard.endpoint_host' => 'vpn.example.com',
+            'services.wireguard.endpoint_port' => 13231,
+            'services.wireguard.public_key' => 'server-public-key',
+        ]);
+
+        $router = new Router([
+            'nas_identifier' => 'shop-main-router',
+            'wireguard_internal_ip' => '10.8.0.10',
+            'wireguard_private_key' => 'client-private-key',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        $script = app(MikroTikProvisioningService::class)->generatePosScript($router);
+
+        $this->assertStringContainsString('/interface wireguard add name=wg-saas listen-port=13231 mtu=1420 private-key="client-private-key"', $script);
+        $this->assertStringContainsString('/ip hotspot profile add name=mms-pos-profile use-radius=yes login-by=mac radius-accounting=yes', $script);
+        $this->assertStringContainsString('/ip hotspot add name=mms-pos interface=vlan-pos address-pool=pool-pos profile=mms-pos-profile disabled=no', $script);
+        // Deliberately no /radius add line -- POS shares the RADIUS client the
+        // Hotspot Script (or Bootstrap/Fresh Infrastructure scripts) already adds
+        // for the "hotspot" service, adding a second one here would just be a
+        // genuine duplicate RouterOS never dedupes on its own.
+        $this->assertStringNotContainsString('/radius add', $script);
+    }
+
     public function test_it_generates_a_fresh_infrastructure_script_for_starlink_plaza_networks(): void
     {
         config([

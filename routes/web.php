@@ -108,6 +108,7 @@ Route::middleware(['auth', AuthorizeTenantStaff::class])->prefix('admin')->name(
     Route::post('routers/{router}/test-api-connection', [RouterController::class, 'testApiConnection'])->name('routers.test-api-connection');
     Route::post('routers/{router}/provision-hotspot', [RouterController::class, 'provisionHotspot'])->name('routers.provision-hotspot');
     Route::post('routers/{router}/provision-pppoe', [RouterController::class, 'provisionPppoe'])->name('routers.provision-pppoe');
+    Route::post('routers/{router}/provision-pos', [RouterController::class, 'provisionPos'])->name('routers.provision-pos');
     Route::post('routers/{router}/push-fresh-infrastructure', [RouterController::class, 'pushFreshInfrastructure'])->name('routers.push-fresh-infrastructure');
     Route::get('topology', [TopologyController::class, 'index'])->name('topology.index');
     Route::resource('routers', RouterController::class);

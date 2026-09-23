@@ -58,6 +58,7 @@ class RouterAutoProvisioningServiceTest extends TestCase
         $this->mock(RouterOsConnectionService::class, function ($mock): void {
             $mock->shouldNotReceive('provisionHotspot');
             $mock->shouldNotReceive('provisionPppoe');
+            $mock->shouldNotReceive('provisionPos');
         });
 
         app(RouterAutoProvisioningService::class)->reconcile();
@@ -88,6 +89,7 @@ class RouterAutoProvisioningServiceTest extends TestCase
                 'success' => false,
                 'steps' => [['label' => 'Add RADIUS client', 'success' => false, 'error' => 'Connection timed out']],
             ]);
+            $mock->shouldReceive('provisionPos')->once()->andReturn(['success' => true, 'steps' => []]);
         });
 
         $result = app(RouterAutoProvisioningService::class)->reconcile();
@@ -107,6 +109,7 @@ class RouterAutoProvisioningServiceTest extends TestCase
 
         $this->mock(RouterOsConnectionService::class, function ($mock): void {
             $mock->shouldReceive('provisionHotspot')->once()->andReturn(['success' => true, 'steps' => []]);
+            $mock->shouldReceive('provisionPos')->once()->andReturn(['success' => true, 'steps' => []]);
         });
 
         $result = app(RouterAutoProvisioningService::class)->reconcile();
@@ -126,6 +129,7 @@ class RouterAutoProvisioningServiceTest extends TestCase
         $this->mock(RouterOsConnectionService::class, function ($mock): void {
             $mock->shouldReceive('provisionHotspot')->once()->andReturn(['success' => true, 'steps' => []]);
             $mock->shouldReceive('provisionPppoe')->once()->andReturn(['success' => true, 'steps' => []]);
+            $mock->shouldReceive('provisionPos')->once()->andReturn(['success' => true, 'steps' => []]);
         });
 
         app(RouterAutoProvisioningService::class)->reconcile();
@@ -139,6 +143,26 @@ class RouterAutoProvisioningServiceTest extends TestCase
         $this->mock(RouterOsConnectionService::class, function ($mock): void {
             $mock->shouldReceive('provisionHotspot')->once()->andReturn(['success' => true, 'steps' => []]);
             $mock->shouldNotReceive('provisionPppoe');
+            $mock->shouldReceive('provisionPos')->once()->andReturn(['success' => true, 'steps' => []]);
+        });
+
+        app(RouterAutoProvisioningService::class)->reconcile();
+    }
+
+    /**
+     * Unlike PPPoE, provisionPos() is always called regardless of enable_pos --
+     * it already no-ops internally for a POS-disabled router (see
+     * RouterOsConnectionService::provisionPos()'s own default-true fallback),
+     * so this service deliberately doesn't duplicate that check itself.
+     */
+    public function test_pos_is_always_provisioned_regardless_of_enable_pos(): void
+    {
+        config(['services.mikrotik.auto_provision_routers' => true]);
+        $this->makeRouter(['provisioning_settings' => ['enable_pos' => false]]);
+
+        $this->mock(RouterOsConnectionService::class, function ($mock): void {
+            $mock->shouldReceive('provisionHotspot')->once()->andReturn(['success' => true, 'steps' => []]);
+            $mock->shouldReceive('provisionPos')->once()->andReturn(['success' => true, 'steps' => []]);
         });
 
         app(RouterAutoProvisioningService::class)->reconcile();
@@ -153,6 +177,7 @@ class RouterAutoProvisioningServiceTest extends TestCase
             $mock->shouldReceive('testConnection')->once()->andReturn(['success' => true, 'identity' => 'test-router']);
             $mock->shouldNotReceive('provisionHotspot');
             $mock->shouldNotReceive('provisionPppoe');
+            $mock->shouldNotReceive('provisionPos');
         });
 
         $result = app(RouterAutoProvisioningService::class)->reconcile(dryRun: true);

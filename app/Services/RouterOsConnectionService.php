@@ -551,10 +551,6 @@ class RouterOsConnectionService
         $result['steps'][] = $profileStep;
         $result['success'] = $result['success'] && $walledGardenResult['success'] && $loginPageResult['success'] && $profileStep['success'];
 
-        $posResult = $this->provisionPos($router);
-        $result['steps'] = array_merge($result['steps'], $posResult['steps']);
-        $result['success'] = $result['success'] && $posResult['success'];
-
         return $result;
     }
 
@@ -578,6 +574,20 @@ class RouterOsConnectionService
      * generator creates, so this is safe to also CREATE the hotspot server
      * object itself, not just re-point an existing one -- see
      * applyPosHotspotServer() below.
+     *
+     * A sibling of provisionHotspot()/provisionPppoe(), not nested inside
+     * either -- called from its own "POS Script" tab button
+     * (RouterController::provisionPos()) and from
+     * RouterAutoProvisioningService (conditionally on enable_pos, mirroring
+     * how that service already calls provisionPppoe() conditionally on
+     * enable_pppoe), rather than always tagging along inside
+     * provisionHotspot(). Deliberately never adds its own `/radius` client
+     * entry -- POS uses the "hotspot" RADIUS service, which provisionHotspot()
+     * (via syncRadiusClients()) already establishes, and a second `/radius add`
+     * for the same service would just be a genuine duplicate RouterOS never
+     * dedupes on its own. This does mean a router that's never had
+     * provisionHotspot() succeed at least once will fail RADIUS auth for POS
+     * MAC-auth too, even if this method's own steps report success.
      *
      * A no-op (not a failure) for a router with POS disabled, or missing
      * `vlan-pos`/`pool-pos` (a router that has never had the fresh

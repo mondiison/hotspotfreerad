@@ -280,20 +280,17 @@ class RouterOsApiProvisioningTest extends TestCase
         // shop's active gateway's PaymentGatewayCatalog list (flutterwave by
         // default: *.flutterwave.com, *.ravepay.co), the Cloudflare walled-garden
         // entry, the wa.me/*.wa.me walled-garden entries, the hotspot login page
-        // push, "point hotspot server", then provisionPos()'s own two steps
-        // (POS defaults to enabled -- see enable_pos's default-true fallback in
-        // provisionPos() -- for a router with no provisioning_settings saved at
-        // all, matching MikroTikProvisioningService's own script-generator default).
+        // push, then the final "point hotspot server" step. POS is a sibling
+        // method (provisionPos(), its own "POS Script" tab/button) rather than
+        // bundled in here, so it contributes no steps to this result.
         $this->assertFalse($result['success']);
-        $this->assertCount(13, $result['steps']);
+        $this->assertCount(11, $result['steps']);
         $this->assertFalse($result['steps'][0]['success']);
         $this->assertNotEmpty($result['steps'][0]['error']);
         $labels = array_column($result['steps'], 'label');
         $this->assertContains('Push hotspot login page', $labels);
-        $this->assertContains('Point hotspot server at "saas-prof"', $labels);
-        $this->assertContains('Add POS MAC-auth hotspot profile', $labels);
         $lastStep = $result['steps'][count($result['steps']) - 1];
-        $this->assertSame('Point POS hotspot server at "mms-pos-profile"', $lastStep['label']);
+        $this->assertSame('Point hotspot server at "saas-prof"', $lastStep['label']);
         $this->assertFalse($lastStep['success']);
     }
 
@@ -311,7 +308,7 @@ class RouterOsApiProvisioningTest extends TestCase
         $result = app(RouterOsConnectionService::class)->provisionHotspot($router);
 
         $this->assertFalse($result['success']);
-        $this->assertCount(13, $result['steps']);
+        $this->assertCount(11, $result['steps']);
         $labels = array_column($result['steps'], 'label');
         $this->assertContains('Push hotspot login page', $labels);
     }
@@ -505,6 +502,12 @@ class RouterOsApiProvisioningTest extends TestCase
             ->assertRedirect(route('admin.routers.show', $router));
 
         $this->assertNotNull(session('status'));
+
+        $this->actingAs($user)
+            ->post(route('admin.routers.provision-pos', $router))
+            ->assertRedirect(route('admin.routers.show', $router));
+
+        $this->assertNotNull(session('status'));
     }
 
     public function test_a_successful_manual_provision_hotspot_click_marks_the_router_auto_provisioned(): void
@@ -550,6 +553,53 @@ class RouterOsApiProvisioningTest extends TestCase
         });
 
         $this->actingAs($user)->post(route('admin.routers.provision-hotspot', $router));
+
+        $this->assertNull($router->fresh()->auto_provisioned_at);
+    }
+
+    public function test_a_successful_manual_provision_pos_click_marks_the_router_auto_provisioned(): void
+    {
+        $shop = $this->makeShop();
+        $user = User::factory()->create(['role' => 'super_admin', 'is_active' => true]);
+
+        $router = Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'Manually POS-Provisioned Router',
+            'nas_identifier' => 'manually-pos-provisioned-router',
+            'wireguard_internal_ip' => '192.0.2.17',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        $this->mock(RouterOsConnectionService::class, function ($mock): void {
+            $mock->shouldReceive('provisionPos')->once()->andReturn(['success' => true, 'steps' => []]);
+        });
+
+        $this->actingAs($user)->post(route('admin.routers.provision-pos', $router));
+
+        $this->assertNotNull($router->fresh()->auto_provisioned_at);
+    }
+
+    public function test_a_failed_manual_provision_pos_click_does_not_mark_the_router_auto_provisioned(): void
+    {
+        $shop = $this->makeShop();
+        $user = User::factory()->create(['role' => 'super_admin', 'is_active' => true]);
+
+        $router = Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'Failed POS Provision Router',
+            'nas_identifier' => 'failed-pos-provision-router',
+            'wireguard_internal_ip' => '192.0.2.18',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        $this->mock(RouterOsConnectionService::class, function ($mock): void {
+            $mock->shouldReceive('provisionPos')->once()->andReturn([
+                'success' => false,
+                'steps' => [['label' => 'Add POS MAC-auth hotspot profile', 'success' => false, 'error' => 'Connection timed out']],
+            ]);
+        });
+
+        $this->actingAs($user)->post(route('admin.routers.provision-pos', $router));
 
         $this->assertNull($router->fresh()->auto_provisioned_at);
     }

@@ -83,8 +83,13 @@ class RouterAutoProvisioningService
 
         $hotspotResult = $this->routerOs->provisionHotspot($router);
         $pppoeResult = $needsPppoe ? $this->routerOs->provisionPppoe($router) : ['success' => true, 'steps' => []];
+        // provisionPos() already no-ops internally for a router with POS disabled
+        // (defaulting enable_pos to true the same way MikroTikProvisioningService's
+        // script generator does), so it's always called here rather than
+        // duplicating that same default-true logic in a second place.
+        $posResult = $this->routerOs->provisionPos($router);
 
-        if ($hotspotResult['success'] && $pppoeResult['success']) {
+        if ($hotspotResult['success'] && $pppoeResult['success'] && $posResult['success']) {
             $router->forceFill(['auto_provisioned_at' => now()])->save();
             $result['provisioned'][] = $router->name;
 
@@ -101,7 +106,7 @@ class RouterAutoProvisioningService
         // from "reachable but a step genuinely failed" by inspecting error text --
         // that kind of string-matching has been a real source of bugs in this
         // codebase before, so every failed step is just reported plainly.
-        foreach (array_merge($hotspotResult['steps'], $pppoeResult['steps']) as $step) {
+        foreach (array_merge($hotspotResult['steps'], $pppoeResult['steps'], $posResult['steps']) as $step) {
             if (! $step['success'] && $step['error'] !== null) {
                 $result['errors'][] = "{$router->name}: {$step['label']} - {$step['error']}";
             }

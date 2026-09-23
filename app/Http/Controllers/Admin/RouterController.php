@@ -61,6 +61,7 @@ class RouterController extends Controller
             'bootstrapScript' => $mikroTik->generateBootstrapScript($router),
             'script' => $mikroTik->generateScript($router),
             'pppoeScript' => $mikroTik->generatePppoeScript($router),
+            'posScript' => $mikroTik->generatePosScript($router),
             'freshInfrastructureScript' => $mikroTik->generateFreshInfrastructureScript($router),
             'accessPointGuide' => $mikroTik->generateAccessPointGuide(),
             'infrastructureProfiles' => $mikroTik->infrastructureProfiles(),
@@ -150,6 +151,17 @@ class RouterController extends Controller
         TenantAccess::assertRouter($router, $request->user());
 
         $result = $routerOs->provisionPppoe($router);
+        $this->markAutoProvisionedIfSuccessful($router, $result);
+
+        return redirect()->route('admin.routers.show', $router)
+            ->with('status', $this->summarizeProvisioningResult($result));
+    }
+
+    public function provisionPos(Request $request, Router $router, RouterOsConnectionService $routerOs): RedirectResponse
+    {
+        TenantAccess::assertRouter($router, $request->user());
+
+        $result = $routerOs->provisionPos($router);
         $this->markAutoProvisionedIfSuccessful($router, $result);
 
         return redirect()->route('admin.routers.show', $router)

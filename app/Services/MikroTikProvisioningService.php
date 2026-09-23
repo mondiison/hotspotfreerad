@@ -108,6 +108,38 @@ SCRIPT;
 SCRIPT;
     }
 
+    /**
+     * Deliberately does NOT add its own `/radius` client line, unlike
+     * generateScript()/generatePppoeScript() -- POS's hotspot server uses the
+     * "hotspot" RADIUS service, which generateScript()'s own line (or the
+     * Bootstrap/Fresh Infrastructure scripts) already covers, and RouterOS
+     * doesn't dedupe `/radius add` entries on its own. Also assumes vlan-pos/
+     * pool-pos already exist (Fresh Infrastructure Script's POS section) --
+     * unlike PPPoE's generic `bridge1` placeholder, these are fixed names
+     * this app always uses, not something meant to be hand-edited, so there's
+     * no safe generic fallback if they're missing; RouterOS will just reject
+     * the `/ip hotspot add` line with a clear "no such interface/pool" error.
+     */
+    public function generatePosScript(Router $router): string
+    {
+        $nasIdentifier = $router->nas_identifier;
+        $tunnelLines = implode("\n", array_merge($this->wireguardProvisioningLines($router), $this->zeroTierLines($router)));
+        $apiUserLines = implode("\n", $this->apiUserProvisioningLines($router));
+
+        return <<<SCRIPT
+/system identity set name="{$nasIdentifier}"
+{$tunnelLines}
+{$apiUserLines}
+# Requires the POS VLAN already set up (Fresh Infrastructure Script's POS
+# section: vlan-pos interface + pool-pos address pool) and a RADIUS client
+# for the "hotspot" service already added (Hotspot Script tab, or the
+# Bootstrap/Fresh Infrastructure scripts) -- POS shares that RADIUS client,
+# so this script does not add a second one.
+/ip hotspot profile add name=mms-pos-profile use-radius=yes login-by=mac radius-accounting=yes
+/ip hotspot add name=mms-pos interface=vlan-pos address-pool=pool-pos profile=mms-pos-profile disabled=no
+SCRIPT;
+    }
+
     public function generatePppoeScript(Router $router): string
     {
         $nasIdentifier = $router->nas_identifier;
