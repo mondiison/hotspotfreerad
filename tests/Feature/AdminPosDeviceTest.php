@@ -8,6 +8,7 @@ use App\Models\PosDevice;
 use App\Models\Shop;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\RadiusProvisioningService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
@@ -57,7 +58,7 @@ class AdminPosDeviceTest extends TestCase
         $this->assertDatabaseHas('radcheck', [
             'username' => 'AA:BB:CC:DD:EE:FF',
             'attribute' => 'Cleartext-Password',
-            'value' => 'AA:BB:CC:DD:EE:FF',
+            'value' => RadiusProvisioningService::POS_MAC_AUTH_PASSWORD,
         ]);
 
         $this->assertDatabaseHas('radusergroup', [

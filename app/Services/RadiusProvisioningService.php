@@ -155,11 +155,62 @@ class RadiusProvisioningService
         );
     }
 
-    public function revokeMacAccess(string $macAddress): void
+    /**
+     * Confirmed live 2026-09-23: radcheck/radreply/radusergroup are keyed
+     * purely by username (a MAC address string), with no feature/type
+     * discriminator -- a single MAC can simultaneously back a hotspot
+     * Subscription, a PosDevice, and/or a TrustedWifiDevice. The scheduled
+     * hotspot:sync-expired-hotspot command revoked every expired
+     * subscription's MAC unconditionally, which silently deleted a
+     * still-valid PosDevice's radcheck rows too whenever the same phone had
+     * both an expired hotspot subscription and an active POS registration --
+     * reported live as a POS device's radcheck row "disappearing" every few
+     * minutes despite the device itself showing a future expiry, requiring a
+     * manual Renew/Sync click to restore it (which just re-ran
+     * provisionPosDevice()). Fixed by refusing to actually delete a MAC's
+     * RADIUS rows while any other feature still currently claims that same
+     * MAC -- $exceptPosDeviceId/$exceptTrustedWifiDeviceId let
+     * revokePosDevice()/revokeTrustedWifiDevice() exclude the very device
+     * they're revoking access for (otherwise a device that's still active
+     * right up until its own delete() call would block its own revoke).
+     */
+    public function revokeMacAccess(string $macAddress, ?int $exceptPosDeviceId = null, ?int $exceptTrustedWifiDeviceId = null): void
     {
+        if ($this->macStillClaimedElsewhere($macAddress, $exceptPosDeviceId, $exceptTrustedWifiDeviceId)) {
+            return;
+        }
+
         DB::table('radcheck')->where('username', $macAddress)->delete();
         DB::table('radreply')->where('username', $macAddress)->delete();
         DB::table('radusergroup')->where('username', $macAddress)->delete();
+    }
+
+    private function macStillClaimedElsewhere(string $macAddress, ?int $exceptPosDeviceId, ?int $exceptTrustedWifiDeviceId): bool
+    {
+        $hasActiveSubscription = Subscription::query()
+            ->where('mac_address', $macAddress)
+            ->where('expires_at', '>', now())
+            ->exists();
+
+        if ($hasActiveSubscription) {
+            return true;
+        }
+
+        $hasActivePosDevice = PosDevice::query()
+            ->where('mac_address', $macAddress)
+            ->when($exceptPosDeviceId, fn ($query) => $query->whereKeyNot($exceptPosDeviceId))
+            ->get()
+            ->contains(fn (PosDevice $device) => $device->isCurrentlyActive());
+
+        if ($hasActivePosDevice) {
+            return true;
+        }
+
+        return TrustedWifiDevice::query()
+            ->where('mac_address', $macAddress)
+            ->when($exceptTrustedWifiDeviceId, fn ($query) => $query->whereKeyNot($exceptTrustedWifiDeviceId))
+            ->get()
+            ->contains(fn (TrustedWifiDevice $device) => $device->isCurrentlyActive());
     }
 
     /**
@@ -214,7 +265,7 @@ class RadiusProvisioningService
 
     public function revokePosDevice(PosDevice $device): void
     {
-        $this->revokeMacAccess($this->normalizeMacAddress($device->mac_address));
+        $this->revokeMacAccess($this->normalizeMacAddress($device->mac_address), exceptPosDeviceId: $device->id);
     }
 
     public function provisionTrustedWifiDevice(TrustedWifiDevice $device): void
@@ -240,7 +291,7 @@ class RadiusProvisioningService
 
     public function revokeTrustedWifiDevice(TrustedWifiDevice $device): void
     {
-        $this->revokeMacAccess($this->normalizeMacAddress($device->mac_address));
+        $this->revokeMacAccess($this->normalizeMacAddress($device->mac_address), exceptTrustedWifiDeviceId: $device->id);
     }
 
     public function provisionPppoeSubscriber(PppoeSubscriber $subscriber): void

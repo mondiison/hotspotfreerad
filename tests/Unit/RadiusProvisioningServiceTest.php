@@ -237,6 +237,10 @@ class RadiusProvisioningServiceTest extends TestCase
             'priority' => 1,
         ]);
 
+        // revokeMacAccess() now refuses to delete a MAC's radius rows while a
+        // subscription for it is still active -- expire it first, matching
+        // what hotspot:sync-expired-hotspot actually does before revoking.
+        $subscription->forceFill(['expires_at' => now()->subMinute()])->save();
         $service->revokeMacAccess('AA:BB:CC:DD:EE:FF');
 
         $this->assertDatabaseMissing('radcheck', ['username' => 'AA:BB:CC:DD:EE:FF']);
@@ -358,6 +362,111 @@ class RadiusProvisioningServiceTest extends TestCase
 
         $this->assertDatabaseMissing('radcheck', ['username' => 'DE:F7:BB:D6:57:B0']);
         $this->assertDatabaseMissing('radusergroup', ['username' => 'DE:F7:BB:D6:57:B0']);
+    }
+
+    /**
+     * Regression test for a live 2026-09-23 report: a POS device's radcheck
+     * row was disappearing every few minutes despite the device itself
+     * showing a future expiry. Root cause -- radcheck/radusergroup are keyed
+     * purely by username (a MAC address), with no feature discriminator, and
+     * the same test phone had both an expired hotspot Subscription and a
+     * still-active PosDevice registration. hotspot:sync-expired-hotspot's
+     * scheduled revokeMacAccess() call for the expired subscription's MAC
+     * was wiping the POS device's still-valid radcheck rows as collateral
+     * damage every five minutes.
+     */
+    public function test_revoking_an_expired_hotspot_subscription_does_not_wipe_a_still_active_pos_device_sharing_the_same_mac(): void
+    {
+        $package = $this->package();
+        $macAddress = 'DE:F7:BB:D6:57:B0';
+
+        Subscription::create([
+            'shop_id' => $package->shop_id,
+            'package_id' => $package->id,
+            'mac_address' => $macAddress,
+            'starts_at' => now()->subHours(2),
+            'expires_at' => now()->subHour(),
+        ]);
+
+        $posDevice = PosDevice::create([
+            'shop_id' => $package->shop_id,
+            'package_id' => $package->id,
+            'device_name' => 'Front Till',
+            'mac_address' => $macAddress,
+            'is_active' => true,
+            'starts_at' => now(),
+            'expires_at' => now()->addMonth(),
+        ]);
+
+        $service = app(RadiusProvisioningService::class);
+        $service->provisionPosDevice($posDevice);
+
+        $service->revokeMacAccess($macAddress);
+
+        $this->assertDatabaseHas('radcheck', [
+            'username' => $macAddress,
+            'attribute' => 'Cleartext-Password',
+            'value' => RadiusProvisioningService::POS_MAC_AUTH_PASSWORD,
+        ]);
+        $this->assertDatabaseHas('radusergroup', ['username' => $macAddress]);
+    }
+
+    public function test_revoking_a_pos_device_does_not_wipe_a_still_active_trusted_wifi_device_sharing_the_same_mac(): void
+    {
+        $package = $this->package();
+        $macAddress = 'DE:F7:BB:D6:57:B0';
+
+        $posDevice = PosDevice::create([
+            'shop_id' => $package->shop_id,
+            'package_id' => $package->id,
+            'device_name' => 'Front Till',
+            'mac_address' => $macAddress,
+            'is_active' => true,
+            'starts_at' => now()->subMonth(),
+            'expires_at' => now()->subDay(),
+        ]);
+
+        $trustedDevice = TrustedWifiDevice::create([
+            'shop_id' => $package->shop_id,
+            'network' => TrustedWifiDevice::NETWORK_STAFF,
+            'device_name' => "Manager's Phone",
+            'mac_address' => $macAddress,
+            'is_active' => true,
+        ]);
+
+        $service = app(RadiusProvisioningService::class);
+        $service->provisionTrustedWifiDevice($trustedDevice);
+
+        $service->revokePosDevice($posDevice);
+
+        $this->assertDatabaseHas('radcheck', [
+            'username' => $macAddress,
+            'attribute' => 'Cleartext-Password',
+        ]);
+    }
+
+    public function test_revoke_pos_device_still_deletes_radius_rows_when_the_mac_is_not_claimed_elsewhere(): void
+    {
+        $package = $this->package();
+        $macAddress = 'DE:F7:BB:D6:57:B0';
+
+        $posDevice = PosDevice::create([
+            'shop_id' => $package->shop_id,
+            'package_id' => $package->id,
+            'device_name' => 'Front Till',
+            'mac_address' => $macAddress,
+            'is_active' => true,
+            'starts_at' => now(),
+            'expires_at' => now()->addMonth(),
+        ]);
+
+        $service = app(RadiusProvisioningService::class);
+        $service->provisionPosDevice($posDevice);
+
+        $service->revokePosDevice($posDevice);
+
+        $this->assertDatabaseMissing('radcheck', ['username' => $macAddress]);
+        $this->assertDatabaseMissing('radusergroup', ['username' => $macAddress]);
     }
 
     private function createRadiusTables(): void
