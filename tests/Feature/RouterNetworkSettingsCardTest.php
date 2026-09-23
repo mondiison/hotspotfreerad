@@ -76,19 +76,24 @@ class RouterNetworkSettingsCardTest extends TestCase
             ->assertSet('gateway', '172.16.45.1/24');
     }
 
-    public function test_pppoe_card_does_not_expose_ssid_password_or_extra_ports_fields(): void
+    /**
+     * PPPoE has no SSID/Wi-Fi password at all (it's wired/PPP dial-in, not
+     * Wi-Fi) -- but gained its own address pool and extra-untagged-port
+     * support on 2026-09-23, once PPP's own client addressing (via
+     * remote-address, not DHCP) and the extra-access-port model were
+     * extended to match Staff/POS. See the next test for that new coverage.
+     */
+    public function test_pppoe_card_does_not_expose_ssid_or_password_fields(): void
     {
         $router = $this->makeRouter();
 
         $component = Livewire::test(RouterNetworkSettingsCard::class, ['router' => $router, 'network' => 'pppoe']);
 
         $this->assertFalse($component->instance()->supportsSsid());
-        $this->assertFalse($component->instance()->supportsAddressPool());
-        $this->assertFalse($component->instance()->supportsExtraPorts());
+        $this->assertTrue($component->instance()->supportsAddressPool());
+        $this->assertTrue($component->instance()->supportsExtraPorts());
         $this->assertFalse($component->instance()->supportsWifiPassword());
-        $component->assertDontSee('Wi-Fi password')
-            ->assertDontSee('DHCP pool')
-            ->assertDontSee('Extra untagged ports');
+        $component->assertDontSee('Wi-Fi password');
     }
 
     public function test_saving_pppoe_settings_updates_only_pppoe_keys(): void
@@ -97,11 +102,15 @@ class RouterNetworkSettingsCardTest extends TestCase
             'hotspot_vlan' => 20,
             'pos_vlan' => 50,
             'pppoe_vlan' => 40,
+            'enable_pppoe' => true,
         ]);
 
         Livewire::test(RouterNetworkSettingsCard::class, ['router' => $router, 'network' => 'pppoe'])
             ->set('vlan', 46)
             ->set('gateway', '172.16.46.1/24')
+            ->set('networkCidr', '172.16.46.0/24')
+            ->set('pool', '172.16.46.10-172.16.46.250')
+            ->set('extraPorts', '11')
             ->call('save')
             ->assertHasNoErrors();
 
@@ -109,10 +118,33 @@ class RouterNetworkSettingsCardTest extends TestCase
 
         $this->assertSame(46, $settings['pppoe_vlan']);
         $this->assertSame('172.16.46.1/24', $settings['pppoe_gateway']);
+        $this->assertSame('172.16.46.0/24', $settings['pppoe_network']);
+        $this->assertSame('172.16.46.10-172.16.46.250', $settings['pppoe_pool']);
+        $this->assertSame('11', $settings['extra_pppoe_port_numbers']);
         $this->assertArrayNotHasKey('pppoe_ssid', $settings);
-        $this->assertArrayNotHasKey('extra_pppoe_port_numbers', $settings);
         $this->assertSame(20, $settings['hotspot_vlan']);
         $this->assertSame(50, $settings['pos_vlan']);
+    }
+
+    /**
+     * Mirrors test_saving_pos_settings_never_poisons_extra_ports_while_pos_is_disabled()
+     * for PPPoE -- RouterManagementService::rules() requires
+     * extra_pppoe_port_numbers to be blank whenever enable_pppoe is false
+     * (Rule::prohibitedIf), so the card must force it blank too rather than
+     * saving whatever was typed into the (disabled) input.
+     */
+    public function test_saving_pppoe_settings_never_poisons_extra_ports_while_pppoe_is_disabled(): void
+    {
+        $router = $this->makeRouter(['pppoe_vlan' => 40, 'enable_pppoe' => false]);
+
+        Livewire::test(RouterNetworkSettingsCard::class, ['router' => $router, 'network' => 'pppoe'])
+            ->set('extraPorts', '11')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $settings = $router->fresh()->provisioning_settings;
+
+        $this->assertSame('', $settings['extra_pppoe_port_numbers']);
     }
 
     public function test_saving_pppoe_settings_never_makes_a_live_routeros_call(): void

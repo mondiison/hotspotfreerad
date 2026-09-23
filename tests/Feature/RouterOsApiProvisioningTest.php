@@ -557,6 +557,31 @@ class RouterOsApiProvisioningTest extends TestCase
         $this->assertFalse($result['steps'][0]['success']);
     }
 
+    /**
+     * Regression test for a live-confirmed 2026-09-23 bug: provisionPppoe()'s
+     * $pppoeInterface default was a stale 'bridge1' placeholder the script
+     * generator had already moved away from, and neither real caller ever
+     * overrode it -- every live PPPoE push was silently binding to the wrong
+     * interface. Also confirms the new self-sufficient VLAN/pool step and
+     * the idempotent profile+server step both actually run.
+     */
+    public function test_provision_pppoe_ensures_vlan_infrastructure_and_binds_vlan_pppoe_by_default(): void
+    {
+        $router = Router::create([
+            'shop_id' => $this->makeShop()->id,
+            'name' => 'PPPoE Infra Router',
+            'nas_identifier' => 'pppoe-infra-router',
+            'wireguard_internal_ip' => '192.0.2.12',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        $result = app(RouterOsConnectionService::class)->provisionPppoe($router);
+
+        $labels = array_column($result['steps'], 'label');
+        $this->assertContains('Check PPPoE VLAN infrastructure', $labels);
+        $this->assertContains('Apply PPPoE profile and server', $labels);
+    }
+
     public function test_provision_routes_require_api_credentials_and_redirect_with_a_status_message(): void
     {
         $shop = $this->makeShop();

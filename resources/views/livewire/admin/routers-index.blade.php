@@ -300,6 +300,14 @@
                                         <flux:error name="provisioning_settings.extra_pos_ports" />
                                     </flux:field>
                                 @endif
+
+                                @if ($provisioning_settings['enable_pppoe'] ?? false)
+                                    <flux:field>
+                                        <flux:label>Extra PPPoE ports</flux:label>
+                                        <flux:input wire:model.blur="provisioning_settings.extra_pppoe_ports" placeholder="e.g. ether11" />
+                                        <flux:error name="provisioning_settings.extra_pppoe_ports" />
+                                    </flux:field>
+                                @endif
                             </div>
                         @else
                             @php($portOptions = \App\Support\RouterPortLayout::portOptions((int) ($provisioning_settings['port_count'] ?? 8)))
@@ -308,6 +316,7 @@
                                 'Extra hotspot port' => $provisioning_settings['extra_hotspot_port_numbers'] ?? '',
                                 'Extra staff port' => ($provisioning_settings['enable_staff'] ?? false) ? ($provisioning_settings['extra_staff_port_numbers'] ?? '') : '',
                                 'Extra POS port' => ($provisioning_settings['enable_pos'] ?? false) ? ($provisioning_settings['extra_pos_port_numbers'] ?? '') : '',
+                                'Extra PPPoE port' => ($provisioning_settings['enable_pppoe'] ?? false) ? ($provisioning_settings['extra_pppoe_port_numbers'] ?? '') : '',
                             ])
                             @php($extraPortConflictRoles = [])
                             @foreach ($extraPortRoles as $roleLabel => $csv)
@@ -401,6 +410,14 @@
                                         <flux:label>Extra POS ports</flux:label>
                                         <flux:input wire:model.blur="provisioning_settings.extra_pos_port_numbers" placeholder="e.g. 10" />
                                         <flux:error name="provisioning_settings.extra_pos_port_numbers" />
+                                    </flux:field>
+                                @endif
+
+                                @if ($provisioning_settings['enable_pppoe'] ?? false)
+                                    <flux:field>
+                                        <flux:label>Extra PPPoE ports</flux:label>
+                                        <flux:input wire:model.blur="provisioning_settings.extra_pppoe_port_numbers" placeholder="e.g. 11" />
+                                        <flux:error name="provisioning_settings.extra_pppoe_port_numbers" />
                                     </flux:field>
                                 @endif
                             </div>
@@ -630,6 +647,19 @@
                                     <flux:label>PPPoE gateway</flux:label>
                                     <flux:input wire:model.blur="provisioning_settings.pppoe_gateway" placeholder="172.16.40.1/24" />
                                     <flux:error name="provisioning_settings.pppoe_gateway" />
+                                </flux:field>
+
+                                <flux:field>
+                                    <flux:label>PPPoE network</flux:label>
+                                    <flux:input wire:model.blur="provisioning_settings.pppoe_network" placeholder="172.16.40.0/24" />
+                                    <flux:error name="provisioning_settings.pppoe_network" />
+                                </flux:field>
+
+                                <flux:field>
+                                    <flux:label>PPPoE address pool</flux:label>
+                                    <flux:input wire:model.blur="provisioning_settings.pppoe_pool" placeholder="172.16.40.10-172.16.40.250" />
+                                    <flux:description>Assigned to PPP sessions via remote-address, not DHCP.</flux:description>
+                                    <flux:error name="provisioning_settings.pppoe_pool" />
                                 </flux:field>
                             @endif
 

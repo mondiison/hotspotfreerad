@@ -1499,9 +1499,28 @@ class RouterOsConnectionService
      * Pushes the PPPoE/RADIUS side of `MikroTikProvisioningService::generatePppoeScript()`
      * live over the API. See provisionHotspot() for the per-step failure model.
      *
+     * Confirmed live 2026-09-23, following a direct request to bring this up
+     * to the same standard POS/Staff already got: `$pppoeInterface`'s default
+     * was a stale `'bridge1'` placeholder -- the script generator switched to
+     * the fixed `'vlan-pppoe'` interface days earlier, but neither caller of
+     * this method (`RouterController::provisionPppoe()`,
+     * `RouterAutoProvisioningService::provisionRouter()`) ever passed an
+     * override, so every live PPPoE push (including every scheduled
+     * auto-provisioning retry) had actually been binding the PPPoE server to
+     * `bridge1` this whole time, silently disagreeing with the script.
+     * `ensurePppoeInfrastructure()` (mirroring `ensureStaffInfrastructure()`/
+     * `ensurePosInfrastructure()`) now also creates the VLAN/IP/pool live,
+     * the same self-sufficiency fix already applied to those two, and the
+     * profile/server steps below were also quietly never idempotent (plain
+     * `/add`, no existing-row check) -- confirmed the same class of bug
+     * `existingHotspotProfileId()` fixed for the customer hotspot profile,
+     * just never hit here since this method was effectively binding the
+     * wrong interface the whole time and presumably never actually
+     * succeeded enough times in a row to expose it.
+     *
      * @return array{success: bool, steps: list<array{label: string, success: bool, error: ?string}>}
      */
-    public function provisionPppoe(Router $router, string $pppoeInterface = 'bridge1'): array
+    public function provisionPppoe(Router $router, string $pppoeInterface = 'vlan-pppoe'): array
     {
         if (! $this->isConfigured($router)) {
             return [
@@ -1510,32 +1529,179 @@ class RouterOsConnectionService
             ];
         }
 
+        $infraResult = $this->ensurePppoeInfrastructure($router, $pppoeInterface);
         $apiRestrictionResult = $this->syncApiServiceRestriction($router);
         $radiusResult = $this->syncRadiusClients($router, 'ppp');
         $zeroTierResult = $this->syncZeroTierNetworkMembership($router);
 
-        $steps = [
+        $aaaResult = $this->runSteps($router, [
             'Enable RADIUS for PPP' => (new Query('/ppp/aaa/set'))
                 ->equal('use-radius', 'yes')
                 ->equal('accounting', 'yes')
                 ->equal('interim-update', '5m'),
-            'Add PPPoE profile' => (new Query('/ppp/profile/add'))
-                ->equal('name', 'mms-pppoe-profile')
-                ->equal('only-one', 'yes')
-                ->equal('change-tcp-mss', 'yes'),
-            'Add PPPoE server' => (new Query('/interface/pppoe-server/server/add'))
-                ->equal('interface', $pppoeInterface)
-                ->equal('service-name', 'mms-radius')
-                ->equal('default-profile', 'mms-pppoe-profile')
-                ->equal('authentication', 'pap,chap,mschap1,mschap2')
-                ->equal('disabled', 'no'),
+        ]);
+
+        $profileServerStep = $this->applyPppoeProfileAndServer($router, $pppoeInterface);
+
+        return [
+            'success' => $infraResult['success'] && $apiRestrictionResult['success'] && $radiusResult['success']
+                && $zeroTierResult['success'] && $aaaResult['success'] && $profileServerStep['success'],
+            'steps' => array_merge(
+                $infraResult['steps'],
+                $apiRestrictionResult['steps'],
+                $radiusResult['steps'],
+                $zeroTierResult['steps'],
+                $aaaResult['steps'],
+                [$profileServerStep],
+            ),
         ];
+    }
 
-        $result = $this->runSteps($router, $steps);
-        $result['steps'] = array_merge($apiRestrictionResult['steps'], $radiusResult['steps'], $zeroTierResult['steps'], $result['steps']);
-        $result['success'] = $apiRestrictionResult['success'] && $radiusResult['success'] && $zeroTierResult['success'] && $result['success'];
+    /**
+     * Mirrors ensureStaffInfrastructure()/ensurePosInfrastructure() -- see
+     * their own docblocks for the reasoning. Deliberately scoped to the
+     * VLAN/IP/pool only, no DHCP server/network: PPP assigns each
+     * subscriber's address itself via IPCP (bound to the profile's
+     * `remote-address=` in applyPppoeProfileAndServer() below), not DHCP,
+     * so `pool-pppoe` (a real `/ip pool`) is the actual "DHCP equivalent"
+     * here and there's no `/ip dhcp-server`/network to ensure at all.
+     *
+     * Only runs for the app's own fixed `'vlan-pppoe'` interface name --
+     * if a caller has overridden $pppoeInterface to something else (a
+     * router not using this app's own VLAN scheme), this assumes that
+     * infrastructure already exists some other way and does nothing,
+     * matching generatePppoeScript()'s own "retype the interface" escape
+     * hatch for the paste-by-hand path.
+     *
+     * @return array{success: bool, steps: list<array{label: string, success: bool, error: ?string}>}
+     */
+    private function ensurePppoeInfrastructure(Router $router, string $pppoeInterface): array
+    {
+        if ($pppoeInterface !== 'vlan-pppoe') {
+            return ['success' => true, 'steps' => []];
+        }
 
-        return $result;
+        $settings = $this->provisioning->provisioningSettings($router, (string) (((array) $router->provisioning_settings)['profile'] ?? 'starlink_plaza'));
+
+        $pppoeVlan = (string) $settings['pppoe_vlan'];
+        $pppoeGateway = (string) $settings['pppoe_gateway'];
+        $pppoePool = (string) $settings['pppoe_pool'];
+
+        try {
+            $client = $this->client($router, 8);
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'steps' => [['label' => 'Check PPPoE VLAN infrastructure', 'success' => false, 'error' => $e->getMessage()]],
+            ];
+        }
+
+        $steps = [];
+
+        $vlanExists = collect($client->query(new Query('/interface/vlan/print'))->read())
+            ->contains(fn ($row) => is_array($row) && ($row['name'] ?? null) === 'vlan-pppoe');
+
+        if (! $vlanExists) {
+            $steps['Create PPPoE VLAN interface'] = (new Query('/interface/vlan/add'))
+                ->equal('interface', 'bridge-lan')
+                ->equal('name', 'vlan-pppoe')
+                ->equal('vlan-id', $pppoeVlan);
+        }
+
+        $addressExists = collect($client->query(new Query('/ip/address/print'))->read())
+            ->contains(fn ($row) => is_array($row) && ($row['interface'] ?? null) === 'vlan-pppoe');
+
+        if (! $addressExists) {
+            $steps['Create PPPoE VLAN IP address'] = (new Query('/ip/address/add'))
+                ->equal('address', $pppoeGateway)
+                ->equal('interface', 'vlan-pppoe');
+        }
+
+        $poolExists = collect($client->query(new Query('/ip/pool/print'))->read())
+            ->contains(fn ($row) => is_array($row) && ($row['name'] ?? null) === 'pool-pppoe');
+
+        if (! $poolExists) {
+            $steps['Create PPPoE address pool'] = (new Query('/ip/pool/add'))
+                ->equal('name', 'pool-pppoe')
+                ->equal('ranges', $pppoePool);
+        }
+
+        if ($steps === []) {
+            return ['success' => true, 'steps' => []];
+        }
+
+        return $this->runSteps($router, $steps);
+    }
+
+    /**
+     * Idempotent add-or-set of both the PPPoE PPP profile and server object
+     * -- confirmed via the same reasoning as `existingHotspotProfileId()`'s
+     * own docblock that a plain `/add` would fail every provisioning
+     * attempt after the first with "already exists". Safe to create rather
+     * than just re-point (unlike `applyHotspotProfile()` for the customer
+     * hotspot): both `mms-pppoe-profile` and this server's binding to
+     * `$pppoeInterface` are fixed, app-owned names/values, never a
+     * router-specific choice from a manual setup elsewhere.
+     *
+     * @return array{label: string, success: bool, error: ?string}
+     */
+    private function applyPppoeProfileAndServer(Router $router, string $pppoeInterface): array
+    {
+        $label = 'Apply PPPoE profile and server';
+
+        try {
+            $client = $this->client($router, 8);
+
+            $existingProfileId = collect($client->query(new Query('/ppp/profile/print'))->read())
+                ->first(fn ($row) => is_array($row) && ($row['name'] ?? null) === 'mms-pppoe-profile')['.id'] ?? null;
+
+            $profileQuery = $existingProfileId !== null
+                ? (new Query('/ppp/profile/set'))
+                    ->equal('numbers', $existingProfileId)
+                    ->equal('only-one', 'yes')
+                    ->equal('change-tcp-mss', 'yes')
+                    ->equal('local-address', $pppoeInterface)
+                    ->equal('remote-address', 'pool-pppoe')
+                : (new Query('/ppp/profile/add'))
+                    ->equal('name', 'mms-pppoe-profile')
+                    ->equal('only-one', 'yes')
+                    ->equal('change-tcp-mss', 'yes')
+                    ->equal('local-address', $pppoeInterface)
+                    ->equal('remote-address', 'pool-pppoe');
+
+            $raw = $client->query($profileQuery)->read(false);
+
+            if ($trapMessage = self::extractTrapMessage($raw)) {
+                throw new \RuntimeException($trapMessage);
+            }
+
+            $existingServer = collect($client->query(new Query('/interface/pppoe-server/server/print'))->read())
+                ->first(fn ($row) => is_array($row) && ($row['interface'] ?? null) === $pppoeInterface);
+
+            $serverQuery = $existingServer !== null
+                ? (new Query('/interface/pppoe-server/server/set'))
+                    ->equal('numbers', $existingServer['.id'])
+                    ->equal('service-name', 'mms-radius')
+                    ->equal('default-profile', 'mms-pppoe-profile')
+                    ->equal('authentication', 'pap,chap,mschap1,mschap2')
+                    ->equal('disabled', 'no')
+                : (new Query('/interface/pppoe-server/server/add'))
+                    ->equal('interface', $pppoeInterface)
+                    ->equal('service-name', 'mms-radius')
+                    ->equal('default-profile', 'mms-pppoe-profile')
+                    ->equal('authentication', 'pap,chap,mschap1,mschap2')
+                    ->equal('disabled', 'no');
+
+            $raw = $client->query($serverQuery)->read(false);
+
+            if ($trapMessage = self::extractTrapMessage($raw)) {
+                throw new \RuntimeException($trapMessage);
+            }
+
+            return ['label' => $label, 'success' => true, 'error' => null];
+        } catch (\Throwable $e) {
+            return ['label' => $label, 'success' => false, 'error' => $e->getMessage()];
+        }
     }
 
     /**

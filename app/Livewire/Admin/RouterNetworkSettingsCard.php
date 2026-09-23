@@ -14,11 +14,13 @@ use Livewire\Component;
  * that section's own tab on the router show page (Hotspot Script / PPPoE
  * Script / POS Script), instead of needing the full 4-step router wizard for
  * a single field. Reused for all three networks rather than near-identical
- * components per network, since the field shape mostly overlaps -- SSID and
- * extra untagged ports only apply to hotspot/pos (PPPoE has no SSID at all,
- * being wired/PPP dial-in rather than Wi-Fi, and is deliberately excluded
- * from the extra-access-port model -- see supportsSsid()/supportsExtraPorts()
- * /supportsAddressPool()), and the Wi-Fi password only applies to pos.
+ * components per network, since the field shape mostly overlaps -- SSID only
+ * applies to hotspot/pos (PPPoE has no SSID at all, being wired/PPP dial-in
+ * rather than Wi-Fi -- see supportsSsid()), and the Wi-Fi password only
+ * applies to pos. PPPoE gained its own address pool and extra-untagged-port
+ * support on 2026-09-23 (see supportsExtraPorts()/supportsAddressPool()),
+ * once PPP's own client addressing (via remote-address, not DHCP) and
+ * extra-access-port model were added to match Staff/POS.
  * Mirrors the small-embedded-Livewire-island pattern RouterCredentialsCard
  * already established on this same (otherwise plain Blade) page -- no
  * Livewire conversion needed for the rest of the page.
@@ -223,12 +225,12 @@ class RouterNetworkSettingsCard extends Component
 
     public function supportsAddressPool(): bool
     {
-        return in_array($this->network, ['hotspot', 'pos'], true);
+        return in_array($this->network, ['hotspot', 'pos', 'pppoe'], true);
     }
 
     public function supportsExtraPorts(): bool
     {
-        return in_array($this->network, ['hotspot', 'pos'], true);
+        return in_array($this->network, ['hotspot', 'pos', 'pppoe'], true);
     }
 
     public function supportsWifiPassword(): bool
@@ -239,10 +241,11 @@ class RouterNetworkSettingsCard extends Component
     /**
      * Whether extra untagged ports can actually be set right now for this
      * network -- true for hotspot unconditionally (no enable_hotspot flag
-     * exists, it's always on), but for POS only when enable_pos is currently
-     * true, matching RouterManagementService::rules()'s own
-     * Rule::prohibitedIf(!enable_pos) constraint on extra_pos_port_numbers
-     * exactly. See the note in save() for why this matters.
+     * exists, it's always on), but for POS/PPPoE only when enable_pos/
+     * enable_pppoe is currently true, matching RouterManagementService::
+     * rules()'s own Rule::prohibitedIf(!enable_pos)/Rule::prohibitedIf(!enable_pppoe)
+     * constraints on extra_pos_port_numbers/extra_pppoe_port_numbers exactly.
+     * See the note in save() for why this matters.
      */
     public function extraPortsEditable(array $settings): bool
     {
@@ -252,6 +255,10 @@ class RouterNetworkSettingsCard extends Component
 
         if ($this->network === 'pos') {
             return (bool) ($settings['enable_pos'] ?? false);
+        }
+
+        if ($this->network === 'pppoe') {
+            return (bool) ($settings['enable_pppoe'] ?? false);
         }
 
         return true;

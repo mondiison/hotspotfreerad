@@ -379,37 +379,79 @@ SCRIPT;
     }
 
     /**
-     * $pppoeInterface used to be a hardcoded generic "bridge1" placeholder
-     * the admin had to manually retype before pasting -- while
-     * generateFreshInfrastructureScript()'s own PPPoE section already
-     * creates and binds the PPPoE server to a fixed "vlan-pppoe" interface
-     * (see its own $pppoeLines). Changed to reference that same fixed name
-     * instead, matching generatePosScript()'s "assumes the fresh
-     * infrastructure script already created this VLAN" pattern -- so a
-     * router that's already had Fresh Infrastructure Script applied needs
-     * no manual edit here anymore. A router that never uses this app's own
-     * VLAN scheme at all can still retype the interface, same as before.
+     * Confirmed live 2026-09-23, following the same self-sufficiency gap
+     * already fixed for POS and Staff: this used to assume
+     * generateFreshInfrastructureScript()'s PPPoE section had already
+     * created vlan-pppoe, meaning a router with enable_pppoe flipped on
+     * after that script was last applied had nothing for the PPPoE server
+     * to bind to. Fixed to match generatePosScript()'s shape -- the VLAN,
+     * any extra untagged PPPoE access ports, and addressing are all created
+     * here now, NOT idempotent, same "do not paste twice" caveat as POS/
+     * Fresh Infrastructure Script.
+     *
+     * PPP assigns each subscriber's IP itself via IPCP, not DHCP -- there
+     * was previously no pool/addressing mechanism for PPPoE clients at all
+     * (`mms-pppoe-profile` set neither `local-address` nor
+     * `remote-address`). `pool-pppoe` (a real `/ip pool`, not an
+     * `/ip dhcp-server`, which PPPoE has no use for) is the actual "DHCP
+     * equivalent" here, bound via the profile's `remote-address=`;
+     * `local-address=vlan-pppoe` borrows that interface's own gateway IP as
+     * the server side of every session. No firewall input-chain accept rule
+     * is needed here the way POS's MAC-auth hotspot needs one -- PPPoE
+     * discovery/session negotiation is Ethernet-level (EtherType
+     * 0x8863/0x8864), never passes through `/ip firewall filter` (which
+     * only sees IP packets) at all, so there's nothing to accept.
      */
-    public function generatePppoeScript(Router $router): string
+    public function generatePppoeScript(Router $router, string $profile = 'starlink_plaza'): string
     {
         $nasIdentifier = $router->nas_identifier;
         $tunnelLines = implode("\n", array_merge($this->wireguardProvisioningLines($router), $this->zeroTierLines($router)));
         $apiUserLines = implode("\n", $this->apiUserProvisioningLines($router));
         $radiusLines = implode("\n", $this->radiusClientLines($router, 'ppp'));
+        $settings = $this->provisioningSettings($router, $profile);
+        $lanBridgeName = 'bridge-lan';
+        $taggedPorts = $lanBridgeName.','.$settings['trunk_port'];
+        $extraPppoePorts = $this->extraPortInterfaces($settings, 'extra_pppoe_ports');
         $pppoeInterface = 'vlan-pppoe';
 
+        $extraPortLines = array_map(
+            fn (string $port): string => '/interface bridge port add bridge='.$lanBridgeName.' interface='.$port.' pvid='.$settings['pppoe_vlan'].' comment="Extra PPPoE access port"',
+            $extraPppoePorts
+        );
+
+        $bridgeVlanLine = $extraPppoePorts !== []
+            ? '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' untagged='.implode(',', $extraPppoePorts).' vlan-ids='.$settings['pppoe_vlan']
+            : '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' vlan-ids='.$settings['pppoe_vlan'];
+
+        $infraLines = implode("\n", array_merge(
+            ['/interface vlan add interface='.$lanBridgeName.' name='.$pppoeInterface.' vlan-id='.$settings['pppoe_vlan']],
+            $extraPortLines,
+            [$bridgeVlanLine],
+            [
+                '/ip address add address='.$settings['pppoe_gateway'].' interface='.$pppoeInterface.' comment="Optional PPPoE/CPE VLAN"',
+                '/ip pool add name=pool-pppoe ranges='.$settings['pppoe_pool'],
+            ]
+        ));
+
         return <<<SCRIPT
-/system identity set name="{$nasIdentifier}"
-{$tunnelLines}
-{$apiUserLines}
-{$radiusLines}
-/ppp aaa set use-radius=yes accounting=yes interim-update=5m
-# PPPoE bandwidth is controlled by MMS Radius packages through Mikrotik-Rate-Limit.
-# Keep this profile generic; do not hard-code rate-limit here unless you want a router-side override.
-/ppp profile add name=mms-pppoe-profile only-one=yes change-tcp-mss=yes
-# Requires the PPPoE VLAN already set up (Fresh Infrastructure Script's PPPoE section). If this router doesn't use that VLAN scheme, change {$pppoeInterface} to the correct subscriber VLAN or LAN bridge.
-/interface pppoe-server server add interface={$pppoeInterface} service-name=mms-radius default-profile=mms-pppoe-profile authentication=pap,chap,mschap1,mschap2 disabled=no
-SCRIPT;
+        /system identity set name="{$nasIdentifier}"
+        {$tunnelLines}
+        {$apiUserLines}
+        {$radiusLines}
+        # Creates the PPPoE VLAN/ports/addressing -- NOT idempotent, same as the
+        # Fresh Infrastructure Script itself. Do not paste this twice, or if this
+        # router's Fresh Infrastructure Script has already included PPPoE
+        # (enable_pppoe was already on when it was last generated/applied).
+        {$infraLines}
+        /ppp aaa set use-radius=yes accounting=yes interim-update=5m
+        # PPPoE bandwidth is controlled by MMS Radius packages through Mikrotik-Rate-Limit.
+        # Keep this profile generic; do not hard-code rate-limit here unless you want a
+        # router-side override. remote-address hands each PPP session an IP from
+        # pool-pppoe (PPP's own IPCP addressing, not DHCP); local-address borrows
+        # {$pppoeInterface}'s own gateway IP as the server side of every session.
+        /ppp profile add name=mms-pppoe-profile only-one=yes change-tcp-mss=yes local-address={$pppoeInterface} remote-address=pool-pppoe
+        /interface pppoe-server server add interface={$pppoeInterface} service-name=mms-radius default-profile=mms-pppoe-profile authentication=pap,chap,mschap1,mschap2 disabled=no
+        SCRIPT;
     }
 
     /**
@@ -464,13 +506,14 @@ SCRIPT;
         $extraHotspotPorts = $this->extraPortInterfaces($settings, 'extra_hotspot_ports');
         $extraStaffPorts = $settings['enable_staff'] ? $this->extraPortInterfaces($settings, 'extra_staff_ports') : [];
         $extraPosPorts = $settings['enable_pos'] ? $this->extraPortInterfaces($settings, 'extra_pos_ports') : [];
+        $extraPppoePorts = $settings['enable_pppoe'] ? $this->extraPortInterfaces($settings, 'extra_pppoe_ports') : [];
 
         // Every VLAN below normally rides tagged-only on the shared catch-all line (no
         // dedicated untagged member) -- pulling a VLAN's ID OUT of that shared line only
         // when it actually has extra untagged ports keeps this byte-identical to the old
         // output whenever no extras are configured, and avoids ever emitting the same
         // "vlan-ids=" value on two separate bridge-vlan-table lines in the same script.
-        $taggedVlans = implode(',', array_filter($allVlans, function ($vlan) use ($settings, $extraHotspotPorts, $extraStaffPorts, $extraPosPorts): bool {
+        $taggedVlans = implode(',', array_filter($allVlans, function ($vlan) use ($settings, $extraHotspotPorts, $extraStaffPorts, $extraPosPorts, $extraPppoePorts): bool {
             if ((string) $vlan === (string) $settings['mgmt_vlan']) {
                 return false;
             }
@@ -481,6 +524,9 @@ SCRIPT;
                 return false;
             }
             if ($extraPosPorts !== [] && (string) $vlan === (string) $settings['pos_vlan']) {
+                return false;
+            }
+            if ($extraPppoePorts !== [] && (string) $vlan === (string) $settings['pppoe_vlan']) {
                 return false;
             }
 
@@ -497,6 +543,7 @@ SCRIPT;
                 $extraHotspotPorts !== [] ? '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' untagged='.implode(',', $extraHotspotPorts).' vlan-ids='.$settings['hotspot_vlan'] : null,
                 ($settings['enable_staff'] && $extraStaffPorts !== []) ? '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' untagged='.implode(',', $extraStaffPorts).' vlan-ids='.$settings['staff_vlan'] : null,
                 ($settings['enable_pos'] && $extraPosPorts !== []) ? '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' untagged='.implode(',', $extraPosPorts).' vlan-ids='.$settings['pos_vlan'] : null,
+                ($settings['enable_pppoe'] && $extraPppoePorts !== []) ? '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' untagged='.implode(',', $extraPppoePorts).' vlan-ids='.$settings['pppoe_vlan'] : null,
             ]);
 
         $secondWanMember = $settings['enable_second_wan']
@@ -540,9 +587,15 @@ SCRIPT;
         $pppoeLines = $settings['enable_pppoe'] ? [
             '',
             '/ip address add address=$pppoeGateway interface=vlan-pppoe comment="Optional PPPoE/CPE VLAN"',
+            '/ip pool add name=pool-pppoe ranges=$pppoePool',
             '/ppp aaa set use-radius=yes accounting=yes interim-update=5m',
-            '/ppp profile add name=mms-pppoe-profile only-one=yes change-tcp-mss=yes',
+            '# remote-address hands each PPP session an IP from pool-pppoe -- PPP assigns',
+            '# addresses itself via IPCP, not DHCP, so this pool is the actual "DHCP',
+            '# equivalent" for PPPoE clients. local-address borrows vlan-pppoe\'s own',
+            '# gateway IP as the server side of every session.',
+            '/ppp profile add name=mms-pppoe-profile only-one=yes change-tcp-mss=yes local-address=vlan-pppoe remote-address=pool-pppoe',
             '/interface pppoe-server server add interface=vlan-pppoe service-name=mms-radius default-profile=mms-pppoe-profile authentication=pap,chap,mschap1,mschap2 disabled=no',
+            ...array_map(fn (string $p): string => '/interface bridge port add bridge=$lanBridge interface='.$p.' pvid=$pppoeVlan comment="Extra PPPoE access port"', $extraPppoePorts),
         ] : [
             '',
             '# PPPoE is disabled for this router profile. Enable it for CPE/subscriber deployments.',
@@ -633,6 +686,7 @@ SCRIPT;
             ':global posNetwork "'.$settings['pos_network'].'"',
             ':global posPool "'.$settings['pos_pool'].'"',
             ':global pppoeGateway "'.$settings['pppoe_gateway'].'"',
+            ':global pppoePool "'.$settings['pppoe_pool'].'"',
             ':global downloadLimit "'.$settings['download_limit'].'"',
             ':global uploadLimit "'.$settings['upload_limit'].'"',
             '',
@@ -956,6 +1010,8 @@ HTML;
             'pos_network' => '192.168.50.0/24',
             'pos_pool' => '192.168.50.10-192.168.50.250',
             'pppoe_gateway' => '172.16.40.1/24',
+            'pppoe_network' => '172.16.40.0/24',
+            'pppoe_pool' => '172.16.40.10-172.16.40.250',
             'enable_builtin_wifi' => false,
             'enable_staff' => true,
             'enable_mgmt_wifi' => false,
@@ -978,8 +1034,18 @@ HTML;
         $hotspotUntagged = implode(',', array_filter([$hotspotWifiInterface, ...$this->extraPortInterfaces($settings, 'extra_hotspot_ports')]));
         $staffUntagged = implode(',', array_filter([$staffWifiInterface, ...$this->extraPortInterfaces($settings, 'extra_staff_ports')]));
         $posUntagged = implode(',', array_filter([$posWifiInterface, ...$this->extraPortInterfaces($settings, 'extra_pos_ports')]));
-        $pppoeTaggedOnly = $settings['enable_pppoe']
-            ? $this->taggedVlanLine($lanBridgeName, $taggedPorts, $settings['pppoe_vlan'])
+        // PPPoE has no virtual Wi-Fi SSID at all (it's dial-up, not a shared
+        // access-port VLAN by default) -- but it can still gain extra untagged
+        // access ports the same way Staff/POS do, so it's tagged-only only
+        // when no extra ports are configured, matching taggedVlans's own
+        // "pull the VLAN ID out of the shared catch-all only when it actually
+        // has extras" reasoning in the no-wifi branch below.
+        $pppoeExtraPorts = $this->extraPortInterfaces($settings, 'extra_pppoe_ports');
+        $pppoeUntagged = implode(',', $pppoeExtraPorts);
+        $pppoeLine = $settings['enable_pppoe']
+            ? ($pppoeUntagged !== ''
+                ? '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' untagged='.$pppoeUntagged.' vlan-ids='.$settings['pppoe_vlan']
+                : $this->taggedVlanLine($lanBridgeName, $taggedPorts, $settings['pppoe_vlan']))
             : null;
 
         return array_filter([
@@ -987,7 +1053,7 @@ HTML;
             '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' untagged='.$hotspotUntagged.' vlan-ids='.$settings['hotspot_vlan'],
             $settings['enable_staff'] ? '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' untagged='.$staffUntagged.' vlan-ids='.$settings['staff_vlan'] : null,
             $settings['enable_pos'] ? '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' untagged='.$posUntagged.' vlan-ids='.$settings['pos_vlan'] : null,
-            $settings['enable_pppoe'] ? $pppoeTaggedOnly : null,
+            $pppoeLine,
             '# If your AP/switch also needs tagged Staff/PPPoE/POS VLANs, keep the tagged ports above and use these virtual SSIDs only for MikroTik built-in Wi-Fi testing.',
         ]);
     }

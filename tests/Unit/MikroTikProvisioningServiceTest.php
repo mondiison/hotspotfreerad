@@ -276,6 +276,45 @@ class MikroTikProvisioningServiceTest extends TestCase
         $this->assertStringContainsString('/interface pppoe-server server add interface=vlan-pppoe service-name=mms-radius', $script);
     }
 
+    /**
+     * Regression/feature test for a 2026-09-23 direct request: generatePppoeScript()
+     * used to assume Fresh Infrastructure Script had already created vlan-pppoe,
+     * the same gap already fixed for POS/Staff. Confirms the VLAN, extra untagged
+     * PPPoE ports, and addressing are now created here, and -- since PPP assigns
+     * client IPs itself via IPCP, not DHCP -- that a real /ip pool (not a DHCP
+     * server) is bound to the profile via remote-address, with local-address
+     * borrowing the VLAN's own gateway IP.
+     */
+    public function test_pppoe_script_creates_vlan_pool_and_extra_ports(): void
+    {
+        config([
+            'services.wireguard.endpoint_host' => 'vpn.example.com',
+            'services.wireguard.endpoint_port' => 13231,
+            'services.wireguard.public_key' => 'server-public-key',
+        ]);
+
+        $router = new Router([
+            'nas_identifier' => 'pppoe-router',
+            'wireguard_internal_ip' => '10.8.0.13',
+            'shared_secret' => 'radius-secret',
+            'provisioning_settings' => [
+                'profile' => 'starlink_plaza',
+                'trunk_port' => 'ether4',
+                'extra_pppoe_ports' => 'ether11',
+                'enable_pppoe' => true,
+            ],
+        ]);
+
+        $script = app(MikroTikProvisioningService::class)->generatePppoeScript($router);
+
+        $this->assertStringContainsString('/interface vlan add interface=bridge-lan name=vlan-pppoe vlan-id=40', $script);
+        $this->assertStringContainsString('/interface bridge port add bridge=bridge-lan interface=ether11 pvid=40 comment="Extra PPPoE access port"', $script);
+        $this->assertStringContainsString('/interface bridge vlan add bridge=bridge-lan tagged=bridge-lan,ether4 untagged=ether11 vlan-ids=40', $script);
+        $this->assertStringContainsString('/ip address add address=172.16.40.1/24 interface=vlan-pppoe', $script);
+        $this->assertStringContainsString('/ip pool add name=pool-pppoe ranges=172.16.40.10-172.16.40.250', $script);
+        $this->assertStringContainsString('/ppp profile add name=mms-pppoe-profile only-one=yes change-tcp-mss=yes local-address=vlan-pppoe remote-address=pool-pppoe', $script);
+    }
+
     public function test_it_generates_a_routeros_pos_script(): void
     {
         config([
@@ -579,6 +618,46 @@ class MikroTikProvisioningServiceTest extends TestCase
         $this->assertStringNotContainsString('vlan-ids=20,', $script);
         $this->assertStringNotContainsString(',20 ', $script);
         $this->assertStringContainsString('vlan-ids=30,40,50', $script);
+    }
+
+    /**
+     * Regression/feature test for a 2026-09-23 direct request: PPPoE previously
+     * had no extra-untagged-port support at all (always tagged-only) and no
+     * client-addressing pool -- both now match Staff/POS's existing shape.
+     */
+    public function test_fresh_infrastructure_script_gives_pppoe_extra_ports_and_a_client_pool(): void
+    {
+        config([
+            'app.url' => 'https://mmsradius.com',
+            'services.radius.server_ip' => '10.8.0.1',
+            'services.wireguard.endpoint_host' => 'vpn.example.com',
+            'services.wireguard.endpoint_port' => 13231,
+            'services.wireguard.public_key' => 'server-public-key',
+            'services.mikrotik.hotspot_dns_name' => 'hotspot.local',
+        ]);
+
+        $router = new Router([
+            'nas_identifier' => 'pppoe-extra-ports-router',
+            'wireguard_internal_ip' => '10.8.0.31',
+            'shared_secret' => 'radius-secret',
+            'provisioning_settings' => [
+                'extra_pppoe_ports' => 'ether11',
+            ],
+        ]);
+
+        $script = app(MikroTikProvisioningService::class)->generateFreshInfrastructureScript($router);
+
+        $this->assertStringContainsString(
+            '/interface bridge vlan add bridge=bridge-lan tagged=bridge-lan,ether2 untagged=ether11 vlan-ids=40',
+            $script
+        );
+        $this->assertStringContainsString('/interface bridge port add bridge=$lanBridge interface=ether11 pvid=$pppoeVlan comment="Extra PPPoE access port"', $script);
+        // PPPoE's VLAN ID (40) must appear on exactly its own dedicated line, not also
+        // inside the shared tagged-only catch-all (which would double-emit it).
+        $this->assertStringNotContainsString('vlan-ids=20,30,40,50', $script);
+        $this->assertStringContainsString('vlan-ids=20,30,50', $script);
+        $this->assertStringContainsString('/ip pool add name=pool-pppoe ranges=$pppoePool', $script);
+        $this->assertStringContainsString('/ppp profile add name=mms-pppoe-profile only-one=yes change-tcp-mss=yes local-address=vlan-pppoe remote-address=pool-pppoe', $script);
     }
 
     public function test_extra_mgmt_ports_merge_into_the_existing_mgmt_untagged_line(): void

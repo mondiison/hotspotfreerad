@@ -28,9 +28,9 @@ class RouterManagementService
 
     /**
      * @param  array<string, mixed>|null  $provisioningSettings  the live/submitted provisioning_settings
-     *     array, used to cross-check port role numbers against each other and against port_count.
-     *     Both call sites (RoutersIndex::save() and validated()) already have this available at the
-     *     point they call rules(), since it's either bound Livewire component state or raw request input.
+     *                                                           array, used to cross-check port role numbers against each other and against port_count.
+     *                                                           Both call sites (RoutersIndex::save() and validated()) already have this available at the
+     *                                                           point they call rules(), since it's either bound Livewire component state or raw request input.
      */
     public function rules(User $user, ?Router $router = null, ?array $provisioningSettings = null): array
     {
@@ -73,10 +73,15 @@ class RouterManagementService
                 'nullable', 'string', 'max:120', 'regex:/^\d+(,\s*\d+)*$/',
                 Rule::prohibitedIf(fn () => ! (bool) data_get($provisioningSettings, 'enable_pos')),
             ],
+            'provisioning_settings.extra_pppoe_port_numbers' => [
+                'nullable', 'string', 'max:120', 'regex:/^\d+(,\s*\d+)*$/',
+                Rule::prohibitedIf(fn () => ! (bool) data_get($provisioningSettings, 'enable_pppoe')),
+            ],
             'provisioning_settings.extra_mgmt_ports' => ['nullable', 'string', 'max:200'],
             'provisioning_settings.extra_hotspot_ports' => ['nullable', 'string', 'max:200'],
             'provisioning_settings.extra_staff_ports' => ['nullable', 'string', 'max:200'],
             'provisioning_settings.extra_pos_ports' => ['nullable', 'string', 'max:200'],
+            'provisioning_settings.extra_pppoe_ports' => ['nullable', 'string', 'max:200'],
             'provisioning_settings.builtin_wifi_interface' => ['required_if:provisioning_settings.enable_builtin_wifi,true', 'nullable', 'string', 'max:40'],
             'provisioning_settings.hotspot_ssid' => ['nullable', 'string', 'max:32'],
             'provisioning_settings.pos_ssid' => ['nullable', 'string', 'max:32'],
@@ -112,6 +117,8 @@ class RouterManagementService
             'provisioning_settings.pos_network' => ['nullable', 'string', 'max:32'],
             'provisioning_settings.pos_pool' => ['nullable', 'string', 'max:64'],
             'provisioning_settings.pppoe_gateway' => ['nullable', 'string', 'max:32'],
+            'provisioning_settings.pppoe_network' => ['nullable', 'string', 'max:32'],
+            'provisioning_settings.pppoe_pool' => ['nullable', 'string', 'max:64'],
             'provisioning_settings.enable_builtin_wifi' => ['nullable', 'boolean'],
             'provisioning_settings.enable_staff' => ['nullable', 'boolean'],
             'provisioning_settings.enable_mgmt_wifi' => ['nullable', 'boolean'],
@@ -357,10 +364,12 @@ class RouterManagementService
             'extra_hotspot_port_numbers' => '',
             'extra_staff_port_numbers' => '',
             'extra_pos_port_numbers' => '',
+            'extra_pppoe_port_numbers' => '',
             'extra_mgmt_ports' => '',
             'extra_hotspot_ports' => '',
             'extra_staff_ports' => '',
             'extra_pos_ports' => '',
+            'extra_pppoe_ports' => '',
             'builtin_wifi_interface' => 'wifi1',
             'hotspot_ssid' => 'MMS Hotspot',
             'pos_ssid' => 'MMS POS',
@@ -395,6 +404,8 @@ class RouterManagementService
             'pos_network' => '192.168.50.0/24',
             'pos_pool' => '192.168.50.10-192.168.50.250',
             'pppoe_gateway' => '172.16.40.1/24',
+            'pppoe_network' => '172.16.40.0/24',
+            'pppoe_pool' => '172.16.40.10-172.16.40.250',
             'enable_builtin_wifi' => false,
             'enable_staff' => true,
             'enable_mgmt_wifi' => false,
@@ -461,6 +472,7 @@ class RouterManagementService
             'extra_hotspot_ports' => 'extra_hotspot_port_numbers',
             'extra_staff_ports' => 'extra_staff_port_numbers',
             'extra_pos_ports' => 'extra_pos_port_numbers',
+            'extra_pppoe_ports' => 'extra_pppoe_port_numbers',
         ] as $stringKey => $numberKey) {
             if (! empty($settings[$numberKey])) {
                 $settings[$stringKey] = implode(',', RouterPortLayout::interfaceNamesFromNumberList((string) $settings[$numberKey]));
@@ -508,6 +520,7 @@ class RouterManagementService
                 'Extra hotspot port' => $provisioningSettings['extra_hotspot_port_numbers'] ?? null,
                 'Extra staff port' => ($provisioningSettings['enable_staff'] ?? false) ? ($provisioningSettings['extra_staff_port_numbers'] ?? null) : null,
                 'Extra POS port' => ($provisioningSettings['enable_pos'] ?? false) ? ($provisioningSettings['extra_pos_port_numbers'] ?? null) : null,
+                'Extra PPPoE port' => ($provisioningSettings['enable_pppoe'] ?? false) ? ($provisioningSettings['extra_pppoe_port_numbers'] ?? null) : null,
             ] as $roleLabel => $csv) {
                 $numbers = array_values(array_filter(array_map('trim', explode(',', (string) $csv)), fn (string $piece): bool => $piece !== ''));
 

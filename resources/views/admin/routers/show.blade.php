@@ -260,7 +260,7 @@ sudo freeradius -X</code></pre>
                             <div class="flex flex-col justify-between gap-3 md:flex-row md:items-start">
                                 <div>
                                     <h2 class="text-base font-semibold">RouterOS PPPoE Script</h2>
-                                    <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Use this when this router will serve PPPoE subscribers instead of, or alongside, hotspot users. Package bandwidth is applied by RADIUS, so the router profile should remain generic. Or apply it live over the API once the Bootstrap Script (Overview tab) has run.</p>
+                                    <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Use this when this router will serve PPPoE subscribers instead of, or alongside, hotspot users. Creates the PPPoE VLAN, addressing, and untagged ports itself -- no need for Fresh Infrastructure Script to have run first. Package bandwidth is applied by RADIUS, so the router profile should remain generic. Or apply it live over the API once the Bootstrap Script (Overview tab) has run.</p>
                                 </div>
                                 @if ($router->api_username)
                                     <flux:modal.trigger name="provision-pppoe-confirm">
@@ -270,7 +270,7 @@ sudo freeradius -X</code></pre>
                                         <div class="space-y-5">
                                             <div>
                                                 <flux:heading size="lg">Provision PPPoE via API</flux:heading>
-                                                <flux:text class="mt-2">This pushes the RADIUS client, PPP/RADIUS settings, profile, and PPPoE server to the router live over the API.</flux:text>
+                                                <flux:text class="mt-2">This pushes the PPPoE VLAN/addressing/pool, RADIUS client, PPP/RADIUS settings, profile, and PPPoE server to the router live over the API.</flux:text>
                                             </div>
                                             <div class="flex justify-end gap-3">
                                                 <flux:modal.close>
@@ -316,7 +316,7 @@ sudo freeradius -X</code></pre>
                         <h2 class="text-base font-semibold">PPPoE Notes</h2>
                         <ul class="mt-4 space-y-3 text-sm text-zinc-600 dark:text-zinc-400">
                             <li>Use PPPoE for fixed subscribers with username/password credentials.</li>
-                            <li>Assumes the PPPoE VLAN already exists (Fresh Infrastructure Script tab). If this router doesn't use that VLAN scheme, change <code>interface=vlan-pppoe</code> in the script to the subscriber VLAN or LAN bridge.</li>
+                            <li>Client addressing uses a real PPP address pool (<code>pool-pppoe</code>, via <code>remote-address</code>) -- PPP assigns each session's IP itself via IPCP, not DHCP, so there's no DHCP server for PPPoE. If this router doesn't use this app's own VLAN scheme at all, change <code>interface=vlan-pppoe</code> in the script to the subscriber VLAN or LAN bridge.</li>
                             <li>Set bandwidth on the package in MMS Radius. FreeRADIUS sends it to MikroTik as <code>Mikrotik-Rate-Limit</code>.</li>
                             <li>Customer CPE WAN mode should be PPPoE client.</li>
                         </ul>
