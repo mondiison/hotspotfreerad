@@ -44,6 +44,9 @@
                         <dd class="mt-1 font-medium text-zinc-950 dark:text-zinc-100">{{ $plan->package_limit ?? 'Unlimited' }}</dd>
                     </div>
                 </dl>
+                @if ($plan->supports_wallet)
+                    <flux:badge color="blue" size="sm" class="mt-3">Wallet{{ $plan->wallet_commission_rate !== null ? ' · '.number_format((float) $plan->wallet_commission_rate, 2).'%' : '' }}</flux:badge>
+                @endif
                 @if ($plan->features)
                     <ul class="mt-4 space-y-1 text-sm text-zinc-600 dark:text-zinc-400">
                         @foreach ($plan->features as $feature)
@@ -124,6 +127,24 @@
                         <flux:description>These appear on billing screens and can later be reused on tenant checkout.</flux:description>
                         <flux:error name="features" />
                     </flux:field>
+
+                    <section class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4 md:col-span-2">
+                        <h2 class="text-sm font-semibold text-zinc-950 dark:text-zinc-100">Tenant wallet</h2>
+                        <p class="mt-1 text-sm leading-6 text-zinc-600 dark:text-zinc-400">Lets a tenant on this plan route customer payments through the platform's own gateway instead of setting up their own, with their cut tracked in an in-app wallet.</p>
+
+                        <div class="mt-4 grid gap-5 md:grid-cols-2">
+                            <div class="md:col-span-2">
+                                <flux:checkbox wire:model.live="supports_wallet" label="Include wallet feature on this plan" />
+                            </div>
+
+                            <flux:field>
+                                <flux:label>Wallet commission rate (%)</flux:label>
+                                <flux:input type="number" step="0.01" min="0" max="100" wire:model.blur="wallet_commission_rate" placeholder="e.g. 5" :disabled="! $supports_wallet" />
+                                <flux:description>The platform's cut of every wallet-routed payment for tenants on this plan.</flux:description>
+                                <flux:error name="wallet_commission_rate" />
+                            </flux:field>
+                        </div>
+                    </section>
 
                     <div class="md:col-span-2">
                         <flux:checkbox wire:model.live="is_active" label="Active plan" />

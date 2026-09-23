@@ -12,9 +12,9 @@ use App\Models\Tenant;
 use App\Models\TenantBillingSubscription;
 use App\Models\User;
 use App\Services\PlatformPaymentSettingsService;
-use Illuminate\Support\Facades\Crypt;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Livewire\Livewire;
@@ -180,6 +180,63 @@ class PlatformBillingTest extends TestCase
         $this->assertNull($plan->package_limit);
     }
 
+    /**
+     * Regression/feature test for a 2026-09-23 gap: BillingPlanManagementService::
+     * rules()/normalize() already fully supported supports_wallet/wallet_commission_rate
+     * (validated, normalized, persisted), and the orphaned full-page plan-form.blade.php
+     * (reached only via admin.billing.plans.create/edit, unlinked from navigation --
+     * see the other plan-form-route tests in this file) already exposed them too, but
+     * the live, linked super-admin UI (this Livewire modal, embedded on admin/billing)
+     * never had the fields wired up at all -- a super admin had no way to actually
+     * toggle wallet support for a plan from the page they'd normally use.
+     */
+    public function test_livewire_billing_plan_manager_can_toggle_wallet_support(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'super_admin',
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(BillingPlansManager::class)
+            ->call('create')
+            ->set('name', 'Wallet Plan')
+            ->set('monthly_price', '50000')
+            ->set('supports_wallet', true)
+            ->set('wallet_commission_rate', '7.5')
+            ->call('save')
+            ->assertHasNoErrors()
+            ->assertSee('Billing plan created.');
+
+        $plan = BillingPlan::where('slug', 'wallet-plan')->firstOrFail();
+
+        $this->assertTrue($plan->supports_wallet);
+        $this->assertSame('7.50', $plan->wallet_commission_rate);
+    }
+
+    public function test_livewire_billing_plan_manager_edit_prefills_wallet_fields(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'super_admin',
+            'is_active' => true,
+        ]);
+        $plan = BillingPlan::create([
+            'name' => 'Wallet Existing',
+            'slug' => 'wallet-existing',
+            'monthly_price' => 60000,
+            'currency' => 'NGN',
+            'supports_wallet' => true,
+            'wallet_commission_rate' => 4.25,
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(BillingPlansManager::class)
+            ->call('edit', $plan->id)
+            ->assertSet('supports_wallet', true)
+            ->assertSet('wallet_commission_rate', '4.25');
+    }
+
     public function test_livewire_billing_plan_manager_edits_plan_from_modal(): void
     {
         $user = User::factory()->create([
@@ -300,7 +357,7 @@ class PlatformBillingTest extends TestCase
             'key' => 'payments.platform.flutterwave',
         ]);
 
-        $service = app(\App\Services\PlatformPaymentSettingsService::class);
+        $service = app(PlatformPaymentSettingsService::class);
         $this->assertSame('db-platform-client-id', $service->clientId());
         $this->assertSame('flutterwave', $service->activeGateway());
         $this->assertSame('db-platform-client-secret', $service->clientSecret());

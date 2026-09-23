@@ -36,6 +36,10 @@ class BillingPlansManager extends Component
 
     public bool $is_active = true;
 
+    public bool $supports_wallet = false;
+
+    public string $wallet_commission_rate = '';
+
     public ?string $savedMessage = null;
 
     public function mount(BillingPlanManagementService $plans): void
@@ -65,6 +69,8 @@ class BillingPlansManager extends Component
         $this->package_limit = (string) $plan->package_limit;
         $this->features = collect($plan->features ?? [])->implode("\n");
         $this->is_active = (bool) $plan->is_active;
+        $this->supports_wallet = (bool) $plan->supports_wallet;
+        $this->wallet_commission_rate = $plan->wallet_commission_rate !== null ? (string) $plan->wallet_commission_rate : '';
         $this->savedMessage = null;
         $this->showFormModal = true;
     }
@@ -82,6 +88,8 @@ class BillingPlansManager extends Component
             'package_limit' => $this->package_limit,
             'features' => $this->features,
             'is_active' => $this->is_active,
+            'supports_wallet' => $this->supports_wallet,
+            'wallet_commission_rate' => $this->wallet_commission_rate,
         ], $plans->rules($plan))->validate();
 
         if ($plan) {
@@ -142,6 +150,8 @@ class BillingPlansManager extends Component
             'router_limit',
             'package_limit',
             'features',
+            'supports_wallet',
+            'wallet_commission_rate',
         ]);
         $this->monthly_price = '0';
         $this->currency = 'NGN';
