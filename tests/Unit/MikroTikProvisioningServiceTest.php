@@ -316,6 +316,9 @@ class MikroTikProvisioningServiceTest extends TestCase
         $this->assertStringContainsString('/queue type add name=pcq-hotspot-down kind=pcq', $script);
         $this->assertStringContainsString('Realtime voice/video small UDP upload', $script);
         $this->assertStringContainsString('MMS POS = WPA2/WPA3 SSID tagged VLAN 50', $script);
+        $this->assertStringContainsString('/ip hotspot profile add name=mms-pos-profile use-radius=yes login-by=mac radius-accounting=yes', $script);
+        $this->assertStringContainsString('/ip hotspot add name=mms-pos interface=vlan-pos address-pool=pool-pos profile=mms-pos-profile disabled=no', $script);
+        $this->assertStringNotContainsString('# /ip hotspot profile add name=mms-pos-profile', $script);
         $this->assertStringContainsString('/system scheduler add name=mms-refresh-bandwidth interval=10m', $script);
         $this->assertStringNotContainsString('/interface wifi add name=$staffWifiInterface', $script);
         $this->assertStringNotContainsString('ssid="MMS Staff"', $script);
@@ -531,6 +534,8 @@ class MikroTikProvisioningServiceTest extends TestCase
         $this->assertStringContainsString('PPPoE is disabled', $script);
         $this->assertStringContainsString('Realtime QoS and PCQ are disabled', $script);
         $this->assertStringNotContainsString('/queue type add name=pcq-hotspot-down kind=pcq', $script);
+        $this->assertStringNotContainsString('mms-pos-profile', $script);
+        $this->assertStringNotContainsString('name=mms-pos ', $script);
     }
 
     public function test_the_ap_switch_trunk_port_only_admits_tagged_frames(): void

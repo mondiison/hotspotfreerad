@@ -551,7 +551,118 @@ class RouterOsConnectionService
         $result['steps'][] = $profileStep;
         $result['success'] = $result['success'] && $walledGardenResult['success'] && $loginPageResult['success'] && $profileStep['success'];
 
+        $posResult = $this->provisionPos($router);
+        $result['steps'] = array_merge($result['steps'], $posResult['steps']);
+        $result['success'] = $result['success'] && $posResult['success'];
+
         return $result;
+    }
+
+    /**
+     * Confirmed live 2026-09-23: the POS VLAN's WPA2/WPA3 SSID had a shared
+     * password but no per-device enforcement at all -- any device that knew
+     * the password got a DHCP lease and full internet access on the POS
+     * VLAN, completely independent of whether it was registered (or paid)
+     * as a PosDevice. RadiusProvisioningService::provisionPosDevice() has
+     * always written a correct RADIUS MAC-auth record (radcheck username =
+     * MAC, password = MAC) on register/renew, but nothing on the router
+     * side ever queried it -- MikroTikProvisioningService's own POS hotspot
+     * binding existed only as commented-out lines in the script generator,
+     * and this live-API path had no equivalent step at all. This closes
+     * that gap the same way provisionHotspot() closes it for the customer
+     * hotspot: an idempotent add-or-set of a `login-by=mac use-radius=yes`
+     * hotspot profile, then a hotspot server object bound to it. Unlike the
+     * customer hotspot (whose interface/pool are router-specific and can
+     * come from a manual `/ip hotspot setup`), the POS VLAN's `vlan-pos`/
+     * `pool-pos` names are always exactly what this app's own script
+     * generator creates, so this is safe to also CREATE the hotspot server
+     * object itself, not just re-point an existing one -- see
+     * applyPosHotspotServer() below.
+     *
+     * A no-op (not a failure) for a router with POS disabled, or missing
+     * `vlan-pos`/`pool-pos` (a router that has never had the fresh
+     * infrastructure script applied since POS was added) -- RouterOS will
+     * reject the hotspot-server add in that case, which applyPosHotspotServer()
+     * surfaces as a normal failed step rather than something this method
+     * needs to detect in advance.
+     *
+     * @return array{success: bool, steps: list<array{label: string, success: bool, error: ?string}>}
+     */
+    public function provisionPos(Router $router): array
+    {
+        if (! $this->isConfigured($router)) {
+            return [
+                'success' => false,
+                'steps' => [['label' => 'POS MAC-auth hotspot', 'success' => false, 'error' => 'No RouterOS API credentials generated for this router yet.']],
+            ];
+        }
+
+        if (! (bool) (((array) $router->provisioning_settings)['enable_pos'] ?? true)) {
+            return ['success' => true, 'steps' => []];
+        }
+
+        $existingProfileId = $this->existingHotspotProfileId($router, 'mms-pos-profile');
+
+        $profileQuery = $existingProfileId !== null
+            ? (new Query('/ip/hotspot/profile/set'))
+                ->equal('numbers', $existingProfileId)
+                ->equal('use-radius', 'yes')
+                ->equal('login-by', 'mac')
+                ->equal('radius-accounting', 'yes')
+            : (new Query('/ip/hotspot/profile/add'))
+                ->equal('name', 'mms-pos-profile')
+                ->equal('use-radius', 'yes')
+                ->equal('login-by', 'mac')
+                ->equal('radius-accounting', 'yes');
+
+        $result = $this->runSteps($router, ['Add POS MAC-auth hotspot profile' => $profileQuery]);
+
+        $serverStep = $this->applyPosHotspotServer($router);
+        $result['steps'][] = $serverStep;
+        $result['success'] = $result['success'] && $serverStep['success'];
+
+        return $result;
+    }
+
+    /**
+     * Points the POS hotspot server (interface=vlan-pos) at mms-pos-profile,
+     * creating it first if it doesn't exist yet -- unlike applyHotspotProfile()
+     * for the customer hotspot, this is safe to create because vlan-pos/
+     * pool-pos are fixed names this app's own script generator always uses,
+     * never a router-specific choice from a manual `/ip hotspot setup`.
+     *
+     * @return array{label: string, success: bool, error: ?string}
+     */
+    private function applyPosHotspotServer(Router $router): array
+    {
+        $label = 'Point POS hotspot server at "mms-pos-profile"';
+
+        try {
+            $client = $this->client($router, 8);
+            $existing = collect($client->query(new Query('/ip/hotspot/print'))->read())
+                ->first(fn ($row) => is_array($row) && ($row['interface'] ?? null) === 'vlan-pos');
+
+            $query = $existing !== null
+                ? (new Query('/ip/hotspot/set'))
+                    ->equal('numbers', $existing['.id'])
+                    ->equal('profile', 'mms-pos-profile')
+                : (new Query('/ip/hotspot/add'))
+                    ->equal('name', 'mms-pos')
+                    ->equal('interface', 'vlan-pos')
+                    ->equal('address-pool', 'pool-pos')
+                    ->equal('profile', 'mms-pos-profile')
+                    ->equal('disabled', 'no');
+
+            $raw = $client->query($query)->read(false);
+
+            if ($trapMessage = self::extractTrapMessage($raw)) {
+                throw new \RuntimeException($trapMessage);
+            }
+
+            return ['label' => $label, 'success' => true, 'error' => null];
+        } catch (\Throwable $e) {
+            return ['label' => $label, 'success' => false, 'error' => $e->getMessage()];
+        }
     }
 
     /**
@@ -1523,8 +1634,17 @@ class RouterOsConnectionService
 
         try {
             $client = $this->client($router, 8);
+            // Excludes the POS MAC-auth hotspot server (bound to interface=vlan-pos,
+            // see provisionPos()/applyPosHotspotServer() below) -- before that exclusion
+            // was added, a router with both hotspot servers present would have this loop
+            // blindly reassign the POS one back to $profile (the customer-facing
+            // "saas-prof"/http-pap profile) every single "Provision via API" run, silently
+            // undoing POS's MAC-auth enforcement. Not yet confirmed live that RouterOS's
+            // /ip/hotspot/print actually surfaces "interface" the same way this API
+            // wrapper already relies on ".id" -- if it doesn't, this filter is a no-op and
+            // the pre-existing "reassign everything" behavior is unchanged, not made worse.
             $hotspots = collect($client->query(new Query('/ip/hotspot/print'))->read())
-                ->filter(fn ($row) => is_array($row) && filled($row['.id'] ?? null));
+                ->filter(fn ($row) => is_array($row) && filled($row['.id'] ?? null) && ($row['interface'] ?? null) !== 'vlan-pos');
 
             if ($hotspots->isEmpty()) {
                 return [

@@ -280,15 +280,20 @@ class RouterOsApiProvisioningTest extends TestCase
         // shop's active gateway's PaymentGatewayCatalog list (flutterwave by
         // default: *.flutterwave.com, *.ravepay.co), the Cloudflare walled-garden
         // entry, the wa.me/*.wa.me walled-garden entries, the hotspot login page
-        // push, then the final "point hotspot server" step.
+        // push, "point hotspot server", then provisionPos()'s own two steps
+        // (POS defaults to enabled -- see enable_pos's default-true fallback in
+        // provisionPos() -- for a router with no provisioning_settings saved at
+        // all, matching MikroTikProvisioningService's own script-generator default).
         $this->assertFalse($result['success']);
-        $this->assertCount(11, $result['steps']);
+        $this->assertCount(13, $result['steps']);
         $this->assertFalse($result['steps'][0]['success']);
         $this->assertNotEmpty($result['steps'][0]['error']);
         $labels = array_column($result['steps'], 'label');
         $this->assertContains('Push hotspot login page', $labels);
+        $this->assertContains('Point hotspot server at "saas-prof"', $labels);
+        $this->assertContains('Add POS MAC-auth hotspot profile', $labels);
         $lastStep = $result['steps'][count($result['steps']) - 1];
-        $this->assertSame('Point hotspot server at "saas-prof"', $lastStep['label']);
+        $this->assertSame('Point POS hotspot server at "mms-pos-profile"', $lastStep['label']);
         $this->assertFalse($lastStep['success']);
     }
 
@@ -306,7 +311,7 @@ class RouterOsApiProvisioningTest extends TestCase
         $result = app(RouterOsConnectionService::class)->provisionHotspot($router);
 
         $this->assertFalse($result['success']);
-        $this->assertCount(11, $result['steps']);
+        $this->assertCount(13, $result['steps']);
         $labels = array_column($result['steps'], 'label');
         $this->assertContains('Push hotspot login page', $labels);
     }
@@ -333,6 +338,43 @@ class RouterOsApiProvisioningTest extends TestCase
         $this->assertContains('Add walled-garden entry (wa.me)', $labels);
         $this->assertContains('Add walled-garden entry (*.wa.me)', $labels);
         $this->assertNotContains('Add walled-garden entry (*.flutterwave.com)', $labels);
+    }
+
+    public function test_provision_pos_reports_a_clear_error_when_router_is_unreachable(): void
+    {
+        $router = Router::create([
+            'shop_id' => $this->makeShop()->id,
+            'name' => 'Unreachable POS Router',
+            'nas_identifier' => 'unreachable-pos-router',
+            'wireguard_internal_ip' => '192.0.2.7',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        $result = app(RouterOsConnectionService::class)->provisionPos($router);
+
+        $this->assertFalse($result['success']);
+        $this->assertCount(2, $result['steps']);
+        $labels = array_column($result['steps'], 'label');
+        $this->assertContains('Add POS MAC-auth hotspot profile', $labels);
+        $this->assertContains('Point POS hotspot server at "mms-pos-profile"', $labels);
+        $this->assertFalse($result['steps'][0]['success']);
+        $this->assertNotEmpty($result['steps'][0]['error']);
+    }
+
+    public function test_provision_pos_is_a_no_op_when_a_router_has_pos_disabled(): void
+    {
+        $router = Router::create([
+            'shop_id' => $this->makeShop()->id,
+            'name' => 'No POS Router',
+            'nas_identifier' => 'no-pos-router',
+            'wireguard_internal_ip' => '192.0.2.8',
+            'shared_secret' => 'radius-secret',
+            'provisioning_settings' => ['enable_pos' => false],
+        ]);
+
+        $result = app(RouterOsConnectionService::class)->provisionPos($router);
+
+        $this->assertSame(['success' => true, 'steps' => []], $result);
     }
 
     public function test_push_hotspot_login_page_reports_a_clear_error_when_router_is_unreachable(): void
