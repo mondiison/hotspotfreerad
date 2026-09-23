@@ -14,6 +14,26 @@ use Illuminate\Support\Str;
 
 class RadiusProvisioningService
 {
+    /**
+     * Confirmed live 2026-09-23: provisionPosDevice() used to store each
+     * device's own MAC as its Cleartext-Password too (matching the
+     * username), relying on RouterOS's `mac-auth-password=""` default to
+     * send that same MAC back as the CHAP password. It doesn't -- RouterOS
+     * hashes whatever it actually sends with the CHAP-Challenge, and
+     * FreeRADIUS's re-computed hash from the stored Cleartext-Password never
+     * matched, rejecting every MAC-auth attempt with "password is
+     * incorrect" even though the username/group lookup succeeded correctly.
+     * grantSubscriptionAccess() below already uses this exact same fixed,
+     * non-MAC password for the customer hotspot's own MAC-cookie RADIUS
+     * flow (confirmed working) -- POS now matches it, with
+     * MikroTikProvisioningService/RouterOsConnectionService setting this
+     * same value as mms-pos-profile's explicit mac-auth-password instead of
+     * leaving it blank, so RouterOS is never guessing what to send. Not a
+     * meaningful secret -- the MAC-as-username is what actually identifies
+     * the device; RADIUS just requires some password value for CHAP/PAP.
+     */
+    public const POS_MAC_AUTH_PASSWORD = 'MmsPosMacAuth2026!';
+
     public function syncRouter(Router $router): void
     {
         DB::table('nas')->updateOrInsert(
@@ -174,7 +194,7 @@ class RadiusProvisioningService
             ],
             [
                 'op' => ':=',
-                'value' => $macAddress,
+                'value' => self::POS_MAC_AUTH_PASSWORD,
             ]
         );
 

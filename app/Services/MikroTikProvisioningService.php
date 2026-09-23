@@ -176,6 +176,7 @@ SCRIPT;
                 '/ip dhcp-server network add address='.$settings['pos_network'].' gateway='.str($settings['pos_gateway'])->before('/').' dns-server='.str($settings['pos_gateway'])->before('/'),
             ]
         ));
+        $macAuthPassword = $this->quote(RadiusProvisioningService::POS_MAC_AUTH_PASSWORD);
 
         return <<<SCRIPT
 /system identity set name="{$nasIdentifier}"
@@ -189,7 +190,14 @@ SCRIPT;
 # Requires a RADIUS client for the "hotspot" service already added (Hotspot
 # Script tab, or the Bootstrap/Fresh Infrastructure scripts) -- POS shares
 # that RADIUS client, so this script does not add a second one.
-/ip hotspot profile add name=mms-pos-profile use-radius=yes login-by=mac radius-accounting=yes
+# mac-auth-password is set explicitly rather than left blank -- confirmed
+# live 2026-09-23 that RouterOS's own "defaults to the client's MAC" blank
+# behavior doesn't actually send a CHAP-hashable password matching the MAC
+# in radcheck, rejecting every MAC-auth attempt. This fixed value matches
+# what RadiusProvisioningService::provisionPosDevice() now stores as every
+# POS device's Cleartext-Password -- not a meaningful secret, since the MAC
+# (the username) is what actually identifies the device.
+/ip hotspot profile add name=mms-pos-profile use-radius=yes login-by=mac mac-auth-password="{$macAuthPassword}" radius-accounting=yes
 /ip hotspot add name=mms-pos interface=vlan-pos address-pool=pool-pos profile=mms-pos-profile disabled=no
 # Best-effort firewall rules -- the input-chain accept is placed before this
 # router's own WAN-only catch-all input drop rule if one exists (confirmed
@@ -341,7 +349,10 @@ SCRIPT;
             '# MAC-auth hotspot: only a MAC address registered as a POS device in MMS Radius',
             '# (and currently active/unexpired) is granted access past this VLAN, even though',
             '# every device on this SSID shares the same WPA2/WPA3 password to associate.',
-            '/ip hotspot profile add name=mms-pos-profile use-radius=yes login-by=mac radius-accounting=yes',
+            '# mac-auth-password is explicit, not left blank -- RouterOS\'s own "defaults to',
+            '# the client\'s MAC" blank behavior does not send a password matching the MAC',
+            '# in radcheck (confirmed live), rejecting every MAC-auth attempt.',
+            '/ip hotspot profile add name=mms-pos-profile use-radius=yes login-by=mac mac-auth-password="'.$this->quote(RadiusProvisioningService::POS_MAC_AUTH_PASSWORD).'" radius-accounting=yes',
             '/ip hotspot add name=mms-pos interface=vlan-pos address-pool=pool-pos profile=mms-pos-profile disabled=no',
         ] : [
             '',

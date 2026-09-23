@@ -340,7 +340,7 @@ class RadiusProvisioningServiceTest extends TestCase
             'username' => 'DE:F7:BB:D6:57:B0',
             'attribute' => 'Cleartext-Password',
             'op' => ':=',
-            'value' => 'DE:F7:BB:D6:57:B0',
+            'value' => RadiusProvisioningService::POS_MAC_AUTH_PASSWORD,
         ]);
         $this->assertDatabaseMissing('radcheck', [
             'username' => 'DE:F7:BB:D6:57:B0',

@@ -7,6 +7,7 @@ use App\Models\Shop;
 use App\Models\Tenant;
 use App\Models\TrustedWifiDevice;
 use App\Services\MikroTikProvisioningService;
+use App\Services\RadiusProvisioningService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -297,7 +298,7 @@ class MikroTikProvisioningServiceTest extends TestCase
         $this->assertStringContainsString('/ip address add address=192.168.50.1/24 interface=vlan-pos', $script);
         $this->assertStringContainsString('/ip pool add name=pool-pos ranges=192.168.50.10-192.168.50.250', $script);
         $this->assertStringContainsString('/ip dhcp-server add name=dhcp-pos interface=vlan-pos address-pool=pool-pos', $script);
-        $this->assertStringContainsString('/ip hotspot profile add name=mms-pos-profile use-radius=yes login-by=mac radius-accounting=yes', $script);
+        $this->assertStringContainsString('/ip hotspot profile add name=mms-pos-profile use-radius=yes login-by=mac mac-auth-password="'.RadiusProvisioningService::POS_MAC_AUTH_PASSWORD.'" radius-accounting=yes', $script);
         $this->assertStringContainsString('/ip hotspot add name=mms-pos interface=vlan-pos address-pool=pool-pos profile=mms-pos-profile disabled=no', $script);
         $this->assertStringContainsString('place-before=[find action=drop in-interface-list=!WAN]', $script);
         // Deliberately no /radius add line -- POS shares the RADIUS client the
@@ -401,7 +402,7 @@ class MikroTikProvisioningServiceTest extends TestCase
         $this->assertStringContainsString('/queue type add name=pcq-hotspot-down kind=pcq', $script);
         $this->assertStringContainsString('Realtime voice/video small UDP upload', $script);
         $this->assertStringContainsString('MMS POS = WPA2/WPA3 SSID tagged VLAN 50', $script);
-        $this->assertStringContainsString('/ip hotspot profile add name=mms-pos-profile use-radius=yes login-by=mac radius-accounting=yes', $script);
+        $this->assertStringContainsString('/ip hotspot profile add name=mms-pos-profile use-radius=yes login-by=mac mac-auth-password="'.RadiusProvisioningService::POS_MAC_AUTH_PASSWORD.'" radius-accounting=yes', $script);
         $this->assertStringContainsString('/ip hotspot add name=mms-pos interface=vlan-pos address-pool=pool-pos profile=mms-pos-profile disabled=no', $script);
         $this->assertStringNotContainsString('# /ip hotspot profile add name=mms-pos-profile', $script);
         $this->assertStringContainsString('/system scheduler add name=mms-refresh-bandwidth interval=10m', $script);

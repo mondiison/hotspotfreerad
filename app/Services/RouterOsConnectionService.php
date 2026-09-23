@@ -615,16 +615,26 @@ class RouterOsConnectionService
 
         $existingProfileId = $this->existingHotspotProfileId($router, 'mms-pos-profile');
 
+        // mac-auth-password is set explicitly rather than left blank --
+        // confirmed live 2026-09-23 via freeradius -X that RouterOS's own
+        // "defaults to the client's MAC" blank behavior doesn't actually
+        // send a CHAP-hashable password matching the MAC in radcheck,
+        // rejecting every MAC-auth attempt ("password is incorrect") even
+        // though the username/group lookup succeeded. Matches the fixed
+        // value RadiusProvisioningService::provisionPosDevice() now stores
+        // as every POS device's Cleartext-Password.
         $profileQuery = $existingProfileId !== null
             ? (new Query('/ip/hotspot/profile/set'))
                 ->equal('numbers', $existingProfileId)
                 ->equal('use-radius', 'yes')
                 ->equal('login-by', 'mac')
+                ->equal('mac-auth-password', RadiusProvisioningService::POS_MAC_AUTH_PASSWORD)
                 ->equal('radius-accounting', 'yes')
             : (new Query('/ip/hotspot/profile/add'))
                 ->equal('name', 'mms-pos-profile')
                 ->equal('use-radius', 'yes')
                 ->equal('login-by', 'mac')
+                ->equal('mac-auth-password', RadiusProvisioningService::POS_MAC_AUTH_PASSWORD)
                 ->equal('radius-accounting', 'yes');
 
         $result = $this->runSteps($router, ['Add POS MAC-auth hotspot profile' => $profileQuery]);
