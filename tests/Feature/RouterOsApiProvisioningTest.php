@@ -349,9 +349,13 @@ class RouterOsApiProvisioningTest extends TestCase
 
         $result = app(RouterOsConnectionService::class)->provisionPos($router);
 
+        // Check POS VLAN infrastructure (ensurePosInfrastructure()'s own
+        // connection attempt to list what already exists), then the hotspot
+        // profile, then "point hotspot server".
         $this->assertFalse($result['success']);
-        $this->assertCount(2, $result['steps']);
+        $this->assertCount(3, $result['steps']);
         $labels = array_column($result['steps'], 'label');
+        $this->assertContains('Check POS VLAN infrastructure', $labels);
         $this->assertContains('Add POS MAC-auth hotspot profile', $labels);
         $this->assertContains('Point POS hotspot server at "mms-pos-profile"', $labels);
         $this->assertFalse($result['steps'][0]['success']);

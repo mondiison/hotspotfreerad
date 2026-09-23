@@ -293,13 +293,71 @@ class MikroTikProvisioningServiceTest extends TestCase
         $script = app(MikroTikProvisioningService::class)->generatePosScript($router);
 
         $this->assertStringContainsString('/interface wireguard add name=wg-saas listen-port=13231 mtu=1420 private-key="client-private-key"', $script);
+        $this->assertStringContainsString('/interface vlan add interface=bridge-lan name=vlan-pos vlan-id=50', $script);
+        $this->assertStringContainsString('/ip address add address=192.168.50.1/24 interface=vlan-pos', $script);
+        $this->assertStringContainsString('/ip pool add name=pool-pos ranges=192.168.50.10-192.168.50.250', $script);
+        $this->assertStringContainsString('/ip dhcp-server add name=dhcp-pos interface=vlan-pos address-pool=pool-pos', $script);
         $this->assertStringContainsString('/ip hotspot profile add name=mms-pos-profile use-radius=yes login-by=mac radius-accounting=yes', $script);
         $this->assertStringContainsString('/ip hotspot add name=mms-pos interface=vlan-pos address-pool=pool-pos profile=mms-pos-profile disabled=no', $script);
+        $this->assertStringContainsString('place-before=[find action=drop in-interface-list=!WAN]', $script);
         // Deliberately no /radius add line -- POS shares the RADIUS client the
         // Hotspot Script (or Bootstrap/Fresh Infrastructure scripts) already adds
         // for the "hotspot" service, adding a second one here would just be a
         // genuine duplicate RouterOS never dedupes on its own.
         $this->assertStringNotContainsString('/radius add', $script);
+    }
+
+    public function test_pos_script_includes_builtin_wifi_and_extra_ports_when_configured(): void
+    {
+        config([
+            'services.wireguard.endpoint_host' => 'vpn.example.com',
+            'services.wireguard.endpoint_port' => 13231,
+            'services.wireguard.public_key' => 'server-public-key',
+        ]);
+
+        $router = new Router([
+            'nas_identifier' => 'bebeji-router01',
+            'wireguard_internal_ip' => '10.8.0.11',
+            'shared_secret' => 'radius-secret',
+            'provisioning_settings' => [
+                'profile' => 'starlink_plaza',
+                'trunk_port' => 'ether4',
+                'builtin_wifi_interface' => 'wifi1',
+                'pos_ssid' => 'MMS POS',
+                'pos_wifi_password' => 'MmsPos2026!',
+                'extra_pos_ports' => 'ether7',
+                'enable_builtin_wifi' => true,
+                'enable_pos' => true,
+            ],
+        ]);
+
+        $script = app(MikroTikProvisioningService::class)->generatePosScript($router);
+
+        $this->assertStringContainsString('/interface wifi security add name=mms-pos-sec authentication-types=wpa2-psk,wpa3-psk passphrase="MmsPos2026!"', $script);
+        $this->assertStringContainsString('/interface wifi configuration add name=mms-pos-cfg mode=ap ssid="MMS POS" security=mms-pos-sec country=Nigeria', $script);
+        $this->assertStringContainsString('/interface wifi add name=wifi-pos master-interface=wifi1 configuration=mms-pos-cfg disabled=no', $script);
+        $this->assertStringContainsString('/interface bridge port add bridge=bridge-lan interface=wifi-pos pvid=50 comment="Virtual POS Wi-Fi for terminal testing"', $script);
+        $this->assertStringContainsString('/interface bridge port add bridge=bridge-lan interface=ether7 pvid=50 comment="Extra POS access port"', $script);
+        $this->assertStringContainsString('/interface bridge vlan add bridge=bridge-lan tagged=bridge-lan,ether4 untagged=wifi-pos,ether7 vlan-ids=50', $script);
+    }
+
+    public function test_pos_script_omits_wifi_lines_without_builtin_wifi(): void
+    {
+        $router = new Router([
+            'nas_identifier' => 'wired-router',
+            'wireguard_internal_ip' => '10.8.0.12',
+            'shared_secret' => 'radius-secret',
+            'provisioning_settings' => [
+                'enable_builtin_wifi' => false,
+                'enable_pos' => true,
+            ],
+        ]);
+
+        $script = app(MikroTikProvisioningService::class)->generatePosScript($router);
+
+        $this->assertStringNotContainsString('mms-pos-sec', $script);
+        $this->assertStringNotContainsString('mms-pos-cfg', $script);
+        $this->assertStringContainsString('/interface bridge vlan add bridge=bridge-lan tagged=bridge-lan,'.'ether2 vlan-ids=50', $script);
     }
 
     public function test_it_generates_a_fresh_infrastructure_script_for_starlink_plaza_networks(): void

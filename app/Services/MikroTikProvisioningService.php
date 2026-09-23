@@ -109,34 +109,97 @@ SCRIPT;
     }
 
     /**
-     * Deliberately does NOT add its own `/radius` client line, unlike
-     * generateScript()/generatePppoeScript() -- POS's hotspot server uses the
-     * "hotspot" RADIUS service, which generateScript()'s own line (or the
-     * Bootstrap/Fresh Infrastructure scripts) already covers, and RouterOS
-     * doesn't dedupe `/radius add` entries on its own. Also assumes vlan-pos/
-     * pool-pos already exist (Fresh Infrastructure Script's POS section) --
-     * unlike PPPoE's generic `bridge1` placeholder, these are fixed names
-     * this app always uses, not something meant to be hand-edited, so there's
-     * no safe generic fallback if they're missing; RouterOS will just reject
-     * the `/ip hotspot add` line with a clear "no such interface/pool" error.
+     * Confirmed live 2026-09-21 originally, and again 2026-09-23 from a
+     * router (bebeji-router01) where enable_pos was flipped on *after* Fresh
+     * Infrastructure Script had already been applied once: since that script
+     * is explicitly not safe to re-run (duplicates everything else already
+     * there), a router in that state had no VLAN/pool/DHCP for POS at all,
+     * and this script's own `/ip hotspot add ... interface=vlan-pos` line
+     * failed outright with "input does not match any value of interface" --
+     * confirmed only recoverable by hand-deriving and pasting the missing
+     * pieces individually. Fixed by making this script fully self-sufficient
+     * -- it now creates the VLAN interface, virtual POS Wi-Fi (when built-in
+     * Wi-Fi is enabled), any extra untagged POS ports, the bridge-vlan entry,
+     * and the IP/pool/DHCP objects itself, duplicating the equivalent lines
+     * in generateFreshInfrastructureScript()'s own POS section rather than
+     * extracting a shared helper -- refactoring that heavily-tested method
+     * carried more risk than the duplication does, and this codebase already
+     * accepts this same tradeoff elsewhere (see the walled-garden-host note
+     * in CLAUDE.md: "has to go in both places, they're not one shared source
+     * of truth"). Like Fresh Infrastructure Script itself, this is NOT
+     * idempotent -- do not paste it twice on a router that already has these
+     * objects (e.g. one whose Fresh Infrastructure Script already included
+     * POS), or it will create duplicates. Deliberately still does NOT add
+     * its own `/radius` client line, unlike generateScript()/
+     * generatePppoeScript() -- POS's hotspot server uses the "hotspot"
+     * RADIUS service, which generateScript()'s own line (or the Bootstrap/
+     * Fresh Infrastructure scripts) already covers, and RouterOS doesn't
+     * dedupe `/radius add` entries on its own.
      */
-    public function generatePosScript(Router $router): string
+    public function generatePosScript(Router $router, string $profile = 'starlink_plaza'): string
     {
         $nasIdentifier = $router->nas_identifier;
         $tunnelLines = implode("\n", array_merge($this->wireguardProvisioningLines($router), $this->zeroTierLines($router)));
         $apiUserLines = implode("\n", $this->apiUserProvisioningLines($router));
+        $settings = $this->provisioningSettings($router, $profile);
+        $lanBridgeName = 'bridge-lan';
+        $taggedPorts = $lanBridgeName.','.$settings['trunk_port'];
+        $enableBuiltinWifi = (bool) $settings['enable_builtin_wifi'];
+        $extraPosPorts = $this->extraPortInterfaces($settings, 'extra_pos_ports');
+
+        $wifiLines = $enableBuiltinWifi ? [
+            '/interface wifi security add name=mms-pos-sec authentication-types=wpa2-psk,wpa3-psk passphrase="'.$this->quote($settings['pos_wifi_password']).'"',
+            '/interface wifi configuration add name=mms-pos-cfg mode=ap ssid="'.$this->quote($settings['pos_ssid']).'" security=mms-pos-sec country=Nigeria',
+            '/interface wifi add name=wifi-pos master-interface='.$settings['builtin_wifi_interface'].' configuration=mms-pos-cfg disabled=no',
+            '/interface bridge port add bridge='.$lanBridgeName.' interface=wifi-pos pvid='.$settings['pos_vlan'].' comment="Virtual POS Wi-Fi for terminal testing"',
+        ] : [];
+
+        $extraPortLines = array_map(
+            fn (string $port): string => '/interface bridge port add bridge='.$lanBridgeName.' interface='.$port.' pvid='.$settings['pos_vlan'].' comment="Extra POS access port"',
+            $extraPosPorts
+        );
+
+        $untaggedMembers = implode(',', array_filter([$enableBuiltinWifi ? 'wifi-pos' : null, ...$extraPosPorts]));
+        $bridgeVlanLine = $untaggedMembers !== ''
+            ? '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' untagged='.$untaggedMembers.' vlan-ids='.$settings['pos_vlan']
+            : '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' vlan-ids='.$settings['pos_vlan'];
+
+        $infraLines = implode("\n", array_merge(
+            ['/interface vlan add interface='.$lanBridgeName.' name=vlan-pos vlan-id='.$settings['pos_vlan']],
+            $wifiLines,
+            $extraPortLines,
+            [$bridgeVlanLine],
+            [
+                '/ip address add address='.$settings['pos_gateway'].' interface=vlan-pos comment="POS SSID VLAN, registered devices, no shared customer password"',
+                '/ip pool add name=pool-pos ranges='.$settings['pos_pool'],
+                '/ip dhcp-server add name=dhcp-pos interface=vlan-pos address-pool=pool-pos lease-time=12h disabled=no',
+                '/ip dhcp-server network add address='.$settings['pos_network'].' gateway='.str($settings['pos_gateway'])->before('/').' dns-server='.str($settings['pos_gateway'])->before('/'),
+            ]
+        ));
 
         return <<<SCRIPT
 /system identity set name="{$nasIdentifier}"
 {$tunnelLines}
 {$apiUserLines}
-# Requires the POS VLAN already set up (Fresh Infrastructure Script's POS
-# section: vlan-pos interface + pool-pos address pool) and a RADIUS client
-# for the "hotspot" service already added (Hotspot Script tab, or the
-# Bootstrap/Fresh Infrastructure scripts) -- POS shares that RADIUS client,
-# so this script does not add a second one.
+# Creates the POS VLAN/Wi-Fi/ports/addressing -- NOT idempotent, same as the
+# Fresh Infrastructure Script itself. Do not paste this twice, or if this
+# router's Fresh Infrastructure Script has already included POS (enable_pos
+# was already on when it was last generated/applied).
+{$infraLines}
+# Requires a RADIUS client for the "hotspot" service already added (Hotspot
+# Script tab, or the Bootstrap/Fresh Infrastructure scripts) -- POS shares
+# that RADIUS client, so this script does not add a second one.
 /ip hotspot profile add name=mms-pos-profile use-radius=yes login-by=mac radius-accounting=yes
 /ip hotspot add name=mms-pos interface=vlan-pos address-pool=pool-pos profile=mms-pos-profile disabled=no
+# Best-effort firewall rules -- the input-chain accept is placed before this
+# router's own WAN-only catch-all input drop rule if one exists (confirmed
+# live 2026-09-23 this is required: RouterOS evaluates filter rules in list
+# order, and a plain `add` appends to the end, after that catch-all, where it
+# would never be reached). Not yet confirmed this `place-before=[find ...]`
+# syntax behaves safely on a router with no such catch-all rule at all.
+/ip firewall address-list add list=mms-pos-subnets address={$settings['pos_network']}
+/ip firewall filter add chain=input in-interface=vlan-pos protocol=tcp dst-port=80,443,64872-64875 action=accept comment="Allow POS MAC-auth hotspot services" place-before=[find action=drop in-interface-list=!WAN]
+/ip firewall filter add chain=forward src-address={$settings['pos_network']} dst-address=10.0.0.0/8 action=drop comment="POS cannot reach private client/management networks"
 SCRIPT;
     }
 
@@ -667,7 +730,15 @@ HTML;
         };
     }
 
-    private function provisioningSettings(Router $router, string $profile): array
+    /**
+     * Public so RouterOsConnectionService::ensurePosInfrastructure() can read
+     * the exact same defaulted pos_vlan/pos_gateway/pos_pool/pos_network
+     * values generatePosScript() itself uses, rather than a second, narrower
+     * copy of these defaults that could drift from this one -- the same
+     * "two places must not disagree" concern that's bitten this codebase
+     * before (see the SSID-defaults-array story elsewhere in CLAUDE.md).
+     */
+    public function provisioningSettings(Router $router, string $profile): array
     {
         $settings = array_filter(
             (array) $router->provisioning_settings,

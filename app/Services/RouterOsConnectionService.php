@@ -611,6 +611,8 @@ class RouterOsConnectionService
             return ['success' => true, 'steps' => []];
         }
 
+        $infraResult = $this->ensurePosInfrastructure($router);
+
         $existingProfileId = $this->existingHotspotProfileId($router, 'mms-pos-profile');
 
         $profileQuery = $existingProfileId !== null
@@ -626,12 +628,127 @@ class RouterOsConnectionService
                 ->equal('radius-accounting', 'yes');
 
         $result = $this->runSteps($router, ['Add POS MAC-auth hotspot profile' => $profileQuery]);
+        $result['steps'] = array_merge($infraResult['steps'], $result['steps']);
+        $result['success'] = $infraResult['success'] && $result['success'];
 
         $serverStep = $this->applyPosHotspotServer($router);
         $result['steps'][] = $serverStep;
         $result['success'] = $result['success'] && $serverStep['success'];
 
         return $result;
+    }
+
+    /**
+     * Confirmed live 2026-09-23 from a router (bebeji-router01) where
+     * enable_pos was flipped on *after* Fresh Infrastructure Script had
+     * already been applied once: since that script is explicitly not safe
+     * to re-run, the router had no vlan-pos interface, pool-pos, or POS DHCP
+     * server at all, and applyPosHotspotServer()'s `/ip/hotspot/add
+     * interface=vlan-pos` step failed outright with RouterOS's "input does
+     * not match any value of interface" -- previously only recoverable by
+     * hand-deriving and pasting the missing pieces individually on the
+     * router console. Closes that gap live over the API: an idempotent
+     * list-then-create of the VLAN interface, its IP address, the address
+     * pool, and the DHCP server/network -- the same objects
+     * generatePosScript() now also creates for the paste-by-hand path (see
+     * that method's own docblock). Reads the exact same defaulted settings
+     * generatePosScript() uses via MikroTikProvisioningService::
+     * provisioningSettings() (made public for exactly this) rather than a
+     * second, narrower copy that could drift from it.
+     *
+     * Deliberately scoped to just these four simple, uniquely-named objects
+     * -- each is a single "does an object with this name/interface already
+     * exist" check, safe to run on every provisionPos() call (including the
+     * unconditional one every 5-minute auto-provisioning cycle makes).
+     * Bridge-vlan table entries, the virtual POS Wi-Fi SSID, and extra
+     * untagged access ports are deliberately NOT auto-created here -- unlike
+     * these four, they can't be reduced to a single "does this exist"
+     * check without a much larger bridge-vlan reconciliation system (a
+     * bridge-vlan row can already exist covering other VLANs and just need
+     * POS's ID added to it, the same complexity generateFreshInfrastructureScript()'s
+     * own bridge-vlan-line logic has to handle for the paste-by-hand case).
+     * A router missing those still needs the Fresh Infrastructure Script
+     * (or generatePosScript()'s now-more-complete output) pasted by hand for
+     * that part.
+     *
+     * @return array{success: bool, steps: list<array{label: string, success: bool, error: ?string}>}
+     */
+    private function ensurePosInfrastructure(Router $router): array
+    {
+        $settings = $this->provisioning->provisioningSettings($router, (string) (((array) $router->provisioning_settings)['profile'] ?? 'starlink_plaza'));
+
+        $posVlan = (string) $settings['pos_vlan'];
+        $posGateway = (string) $settings['pos_gateway'];
+        $posNetwork = (string) $settings['pos_network'];
+        $posPool = (string) $settings['pos_pool'];
+        $posGatewayIp = str($posGateway)->before('/')->toString();
+
+        try {
+            $client = $this->client($router, 8);
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'steps' => [['label' => 'Check POS VLAN infrastructure', 'success' => false, 'error' => $e->getMessage()]],
+            ];
+        }
+
+        $steps = [];
+
+        $vlanExists = collect($client->query(new Query('/interface/vlan/print'))->read())
+            ->contains(fn ($row) => is_array($row) && ($row['name'] ?? null) === 'vlan-pos');
+
+        if (! $vlanExists) {
+            $steps['Create POS VLAN interface'] = (new Query('/interface/vlan/add'))
+                ->equal('interface', 'bridge-lan')
+                ->equal('name', 'vlan-pos')
+                ->equal('vlan-id', $posVlan);
+        }
+
+        $addressExists = collect($client->query(new Query('/ip/address/print'))->read())
+            ->contains(fn ($row) => is_array($row) && ($row['interface'] ?? null) === 'vlan-pos');
+
+        if (! $addressExists) {
+            $steps['Create POS VLAN IP address'] = (new Query('/ip/address/add'))
+                ->equal('address', $posGateway)
+                ->equal('interface', 'vlan-pos');
+        }
+
+        $poolExists = collect($client->query(new Query('/ip/pool/print'))->read())
+            ->contains(fn ($row) => is_array($row) && ($row['name'] ?? null) === 'pool-pos');
+
+        if (! $poolExists) {
+            $steps['Create POS address pool'] = (new Query('/ip/pool/add'))
+                ->equal('name', 'pool-pos')
+                ->equal('ranges', $posPool);
+        }
+
+        $dhcpServerExists = collect($client->query(new Query('/ip/dhcp-server/print'))->read())
+            ->contains(fn ($row) => is_array($row) && ($row['name'] ?? null) === 'dhcp-pos');
+
+        if (! $dhcpServerExists) {
+            $steps['Create POS DHCP server'] = (new Query('/ip/dhcp-server/add'))
+                ->equal('name', 'dhcp-pos')
+                ->equal('interface', 'vlan-pos')
+                ->equal('address-pool', 'pool-pos')
+                ->equal('lease-time', '12h')
+                ->equal('disabled', 'no');
+        }
+
+        $dhcpNetworkExists = collect($client->query(new Query('/ip/dhcp-server/network/print'))->read())
+            ->contains(fn ($row) => is_array($row) && ($row['address'] ?? null) === $posNetwork);
+
+        if (! $dhcpNetworkExists) {
+            $steps['Create POS DHCP network'] = (new Query('/ip/dhcp-server/network/add'))
+                ->equal('address', $posNetwork)
+                ->equal('gateway', $posGatewayIp)
+                ->equal('dns-server', $posGatewayIp);
+        }
+
+        if ($steps === []) {
+            return ['success' => true, 'steps' => []];
+        }
+
+        return $this->runSteps($router, $steps);
     }
 
     /**
