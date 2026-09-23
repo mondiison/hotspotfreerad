@@ -973,6 +973,23 @@ class RouterOsConnectionService
      * confirmed" caveat this file already carries for other freshly-added
      * RouterOS behavior.
      *
+     * Confirmed live 2026-09-23: on a router where enable_staff/
+     * enable_builtin_wifi were both on but the wireless SSID itself had
+     * never actually been pasted (only the VLAN/pool/DHCP infrastructure had,
+     * via ensureStaffInfrastructure()'s own live create step), this used to
+     * attempt the `/interface/wifi/access-list/add` below anyway and let
+     * RouterOS reject it with a raw, unhelpful "input does not match any
+     * value of interface" -- true, but the actual list-then-diff design
+     * intentionally never creates the wireless SSID itself live (see this
+     * method's own docblock above and provisionStaffWifi()'s), so this
+     * failure mode was always expected, just not reported clearly. Now
+     * checks the interface's actual live existence first via
+     * `/interface/wifi/print` and fails fast with an actionable message
+     * instead of a confusing RouterOS trap -- the config-level
+     * enable_builtin_wifi/enable_staff/enable_mgmt_wifi toggles only say
+     * whether a wireless SSID is *supposed* to exist, not whether it
+     * *actually* does yet on this specific router.
+     *
      * @return array{label: string, success: bool, error: ?string}
      */
     private function syncWifiAccessList(Router $router, string $interfaceName, string $ssidLabel, string $network): array
@@ -981,6 +998,17 @@ class RouterOsConnectionService
 
         try {
             $client = $this->client($router, 8);
+
+            $interfaceExists = collect($client->query(new Query('/interface/wifi/print'))->read())
+                ->contains(fn ($row) => is_array($row) && ($row['name'] ?? null) === $interfaceName);
+
+            if (! $interfaceExists) {
+                return [
+                    'label' => $label,
+                    'success' => false,
+                    'error' => "The {$ssidLabel} Wi-Fi interface ({$interfaceName}) doesn't exist on this router yet -- paste the wireless SSID lines from the Staff Script tab (security, configuration, interface, and bridge port) first, then retry.",
+                ];
+            }
 
             $existingIds = collect($client->query(new Query('/interface/wifi/access-list/print'))->read())
                 ->filter(fn ($row) => is_array($row) && ($row['interface'] ?? null) === $interfaceName)
