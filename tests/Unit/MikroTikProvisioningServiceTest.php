@@ -508,6 +508,39 @@ class MikroTikProvisioningServiceTest extends TestCase
         $this->assertStringContainsString('untagged=wifi-staff,ether6 vlan-ids=30', $script);
     }
 
+    public function test_custom_hotspot_and_pos_ssid_flow_into_the_builtin_wifi_script(): void
+    {
+        config([
+            'app.url' => 'https://mmsradius.com',
+            'services.radius.server_ip' => '10.8.0.1',
+            'services.wireguard.endpoint_host' => 'vpn.example.com',
+            'services.wireguard.endpoint_port' => 13231,
+            'services.wireguard.public_key' => 'server-public-key',
+            'services.mikrotik.hotspot_dns_name' => 'hotspot.local',
+        ]);
+
+        $router = new Router([
+            'nas_identifier' => 'ssid-test-router',
+            'wireguard_internal_ip' => '10.8.0.40',
+            'shared_secret' => 'radius-secret',
+            'provisioning_settings' => [
+                'profile' => 'small_hotspot',
+                'enable_builtin_wifi' => true,
+                'hotspot_ssid' => 'Cafe Free WiFi',
+                'pos_ssid' => 'Cafe Till',
+            ],
+        ]);
+
+        $script = app(MikroTikProvisioningService::class)->generateFreshInfrastructureScript($router);
+
+        $this->assertStringContainsString('ssid="Cafe Free WiFi" security=mms-open-hotspot-sec', $script);
+        $this->assertStringContainsString('ssid="Cafe Till" security=mms-pos-sec', $script);
+        $this->assertStringContainsString('# Cafe Free WiFi = open SSID tagged VLAN', $script);
+        $this->assertStringContainsString('# Cafe Till = WPA2/WPA3 SSID tagged VLAN', $script);
+        $this->assertStringNotContainsString('ssid="MMS Hotspot"', $script);
+        $this->assertStringNotContainsString('ssid="MMS POS"', $script);
+    }
+
     public function test_fresh_infrastructure_script_uses_router_specific_settings(): void
     {
         config([

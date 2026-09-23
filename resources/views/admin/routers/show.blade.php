@@ -206,6 +206,8 @@ sudo freeradius -X</code></pre>
                 </flux:tab.panel>
 
                 <flux:tab.panel name="hotspot" class="space-y-6">
+                    <livewire:admin.router-network-settings-card :router="$router" network="hotspot" :key="'hotspot-settings-'.$router->id" />
+
                     <section class="min-w-0 overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm">
                         <div class="border-b border-zinc-200 dark:border-zinc-700 px-5 py-4">
                             <div class="flex flex-col justify-between gap-3 md:flex-row md:items-start">
@@ -214,10 +216,26 @@ sudo freeradius -X</code></pre>
                                     <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Paste this into MikroTik RouterOS terminal after confirming the config values, or apply it live over the API once the Bootstrap Script (Overview tab) has run.</p>
                                 </div>
                                 @if ($router->api_username)
-                                    <form method="POST" action="{{ route('admin.routers.provision-hotspot', $router) }}" onsubmit="return confirm('This pushes the RADIUS client, hotspot profile, walled-garden entries, and the hotspot login page to the router live over the API. Continue?');">
-                                        @csrf
-                                        <button type="submit" class="rounded-md border border-zinc-200 dark:border-zinc-700 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-zinc-50 dark:hover:bg-zinc-800">Provision via API</button>
-                                    </form>
+                                    <flux:modal.trigger name="provision-hotspot-confirm">
+                                        <button type="button" class="rounded-md border border-zinc-200 dark:border-zinc-700 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-zinc-50 dark:hover:bg-zinc-800">Provision via API</button>
+                                    </flux:modal.trigger>
+                                    <flux:modal name="provision-hotspot-confirm" class="md:w-lg" :dismissible="true">
+                                        <div class="space-y-5">
+                                            <div>
+                                                <flux:heading size="lg">Provision hotspot via API</flux:heading>
+                                                <flux:text class="mt-2">This pushes the RADIUS client, hotspot profile, walled-garden entries, and the hotspot login page to the router live over the API.</flux:text>
+                                            </div>
+                                            <div class="flex justify-end gap-3">
+                                                <flux:modal.close>
+                                                    <flux:button type="button" variant="ghost">Cancel</flux:button>
+                                                </flux:modal.close>
+                                                <form method="POST" action="{{ route('admin.routers.provision-hotspot', $router) }}">
+                                                    @csrf
+                                                    <flux:button type="submit" variant="primary">Provision via API</flux:button>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </flux:modal>
                                 @endif
                             </div>
                         </div>
@@ -242,10 +260,26 @@ sudo freeradius -X</code></pre>
                                     <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Use this when this router will serve PPPoE subscribers instead of, or alongside, hotspot users. Package bandwidth is applied by RADIUS, so the router profile should remain generic. Or apply it live over the API once the Bootstrap Script (Overview tab) has run.</p>
                                 </div>
                                 @if ($router->api_username)
-                                    <form method="POST" action="{{ route('admin.routers.provision-pppoe', $router) }}" onsubmit="return confirm('This pushes the RADIUS client, PPP/RADIUS settings, profile, and PPPoE server to the router live over the API. Continue?');">
-                                        @csrf
-                                        <button type="submit" class="rounded-md border border-zinc-200 dark:border-zinc-700 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-zinc-50 dark:hover:bg-zinc-800">Provision via API</button>
-                                    </form>
+                                    <flux:modal.trigger name="provision-pppoe-confirm">
+                                        <button type="button" class="rounded-md border border-zinc-200 dark:border-zinc-700 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-zinc-50 dark:hover:bg-zinc-800">Provision via API</button>
+                                    </flux:modal.trigger>
+                                    <flux:modal name="provision-pppoe-confirm" class="md:w-lg" :dismissible="true">
+                                        <div class="space-y-5">
+                                            <div>
+                                                <flux:heading size="lg">Provision PPPoE via API</flux:heading>
+                                                <flux:text class="mt-2">This pushes the RADIUS client, PPP/RADIUS settings, profile, and PPPoE server to the router live over the API.</flux:text>
+                                            </div>
+                                            <div class="flex justify-end gap-3">
+                                                <flux:modal.close>
+                                                    <flux:button type="button" variant="ghost">Cancel</flux:button>
+                                                </flux:modal.close>
+                                                <form method="POST" action="{{ route('admin.routers.provision-pppoe', $router) }}">
+                                                    @csrf
+                                                    <flux:button type="submit" variant="primary">Provision via API</flux:button>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </flux:modal>
                                 @endif
                             </div>
                         </div>
@@ -287,6 +321,8 @@ sudo freeradius -X</code></pre>
                 </flux:tab.panel>
 
                 <flux:tab.panel name="pos" class="space-y-6">
+                    <livewire:admin.router-network-settings-card :router="$router" network="pos" :key="'pos-settings-'.$router->id" />
+
                     <section class="min-w-0 overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm">
                         <div class="border-b border-zinc-200 dark:border-zinc-700 px-5 py-4">
                             <div class="flex flex-col justify-between gap-3 md:flex-row md:items-start">
@@ -295,10 +331,26 @@ sudo freeradius -X</code></pre>
                                     <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Binds the POS SSID to MAC-auth against MMS Radius -- only a MAC address registered and active in POS Devices gets past this VLAN, even though every device shares the same Wi-Fi password to associate. Requires the POS VLAN already set up (Fresh Infrastructure Script tab) and the Hotspot Script already applied at least once for its shared RADIUS client. Apply live over the API independently of the Hotspot/PPPoE scripts, or paste by hand.</p>
                                 </div>
                                 @if ($router->api_username)
-                                    <form method="POST" action="{{ route('admin.routers.provision-pos', $router) }}" onsubmit="return confirm('This pushes only the POS MAC-auth hotspot profile and server to the router live over the API -- it does not touch the customer hotspot or PPPoE. Continue?');">
-                                        @csrf
-                                        <button type="submit" class="rounded-md border border-zinc-200 dark:border-zinc-700 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-zinc-50 dark:hover:bg-zinc-800">Provision via API</button>
-                                    </form>
+                                    <flux:modal.trigger name="provision-pos-confirm">
+                                        <button type="button" class="rounded-md border border-zinc-200 dark:border-zinc-700 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-zinc-50 dark:hover:bg-zinc-800">Provision via API</button>
+                                    </flux:modal.trigger>
+                                    <flux:modal name="provision-pos-confirm" class="md:w-lg" :dismissible="true">
+                                        <div class="space-y-5">
+                                            <div>
+                                                <flux:heading size="lg">Provision POS via API</flux:heading>
+                                                <flux:text class="mt-2">This pushes only the POS MAC-auth hotspot profile and server to the router live over the API -- it does not touch the customer hotspot or PPPoE.</flux:text>
+                                            </div>
+                                            <div class="flex justify-end gap-3">
+                                                <flux:modal.close>
+                                                    <flux:button type="button" variant="ghost">Cancel</flux:button>
+                                                </flux:modal.close>
+                                                <form method="POST" action="{{ route('admin.routers.provision-pos', $router) }}">
+                                                    @csrf
+                                                    <flux:button type="submit" variant="primary">Provision via API</flux:button>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </flux:modal>
                                 @endif
                             </div>
                         </div>

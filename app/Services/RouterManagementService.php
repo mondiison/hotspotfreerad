@@ -78,6 +78,8 @@ class RouterManagementService
             'provisioning_settings.extra_staff_ports' => ['nullable', 'string', 'max:200'],
             'provisioning_settings.extra_pos_ports' => ['nullable', 'string', 'max:200'],
             'provisioning_settings.builtin_wifi_interface' => ['required_if:provisioning_settings.enable_builtin_wifi,true', 'nullable', 'string', 'max:40'],
+            'provisioning_settings.hotspot_ssid' => ['nullable', 'string', 'max:32'],
+            'provisioning_settings.pos_ssid' => ['nullable', 'string', 'max:32'],
             'provisioning_settings.staff_wifi_password' => [
                 Rule::requiredIf(fn () => (bool) data_get($provisioningSettings, 'enable_builtin_wifi') && (bool) data_get($provisioningSettings, 'enable_staff')),
                 'nullable', 'string', 'min:8', 'max:63',
@@ -360,6 +362,8 @@ class RouterManagementService
             'extra_staff_ports' => '',
             'extra_pos_ports' => '',
             'builtin_wifi_interface' => 'wifi1',
+            'hotspot_ssid' => 'MMS Hotspot',
+            'pos_ssid' => 'MMS POS',
             'staff_wifi_password' => 'MmsStaff2026!',
             'pos_wifi_password' => 'MmsPos2026!',
             'mgmt_wifi_password' => 'MmsMgmt2026!',
@@ -471,8 +475,14 @@ class RouterManagementService
      * port number higher than the total port count, and rejects two roles sharing a port.
      * No-ops in advanced mode (raw interface-name strings aren't port-count-bound) or when
      * port_count itself hasn't been submitted yet.
+     *
+     * Public so a scoped single-section editor (e.g. App\Livewire\Admin\RouterNetworkSettingsCard,
+     * which only edits one network's extra-ports field at a time) can run the exact same
+     * conflict check the full wizard does -- built against a copy of the router's full
+     * existing provisioning_settings with just that one field overridden, rather than
+     * re-implementing a second, narrower conflict check that could drift from this one.
      */
-    private function portConflictRule(array $provisioningSettings): Closure
+    public function portConflictRule(array $provisioningSettings): Closure
     {
         return function (string $attribute, mixed $value, Closure $fail) use ($provisioningSettings): void {
             if (($provisioningSettings['ports_advanced_mode'] ?? false) || blank($value)) {
