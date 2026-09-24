@@ -469,6 +469,64 @@ class HotspotPortalTest extends TestCase
         $this->assertSame('tenant', data_get($payment->payload, 'flutterwave_account.source'));
     }
 
+    /**
+     * USSD and NQR (2026-09-24, direct request for Nigeria-relevant methods
+     * beyond OPay/Transfer/Card) reuse the exact same v4 direct-charge
+     * mechanism as OPay -- only `payment_method.type` differs -- rather than
+     * needing their own payload building.
+     */
+    public function test_payment_step_redirects_to_flutterwave_for_ussd(): void
+    {
+        $this->assertRedirectsToFlutterwaveForMethod('ussd');
+    }
+
+    public function test_payment_step_redirects_to_flutterwave_for_nqr(): void
+    {
+        $this->assertRedirectsToFlutterwaveForMethod('nqr');
+    }
+
+    private function assertRedirectsToFlutterwaveForMethod(string $method): void
+    {
+        $this->configureFlutterwave();
+        config(['services.flutterwave.default_payment_method' => null]);
+        Http::fake([
+            'idp.flutterwave.com/*' => Http::response([
+                'access_token' => 'FLW_V4_TOKEN',
+                'expires_in' => 600,
+            ]),
+            'developersandbox-api.flutterwave.com/orchestration/direct-charges' => Http::response([
+                'status' => 'success',
+                'data' => [
+                    'id' => 'chg_'.$method,
+                    'reference' => 'pending',
+                    'next_action' => [
+                        'type' => 'redirect_url',
+                        'redirect_url' => [
+                            'url' => "https://developer-sandbox-ui-sit.flutterwave.cloud/redirects/{$method}/demo",
+                        ],
+                    ],
+                ],
+            ]),
+        ]);
+        [$router, $package] = $this->routerWithPackage();
+        $router->shop->update([
+            'flutterwave_client_id' => 'tenant-client-id',
+            'flutterwave_client_secret' => 'tenant-client-secret',
+        ]);
+
+        $this->post(route('hotspot.pay'), [
+            'mac' => 'AA:BB:CC:DD:EE:FF',
+            'nasid' => $router->nas_identifier,
+            'package_id' => $package->id,
+            'email' => 'customer@example.com',
+            'payment_method' => $method,
+        ])
+            ->assertRedirect("https://developer-sandbox-ui-sit.flutterwave.cloud/redirects/{$method}/demo");
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/orchestration/direct-charges')
+            && data_get($request->data(), 'payment_method.type') === $method);
+    }
+
     public function test_payment_step_rejects_legacy_bank_transfer_method_value(): void
     {
         [$router, $package] = $this->routerWithPackage();

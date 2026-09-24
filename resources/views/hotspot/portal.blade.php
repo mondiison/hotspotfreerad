@@ -188,7 +188,7 @@
                                     <legend class="mb-2 text-xs font-medium text-zinc-500">Pay with</legend>
                                     @if ($gatewayKey === \App\Support\PaymentGatewayCatalog::FLUTTERWAVE)
                                         <div class="grid grid-cols-3 gap-2">
-                                            @foreach ([['opay', 'OPay', true], ['bank_transfer', 'Transfer', false], ['card', 'Card', false]] as [$methodValue, $methodLabel, $methodSelected])
+                                            @foreach ([['opay', 'OPay', true], ['bank_transfer', 'Transfer', false], ['card', 'Card', false], ['ussd', 'USSD', false], ['nqr', 'QR', false]] as [$methodValue, $methodLabel, $methodSelected])
                                                 <label class="cursor-pointer">
                                                     <input type="radio" name="payment_method" value="{{ $methodValue }}" class="peer sr-only" @checked($methodSelected)>
                                                     <span class="grid min-h-9 place-items-center rounded-md border border-zinc-200 px-2 text-center text-xs font-medium text-zinc-600 transition peer-checked:border-zinc-950 peer-checked:bg-zinc-950 peer-checked:text-white">

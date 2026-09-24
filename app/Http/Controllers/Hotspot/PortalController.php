@@ -14,8 +14,8 @@ use App\Services\HotspotPaymentConfirmationService;
 use App\Services\ManualBankTransferService;
 use App\Services\MikroTikProvisioningService;
 use App\Services\MonnifyService;
-use App\Services\PaystackService;
 use App\Services\Payments\HotspotHostedCheckoutManager;
+use App\Services\PaystackService;
 use App\Services\RadiusProvisioningService;
 use App\Services\SquadService;
 use App\Services\StripeService;
@@ -225,7 +225,7 @@ class PortalController extends Controller
             'package_id' => ['required', 'integer', 'exists:packages,id'],
             'email' => ['nullable', 'email', 'max:255'],
             'phone' => ['nullable', 'string', 'max:255'],
-            'payment_method' => ['nullable', 'string', 'in:opay,bank_transfer,card'],
+            'payment_method' => ['nullable', 'string', 'in:opay,bank_transfer,card,ussd,nqr'],
             'link-login' => ['nullable', 'string', 'max:2048'],
             'link-login-only' => ['nullable', 'string', 'max:2048'],
             'link-orig' => ['nullable', 'string', 'max:2048'],
@@ -423,7 +423,17 @@ class PortalController extends Controller
                     ]);
                 }
 
-                if ($paymentMethod === 'opay') {
+                // OPay, USSD, and NQR (Nigeria QR) all go through the same v4
+                // orchestration direct-charge endpoint, differing only in
+                // `payment_method.type` (FlutterwaveService::paymentMethodType()
+                // passes $paymentMethod straight through) -- Flutterwave's hosted
+                // redirect page is what actually renders the USSD dial code or QR
+                // image, the same way it already renders OPay's own flow, so this
+                // reuses the exact mechanism already proven working for OPay rather
+                // than needing a method-specific payload. USSD/NQR themselves are
+                // not yet confirmed against a live checkout, matching this
+                // codebase's honesty pattern for other freshly-added integrations.
+                if (in_array($paymentMethod, ['opay', 'ussd', 'nqr'], true)) {
                     $checkout = $flutterwave->initializeCheckout(
                         $payment,
                         [
@@ -451,7 +461,7 @@ class PortalController extends Controller
                     Log::warning('Flutterwave checkout response missing redirect URL', [
                         'payment_id' => $payment->id,
                         'tx_ref' => $payment->tx_ref,
-                        'payment_method' => 'opay',
+                        'payment_method' => $paymentMethod,
                         'response_body' => $checkout['response'] ?? null,
                     ]);
 
@@ -744,7 +754,7 @@ class PortalController extends Controller
         VerifyHotspotPaymentWebhook::dispatch(
             $payment->id,
             (string) $providerReference,
-                $this->paymentResourceType((string) $providerReference, data_get($payload, 'event') ?: data_get($payload, 'eventType'))
+            $this->paymentResourceType((string) $providerReference, data_get($payload, 'event') ?: data_get($payload, 'eventType'))
         );
 
         return response('ok', 200);
