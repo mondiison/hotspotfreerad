@@ -160,12 +160,39 @@ If a device shows up on the network that this command doesn't recognize (a typo,
 ## If something goes wrong
 
 - **`listnetworks` still shows `ACCESS_DENIED` after running the approve command in Step 4** — re-run the approve command and actually read what it prints back this time. It should echo `"authorized":true`. If it instead comes back `"authorized":false`, the approval didn't take — the most common cause is a stray `"config"` wrapper around the fields (some older copies of this doc showed `-d '{"config": {"authorized": true, ...}}'`, which ZeroTier silently ignores instead of rejecting). The command above sends `"authorized"`/`"ipAssignments"` directly at the top level of the JSON body — no wrapper.
-- **"ZeroTier controller auth token not readable" / `Permission denied` reading `authtoken.secret`** — confirmed live: this file is root-only (`0600 root:root`) by default, and the app (running as `www-data`) can't read it as-is. Fix it with:
+- **"ZeroTier controller auth token not readable" / `Permission denied` reading `authtoken.secret`** — confirmed live: this file is root-only (`0600 root:root`) by default, and the app (running as `www-data`) can't read it as-is. The one-time fix:
   ```bash
   sudo chgrp www-data /var/lib/zerotier-one/authtoken.secret
   sudo chmod 640 /var/lib/zerotier-one/authtoken.secret
   ```
-  Confirm it worked with `sudo -u www-data cat /var/lib/zerotier-one/authtoken.secret` — it should print the token, not an error. If `zerotier-one` is ever upgraded or reinstalled, it may recreate this file with the default root-only permissions again, so this may need to be re-applied after that.
+  Confirm it worked with `sudo -u www-data cat /var/lib/zerotier-one/authtoken.secret` — it should print the token, not an error.
+
+  `zerotier-one` recreates this file with default root-only permissions every time the package is upgraded/reinstalled, silently breaking `hotspot:sync-zerotier-members`/"Authorize & connect now" again until the two commands above are re-run. **Don't automate this with a `systemd-tmpfiles` `z` rule wired into `zerotier-one.service`'s `ExecStartPost`** — confirmed live 2026-09-24: this took the *entire* `zerotier-one` service down for about two months, not just the permission fix. `/var/lib/zerotier-one` (owned by the `zerotier-one` service account) and `authtoken.secret` inside it (owned by `root`) have different owners, and a systemd hardening check (`Detected unsafe path transition ... during canonicalization`) refuses to let `systemd-tmpfiles` cross that ownership boundary at all — it doesn't matter what the rule itself requests, path resolution fails before the rule ever runs, the `ExecStartPost` step exits non-zero, and systemd tears down the whole unit as a result, including the already-running main daemon. If you want this reapplied automatically after every upgrade instead of remembering to run the two commands by hand, use a plain shell script instead of `systemd-tmpfiles` — a direct `chgrp`/`chmod` doesn't trigger this same tmpfiles-specific path-canonicalization check:
+  ```bash
+  sudo tee /usr/local/sbin/hotspotfreerad-fix-zerotier-authtoken > /dev/null <<'EOF'
+  #!/bin/sh
+  # Reapplies group/permissions on authtoken.secret so www-data can read it
+  # for the app's ZeroTier controller-API calls. Always exits 0 -- this is a
+  # convenience for that, never something that should be able to take the
+  # core tunnel daemon itself down (see the systemd-tmpfiles outage above).
+  FILE=/var/lib/zerotier-one/authtoken.secret
+  if [ -f "$FILE" ]; then
+      chgrp www-data "$FILE"
+      chmod 640 "$FILE"
+  fi
+  exit 0
+  EOF
+  sudo chmod 755 /usr/local/sbin/hotspotfreerad-fix-zerotier-authtoken
+
+  sudo mkdir -p /etc/systemd/system/zerotier-one.service.d
+  sudo tee /etc/systemd/system/zerotier-one.service.d/override.conf > /dev/null <<'EOF'
+  [Service]
+  ExecStartPost=/usr/local/sbin/hotspotfreerad-fix-zerotier-authtoken
+  EOF
+  sudo systemctl daemon-reload
+  sudo systemctl restart zerotier-one
+  ```
+  This script deliberately always exits `0` even if the file is missing or the `chgrp`/`chmod` calls fail, so a permission hiccup can never again cascade into the whole tunnel daemon being torn down — worst case, the app's controller-API calls fail until someone notices and fixes it by hand, exactly like before this script existed.
 - **A router's ID never gets approved** — double-check the ID saved on the router record in HotspotFreeRAD matches exactly what `/zerotier print` shows on the router. A single wrong character means you're approving an ID that doesn't exist, while the real one waits forever.
 - **A router still shows `ACCESS_DENIED` on `/zerotier interface print` even after its node ID was authorized (either by the scheduled sync or the "Authorize & connect now" button)** — confirmed live 2026-09-21: this can genuinely happen with a router that joined the network *before* it was authorized (the normal order for a fresh/reset router), because RouterOS caches that denial on the interface and never re-checks on its own. As of the same date, both the "Authorize & connect now" button and every "Provision via API"/`hotspot:auto-provision-routers` run now detect this and automatically remove and re-add the interface to force a fresh check — give it one more cycle (or click "Authorize & connect now" again) before troubleshooting further by hand. If you do need to do it manually on the router console:
   ```
