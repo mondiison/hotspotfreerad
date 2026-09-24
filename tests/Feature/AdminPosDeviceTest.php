@@ -80,6 +80,30 @@ class AdminPosDeviceTest extends TestCase
         ]);
     }
 
+    /**
+     * 2026-09-24: "Expires at" used to be a blank field an admin had to
+     * either leave empty (silently falling back to the package's uptime in
+     * PosDeviceManagementService::normalize()) or manually calculate
+     * themselves. Selecting a package now reactively fills it in with
+     * starts_at + that package's own limit_uptime_seconds, still editable
+     * afterward for a custom expiry.
+     */
+    public function test_selecting_a_package_auto_calculates_expires_at(): void
+    {
+        [$user, $shop, $package] = $this->tenantSetup();
+
+        $component = Livewire::actingAs($user)
+            ->test(PosDevicesIndex::class)
+            ->set('starts_at', '2026-01-01T00:00')
+            ->set('package_id', (string) $package->id);
+
+        $this->assertSame('2026-01-31T00:00', $component->get('expires_at'));
+
+        $component->set('starts_at', '2026-02-01T00:00');
+
+        $this->assertSame('2026-03-03T00:00', $component->get('expires_at'));
+    }
+
     public function test_renew_extends_pos_device_and_keeps_radius_synced(): void
     {
         [$user, $shop, $package] = $this->tenantSetup();

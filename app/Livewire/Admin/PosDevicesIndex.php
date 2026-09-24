@@ -7,6 +7,7 @@ use App\Models\PosDevice;
 use App\Models\Shop;
 use App\Services\PosDeviceManagementService;
 use App\Support\TenantAccess;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
@@ -71,6 +72,42 @@ class PosDevicesIndex extends Component
     public function updatedShopId(): void
     {
         $this->package_id = '';
+    }
+
+    /**
+     * Reactively derives "Expires at" from the selected package's own
+     * uptime duration, the same starts_at + limit_uptime_seconds math
+     * PosDeviceManagementService::normalize() already falls back to when
+     * expires_at is left blank -- this just makes that calculation visible
+     * and automatic in the form instead of a silent default an admin has
+     * to discover by leaving the field empty. Still a plain input
+     * afterward, so a custom expiry can be typed in to override it.
+     */
+    public function updatedPackageId(): void
+    {
+        $this->recalculateExpiry();
+    }
+
+    public function updatedStartsAt(): void
+    {
+        $this->recalculateExpiry();
+    }
+
+    private function recalculateExpiry(): void
+    {
+        if (blank($this->package_id)) {
+            return;
+        }
+
+        $package = Package::find($this->package_id);
+
+        if (! $package) {
+            return;
+        }
+
+        $startsAt = filled($this->starts_at) ? Carbon::parse($this->starts_at) : now();
+
+        $this->expires_at = $startsAt->copy()->addSeconds((int) $package->limit_uptime_seconds)->format('Y-m-d\TH:i');
     }
 
     public function create(): void

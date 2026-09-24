@@ -150,7 +150,7 @@
 
                 <flux:field>
                     <flux:label>POS package</flux:label>
-                    <flux:select wire:model="package_id" required>
+                    <flux:select wire:model.live="package_id" required>
                         <option value="">Select hotspot-capable package</option>
                         @foreach ($packages as $package)
                             <option value="{{ $package->id }}">{{ $package->name }} / {{ $package->speed_limit_profile }}</option>
@@ -193,14 +193,14 @@
 
                 <flux:field>
                     <flux:label>Starts at</flux:label>
-                    <flux:input type="datetime-local" wire:model="starts_at" />
+                    <flux:input type="datetime-local" wire:model.live="starts_at" />
                     <flux:error name="starts_at" />
                 </flux:field>
 
                 <flux:field>
                     <flux:label>Expires at</flux:label>
                     <flux:input type="datetime-local" wire:model="expires_at" />
-                    <flux:description>Leave blank to calculate from the package uptime.</flux:description>
+                    <flux:description>Auto-calculated from the selected package's duration once you pick a package -- edit it directly if this device needs a custom expiry.</flux:description>
                     <flux:error name="expires_at" />
                 </flux:field>
 
