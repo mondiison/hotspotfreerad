@@ -229,6 +229,54 @@ class AdminPaymentSettingsTest extends TestCase
         $this->assertSame('livewire-webhook-secret', $shop->flutterwave_webhook_secret);
     }
 
+    /**
+     * Regression test for a 2026-09-24 live report: the rendered form's
+     * Flutterwave credential inputs are bound to gateway_settings.{field}
+     * (PaymentSettingsCard's generic per-gateway field loop -- the same
+     * binding every other gateway already uses), never directly to the
+     * dedicated flutterwave_* Livewire properties. PaymentSettingsService::
+     * updates() used `??` to fall back from those dedicated properties to
+     * gateway_settings, but `??` only triggers on null, and the dedicated
+     * properties are always an empty string (never null) since nothing
+     * binds to them -- so a credential typed into the real form field could
+     * never actually reach the encrypted shop columns FlutterwaveService
+     * reads from, no matter how many times it was saved. The other test
+     * above (saves_credentials) exercises the dedicated properties directly
+     * and was passing the whole time, masking this -- it doesn't reflect
+     * what the real form actually submits.
+     */
+    public function test_livewire_payment_settings_card_saves_flutterwave_credentials_via_the_real_form_fields(): void
+    {
+        [$tenant] = $this->tenants();
+        $shop = $this->shop($tenant, 'Real Form Shop', false)->load('tenant');
+        $shop->payments_count = 0;
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user);
+
+        Livewire::test(PaymentSettingsCard::class, ['shop' => $shop])
+            ->set('gateway_settings.client_id', 'real-form-client-id')
+            ->set('gateway_settings.client_secret', 'real-form-client-secret')
+            ->set('gateway_settings.secret_key', 'FLWSECK_TEST-real-form-secret-key')
+            ->set('gateway_settings.webhook_secret', 'real-form-webhook-secret')
+            ->call('save')
+            ->assertHasNoErrors()
+            ->assertSee('OPay/transfer ready')
+            ->assertSee('Card checkout ready')
+            ->assertSee('Webhook ready');
+
+        $shop->refresh();
+
+        $this->assertSame('real-form-client-id', $shop->flutterwave_client_id);
+        $this->assertSame('real-form-client-secret', $shop->flutterwave_client_secret);
+        $this->assertSame('FLWSECK_TEST-real-form-secret-key', $shop->flutterwave_secret_key);
+        $this->assertSame('real-form-webhook-secret', $shop->flutterwave_webhook_secret);
+    }
+
     public function test_livewire_payment_settings_card_saves_branded_gateway_settings(): void
     {
         [$tenant] = $this->tenants();

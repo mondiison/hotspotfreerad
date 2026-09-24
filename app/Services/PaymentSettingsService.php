@@ -87,10 +87,18 @@ class PaymentSettingsService
         }
 
         if ($gateway === PaymentGatewayCatalog::FLUTTERWAVE) {
-            $data['flutterwave_client_id'] = $data['flutterwave_client_id'] ?? ($gatewaySettings['client_id'] ?? null);
-            $data['flutterwave_client_secret'] = $data['flutterwave_client_secret'] ?? ($gatewaySettings['client_secret'] ?? null);
-            $data['flutterwave_secret_key'] = $data['flutterwave_secret_key'] ?? ($gatewaySettings['secret_key'] ?? null);
-            $data['flutterwave_webhook_secret'] = $data['flutterwave_webhook_secret'] ?? ($gatewaySettings['webhook_secret'] ?? null);
+            // The form's credential inputs are all bound to gateway_settings.{field}
+            // (PaymentSettingsCard's generic per-gateway field loop), never directly to
+            // these flutterwave_* Livewire properties -- they're always an empty string,
+            // never null, since nothing in the blade sets them. `??` only falls back on
+            // null/unset, so it silently never read the actual typed value, and a new
+            // Flutterwave credential could never be saved no matter how many times the
+            // form was submitted (confirmed live 2026-09-24). `filled()` treats an empty
+            // string as "nothing typed here" and correctly falls through to gateway_settings.
+            $data['flutterwave_client_id'] = filled($data['flutterwave_client_id'] ?? null) ? $data['flutterwave_client_id'] : ($gatewaySettings['client_id'] ?? null);
+            $data['flutterwave_client_secret'] = filled($data['flutterwave_client_secret'] ?? null) ? $data['flutterwave_client_secret'] : ($gatewaySettings['client_secret'] ?? null);
+            $data['flutterwave_secret_key'] = filled($data['flutterwave_secret_key'] ?? null) ? $data['flutterwave_secret_key'] : ($gatewaySettings['secret_key'] ?? null);
+            $data['flutterwave_webhook_secret'] = filled($data['flutterwave_webhook_secret'] ?? null) ? $data['flutterwave_webhook_secret'] : ($gatewaySettings['webhook_secret'] ?? null);
         }
 
         if ((bool) ($data['clear_flutterwave_credentials'] ?? false)) {
