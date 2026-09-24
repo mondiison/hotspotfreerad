@@ -390,6 +390,7 @@ class RouterOsApiProvisioningTest extends TestCase
                 'enable_builtin_wifi' => true,
                 'enable_staff' => true,
                 'enable_mgmt_wifi' => true,
+                'enable_mgmt_mac_auth' => true,
             ],
         ]);
 
@@ -421,7 +422,7 @@ class RouterOsApiProvisioningTest extends TestCase
             'nas_identifier' => 'no-builtin-wifi-router',
             'wireguard_internal_ip' => '192.0.2.10',
             'shared_secret' => 'radius-secret',
-            'provisioning_settings' => ['enable_builtin_wifi' => false, 'enable_staff' => true],
+            'provisioning_settings' => ['enable_builtin_wifi' => false, 'enable_staff' => true, 'enable_mgmt_mac_auth' => true],
         ]);
 
         $result = app(RouterOsConnectionService::class)->provisionStaffWifi($router);
@@ -435,7 +436,16 @@ class RouterOsApiProvisioningTest extends TestCase
         $this->assertNotContains('Sync MMS Mgmt trusted-device access list', $labels);
     }
 
-    public function test_provision_staff_wifi_is_a_no_op_when_staff_is_disabled(): void
+    /**
+     * Regression test for the 2026-09-24 fix: Management's MAC-auth hotspot
+     * used to be unconditional (attempted every provisionStaffWifi() call
+     * regardless of any toggle) -- confirmed live this locked an admin's own
+     * laptop out of general internet access on a wired mgmt port, since it
+     * was never registered under Trusted Wi-Fi Devices. It's now gated by
+     * enable_mgmt_mac_auth (default false), so a router with Staff disabled
+     * and mgmt MAC-auth never turned on is now a genuine full no-op.
+     */
+    public function test_provision_staff_wifi_is_a_no_op_when_staff_and_mgmt_mac_auth_are_disabled(): void
     {
         $router = Router::create([
             'shop_id' => $this->makeShop()->id,
@@ -444,6 +454,22 @@ class RouterOsApiProvisioningTest extends TestCase
             'wireguard_internal_ip' => '192.0.2.11',
             'shared_secret' => 'radius-secret',
             'provisioning_settings' => ['enable_staff' => false, 'enable_mgmt_wifi' => false],
+        ]);
+
+        $result = app(RouterOsConnectionService::class)->provisionStaffWifi($router);
+
+        $this->assertSame(['success' => true, 'steps' => []], $result);
+    }
+
+    public function test_provision_staff_wifi_still_applies_management_mac_auth_hotspot_when_opted_in(): void
+    {
+        $router = Router::create([
+            'shop_id' => $this->makeShop()->id,
+            'name' => 'Mgmt Mac Auth Router',
+            'nas_identifier' => 'mgmt-mac-auth-router',
+            'wireguard_internal_ip' => '192.0.2.13',
+            'shared_secret' => 'radius-secret',
+            'provisioning_settings' => ['enable_staff' => false, 'enable_mgmt_wifi' => false, 'enable_mgmt_mac_auth' => true],
         ]);
 
         $result = app(RouterOsConnectionService::class)->provisionStaffWifi($router);

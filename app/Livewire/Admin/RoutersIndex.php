@@ -540,7 +540,8 @@ class RoutersIndex extends Component
             ],
             3 => [
                 'provisioning_settings.enable_staff', 'provisioning_settings.enable_pos',
-                'provisioning_settings.enable_mgmt_wifi', 'provisioning_settings.enable_pppoe',
+                'provisioning_settings.enable_mgmt_wifi', 'provisioning_settings.enable_mgmt_mac_auth',
+                'provisioning_settings.enable_pppoe',
                 'provisioning_settings.enable_realtime_qos', 'provisioning_settings.download_limit',
                 'provisioning_settings.upload_limit', 'provisioning_settings.builtin_wifi_interface',
                 'provisioning_settings.staff_wifi_password', 'provisioning_settings.pos_wifi_password',

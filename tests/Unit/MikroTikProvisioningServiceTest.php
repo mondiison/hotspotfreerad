@@ -435,6 +435,7 @@ class MikroTikProvisioningServiceTest extends TestCase
                 'enable_builtin_wifi' => true,
                 'enable_staff' => true,
                 'enable_mgmt_wifi' => true,
+                'enable_mgmt_mac_auth' => true,
             ],
         ]);
 
@@ -494,11 +495,39 @@ class MikroTikProvisioningServiceTest extends TestCase
         $this->assertStringContainsString('/interface bridge vlan add bridge=bridge-lan tagged=bridge-lan,ether4 untagged=ether6 vlan-ids=30', $script);
         $this->assertStringContainsString('/ip hotspot profile add name=mms-staff-profile use-radius=yes login-by=mac mac-auth-password="MmsTrustedWifi2026!" radius-accounting=yes', $script);
         $this->assertStringContainsString('/ip hotspot add name=mms-staff interface=vlan-staff address-pool=pool-staff profile=mms-staff-profile disabled=no', $script);
-        $this->assertStringContainsString('/ip hotspot profile add name=mms-mgmt-profile use-radius=yes login-by=mac mac-auth-password="MmsTrustedWifi2026!" radius-accounting=yes', $script);
 
         $this->assertStringNotContainsString('/interface wifi security add', $script);
         $this->assertStringNotContainsString('/interface wifi configuration add', $script);
         $this->assertStringContainsString('the MAC-auth hotspot above is still enforcing regardless', $script);
+    }
+
+    /**
+     * Regression/feature test for the 2026-09-24 fix: Management's MAC-auth
+     * hotspot (unlike Staff's) is now opt-in via enable_mgmt_mac_auth,
+     * default false -- confirmed live that the unconditional version locked
+     * an admin's own laptop out of general internet access on a wired mgmt
+     * port, since RouterOS's hotspot subsystem intercepts unauthenticated
+     * clients the moment a hotspot server is active on an interface, and
+     * there was no reason to assume every mgmt device is pre-registered.
+     */
+    public function test_staff_script_omits_management_mac_auth_hotspot_by_default(): void
+    {
+        $router = new Router([
+            'nas_identifier' => 'default-mgmt-router',
+            'wireguard_internal_ip' => '10.8.0.14',
+            'shared_secret' => 'radius-secret',
+            'provisioning_settings' => [
+                'trunk_port' => 'ether4',
+                'enable_staff' => false,
+            ],
+        ]);
+
+        $script = app(MikroTikProvisioningService::class)->generateStaffScript($router);
+
+        $this->assertStringNotContainsString('mms-mgmt-profile', $script);
+        $this->assertStringNotContainsString('/ip hotspot add name=mms-mgmt', $script);
+        $this->assertStringContainsString('Management MAC-auth hotspot is disabled for this router', $script);
+        $this->assertStringContainsString('Management MAC-auth is disabled for this router -- no access list to generate.', $script);
     }
 
     public function test_it_generates_a_fresh_infrastructure_script_for_starlink_plaza_networks(): void
@@ -884,6 +913,7 @@ class MikroTikProvisioningServiceTest extends TestCase
                 'profile' => 'small_hotspot',
                 'enable_builtin_wifi' => true,
                 'enable_mgmt_wifi' => true,
+                'enable_mgmt_mac_auth' => true,
                 'wan2' => 'ether7',
                 'hotspot_gateway' => '10.5.50.1/24',
                 'hotspot_network' => '10.5.50.0/24',
@@ -949,6 +979,7 @@ class MikroTikProvisioningServiceTest extends TestCase
                 'profile' => 'small_hotspot',
                 'enable_builtin_wifi' => true,
                 'enable_mgmt_wifi' => true,
+                'enable_mgmt_mac_auth' => true,
             ],
         ]);
 

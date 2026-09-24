@@ -152,6 +152,43 @@ class RoutersWizardTest extends TestCase
             ->assertDontSee('PPPoE gateway');
     }
 
+    /**
+     * Regression/feature test for the 2026-09-24 fix: Management MAC-auth
+     * enforcement is opt-in (enable_mgmt_mac_auth, default false), unlike
+     * Staff's -- confirmed live that forcing it on by default locked an
+     * admin's own laptop out of general internet access on a wired
+     * management port, since it was never registered under Trusted Wi-Fi
+     * Devices. Confirms the toggle is off by default, its warning copy only
+     * shows once enabled, and it saves correctly.
+     */
+    public function test_management_mac_auth_is_off_by_default_and_saves_when_enabled(): void
+    {
+        $shop = $this->shop();
+
+        Livewire::actingAs($this->superAdmin())
+            ->test(RoutersIndex::class)
+            ->call('create')
+            ->set('shop_id', (string) $shop->id)
+            ->set('name', 'Mgmt Mac Auth Router')
+            ->set('nas_identifier', 'mgmt-mac-auth-wizard-router')
+            ->set('wireguard_internal_ip', '10.8.0.86')
+            ->set('shared_secret', 'radius-secret')
+            ->call('nextStep')
+            ->call('nextStep')
+            ->assertSet('provisioning_settings.enable_mgmt_mac_auth', false)
+            ->assertDontSee('Only devices registered under Trusted Wi-Fi Devices')
+            ->set('provisioning_settings.enable_mgmt_mac_auth', true)
+            ->assertSee('Only devices registered under Trusted Wi-Fi Devices')
+            ->call('nextStep')
+            ->call('nextStep')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $router = Router::where('nas_identifier', 'mgmt-mac-auth-wizard-router')->firstOrFail();
+
+        $this->assertTrue($router->provisioning_settings['enable_mgmt_mac_auth']);
+    }
+
     public function test_port_role_collision_fails_validation(): void
     {
         $shop = $this->shop();

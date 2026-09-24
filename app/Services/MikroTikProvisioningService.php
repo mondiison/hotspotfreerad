@@ -274,6 +274,7 @@ SCRIPT;
         $enableBuiltinWifi = (bool) $settings['enable_builtin_wifi'];
         $enableStaff = (bool) $settings['enable_staff'];
         $enableMgmtWifi = (bool) $settings['enable_mgmt_wifi'];
+        $enableMgmtMacAuth = (bool) $settings['enable_mgmt_mac_auth'];
 
         $tunnelLines = implode("\n", array_merge($this->wireguardProvisioningLines($router), $this->zeroTierLines($router)));
         $apiUserLines = implode("\n", $this->apiUserProvisioningLines($router));
@@ -329,7 +330,25 @@ SCRIPT;
             '/interface bridge port add bridge='.$lanBridgeName.' interface=wifi-mgmt pvid='.$settings['mgmt_vlan'].' comment="Virtual management Wi-Fi for lab testing"',
         ] : ['# Management Wi-Fi SSID is disabled for this router profile (Network plan\'s "Enable management Wi-Fi").'];
 
-        $mgmtHotspotLines = [
+        // Confirmed live 2026-09-24: this used to be unconditional (bound to
+        // vlan-mgmt regardless of any toggle), which turned out to be a real
+        // problem -- an admin plugging a laptop into a wired mgmt access
+        // port for a quick test lost general internet access outright,
+        // since RouterOS's hotspot subsystem intercepts traffic from ANY
+        // unauthenticated client on an interface with an active hotspot
+        // server, and the laptop's MAC was never registered under Trusted
+        // Wi-Fi Devices. Unlike Staff (a network that's meaningless without
+        // its own MAC-auth enforcement, since that's the whole reason a
+        // separate Staff SSID/VLAN exists), Management is core
+        // infrastructure every router already has before this feature
+        // existed -- forcing MAC-auth on it by default risks locking out
+        // the Pi's own port (pi_port) if its MAC is ever missing/out of
+        // sync, which would sever the tunnel this whole app depends on with
+        // no remote way to fix it. enable_mgmt_mac_auth (default false) now
+        // gates this deliberately, matching the same opt-in shape
+        // route_lan_through_tunnel already uses for another mgmt-network
+        // behavior change.
+        $mgmtHotspotLines = $enableMgmtMacAuth ? [
             '# MAC-auth hotspot for the management VLAN -- same mechanism as Staff above,',
             '# scoped to network=mgmt Trusted Wi-Fi Devices. Management VLAN/addressing is',
             '# core infrastructure created unconditionally elsewhere, so only the MAC-auth',
@@ -337,6 +356,11 @@ SCRIPT;
             '/ip hotspot profile add name=mms-mgmt-profile use-radius=yes login-by=mac mac-auth-password="'.$trustedWifiMacAuthPassword.'" radius-accounting=yes',
             '/ip hotspot add name=mms-mgmt interface=vlan-mgmt address-pool=pool-mgmt profile=mms-mgmt-profile disabled=no',
             '/ip firewall filter add chain=input in-interface=vlan-mgmt protocol=tcp dst-port=80,443,64872-64875 action=accept comment="Allow Management MAC-auth hotspot services" place-before=[find action=drop in-interface-list=!WAN]',
+        ] : [
+            '# Management MAC-auth hotspot is disabled for this router (Network plan\'s',
+            '# "Enable management MAC-auth" toggle) -- devices on the management VLAN get',
+            '# full access once they know the Wi-Fi password / have physical port access,',
+            '# with no additional Trusted Wi-Fi Device registration required.',
         ];
 
         $mgmtSection = implode("\n", array_merge($mgmtWifiLines, $mgmtHotspotLines));
@@ -347,10 +371,10 @@ SCRIPT;
                     ? '# No built-in Wi-Fi radio on this router, so there\'s no wifi access-list to manage for Staff -- the MAC-auth hotspot above is still enforcing regardless.'
                     : '# Staff SSID is disabled -- no access list to generate.',
             ],
-            ($enableMgmtWifi && $enableBuiltinWifi) ? $this->wifiAccessListLines($router, 'wifi-mgmt', 'MMS Mgmt', TrustedWifiDevice::NETWORK_MGMT) : [
-                $enableMgmtWifi
+            ($enableMgmtWifi && $enableBuiltinWifi && $enableMgmtMacAuth) ? $this->wifiAccessListLines($router, 'wifi-mgmt', 'MMS Mgmt', TrustedWifiDevice::NETWORK_MGMT) : [
+                $enableMgmtMacAuth
                     ? '# No built-in Wi-Fi radio on this router, so there\'s no wifi access-list to manage for Management -- the MAC-auth hotspot above is still enforcing regardless.'
-                    : '# Management Wi-Fi SSID is disabled -- no access list to generate.',
+                    : '# Management MAC-auth is disabled for this router -- no access list to generate.',
             ]
         );
         $accessListSection = implode("\n", $accessListLines);
@@ -644,7 +668,10 @@ SCRIPT;
             $settings['enable_pos'] ? '/interface bridge port add bridge=$lanBridge interface=$posWifiInterface pvid=$posVlan comment="Virtual POS Wi-Fi for terminal testing"' : '# POS virtual bridge port disabled.',
             $settings['enable_mgmt_wifi'] ? '/interface bridge port add bridge=$lanBridge interface=$mgmtWifiInterface pvid=$mgmtVlan comment="Virtual management Wi-Fi for lab testing"' : '# Management virtual bridge port disabled.',
             ...($settings['enable_staff'] ? $this->wifiAccessListLines($router, '$staffWifiInterface', 'MMS Staff', TrustedWifiDevice::NETWORK_STAFF) : []),
-            ...($settings['enable_mgmt_wifi'] ? $this->wifiAccessListLines($router, '$mgmtWifiInterface', 'MMS Mgmt', TrustedWifiDevice::NETWORK_MGMT) : []),
+            // Gated on enable_mgmt_mac_auth too (not just enable_mgmt_wifi) --
+            // see generateStaffScript()'s own docblock for why Management's
+            // trusted-device enforcement is opt-in, unlike Staff's.
+            ...(($settings['enable_mgmt_wifi'] && $settings['enable_mgmt_mac_auth']) ? $this->wifiAccessListLines($router, '$mgmtWifiInterface', 'MMS Mgmt', TrustedWifiDevice::NETWORK_MGMT) : []),
         ] : [
             '',
             '# Built-in MikroTik Wi-Fi is disabled for this profile. Use the AP/switch trunk for external APs.',
@@ -1015,6 +1042,7 @@ HTML;
             'enable_builtin_wifi' => false,
             'enable_staff' => true,
             'enable_mgmt_wifi' => false,
+            'enable_mgmt_mac_auth' => false,
             'enable_pos' => true,
             'enable_pppoe' => $profile !== 'small_hotspot',
             'enable_realtime_qos' => true,

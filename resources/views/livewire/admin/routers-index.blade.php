@@ -438,7 +438,14 @@
                             <flux:checkbox wire:model.live="provisioning_settings.enable_mgmt_wifi" label="Management Wi-Fi" />
                             <flux:checkbox wire:model.live="provisioning_settings.enable_pppoe" label="PPPoE/CPE VLAN" />
                             <flux:checkbox wire:model.live="provisioning_settings.enable_realtime_qos" label="Realtime voice/video QoS" />
+                            <flux:checkbox wire:model.live="provisioning_settings.enable_mgmt_mac_auth" label="Require Trusted Wi-Fi Device on management VLAN" />
                         </div>
+
+                        @if ($provisioning_settings['enable_mgmt_mac_auth'] ?? false)
+                            <div class="rounded-md border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950 p-3 text-sm text-amber-800 dark:text-amber-200">
+                                Only devices registered under Trusted Wi-Fi Devices (network: Management) will get internet access on the management VLAN -- including any wired laptop plugged into an extra management port. Off by default: forcing this on risks locking out the Pi's own port if its MAC is ever missing or out of sync, since that would sever the tunnel this app depends on with no remote way to fix it. Register the Pi's MAC first if you enable this.
+                            </div>
+                        @endif
 
                         <div class="grid gap-5 md:grid-cols-2">
                             <flux:field>

@@ -839,6 +839,7 @@ class RouterOsConnectionService
         $enableBuiltinWifi = (bool) ($settings['enable_builtin_wifi'] ?? false);
         $enableStaff = (bool) ($settings['enable_staff'] ?? true);
         $enableMgmtWifi = (bool) ($settings['enable_mgmt_wifi'] ?? false);
+        $enableMgmtMacAuth = (bool) ($settings['enable_mgmt_mac_auth'] ?? false);
 
         $result = ['success' => true, 'steps' => []];
 
@@ -865,26 +866,42 @@ class RouterOsConnectionService
             }
         }
 
-        // Management's VLAN/pool are core infrastructure, assumed already
-        // present (see ensureStaffInfrastructure()'s own docblock) -- so its
-        // MAC-auth hotspot is attempted unconditionally rather than gated
-        // behind enable_mgmt_wifi, the same "core, always there" reasoning
-        // already applied to the VLAN itself.
-        $mgmtHotspotStep = $this->applyMacAuthHotspotServer(
-            $router,
-            'Apply Management MAC-auth hotspot',
-            'mms-mgmt-profile',
-            'mms-mgmt',
-            'vlan-mgmt',
-            'pool-mgmt',
-        );
-        $result['steps'][] = $mgmtHotspotStep;
-        $result['success'] = $result['success'] && $mgmtHotspotStep['success'];
+        // Confirmed live 2026-09-24: this used to be unconditional (Management's
+        // VLAN/pool are core infrastructure, assumed already present -- see
+        // ensureStaffInfrastructure()'s own docblock -- so the reasoning was
+        // "attempt the hotspot unconditionally, the same way the VLAN itself
+        // is always assumed present"). That turned out to be a real problem:
+        // an admin plugging a laptop into a wired mgmt access port for a
+        // quick test lost general internet access outright, since RouterOS's
+        // hotspot subsystem intercepts traffic from any unauthenticated
+        // client the moment a hotspot server is active on that interface,
+        // and there's no reason to assume every mgmt-network device is
+        // pre-registered under Trusted Wi-Fi Devices. Unlike Staff (whose
+        // whole reason for existing as a separate SSID/VLAN is trusted-device
+        // enforcement), Management already existed as core infrastructure
+        // before this feature, and forcing MAC-auth onto it by default risks
+        // locking out the Pi's own port (pi_port) if its MAC is ever
+        // missing/out of sync -- severing the tunnel this whole app depends
+        // on with no remote way to fix it. enable_mgmt_mac_auth (default
+        // false) now gates this deliberately, matching MikroTikProvisioningService::
+        // generateStaffScript()'s own gating exactly.
+        if ($enableMgmtMacAuth) {
+            $mgmtHotspotStep = $this->applyMacAuthHotspotServer(
+                $router,
+                'Apply Management MAC-auth hotspot',
+                'mms-mgmt-profile',
+                'mms-mgmt',
+                'vlan-mgmt',
+                'pool-mgmt',
+            );
+            $result['steps'][] = $mgmtHotspotStep;
+            $result['success'] = $result['success'] && $mgmtHotspotStep['success'];
 
-        if ($enableMgmtWifi && $enableBuiltinWifi) {
-            $step = $this->syncWifiAccessList($router, 'wifi-mgmt', 'MMS Mgmt', TrustedWifiDevice::NETWORK_MGMT);
-            $result['steps'][] = $step;
-            $result['success'] = $result['success'] && $step['success'];
+            if ($enableMgmtWifi && $enableBuiltinWifi) {
+                $step = $this->syncWifiAccessList($router, 'wifi-mgmt', 'MMS Mgmt', TrustedWifiDevice::NETWORK_MGMT);
+                $result['steps'][] = $step;
+                $result['success'] = $result['success'] && $step['success'];
+            }
         }
 
         return $result;
