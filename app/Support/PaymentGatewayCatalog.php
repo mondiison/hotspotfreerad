@@ -282,22 +282,17 @@ class PaymentGatewayCatalog
     }
 
     /**
-     * Platform billing's credential fields per gateway, mostly identical to
-     * credentialFields() above but narrower where the platform integration
-     * genuinely uses fewer fields than the tenant-facing one does -- Flutterwave's
-     * platform side only ever calls the v4 orchestration API (client_id/client_secret),
-     * never the v3 card-checkout endpoint tenant shops can use, so `secret_key`
-     * would be a field that saves but does nothing if shown here.
+     * Platform billing's credential fields per gateway -- identical to
+     * credentialFields() above. Flutterwave's `secret_key` (v3 card checkout)
+     * used to be stripped out here on the theory that platform billing only
+     * ever called the v4 orchestration API, but that made the field
+     * impossible to save at all, including for wallet-mode tenant card
+     * checkout, which also reads this same platform-level credential --
+     * see PlatformFlutterwaveService::createStandardHostedCheckout().
      */
     public static function platformCredentialFields(string $gateway): array
     {
-        $fields = self::credentialFields($gateway);
-
-        if ($gateway === self::FLUTTERWAVE) {
-            unset($fields['secret_key']);
-        }
-
-        return $fields;
+        return self::credentialFields($gateway);
     }
 
     public static function tenantProvider(?string $gatewayKey = null): array

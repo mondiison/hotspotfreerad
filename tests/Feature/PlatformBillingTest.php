@@ -348,6 +348,7 @@ class PlatformBillingTest extends TestCase
             ->set('active_gateway', 'flutterwave')
             ->set('gateway_settings.client_id', 'db-platform-client-id')
             ->set('gateway_settings.client_secret', 'db-platform-client-secret')
+            ->set('gateway_settings.secret_key', 'FLWSECK_TEST-db-platform-secret-key')
             ->set('gateway_settings.webhook_secret', 'db-platform-webhook-secret')
             ->set('default_payment_method', 'bank_transfer')
             ->call('save')
@@ -366,6 +367,9 @@ class PlatformBillingTest extends TestCase
         $this->assertSame('db-platform-client-secret', $service->clientSecret());
         $this->assertSame('db-platform-webhook-secret', $service->webhookSecretHash());
         $this->assertSame('bank_transfer', $service->defaultPaymentMethod());
+        // Card checkout (2026-09-25) needs a genuinely settable v3 Secret Key --
+        // this field used to be hidden entirely on the platform settings card.
+        $this->assertSame('FLWSECK_TEST-db-platform-secret-key', $service->flutterwaveHostedCheckoutSecretKey());
     }
 
     /**
@@ -594,6 +598,161 @@ class PlatformBillingTest extends TestCase
         $payment = PlatformBillingPayment::firstOrFail();
         $this->assertSame('pending', $payment->status);
         $this->assertSame('chg_platform_123', $payment->provider_reference);
+    }
+
+    /**
+     * Card can't go through Flutterwave's v4 orchestration API at all -- that
+     * endpoint's payment_method.type: "card" needs real encrypted card details
+     * this server-side redirect flow never collects. Confirmed live 2026-09-25
+     * that the platform Payment Settings card offered a "Card" billing method
+     * with no way to save the v3 Secret Key it actually needs -- fixed by
+     * un-hiding that field (PaymentGatewayCatalog::platformCredentialFields())
+     * and giving PlatformFlutterwaveService a v3 hosted-checkout method
+     * mirroring FlutterwaveService::createStandardHostedCheckout().
+     */
+    public function test_tenant_admin_can_start_platform_flutterwave_card_subscription_checkout(): void
+    {
+        $this->configurePlatformFlutterwave();
+        config(['services.flutterwave.default_payment_method' => 'card']);
+        PlatformSetting::query()->updateOrCreate(
+            ['key' => 'payments.platform.gateway.flutterwave'],
+            ['value' => ['secret_key' => Crypt::encryptString('FLWSECK_TEST-platform-secret')]]
+        );
+        Cache::flush();
+
+        Http::fake([
+            'api.flutterwave.com/v3/payments' => Http::response([
+                'status' => 'success',
+                'data' => [
+                    'link' => 'https://checkout.flutterwave.com/v3/hosted/pay/flwlnk_platform',
+                    'tx_ref' => 'pending',
+                ],
+            ]),
+        ]);
+
+        $tenant = Tenant::create([
+            'company_name' => 'Tenant One',
+            'owner_email' => 'one@example.com',
+        ]);
+        $plan = BillingPlan::where('slug', 'growth')->firstOrFail();
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->post(route('admin.billing.payments.checkout'), [
+                'billing_plan_id' => $plan->id,
+            ])
+            ->assertRedirect('https://checkout.flutterwave.com/v3/hosted/pay/flwlnk_platform');
+
+        $payment = PlatformBillingPayment::firstOrFail();
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/v3/payments')
+            && $request->hasHeader('Authorization', 'Bearer FLWSECK_TEST-platform-secret')
+            && $request['tx_ref'] === $payment->tx_ref
+            && $request['amount'] === 35000.0
+            && $request['currency'] === 'NGN'
+            && $request['payment_options'] === 'card'
+            && $request['customer']['email'] === 'one@example.com');
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), '/orchestration/direct-charges'));
+
+        $this->assertNull($payment->provider_reference);
+        $this->assertSame('standard_v3', data_get($payment->payload, 'flutterwave_checkout_version'));
+    }
+
+    public function test_platform_flutterwave_card_checkout_requires_platform_secret_key(): void
+    {
+        $this->configurePlatformFlutterwave();
+        config(['services.flutterwave.default_payment_method' => 'card']);
+        Http::fake();
+
+        $tenant = Tenant::create([
+            'company_name' => 'Tenant One',
+            'owner_email' => 'one@example.com',
+        ]);
+        $plan = BillingPlan::where('slug', 'growth')->firstOrFail();
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->post(route('admin.billing.payments.checkout'), [
+                'billing_plan_id' => $plan->id,
+            ])
+            ->assertRedirect(route('admin.billing.index'))
+            ->assertSessionHasErrors('billing');
+
+        $this->assertDatabaseCount('platform_billing_payments', 0);
+        Http::assertNothingSent();
+    }
+
+    public function test_successful_platform_flutterwave_card_callback_activates_billing_subscription(): void
+    {
+        $this->configurePlatformFlutterwave();
+        PlatformSetting::query()->updateOrCreate(
+            ['key' => 'payments.platform.gateway.flutterwave'],
+            ['value' => ['secret_key' => Crypt::encryptString('FLWSECK_TEST-platform-secret')]]
+        );
+        Cache::flush();
+
+        $tenant = Tenant::create([
+            'company_name' => 'Tenant One',
+            'owner_email' => 'one@example.com',
+        ]);
+        $plan = BillingPlan::where('slug', 'starter')->firstOrFail();
+        $payment = PlatformBillingPayment::create([
+            'tenant_id' => $tenant->id,
+            'billing_plan_id' => $plan->id,
+            'provider' => 'flutterwave',
+            'tx_ref' => 'PBF-TEST-CARD',
+            'amount' => $plan->monthly_price,
+            'currency' => $plan->currency,
+            'status' => 'pending',
+            'payload' => ['flutterwave_checkout_version' => 'standard_v3'],
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        Http::fake([
+            'api.flutterwave.com/v3/transactions/987654/verify' => Http::response([
+                'status' => 'success',
+                'data' => [
+                    'id' => 987654,
+                    'status' => 'successful',
+                    'tx_ref' => $payment->tx_ref,
+                    'amount' => 15000,
+                    'currency' => 'NGN',
+                ],
+            ]),
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('admin.billing.payments.callback', [
+                'status' => 'successful',
+                'tx_ref' => $payment->tx_ref,
+                'transaction_id' => '987654',
+            ]))
+            ->assertRedirect(route('admin.billing.index'));
+
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'idp.flutterwave.com'));
+
+        $this->assertDatabaseHas('platform_billing_payments', [
+            'id' => $payment->id,
+            'status' => 'successful',
+            'provider_reference' => '987654',
+        ]);
+        $this->assertDatabaseHas('tenant_billing_subscriptions', [
+            'tenant_id' => $tenant->id,
+            'billing_plan_id' => $plan->id,
+            'status' => 'active',
+        ]);
     }
 
     public function test_tenant_admin_can_start_platform_stripe_subscription_checkout(): void

@@ -27,7 +27,7 @@ class PlatformBillingConfirmationService
         $verification = match ($payment->provider) {
             PaymentGatewayCatalog::STRIPE => $this->stripe->verifyPayment($providerReference),
             PaymentGatewayCatalog::MONNIFY => $this->monnify->verifyPayment($providerReference),
-            default => $this->flutterwave->verifyPayment($providerReference, $resourceType),
+            default => $this->flutterwave->verifyPayment($payment, $providerReference, $resourceType),
         };
 
         if (! $this->verificationMatchesPayment($verification, $payment)) {

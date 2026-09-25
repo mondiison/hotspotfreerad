@@ -176,10 +176,25 @@ class BillingController extends Controller
             default => $flutterwave,
         };
 
-        if (! $gatewayService->isConfigured()) {
+        // Card can't go through Flutterwave's v4 orchestration initializeCheckout()
+        // at all -- that API's payment_method.type: "card" needs real encrypted
+        // card details this server-side redirect flow never collects, the same
+        // reason the hotspot-side PortalController::pay() routes "card" around its
+        // own initializeCheckout() call entirely. It uses the older v3 hosted
+        // checkout instead, authenticated with a separate secret key.
+        $isFlutterwaveCard = $gateway === PaymentGatewayCatalog::FLUTTERWAVE
+            && $platformSettings->defaultPaymentMethod() === 'card';
+
+        $gatewayIsConfigured = $isFlutterwaveCard
+            ? $flutterwave->hasHostedCheckout()
+            : $gatewayService->isConfigured();
+
+        if (! $gatewayIsConfigured) {
             return redirect()
                 ->route('admin.billing.index')
-                ->withErrors(['billing' => 'Default platform gateway credentials are not configured yet.']);
+                ->withErrors(['billing' => $isFlutterwaveCard
+                    ? 'Card checkout needs the platform Flutterwave Secret Key (v3 card checkout). Add it under Platform Billing settings.'
+                    : 'Default platform gateway credentials are not configured yet.']);
         }
 
         $payment = PlatformBillingPayment::create([
@@ -209,10 +224,9 @@ class BillingController extends Controller
                 ? route('admin.billing.payments.callback')
                 : route('admin.billing.payments.callback', ['tx_ref' => $payment->tx_ref]);
 
-            $checkout = $gatewayService->initializeCheckout(
-                $payment->load(['tenant', 'billingPlan']),
-                $redirectUrl
-            );
+            $checkout = $isFlutterwaveCard
+                ? $flutterwave->createStandardHostedCheckout($payment->load(['tenant', 'billingPlan']), $redirectUrl)
+                : $gatewayService->initializeCheckout($payment->load(['tenant', 'billingPlan']), $redirectUrl);
 
             $payment->update([
                 'provider_reference' => $checkout['provider_reference'],
@@ -220,6 +234,7 @@ class BillingController extends Controller
                     'checkout_url' => $checkout['checkout_url'],
                     'gateway_init_response' => $checkout['response'],
                     $payment->provider.'_init_response' => $checkout['response'],
+                    ...($isFlutterwaveCard ? ['flutterwave_checkout_version' => 'standard_v3'] : []),
                 ]),
             ]);
 

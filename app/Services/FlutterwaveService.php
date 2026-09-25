@@ -269,16 +269,22 @@ class FlutterwaveService
 
     public function hostedCheckoutCredentialSource(Payment $payment): array
     {
-        // No platform-level equivalent of a hosted-checkout (card) secret key exists
-        // yet -- deliberately left unconfigured for wallet-mode shops rather than risk
-        // silently falling back to a stale tenant-owned key a shop may have configured
-        // before switching to wallet mode. Card checkout is simply unavailable for
-        // wallet-mode payments until platform-level card credentials are added.
+        // A wallet-enabled shop's card checkout now uses the platform's own v3
+        // Secret Key (PlatformPaymentSettingsService::flutterwaveHostedCheckoutSecretKey(),
+        // added alongside PlatformFlutterwaveService::createStandardHostedCheckout()
+        // for platform billing's own card support) instead of anything on the
+        // shop itself -- this used to be permanently unconfigured for wallet mode,
+        // since no platform-level secret key existed to fall back to at all.
         if ($this->usesWalletCredentials($payment)) {
-            return [
-                'source' => 'unconfigured',
-                'label' => 'Card checkout is not available for platform wallet payments yet',
-            ];
+            return filled($this->platformSettings->flutterwaveHostedCheckoutSecretKey())
+                ? [
+                    'source' => 'platform',
+                    'label' => 'MMS Radius platform gateway',
+                ]
+                : [
+                    'source' => 'unconfigured',
+                    'label' => 'Card checkout is not available for platform wallet payments yet',
+                ];
         }
 
         if (filled($payment->shop?->flutterwave_secret_key)) {
@@ -427,10 +433,10 @@ class FlutterwaveService
 
     private function hostedCheckoutSecretKey(Payment $payment): string
     {
-        // See hostedCheckoutCredentialSource()'s docblock -- wallet-mode shops never
-        // get a hosted-checkout (card) secret key, platform-level or tenant-owned.
+        // See hostedCheckoutCredentialSource()'s docblock -- wallet-mode shops now
+        // use the platform's own v3 Secret Key instead of anything shop-owned.
         if ($this->usesWalletCredentials($payment)) {
-            return '';
+            return $this->normalizeSecretKey((string) $this->platformSettings->flutterwaveHostedCheckoutSecretKey());
         }
 
         if (filled($payment->shop?->flutterwave_secret_key)) {

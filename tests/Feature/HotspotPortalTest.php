@@ -1149,6 +1149,53 @@ class HotspotPortalTest extends TestCase
     }
 
     /**
+     * Card checkout used to be permanently unavailable for wallet-mode shops
+     * -- no platform-level v3 Secret Key existed to fall back to at all, since
+     * platform billing itself never had card support either (confirmed live
+     * 2026-09-25: a wallet-enabled shop's card option surfaced a Flutterwave
+     * hosted-checkout error, and the platform settings card that would
+     * configure it didn't even show the field). Fixed by adding a v3 Secret
+     * Key credential to platform payment settings and giving
+     * FlutterwaveService::hostedCheckoutSecretKey()/hostedCheckoutCredentialSource()
+     * a wallet-mode branch that reads it.
+     */
+    public function test_wallet_mode_card_checkout_uses_the_platform_secret_key(): void
+    {
+        [$router, $package] = $this->routerWithPackage(['wallet_enabled' => true]);
+        PlatformSetting::query()->updateOrCreate(
+            ['key' => 'payments.platform.gateway.flutterwave'],
+            ['value' => ['secret_key' => Crypt::encryptString('FLWSECK_TEST-platform-secret')]]
+        );
+        Cache::flush();
+
+        Http::fake([
+            'api.flutterwave.com/v3/payments' => Http::response([
+                'status' => 'success',
+                'data' => [
+                    'link' => 'https://checkout.flutterwave.com/v3/hosted/pay/flwlnk_wallet',
+                    'tx_ref' => 'pending',
+                ],
+            ]),
+        ]);
+
+        $this->post(route('hotspot.pay'), [
+            'mac' => 'AA:BB:CC:DD:EE:FF',
+            'nasid' => $router->nas_identifier,
+            'package_id' => $package->id,
+            'payment_method' => 'card',
+        ])
+            ->assertRedirect('https://checkout.flutterwave.com/v3/hosted/pay/flwlnk_wallet');
+
+        $payment = Payment::firstOrFail();
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/v3/payments')
+            && $request->hasHeader('Authorization', 'Bearer FLWSECK_TEST-platform-secret')
+            && $request['tx_ref'] === $payment->tx_ref);
+
+        $this->assertSame('platform', data_get($payment->payload, 'flutterwave_account.source'));
+    }
+
+    /**
      * 2026-09-25, direct request: wallet mode used to be hardcoded to
      * Flutterwave regardless of the platform's own "Active gateway" choice
      * (Shop::paymentGateway() always returned FLUTTERWAVE for a wallet-enabled

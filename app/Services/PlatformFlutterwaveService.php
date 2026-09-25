@@ -72,8 +72,16 @@ class PlatformFlutterwaveService
     /**
      * @throws RequestException
      */
-    public function verifyPayment(string $providerReference, string $type = 'order'): array
+    public function verifyPayment(PlatformBillingPayment $payment, string $providerReference, string $type = 'order'): array
     {
+        if (data_get($payment->payload, 'flutterwave_checkout_version') === 'standard_v3') {
+            return Http::withToken((string) $this->settings->flutterwaveHostedCheckoutSecretKey())
+                ->acceptJson()
+                ->get($this->standardBaseUrl()."/transactions/{$providerReference}/verify")
+                ->throw()
+                ->json();
+        }
+
         $resource = Str::startsWith($type, 'order') ? 'orders' : 'charges';
 
         return Http::withToken($this->accessToken())
@@ -87,6 +95,78 @@ class PlatformFlutterwaveService
     {
         return filled($this->settings->clientId())
             && filled($this->settings->clientSecret());
+    }
+
+    /**
+     * Card checkout can't go through the v4 orchestration `/orchestration/
+     * direct-charges` endpoint `initializeCheckout()` uses -- that API's
+     * `payment_method.type: "card"` requires actual encrypted card details
+     * on the request, which this server-side, redirect-based flow never
+     * collects (confirmed by the tenant-facing hotspot checkout already
+     * routing "card" around initializeCheckout() entirely, never through
+     * it). Card uses Flutterwave's older v3 hosted `/payments` checkout
+     * instead -- same shape as FlutterwaveService::createStandardHostedCheckout(),
+     * just charging a PlatformBillingPayment against the tenant instead of a
+     * hotspot customer Payment, and authenticated with the platform's own
+     * v3 Secret Key (PlatformPaymentSettingsService::flutterwaveHostedCheckoutSecretKey())
+     * rather than a shop's.
+     *
+     * @throws RequestException
+     */
+    public function createStandardHostedCheckout(PlatformBillingPayment $payment, string $redirectUrl): array
+    {
+        $response = Http::withToken((string) $this->settings->flutterwaveHostedCheckoutSecretKey())
+            ->acceptJson()
+            ->post($this->standardBaseUrl().'/payments', [
+                'tx_ref' => $payment->tx_ref,
+                'amount' => (float) $payment->amount,
+                'currency' => $payment->currency,
+                'redirect_url' => $redirectUrl,
+                'payment_options' => 'card',
+                'customer' => [
+                    'email' => $payment->tenant->owner_email,
+                    'phonenumber' => preg_replace('/\D+/', '', (string) $payment->tenant->contact_phone) ?: '',
+                    'name' => $payment->tenant->company_name,
+                ],
+                'customizations' => [
+                    'title' => 'HotspotFreeRAD subscription',
+                    'description' => $payment->billingPlan->name,
+                ],
+                'meta' => [
+                    'payment_type' => 'platform_subscription',
+                    'payment_id' => $payment->id,
+                    'payment_reference' => $payment->tx_ref,
+                    'checkout_version' => 'standard_v3',
+                    'tenant_id' => $payment->tenant_id,
+                    'tenant_name' => $payment->tenant->company_name,
+                    'billing_plan_id' => $payment->billing_plan_id,
+                    'billing_plan_name' => $payment->billingPlan->name,
+                ],
+                'configurations' => [
+                    'session_duration' => 30,
+                    'max_retry_attempt' => 3,
+                ],
+            ])
+            ->throw()
+            ->json();
+
+        return [
+            'response' => $response,
+            'provider_reference' => null,
+            'checkout_url' => $this->standardCheckoutUrl($response),
+        ];
+    }
+
+    public function hasHostedCheckout(): bool
+    {
+        return filled($this->settings->flutterwaveHostedCheckoutSecretKey());
+    }
+
+    private function standardCheckoutUrl(array $response): ?string
+    {
+        $value = data_get($response, 'data.link');
+
+        return filled($value) && is_string($value) ? $value : null;
     }
 
     /**
@@ -209,6 +289,11 @@ class PlatformFlutterwaveService
     private function baseUrl(): string
     {
         return rtrim((string) config('services.flutterwave.base_url'), '/');
+    }
+
+    private function standardBaseUrl(): string
+    {
+        return rtrim((string) config('services.flutterwave.standard_base_url'), '/');
     }
 
     private function paymentMethodType(): string

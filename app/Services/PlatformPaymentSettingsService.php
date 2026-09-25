@@ -170,6 +170,11 @@ class PlatformPaymentSettingsService
         return $this->gatewayCredential(PaymentGatewayCatalog::FLUTTERWAVE, 'webhook_secret');
     }
 
+    public function flutterwaveHostedCheckoutSecretKey(): ?string
+    {
+        return $this->gatewayCredential(PaymentGatewayCatalog::FLUTTERWAVE, 'secret_key');
+    }
+
     public function defaultPaymentMethod(): string
     {
         $method = $this->storedGeneral()['default_payment_method'] ?? config('services.flutterwave.default_payment_method') ?? 'opay';
