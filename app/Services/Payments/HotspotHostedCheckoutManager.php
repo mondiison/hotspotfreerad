@@ -4,8 +4,8 @@ namespace App\Services\Payments;
 
 use App\Models\Payment;
 use App\Services\MonnifyService;
-use App\Services\PaystackService;
 use App\Services\Payments\Contracts\HotspotHostedGateway;
+use App\Services\PaystackService;
 use App\Services\SquadService;
 use App\Services\StripeService;
 use App\Support\PaymentGatewayCatalog;
@@ -101,7 +101,16 @@ class HotspotHostedCheckoutManager
     private function callbackUrl(Payment $payment): string
     {
         return match ($payment->provider) {
-            PaymentGatewayCatalog::MONNIFY => route('hotspot.payment.callback', ['paymentReference' => $payment->tx_ref]),
+            // Monnify appends its own ?paymentReference=...&paymentStatus=... to
+            // whatever redirectUrl it's given, using a plain "?" rather than
+            // checking for an existing query string first -- pre-embedding our
+            // own ?paymentReference=... here produced a doubled, malformed query
+            // string on return (confirmed live 2026-09-25: the tx_ref PortalController
+            // extracted literally contained a second, embedded "?paymentReference=..."
+            // copy of itself, so payment lookup failed outright). callback()'s tx_ref
+            // extraction already checks paymentReference as a fallback, so Monnify's
+            // own appended value alone is all that's needed here.
+            PaymentGatewayCatalog::MONNIFY => route('hotspot.payment.callback'),
             PaymentGatewayCatalog::SQUAD => route('hotspot.payment.callback', ['transaction_ref' => $payment->tx_ref]),
             PaymentGatewayCatalog::STRIPE => route('hotspot.payment.callback', ['tx_ref' => $payment->tx_ref]),
             default => route('hotspot.payment.callback'),

@@ -1745,7 +1745,7 @@ class HotspotPortalTest extends TestCase
             && $request['currencyCode'] === 'NGN'
             && $request['contractCode'] === '1234567890'
             && $request['customerEmail'] === 'customer@example.com'
-            && $request['redirectUrl'] === route('hotspot.payment.callback', ['paymentReference' => $payment->tx_ref])
+            && $request['redirectUrl'] === route('hotspot.payment.callback')
             && $request['metadata']['tenant_name'] === 'Demo ISP'
             && $request['metadata']['shop_name'] === 'Demo Shop'
             && $request['metadata']['device_mac'] === 'AA:BB:CC:DD:EE:FF');

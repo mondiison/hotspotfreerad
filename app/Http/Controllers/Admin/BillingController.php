@@ -199,9 +199,19 @@ class BillingController extends Controller
         ]);
 
         try {
+            // Same reasoning as HotspotHostedCheckoutManager::callbackUrl()'s Monnify
+            // case: Monnify appends its own ?paymentReference=...&paymentStatus=...
+            // to whatever redirectUrl it's given, using "?" rather than checking for
+            // an existing query string -- pre-embedding our own ?tx_ref=... here
+            // would produce the same doubled, malformed query string confirmed live
+            // on the hotspot side.
+            $redirectUrl = $gateway === PaymentGatewayCatalog::MONNIFY
+                ? route('admin.billing.payments.callback')
+                : route('admin.billing.payments.callback', ['tx_ref' => $payment->tx_ref]);
+
             $checkout = $gatewayService->initializeCheckout(
                 $payment->load(['tenant', 'billingPlan']),
-                route('admin.billing.payments.callback', ['tx_ref' => $payment->tx_ref])
+                $redirectUrl
             );
 
             $payment->update([
@@ -234,7 +244,7 @@ class BillingController extends Controller
 
     public function callback(Request $request, PlatformBillingConfirmationService $billing): RedirectResponse
     {
-        $txRef = $request->query('tx_ref') ?: $request->query('reference');
+        $txRef = $request->query('tx_ref') ?: $request->query('paymentReference') ?: $request->query('reference');
         $payment = PlatformBillingPayment::with(['tenant', 'billingPlan'])
             ->where('tx_ref', $txRef)
             ->first();
@@ -250,7 +260,13 @@ class BillingController extends Controller
 
         abort_unless($request->user()->isSuperAdmin() || $request->user()->tenant_id === $payment->tenant_id, 403);
 
-        if ($payment->provider !== PaymentGatewayCatalog::STRIPE && ! $this->statusIsSuccessful($request->query('status'))) {
+        // Monnify's own redirect convention appends paymentReference/paymentStatus,
+        // never a plain "status" param -- gating on $request->query('status') for
+        // Monnify would reject every successful payment outright before ever
+        // reaching real API verification below, the same exclusion the hotspot-side
+        // callback() already applies to Monnify (and Paystack/Squad) for exactly
+        // this reason.
+        if (! in_array($payment->provider, [PaymentGatewayCatalog::MONNIFY, PaymentGatewayCatalog::STRIPE], true) && ! $this->statusIsSuccessful($request->query('status'))) {
             $payment->update(['status' => $request->query('status', 'failed')]);
 
             return redirect()->route('admin.billing.index')->withErrors(['billing' => 'Platform billing payment was not successful.']);
