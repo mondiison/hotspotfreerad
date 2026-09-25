@@ -4,6 +4,7 @@ namespace App\Services;
 
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Resolves a bank account number to its real account holder name before a
@@ -46,14 +47,24 @@ class BankAccountResolutionService
      */
     public function banks(): array
     {
+        $provider = $this->activeProvider();
+
         try {
-            return match ($this->activeProvider()) {
+            return match ($provider) {
                 'paystack' => $this->paystackBanks(),
                 'monnify' => $this->monnify->banks(),
                 'flutterwave' => $this->flutterwave->banks(),
                 default => [],
             };
-        } catch (RequestException) {
+        } catch (\Throwable $exception) {
+            Log::warning('Fetching bank list failed', [
+                'provider' => $provider,
+                'exception' => get_class($exception),
+                'message' => $exception->getMessage(),
+                'response_status' => $exception instanceof RequestException ? $exception->response->status() : null,
+                'response_body' => $exception instanceof RequestException ? $exception->response->body() : null,
+            ]);
+
             return [];
         }
     }
@@ -75,7 +86,17 @@ class BankAccountResolutionService
                 'monnify' => $this->monnify->resolveAccount($bankCode, $accountNumber),
                 'flutterwave' => $this->flutterwave->resolveAccount($bankCode, $accountNumber),
             };
-        } catch (RequestException $exception) {
+        } catch (\Throwable $exception) {
+            Log::warning('Bank account resolution failed', [
+                'provider' => $provider,
+                'bank_code' => $bankCode,
+                'account_number' => $accountNumber,
+                'exception' => get_class($exception),
+                'message' => $exception->getMessage(),
+                'response_status' => $exception instanceof RequestException ? $exception->response->status() : null,
+                'response_body' => $exception instanceof RequestException ? $exception->response->body() : null,
+            ]);
+
             return ['account_name' => null, 'error' => 'Could not verify this account -- double-check the bank and account number and try again.'];
         }
 
