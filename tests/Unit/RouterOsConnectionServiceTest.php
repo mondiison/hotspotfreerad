@@ -351,6 +351,30 @@ class RouterOsConnectionServiceTest extends TestCase
         $this->assertSame(['RADIUS client (WireGuard)'], $plan['unchanged']);
     }
 
+    /**
+     * Regression test for a 2026-09-25 live report: a router ended up with
+     * two identical RADIUS client entries at the same address (a resulting
+     * RouterOS behavior of retrying a login across both roughly doubled
+     * every authentication round-trip). This reconciliation's add/unchanged
+     * logic already never re-adds when *an* entry exists at a desired
+     * address, but it never used to clean up a pre-existing duplicate --
+     * confirm it now does, keeping the first and removing the rest.
+     */
+    public function test_plan_radius_client_changes_removes_a_duplicate_entry_at_a_desired_address(): void
+    {
+        $desired = ['zerotier' => ['address' => '10.9.0.1']];
+        $existing = [
+            ['.id' => '*1', 'address' => '10.9.0.1'],
+            ['.id' => '*2', 'address' => '10.9.0.1'],
+        ];
+
+        $plan = RouterOsConnectionService::planRadiusClientChanges($desired, $existing, ['10.8.0.1', '10.9.0.1']);
+
+        $this->assertSame([], $plan['add']);
+        $this->assertSame(['Remove duplicate RADIUS client (10.9.0.1)' => '*2'], $plan['remove']);
+        $this->assertSame(['RADIUS client (ZeroTier)'], $plan['unchanged']);
+    }
+
     public function test_plan_radius_client_changes_removes_a_stale_managed_entry(): void
     {
         // Router reverted from wireguard_zerotier back to wireguard-only --

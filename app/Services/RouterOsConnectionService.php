@@ -1892,11 +1892,36 @@ class RouterOsConnectionService
 
         $desiredAddresses = collect($desired)->pluck('address')->all();
         $remove = [];
+        $keptDesiredAddresses = [];
 
         foreach ($existing as $row) {
             $address = (string) ($row['address'] ?? '');
 
-            if ($address === '' || in_array($address, $desiredAddresses, true) || ! in_array($address, $managedAddresses, true)) {
+            if ($address === '') {
+                continue;
+            }
+
+            if (in_array($address, $desiredAddresses, true)) {
+                // A desired address should only ever have one entry. Confirmed
+                // live 2026-09-25: a router ended up with two identical entries
+                // at the same address (most likely its script pasted by hand
+                // more than once -- unlike this reconciliation, a script paste
+                // isn't idempotent), and RouterOS retrying a login across both
+                // roughly doubled every RADIUS round-trip. This add/unchanged
+                // logic above only ever checks "does *an* entry exist here" so
+                // it never re-adds a duplicate, but it also never used to clean
+                // one up. Keep the first entry seen for a given address, remove
+                // any further ones.
+                if (isset($keptDesiredAddresses[$address])) {
+                    $remove['Remove duplicate RADIUS client ('.$address.')'] = (string) ($row['.id'] ?? '');
+                } else {
+                    $keptDesiredAddresses[$address] = true;
+                }
+
+                continue;
+            }
+
+            if (! in_array($address, $managedAddresses, true)) {
                 continue;
             }
 
