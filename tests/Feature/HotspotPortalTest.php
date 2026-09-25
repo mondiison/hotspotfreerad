@@ -385,9 +385,40 @@ class HotspotPortalTest extends TestCase
             ->assertSee('Start test access');
     }
 
+    /**
+     * Regression test for a 2026-09-25 live report: the checkout-unavailable
+     * fallback page (resources/views/hotspot/checkout.blade.php, shown when
+     * online checkout can't start) has its own separate "Start test access"
+     * form that was missed when the portal's own button was first gated --
+     * it was still showing unconditionally even for a shop with test access
+     * turned off (the button itself would have hit PortalController::grant()'s
+     * server-side guard and been rejected, but showing it at all was
+     * confusing and inconsistent with the portal page).
+     */
+    public function test_checkout_unavailable_page_hides_start_test_access_button_when_disabled(): void
+    {
+        Http::fake();
+        [$router, $package] = $this->routerWithPackage();
+        $router->shop->update([
+            'flutterwave_client_id' => 'tenant-client-id',
+            'flutterwave_client_secret' => 'tenant-client-secret',
+        ]);
+
+        $this->post(route('hotspot.pay'), [
+            'mac' => 'AA:BB:CC:DD:EE:FF',
+            'nasid' => $router->nas_identifier,
+            'package_id' => $package->id,
+            'payment_method' => 'card',
+        ])
+            ->assertOk()
+            ->assertSee('Card checkout needs the tenant gateway secret key')
+            ->assertDontSee('Start test access');
+    }
+
     public function test_payment_step_creates_pending_payment_and_customer(): void
     {
         [$router, $package] = $this->routerWithPackage();
+        $router->shop->update(['allow_test_access' => true]);
 
         $this->post(route('hotspot.pay'), [
             'mac' => 'AA:BB:CC:DD:EE:FF',

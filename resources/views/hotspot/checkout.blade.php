@@ -84,21 +84,23 @@
                 @endif
             </div>
 
-            <form method="POST" action="{{ route('hotspot.grant') }}" class="mt-5">
-                @csrf
-                <input type="hidden" name="package_id" value="{{ $package->id }}">
-                <input type="hidden" name="mac" value="{{ $macAddress }}">
-                <input type="hidden" name="nasid" value="{{ $router->nas_identifier }}">
-                @if ($loginUrl)
-                    <input type="hidden" name="link-login" value="{{ $loginUrl }}">
-                @endif
-                @if ($originalUrl)
-                    <input type="hidden" name="link-orig" value="{{ $originalUrl }}">
-                @endif
-                <button class="w-full rounded-md px-4 py-2 text-sm font-medium text-white" style="background-color: var(--brand)">
-                    Start test access
-                </button>
-            </form>
+            @if ($shop->allow_test_access)
+                <form method="POST" action="{{ route('hotspot.grant') }}" class="mt-5">
+                    @csrf
+                    <input type="hidden" name="package_id" value="{{ $package->id }}">
+                    <input type="hidden" name="mac" value="{{ $macAddress }}">
+                    <input type="hidden" name="nasid" value="{{ $router->nas_identifier }}">
+                    @if ($loginUrl)
+                        <input type="hidden" name="link-login" value="{{ $loginUrl }}">
+                    @endif
+                    @if ($originalUrl)
+                        <input type="hidden" name="link-orig" value="{{ $originalUrl }}">
+                    @endif
+                    <button class="w-full rounded-md px-4 py-2 text-sm font-medium text-white" style="background-color: var(--brand)">
+                        Start test access
+                    </button>
+                </form>
+            @endif
             </div>
         </section>
     </main>
