@@ -179,6 +179,25 @@ class PlatformPaymentSettingsService
         return in_array($this->activeGateway(), PaymentGatewayCatalog::platformImplementedGatewayKeys(), true);
     }
 
+    /**
+     * The gateway a wallet-enabled tenant's customer payments actually route
+     * through -- follows the platform's own "Active gateway" choice, but only
+     * among gateways with a tenant-facing service that knows how to use
+     * platform-owned credentials (Flutterwave/Stripe/Monnify, the same set
+     * activeGatewayIsImplemented() checks). The "Active gateway" dropdown
+     * still lets an admin pick Paystack/Squad for planning purposes, but
+     * following that choice here would silently break every wallet-enabled
+     * tenant's live customer checkout the moment it's selected -- falling
+     * back to Flutterwave instead keeps wallet mode on its previous,
+     * proven-working default until those two gateways gain the same
+     * wallet-credential support FlutterwaveService/MonnifyService/StripeService
+     * already have.
+     */
+    public function walletGateway(): string
+    {
+        return $this->activeGatewayIsImplemented() ? $this->activeGateway() : PaymentGatewayCatalog::FLUTTERWAVE;
+    }
+
     public function hasStoredCredentials(?string $gateway = null): bool
     {
         return $this->storedGatewayRaw($gateway ?: $this->activeGateway()) !== [];

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Payment;
 use App\Services\Payments\Contracts\HotspotHostedGateway;
 use App\Support\GuestCustomerEmail;
+use App\Support\PaymentGatewayCatalog;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -12,6 +13,8 @@ use Illuminate\Support\Str;
 
 class MonnifyService implements HotspotHostedGateway
 {
+    public function __construct(private readonly PlatformPaymentSettingsService $platformSettings) {}
+
     /**
      * @throws RequestException
      */
@@ -101,6 +104,13 @@ class MonnifyService implements HotspotHostedGateway
 
     public function credentialSource(Payment $payment): array
     {
+        if ($this->usesWalletCredentials($payment)) {
+            return [
+                'source' => 'platform',
+                'label' => 'MMS Radius platform gateway',
+            ];
+        }
+
         if ($this->isConfiguredFor($payment)) {
             return [
                 'source' => 'tenant',
@@ -158,15 +168,22 @@ class MonnifyService implements HotspotHostedGateway
 
     private function setting(Payment $payment, string $key): string
     {
-        $settings = (array) ($payment->shop?->paymentGatewaySettings()['monnify'] ?? []);
+        $settings = $this->usesWalletCredentials($payment)
+            ? $this->platformSettings->gatewaySettings(PaymentGatewayCatalog::MONNIFY)
+            : (array) ($payment->shop?->paymentGatewaySettings()['monnify'] ?? []);
 
         return trim((string) ($settings[$key] ?? ''), " \t\n\r\0\x0B\"'");
     }
 
+    private function usesWalletCredentials(?Payment $payment): bool
+    {
+        return (bool) $payment?->shop?->tenant?->wallet_enabled;
+    }
+
     /**
-     * Per-shop, not global -- defaults to "test" (sandbox) so a shop that's
-     * never touched this setting keeps behaving exactly as it always has,
-     * rather than silently starting to hit the live API.
+     * Defaults to "test" (sandbox) so a shop/platform account that's never
+     * touched this setting keeps behaving exactly as it always has, rather
+     * than silently starting to hit the live API.
      */
     private function baseUrl(Payment $payment): string
     {

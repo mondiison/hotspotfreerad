@@ -2,10 +2,11 @@
 
 namespace App\Models;
 
+use App\Services\PlatformPaymentSettingsService;
+use App\Support\PaymentGatewayCatalog;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Model;
-use App\Support\PaymentGatewayCatalog;
 
 class Shop extends Model
 {
@@ -32,7 +33,7 @@ class Shop extends Model
     public function paymentGateway(): string
     {
         if ($this->tenant?->wallet_enabled) {
-            return PaymentGatewayCatalog::FLUTTERWAVE;
+            return app(PlatformPaymentSettingsService::class)->walletGateway();
         }
 
         return $this->payment_gateway ?: PaymentGatewayCatalog::FLUTTERWAVE;

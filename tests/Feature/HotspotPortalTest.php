@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Jobs\VerifyHotspotPaymentWebhook;
 use App\Models\Package;
 use App\Models\Payment;
+use App\Models\PlatformSetting;
 use App\Models\Router;
 use App\Models\Shop;
 use App\Models\Subscription;
@@ -13,6 +14,7 @@ use App\Models\Wallet;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Schema;
@@ -1046,6 +1048,96 @@ class HotspotPortalTest extends TestCase
             'type' => 'debit',
             'amount' => 50,
         ]);
+    }
+
+    /**
+     * 2026-09-25, direct request: wallet mode used to be hardcoded to
+     * Flutterwave regardless of the platform's own "Active gateway" choice
+     * (Shop::paymentGateway() always returned FLUTTERWAVE for a wallet-enabled
+     * tenant). Now it follows PlatformPaymentSettingsService::walletGateway(),
+     * which mirrors the platform's active gateway as long as that gateway has
+     * a real platform-credentialed adapter (Flutterwave/Stripe/Monnify).
+     */
+    public function test_wallet_mode_follows_the_platforms_active_gateway_to_monnify(): void
+    {
+        PlatformSetting::query()->updateOrCreate(
+            ['key' => 'payments.platform.general'],
+            ['value' => ['active_gateway' => 'monnify']]
+        );
+        PlatformSetting::query()->updateOrCreate(
+            ['key' => 'payments.platform.gateway.monnify'],
+            ['value' => [
+                'public_key' => Crypt::encryptString('platform-monnify-api-key'),
+                'secret_key' => Crypt::encryptString('platform-monnify-secret-key'),
+                'contract_code' => Crypt::encryptString('platform-contract-code'),
+            ]]
+        );
+        Cache::flush();
+
+        [$router, $package] = $this->routerWithPackage([
+            'wallet_enabled' => true,
+            'billing_model' => 'commission',
+            'commission_rate' => 10,
+            'wallet_commission_bearer' => 'tenant',
+        ]);
+
+        Http::fake([
+            'sandbox.monnify.com/api/v1/auth/login' => Http::response([
+                'responseBody' => ['accessToken' => 'WALLET_MONNIFY_TOKEN'],
+            ]),
+            'sandbox.monnify.com/api/v1/merchant/transactions/init-transaction' => Http::response([
+                'responseBody' => [
+                    'transactionReference' => 'MNFY|wallet|123',
+                    'checkoutUrl' => 'https://sandbox.monnify.com/checkout/wallet-hotspot',
+                ],
+            ]),
+        ]);
+
+        // Deliberately no shop-level Monnify gateway_settings saved -- wallet
+        // mode must resolve credentials from the platform's own settings.
+        $this->post(route('hotspot.pay'), [
+            'mac' => 'AA:BB:CC:DD:EE:FF',
+            'nasid' => $router->nas_identifier,
+            'package_id' => $package->id,
+            'email' => 'customer@example.com',
+        ])
+            ->assertRedirect('https://sandbox.monnify.com/checkout/wallet-hotspot');
+
+        $payment = Payment::firstOrFail();
+        $this->assertSame('monnify', $payment->provider);
+        $this->assertSame('MNFY|wallet|123', $payment->provider_reference);
+        $this->assertSame('platform', data_get($payment->payload, 'monnify_account.source'));
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/api/v1/merchant/transactions/init-transaction')
+            && $request->hasHeader('Authorization', 'Bearer WALLET_MONNIFY_TOKEN')
+            && $request['contractCode'] === 'platform-contract-code');
+    }
+
+    /**
+     * A gateway with no wallet-credential support yet (Paystack/Squad --
+     * PlatformPaymentSettingsService::walletGateway()'s deliberate safety
+     * fallback) must never silently break wallet checkout just because an
+     * admin picked it as "Active gateway" for planning purposes.
+     */
+    public function test_wallet_mode_falls_back_to_flutterwave_when_active_gateway_has_no_wallet_support(): void
+    {
+        PlatformSetting::query()->updateOrCreate(
+            ['key' => 'payments.platform.general'],
+            ['value' => ['active_gateway' => 'paystack']]
+        );
+        Cache::flush();
+        $this->configureFlutterwave();
+
+        [$router, $package] = $this->routerWithPackage(['wallet_enabled' => true]);
+
+        $this->post(route('hotspot.pay'), [
+            'mac' => 'AA:BB:CC:DD:EE:FF',
+            'nasid' => $router->nas_identifier,
+            'package_id' => $package->id,
+            'email' => 'customer@example.com',
+        ]);
+
+        $this->assertSame('flutterwave', Payment::firstOrFail()->provider);
     }
 
     public function test_wallet_mode_customer_bears_commission_charges_extra_and_credits_full_price(): void

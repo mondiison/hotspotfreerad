@@ -5,12 +5,15 @@ namespace App\Services;
 use App\Models\Payment;
 use App\Services\Payments\Contracts\HotspotHostedGateway;
 use App\Support\GuestCustomerEmail;
+use App\Support\PaymentGatewayCatalog;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 
 class StripeService implements HotspotHostedGateway
 {
+    public function __construct(private readonly PlatformPaymentSettingsService $platformSettings) {}
+
     /**
      * @throws RequestException
      */
@@ -105,6 +108,13 @@ class StripeService implements HotspotHostedGateway
 
     public function credentialSource(Payment $payment): array
     {
+        if ($this->usesWalletCredentials($payment)) {
+            return [
+                'source' => 'platform',
+                'label' => 'MMS Radius platform gateway',
+            ];
+        }
+
         if ($this->isConfiguredFor($payment)) {
             return [
                 'source' => 'tenant',
@@ -127,16 +137,24 @@ class StripeService implements HotspotHostedGateway
 
     private function secretKey(Payment $payment): string
     {
-        $settings = (array) ($payment->shop?->paymentGatewaySettings()['stripe'] ?? []);
-
-        return $this->normalizeSecret((string) ($settings['secret_key'] ?? ''));
+        return $this->normalizeSecret((string) ($this->settings($payment)['secret_key'] ?? ''));
     }
 
     private function webhookSecret(Payment $payment): string
     {
-        $settings = (array) ($payment->shop?->paymentGatewaySettings()['stripe'] ?? []);
+        return $this->normalizeSecret((string) ($this->settings($payment)['webhook_secret'] ?? ''));
+    }
 
-        return $this->normalizeSecret((string) ($settings['webhook_secret'] ?? ''));
+    private function settings(Payment $payment): array
+    {
+        return $this->usesWalletCredentials($payment)
+            ? $this->platformSettings->gatewaySettings(PaymentGatewayCatalog::STRIPE)
+            : (array) ($payment->shop?->paymentGatewaySettings()['stripe'] ?? []);
+    }
+
+    private function usesWalletCredentials(?Payment $payment): bool
+    {
+        return (bool) $payment?->shop?->tenant?->wallet_enabled;
     }
 
     private function normalizeSecret(string $secret): string
