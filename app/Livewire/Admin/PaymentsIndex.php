@@ -120,6 +120,68 @@ class PaymentsIndex extends Component
         $this->dispatch('notify', type: 'success', message: 'Manual transfer confirmed and hotspot access provisioned.');
     }
 
+    /**
+     * Re-queries the payment's own gateway using its already-stored
+     * provider_reference and grants access if it now confirms successful --
+     * added 2026-09-25 after a live report of a stuck customer payment
+     * (Monnify's redirect URL was malformed, separately fixed, but the
+     * underlying Payment row + provider_reference were saved correctly at
+     * checkout time, so nothing here needed the redirect to have worked).
+     * Mirrors BillingController::verify()'s already-proven shape for
+     * platform billing, and reuses the exact same verifyAndGrant() every
+     * other confirmation path (callback, webhook, customer-facing manual
+     * verify) already goes through.
+     */
+    public function verifyPayment(int $paymentId, HotspotPaymentConfirmationService $payments): void
+    {
+        $payment = TenantAccess::scopePayments(
+            Payment::query()->with(['shop.tenant', 'package', 'subscription']),
+            auth()->user()
+        )->findOrFail($paymentId);
+
+        if ($payment->provider === PaymentGatewayCatalog::MANUAL_BANK || $payment->status === 'successful') {
+            $this->dispatch('notify', type: 'warning', message: 'Nothing to verify for this payment.');
+
+            return;
+        }
+
+        if (blank($payment->provider_reference)) {
+            $this->dispatch('notify', type: 'warning', message: PaymentGatewayCatalog::gatewayName($payment->provider).' has not returned a provider reference for this payment yet.');
+
+            return;
+        }
+
+        try {
+            $subscription = $payments->verifyAndGrant(
+                $payment,
+                (string) $payment->provider_reference,
+                $this->paymentResourceType((string) $payment->provider_reference)
+            );
+        } catch (\Throwable $exception) {
+            $this->dispatch('notify', type: 'warning', message: 'Could not verify this payment: '.$exception->getMessage());
+
+            return;
+        }
+
+        if (! $subscription) {
+            $this->dispatch('notify', type: 'warning', message: 'Checked '.PaymentGatewayCatalog::gatewayName($payment->provider).' again, but this payment still isn\'t confirmed.');
+
+            return;
+        }
+
+        $this->dispatch('notify', type: 'success', message: 'Payment verified and hotspot access provisioned.');
+    }
+
+    /**
+     * Mirrors PortalController::paymentResourceType() -- duplicated rather
+     * than exposed from the controller, since it's a small, pure heuristic
+     * with no other dependencies.
+     */
+    private function paymentResourceType(string $providerReference): string
+    {
+        return str_starts_with(strtolower($providerReference), 'chg') ? 'charge' : 'order';
+    }
+
     public function render(PaymentReportService $reports)
     {
         $filters = $reports->filters([

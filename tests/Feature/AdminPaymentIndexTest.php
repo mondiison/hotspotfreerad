@@ -10,9 +10,11 @@ use App\Models\Shop;
 use App\Models\Subscription;
 use App\Models\Tenant;
 use App\Models\User;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
-use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -351,7 +353,125 @@ class AdminPaymentIndexTest extends TestCase
                 ->call('confirmManualTransfer', $payment->id);
 
             $this->fail('Expected tenant-scoped manual transfer confirmation to hide other tenant payment.');
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
+        } catch (ModelNotFoundException) {
+            $this->assertTrue(true);
+        }
+
+        $this->assertDatabaseHas('payments', [
+            'id' => $payment->id,
+            'status' => 'pending',
+        ]);
+    }
+
+    /**
+     * 2026-09-25, direct request after a live report of a stuck customer
+     * payment (a malformed Monnify redirect URL, separately fixed --
+     * PortalController's callback lookup failed, but the underlying Payment
+     * row + provider_reference were saved correctly at checkout time). Adds
+     * an admin-facing "Verify" action mirroring BillingController::verify()'s
+     * already-proven platform-billing pattern, reusing the same
+     * verifyAndGrant() every other confirmation path already goes through.
+     */
+    public function test_tenant_admin_can_manually_verify_a_pending_online_payment(): void
+    {
+        $this->createRadiusTables();
+        [$payment, $tenant] = $this->paymentFixture('Verify Tenant', 'verify@example.com', 'Verify Shop', 'HSF-VERIFY-PENDING', 'pending');
+        $payment->update(['provider_reference' => 'ord_verify_123']);
+        $payment->shop->update([
+            'flutterwave_client_id' => 'tenant-client-id',
+            'flutterwave_client_secret' => 'tenant-client-secret',
+        ]);
+        config([
+            'services.flutterwave.auth_url' => 'https://idp.flutterwave.com/realms/flutterwave/protocol/openid-connect/token',
+            'services.flutterwave.base_url' => 'https://developersandbox-api.flutterwave.com',
+        ]);
+        Http::fake([
+            'idp.flutterwave.com/*' => Http::response([
+                'access_token' => 'FLW_V4_TOKEN',
+                'expires_in' => 600,
+            ]),
+            'developersandbox-api.flutterwave.com/orders/ord_verify_123' => Http::response([
+                'status' => 'success',
+                'data' => [
+                    'id' => 'ord_verify_123',
+                    'status' => 'succeeded',
+                    'reference' => $payment->tx_ref,
+                    'amount' => 500,
+                    'currency' => 'NGN',
+                ],
+            ]),
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(PaymentsIndex::class)
+            ->assertSee('HSF-VERIFY-PENDING')
+            ->assertSee('Verify')
+            ->call('verifyPayment', $payment->id)
+            ->assertDispatched('notify');
+
+        $this->assertDatabaseHas('payments', [
+            'id' => $payment->id,
+            'status' => 'successful',
+        ]);
+        $this->assertDatabaseHas('subscriptions', [
+            'payment_id' => $payment->id,
+            'mac_address' => data_get($payment->payload, 'mac'),
+        ]);
+    }
+
+    public function test_manual_verify_does_nothing_for_manual_bank_transfers(): void
+    {
+        [$payment, $tenant] = $this->paymentFixture('Manual Guard Tenant', 'manual-guard@example.com', 'Manual Guard Shop', 'HSF-MANUAL-GUARD', 'pending');
+        $payment->update([
+            'provider' => 'manual_bank',
+            'provider_reference' => $payment->tx_ref,
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        Http::fake();
+
+        Livewire::actingAs($user)
+            ->test(PaymentsIndex::class)
+            ->call('verifyPayment', $payment->id)
+            ->assertDispatched('notify');
+
+        Http::assertNothingSent();
+        $this->assertDatabaseHas('payments', [
+            'id' => $payment->id,
+            'status' => 'pending',
+        ]);
+    }
+
+    public function test_tenant_admin_cannot_verify_another_tenants_payment(): void
+    {
+        [$payment] = $this->paymentFixture('Other Verify Tenant', 'other-verify@example.com', 'Other Verify Shop', 'HSF-OTHER-VERIFY', 'pending');
+        $payment->update(['provider_reference' => 'ord_other_verify']);
+        $actorTenant = Tenant::create([
+            'company_name' => 'Verify Actor Tenant',
+            'owner_email' => 'verify-actor@example.com',
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $actorTenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        try {
+            Livewire::actingAs($user)
+                ->test(PaymentsIndex::class)
+                ->call('verifyPayment', $payment->id);
+
+            $this->fail('Expected tenant-scoped payment verification to hide other tenant payment.');
+        } catch (ModelNotFoundException) {
             $this->assertTrue(true);
         }
 

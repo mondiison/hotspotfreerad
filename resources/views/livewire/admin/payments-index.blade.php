@@ -147,6 +147,24 @@
                                     <span wire:loading.remove wire:target="confirmManualTransfer({{ $payment->id }})">Confirm</span>
                                     <span wire:loading wire:target="confirmManualTransfer({{ $payment->id }})">Confirming...</span>
                                 </flux:button>
+                            @elseif ($payment->provider !== \App\Support\PaymentGatewayCatalog::MANUAL_BANK && $payment->status !== 'successful')
+                                @if ($payment->provider_reference)
+                                    <flux:button
+                                        type="button"
+                                        size="xs"
+                                        variant="outline"
+                                        icon="arrow-path"
+                                        wire:click="verifyPayment({{ $payment->id }})"
+                                        wire:confirm="Re-check this payment with the gateway now?"
+                                        wire:loading.attr="disabled"
+                                        wire:target="verifyPayment({{ $payment->id }})"
+                                    >
+                                        <span wire:loading.remove wire:target="verifyPayment({{ $payment->id }})">Verify</span>
+                                        <span wire:loading wire:target="verifyPayment({{ $payment->id }})">Verifying...</span>
+                                    </flux:button>
+                                @else
+                                    <span class="text-xs text-zinc-400 dark:text-zinc-500" title="No provider reference yet">No reference</span>
+                                @endif
                             @else
                                 <span class="text-xs text-zinc-400 dark:text-zinc-500">-</span>
                             @endif
