@@ -187,6 +187,52 @@ class AdminWalletTest extends TestCase
             && $request['bank_code'] === '058');
     }
 
+    /**
+     * Regression test for a 2026-09-25 live report: every account failed to
+     * resolve because Monnify's v1 disbursement account-validate endpoint is
+     * deprecated (confirmed live via the exact "responseCode: 99" rejection).
+     * Locks in the v2 path this was fixed to use.
+     */
+    public function test_settlement_account_resolves_via_monnify_v2_endpoint(): void
+    {
+        $tenant = $this->tenant();
+        $this->subscribeTenant($tenant, supportsWallet: true, walletCommissionRate: 10);
+        $tenant->forceFill(['wallet_enabled' => true])->save();
+        Wallet::create(['tenant_id' => $tenant->id, 'balance' => 0]);
+        $user = $this->tenantAdmin($tenant);
+
+        PlatformSetting::query()->updateOrCreate(
+            ['key' => 'payments.platform.gateway.monnify'],
+            ['value' => [
+                'public_key' => Crypt::encryptString('platform-monnify-api-key'),
+                'secret_key' => Crypt::encryptString('platform-monnify-secret-key'),
+                'contract_code' => Crypt::encryptString('platform-contract-code'),
+            ]]
+        );
+        Cache::flush();
+
+        Http::fake([
+            'sandbox.monnify.com/api/v1/auth/login' => Http::response([
+                'responseBody' => ['accessToken' => 'SETTLEMENT_MONNIFY_TOKEN'],
+            ]),
+            'sandbox.monnify.com/api/v2/disbursements/account/validate*' => Http::response([
+                'requestSuccessful' => true,
+                'responseBody' => ['accountNumber' => '0148556206', 'accountName' => 'Monday Bulus', 'bankCode' => '058'],
+            ]),
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(WalletIndex::class, ['tenant' => $tenant])
+            ->set('selectedBankCode', '058')
+            ->set('settlementAccountNumber', '0148556206')
+            ->call('verifySettlementAccount')
+            ->assertSet('resolvedAccountName', 'Monday Bulus');
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/api/v2/disbursements/account/validate')
+            && $request->hasHeader('Authorization', 'Bearer SETTLEMENT_MONNIFY_TOKEN'));
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), '/api/v1/disbursements/account/validate'));
+    }
+
     private function giveTenantAVerifiedSettlementAccount(Tenant $tenant): void
     {
         $tenant->forceFill([

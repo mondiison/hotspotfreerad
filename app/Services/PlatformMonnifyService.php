@@ -110,9 +110,14 @@ class PlatformMonnifyService
     }
 
     /**
-     * Monnify's disbursement account-validate endpoint -- not yet exercised
-     * against a live account, matching this codebase's honesty pattern for
-     * other freshly-added integrations.
+     * Monnify's v1 disbursement account-validate endpoint is deprecated --
+     * confirmed live 2026-09-25 (`responseCode: "99"`, "This API endpoint has
+     * been deprecated ... migrate to ... /api/v2/disbursements/account/validate"),
+     * which is why this uses v2. Same accountNumber/bankCode query params and
+     * bearer-token auth as v1 -- the deprecation notice didn't mention a
+     * changed request shape, only the path -- but this hasn't been separately
+     * confirmed against a real account yet, matching this codebase's honesty
+     * pattern for other freshly-added integrations.
      *
      * @return array{account_name: ?string}
      *
@@ -122,7 +127,7 @@ class PlatformMonnifyService
     {
         $response = Http::withToken($this->accessToken())
             ->acceptJson()
-            ->get($this->baseUrl().'/api/v1/disbursements/account/validate', [
+            ->get($this->baseUrl().'/api/v2/disbursements/account/validate', [
                 'accountNumber' => $accountNumber,
                 'bankCode' => $bankCode,
             ])
