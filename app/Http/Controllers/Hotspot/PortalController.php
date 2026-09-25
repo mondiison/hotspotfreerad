@@ -26,6 +26,7 @@ use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -49,7 +50,7 @@ class PortalController extends Controller
             ->header('Content-Type', 'text/html');
     }
 
-    public function show(Request $request): View
+    public function show(Request $request, FlutterwaveService $flutterwave): View
     {
         $validated = $request->validate([
             'mac' => ['nullable', 'string', 'max:64'],
@@ -109,7 +110,40 @@ class PortalController extends Controller
             'macAddress' => $validated['mac'],
             'loginUrl' => $this->mikrotikLoginUrl($validated),
             'originalUrl' => $validated['link-orig'] ?? null,
+            'ussdBanks' => $this->ussdBanks($router, $flutterwave),
         ]);
+    }
+
+    /**
+     * USSD needs the customer to pick their own bank (Flutterwave requires
+     * payment_method.ussd.account_bank) -- fetched once per shop and cached,
+     * since the bank list itself never varies per customer and this avoids
+     * an extra Flutterwave API call on every single portal page view.
+     * Fails gracefully to an empty list (the USSD option simply won't be
+     * offered) rather than breaking the whole portal page over a
+     * credentials or network hiccup.
+     *
+     * @return list<array{code: string, name: string}>
+     */
+    private function ussdBanks(Router $router, FlutterwaveService $flutterwave): array
+    {
+        if ($router->shop?->paymentGateway() !== PaymentGatewayCatalog::FLUTTERWAVE) {
+            return [];
+        }
+
+        $dummyPayment = (new Payment(['shop_id' => $router->shop_id]))->setRelation('shop', $router->shop);
+
+        if (! $flutterwave->isConfiguredFor($dummyPayment)) {
+            return [];
+        }
+
+        return Cache::remember('flutterwave-ussd-banks:'.$router->shop_id, now()->addHours(6), function () use ($dummyPayment, $flutterwave): array {
+            try {
+                return $flutterwave->banks($dummyPayment);
+            } catch (Throwable) {
+                return [];
+            }
+        });
     }
 
     public function grant(Request $request, RadiusProvisioningService $radius): RedirectResponse|View
@@ -230,7 +264,8 @@ class PortalController extends Controller
             'package_id' => ['required', 'integer', 'exists:packages,id'],
             'email' => ['nullable', 'email', 'max:255'],
             'phone' => ['nullable', 'string', 'max:255'],
-            'payment_method' => ['nullable', 'string', 'in:opay,bank_transfer,card,ussd,nqr'],
+            'payment_method' => ['nullable', 'string', 'in:opay,bank_transfer,card,ussd'],
+            'ussd_bank_code' => ['required_if:payment_method,ussd', 'nullable', 'string', 'max:10'],
             'link-login' => ['nullable', 'string', 'max:2048'],
             'link-login-only' => ['nullable', 'string', 'max:2048'],
             'link-orig' => ['nullable', 'string', 'max:2048'],
@@ -428,23 +463,23 @@ class PortalController extends Controller
                     ]);
                 }
 
-                // OPay, USSD, and NQR (Nigeria QR) all go through the same v4
-                // orchestration direct-charge endpoint, differing only in
-                // `payment_method.type` (FlutterwaveService::paymentMethodType()
-                // passes $paymentMethod straight through) -- Flutterwave's hosted
-                // redirect page is what actually renders the USSD dial code or QR
-                // image, the same way it already renders OPay's own flow, so this
-                // reuses the exact mechanism already proven working for OPay rather
-                // than needing a method-specific payload. USSD/NQR themselves are
-                // not yet confirmed against a live checkout, matching this
-                // codebase's honesty pattern for other freshly-added integrations.
-                if (in_array($paymentMethod, ['opay', 'ussd', 'nqr'], true)) {
+                // OPay and USSD both go through the same v4 orchestration
+                // direct-charge endpoint -- confirmed live 2026-09-25 that USSD
+                // additionally needs payment_method.ussd.account_bank (the
+                // customer's bank code), unlike OPay's flat {type: "opay"}
+                // shape; FlutterwaveService::paymentMethodPayload() builds that
+                // nested object when present. NQR was removed the same day --
+                // confirmed via Flutterwave's own docs it isn't a valid
+                // payment_method.type at all for this endpoint, not just an
+                // unverified one.
+                if (in_array($paymentMethod, ['opay', 'ussd'], true)) {
                     $checkout = $flutterwave->initializeCheckout(
                         $payment,
                         [
                             'email' => $validated['email'] ?? null,
                             'phone' => $validated['phone'] ?? null,
                             'payment_method' => $validated['payment_method'] ?? null,
+                            'ussd_bank_code' => $validated['ussd_bank_code'] ?? null,
                             'name' => 'Hotspot Customer',
                         ],
                         route('hotspot.payment.callback', ['tx_ref' => $payment->tx_ref])

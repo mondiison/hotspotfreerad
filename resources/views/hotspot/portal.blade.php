@@ -138,7 +138,7 @@
                 @forelse ($packages as $package)
                     <article
                         class="rounded-lg border border-white/10 bg-white p-3 text-zinc-950 shadow-sm transition sm:p-5"
-                        x-data="{ paying: false, testing: false }"
+                        x-data="{ paying: false, testing: false, payment_method: 'opay' }"
                         :class="selectedPlan === {{ $package->id }} ? 'ring-2 ring-[var(--brand)]' : ''"
                     >
                         <button type="button" class="w-full text-left" @click="selectedPlan = selectedPlan === {{ $package->id }} ? null : {{ $package->id }}">
@@ -183,11 +183,21 @@
                                 <fieldset>
                                     <label for="payment_method" class="mb-2 block text-xs font-medium text-zinc-500">Pay with</label>
                                     @if ($gatewayKey === \App\Support\PaymentGatewayCatalog::FLUTTERWAVE)
-                                        <select name="payment_method" id="payment_method" class="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-700">
-                                            @foreach ([['opay', 'OPay'], ['bank_transfer', 'Bank Transfer'], ['card', 'Card'], ['ussd', 'USSD'], ['nqr', 'QR (Scan to Pay)']] as [$methodValue, $methodLabel])
+                                        <select name="payment_method" id="payment_method" x-model="payment_method" class="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-700">
+                                            @foreach ([['opay', 'OPay'], ['bank_transfer', 'Bank Transfer'], ['card', 'Card'], ['ussd', 'USSD']] as [$methodValue, $methodLabel])
                                                 <option value="{{ $methodValue }}">{{ $methodLabel }}</option>
                                             @endforeach
                                         </select>
+                                        @if (! empty($ussdBanks))
+                                            <div class="mt-2" x-show="payment_method === 'ussd'" x-cloak>
+                                                <label for="ussd_bank_code_{{ $package->id }}" class="mb-2 block text-xs font-medium text-zinc-500">Bank</label>
+                                                <select name="ussd_bank_code" id="ussd_bank_code_{{ $package->id }}" class="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-700">
+                                                    @foreach ($ussdBanks as $bank)
+                                                        <option value="{{ $bank['code'] }}">{{ $bank['name'] }}</option>
+                                                    @endforeach
+                                                </select>
+                                            </div>
+                                        @endif
                                     @else
                                         <div class="flex items-center gap-2 rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2">
                                             @if ($gatewayLogoUrl)

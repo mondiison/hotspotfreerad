@@ -29,9 +29,7 @@ class FlutterwaveService
                 'currency' => $payment->currency,
                 'reference' => $payment->tx_ref,
                 'redirect_url' => $redirectUrl,
-                'payment_method' => [
-                    'type' => $this->paymentMethodType($customer['payment_method'] ?? null),
-                ],
+                'payment_method' => $this->paymentMethodPayload($customer),
                 'customer' => $this->customerPayload($payment, $customer),
                 'meta' => [
                     'payment_id' => $payment->id,
@@ -475,6 +473,48 @@ class FlutterwaveService
         return filled($method)
             ? (string) $method
             : 'opay';
+    }
+
+    /**
+     * Confirmed live 2026-09-25: unlike OPay, Flutterwave's v4 API rejects a
+     * USSD charge with "payment_method.ussd must not be null" -- it needs a
+     * nested `ussd.account_bank` (the customer's bank code) that OPay's flat
+     * `{type: "opay"}` shape never required. `nqr` was removed entirely the
+     * same day -- confirmed via Flutterwave's own docs that it isn't a valid
+     * payment_method.type at all for this endpoint.
+     */
+    private function paymentMethodPayload(array $customer): array
+    {
+        $type = $this->paymentMethodType($customer['payment_method'] ?? null);
+
+        $payload = ['type' => $type];
+
+        if ($type === 'ussd' && filled($customer['ussd_bank_code'] ?? null)) {
+            $payload['ussd'] = ['account_bank' => (string) $customer['ussd_bank_code']];
+        }
+
+        return $payload;
+    }
+
+    /**
+     * @return list<array{code: string, name: string}>
+     *
+     * @throws RequestException
+     */
+    public function banks(Payment $payment): array
+    {
+        $response = Http::withToken($this->accessToken($payment))
+            ->acceptJson()
+            ->get($this->baseUrl().'/banks', ['country' => 'NG'])
+            ->throw()
+            ->json();
+
+        return collect(data_get($response, 'data', []))
+            ->map(fn (array $bank): array => [
+                'code' => (string) data_get($bank, 'code'),
+                'name' => (string) data_get($bank, 'name'),
+            ])
+            ->all();
     }
 
     private function customerPayload(Payment $payment, array $customer): array
