@@ -37,7 +37,7 @@ class PaymentGatewayCatalog
                     'client_id' => 'Client ID (v4 OPay/transfer)',
                     'client_secret' => 'Client Secret (v4 OPay/transfer)',
                     'secret_key' => 'Secret Key (v3 card checkout)',
-                    'webhook_secret' => 'Secret Hash / Webhook Secret',
+                    'webhook_secret' => 'Secret Hash',
                 ],
                 'secret_fields' => ['client_secret', 'secret_key', 'webhook_secret'],
                 'walled_garden_hosts' => ['*.flutterwave.com', '*.ravepay.co'],

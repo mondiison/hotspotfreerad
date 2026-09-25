@@ -354,7 +354,7 @@ class PlatformBillingTest extends TestCase
             ->assertHasNoErrors()
             ->assertSee('Platform payment settings updated.')
             ->assertSee('Client ID (v4 OPay/transfer) saved')
-            ->assertSee('Secret Hash / Webhook Secret saved');
+            ->assertSee('Secret Hash saved');
 
         $this->assertDatabaseHas('platform_settings', [
             'key' => 'payments.platform.gateway.flutterwave',
