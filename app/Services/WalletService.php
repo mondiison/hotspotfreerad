@@ -2,7 +2,9 @@
 
 namespace App\Services;
 
+use App\Jobs\SyncRouterWalledGarden;
 use App\Models\Payment;
+use App\Models\Router;
 use App\Models\Tenant;
 use App\Models\Wallet;
 use App\Models\WalletTransaction;
@@ -33,12 +35,36 @@ class WalletService
             'commission_rate' => $plan?->wallet_commission_rate ?? 0,
         ])->save();
 
+        $this->syncWalledGardensForTenant($tenant);
+
         return Wallet::query()->firstOrCreate(['tenant_id' => $tenant->id]);
     }
 
     public function disable(Tenant $tenant): void
     {
         $tenant->forceFill(['wallet_enabled' => false])->save();
+
+        $this->syncWalledGardensForTenant($tenant);
+    }
+
+    /**
+     * Wallet mode changes what gateway Shop::paymentGateway() resolves to
+     * (the platform's walletGateway() instead of the shop's own configured
+     * one) without ever touching the shop's payment_gateway column -- so it
+     * never went through PaymentSettingsService::update()'s existing
+     * "gateway changed, re-sync walled gardens" dispatch at all. Confirmed
+     * live 2026-09-25: a tenant enabled wallet mode (Monnify showed
+     * correctly on the checkout page, proving Shop::paymentGateway() itself
+     * resolved right), but the router's walled garden still only allowed
+     * whatever gateway it was provisioned for before, so the redirect to
+     * Monnify's hosted checkout got hard-reset (net::ERR_CONNECTION_CLOSED),
+     * the same failure mode documented for a manual gateway switch.
+     */
+    private function syncWalledGardensForTenant(Tenant $tenant): void
+    {
+        Router::whereHas('shop', fn ($query) => $query->where('tenant_id', $tenant->id))
+            ->pluck('id')
+            ->each(fn (int $routerId) => SyncRouterWalledGarden::dispatch($routerId));
     }
 
     public function balance(Tenant $tenant): float

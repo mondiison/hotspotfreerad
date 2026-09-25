@@ -2,7 +2,9 @@
 
 namespace App\Services;
 
+use App\Jobs\SyncRouterWalledGarden;
 use App\Models\PlatformSetting;
+use App\Models\Router;
 use App\Models\User;
 use App\Support\PaymentGatewayCatalog;
 use Illuminate\Support\Facades\Cache;
@@ -50,6 +52,8 @@ class PlatformPaymentSettingsService
     {
         abort_unless($actor->isSuperAdmin(), 403);
 
+        $previousWalletGateway = $this->walletGateway();
+
         $gateway = (string) ($data['active_gateway'] ?? $this->activeGateway());
 
         $general = $this->storedGeneral();
@@ -82,6 +86,22 @@ class PlatformPaymentSettingsService
 
         Cache::forget($this->cacheKey(self::GENERAL_KEY));
         Cache::forget($this->cacheKey($this->gatewayKey($gateway)));
+
+        // Every wallet-enabled tenant's shops resolve their checkout gateway from
+        // walletGateway() (see Shop::paymentGateway()), not from anything saved on
+        // the shop itself -- so a change here can silently break checkout for every
+        // one of them at once unless their routers' walled gardens are re-synced too,
+        // the same "gateway changed" trigger PaymentSettingsService::update() already
+        // uses for a tenant's own gateway switch. Compares the *effective* wallet
+        // gateway (walletGateway()'s Flutterwave-fallback-aware result), not the raw
+        // active_gateway, so picking a not-yet-wallet-capable gateway like Paystack
+        // -- which silently keeps every wallet tenant on Flutterwave under the hood
+        // -- doesn't dispatch a pointless resync.
+        if ($this->walletGateway() !== $previousWalletGateway) {
+            Router::whereHas('shop.tenant', fn ($query) => $query->where('wallet_enabled', true))
+                ->pluck('id')
+                ->each(fn (int $routerId) => SyncRouterWalledGarden::dispatch($routerId));
+        }
     }
 
     public function snapshot(): array

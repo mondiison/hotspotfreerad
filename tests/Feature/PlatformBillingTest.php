@@ -2,12 +2,15 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\SyncRouterWalledGarden;
 use App\Jobs\VerifyPlatformBillingWebhook;
 use App\Livewire\Admin\BillingPlansManager;
 use App\Livewire\Admin\PlatformPaymentSettingsCard;
 use App\Models\BillingPlan;
 use App\Models\PlatformBillingPayment;
 use App\Models\PlatformSetting;
+use App\Models\Router;
+use App\Models\Shop;
 use App\Models\Tenant;
 use App\Models\TenantBillingSubscription;
 use App\Models\User;
@@ -363,6 +366,50 @@ class PlatformBillingTest extends TestCase
         $this->assertSame('db-platform-client-secret', $service->clientSecret());
         $this->assertSame('db-platform-webhook-secret', $service->webhookSecretHash());
         $this->assertSame('bank_transfer', $service->defaultPaymentMethod());
+    }
+
+    /**
+     * Regression test for the same 2026-09-25 walled-garden gap, from the
+     * other direction: switching the platform's own "Active gateway" (not
+     * just enabling wallet mode itself) also changes what every wallet-
+     * enabled tenant's shops resolve to, and needs the same resync.
+     */
+    public function test_changing_the_platforms_active_gateway_resyncs_walled_gardens_for_wallet_tenants(): void
+    {
+        Queue::fake();
+
+        PlatformSetting::query()->updateOrCreate(
+            ['key' => 'payments.platform.gateway.monnify'],
+            ['value' => [
+                'public_key' => Crypt::encryptString('platform-monnify-api-key'),
+                'secret_key' => Crypt::encryptString('platform-monnify-secret-key'),
+                'contract_code' => Crypt::encryptString('platform-contract-code'),
+            ]]
+        );
+        Cache::flush();
+
+        $tenant = Tenant::create([
+            'company_name' => 'Wallet Tenant',
+            'owner_email' => 'wallet@example.com',
+            'wallet_enabled' => true,
+        ]);
+        $shop = Shop::create(['tenant_id' => $tenant->id, 'name' => 'Wallet Shop']);
+        $router = Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'Router One',
+            'nas_identifier' => 'active-gateway-change-router',
+            'wireguard_internal_ip' => '10.8.0.211',
+            'shared_secret' => 'radius-secret',
+        ]);
+        $superAdmin = User::factory()->create(['role' => 'super_admin', 'is_active' => true]);
+
+        Livewire::actingAs($superAdmin)
+            ->test(PlatformPaymentSettingsCard::class)
+            ->set('active_gateway', 'monnify')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        Queue::assertPushed(SyncRouterWalledGarden::class, fn (SyncRouterWalledGarden $job): bool => $job->routerId() === $router->id);
     }
 
     public function test_tenant_admin_cannot_update_platform_payment_settings(): void

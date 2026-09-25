@@ -2,9 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\SyncRouterWalledGarden;
 use App\Livewire\Admin\WalletIndex;
 use App\Models\BillingPlan;
 use App\Models\PlatformSetting;
+use App\Models\Router;
+use App\Models\Shop;
 use App\Models\Tenant;
 use App\Models\TenantBillingSubscription;
 use App\Models\User;
@@ -13,6 +16,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -71,6 +75,39 @@ class AdminWalletTest extends TestCase
         $this->assertTrue($tenant->wallet_enabled);
         $this->assertEquals(7.5, $tenant->commission_rate);
         $this->assertDatabaseHas('wallets', ['tenant_id' => $tenant->id]);
+    }
+
+    /**
+     * Regression test for a 2026-09-25 live report: enabling wallet mode
+     * changes what gateway Shop::paymentGateway() resolves to without ever
+     * touching the shop's payment_gateway column, so it never went through
+     * PaymentSettingsService's existing "gateway changed, re-sync walled
+     * gardens" dispatch -- a tenant enabled wallet (Monnify showed correctly
+     * on checkout) but the router's walled garden still only allowed the
+     * previous gateway, so the payment redirect got hard-reset
+     * (net::ERR_CONNECTION_CLOSED).
+     */
+    public function test_enabling_wallet_dispatches_a_walled_garden_sync_for_every_shop_router(): void
+    {
+        Queue::fake();
+
+        $tenant = $this->tenant();
+        $this->subscribeTenant($tenant, supportsWallet: true, walletCommissionRate: 7.5);
+        $shop = Shop::create(['tenant_id' => $tenant->id, 'name' => 'Demo Shop']);
+        $router = Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'Router One',
+            'nas_identifier' => 'wallet-enable-router',
+            'wireguard_internal_ip' => '10.8.0.210',
+            'shared_secret' => 'radius-secret',
+        ]);
+        $user = $this->tenantAdmin($tenant);
+
+        Livewire::actingAs($user)
+            ->test(WalletIndex::class, ['tenant' => $tenant])
+            ->call('enableWallet');
+
+        Queue::assertPushed(SyncRouterWalledGarden::class, fn (SyncRouterWalledGarden $job): bool => $job->routerId() === $router->id);
     }
 
     public function test_tenant_admin_can_change_who_bears_the_commission(): void
