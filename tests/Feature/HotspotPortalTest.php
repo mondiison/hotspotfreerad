@@ -549,57 +549,15 @@ class HotspotPortalTest extends TestCase
     }
 
     /**
-     * USSD (2026-09-25) requires a nested `payment_method.ussd.account_bank`
-     * -- Flutterwave's v4 API rejects a USSD charge without it, unlike OPay's
-     * flat `{type: "opay"}` shape. NQR was removed entirely the same day --
-     * confirmed via Flutterwave's own docs that `nqr` isn't a valid
-     * payment_method.type at all for this endpoint.
+     * USSD was removed entirely 2026-09-25 -- confirmed live that Flutterwave's
+     * v4 orchestration API rejects every bank code as "Invalid bank code",
+     * including their own documented example value, meaning inline USSD via
+     * this endpoint isn't actually functional for this account regardless of
+     * payload shape. Kept as a validation-rejection test the same way `nqr`
+     * already is, rather than silently accepting a method that's guaranteed
+     * to fail checkout.
      */
-    public function test_payment_step_redirects_to_flutterwave_for_ussd(): void
-    {
-        $this->configureFlutterwave();
-        config(['services.flutterwave.default_payment_method' => null]);
-        Http::fake([
-            'idp.flutterwave.com/*' => Http::response([
-                'access_token' => 'FLW_V4_TOKEN',
-                'expires_in' => 600,
-            ]),
-            'developersandbox-api.flutterwave.com/orchestration/direct-charges' => Http::response([
-                'status' => 'success',
-                'data' => [
-                    'id' => 'chg_ussd',
-                    'reference' => 'pending',
-                    'next_action' => [
-                        'type' => 'redirect_url',
-                        'redirect_url' => [
-                            'url' => 'https://developer-sandbox-ui-sit.flutterwave.cloud/redirects/ussd/demo',
-                        ],
-                    ],
-                ],
-            ]),
-        ]);
-        [$router, $package] = $this->routerWithPackage();
-        $router->shop->update([
-            'flutterwave_client_id' => 'tenant-client-id',
-            'flutterwave_client_secret' => 'tenant-client-secret',
-        ]);
-
-        $this->post(route('hotspot.pay'), [
-            'mac' => 'AA:BB:CC:DD:EE:FF',
-            'nasid' => $router->nas_identifier,
-            'package_id' => $package->id,
-            'email' => 'customer@example.com',
-            'payment_method' => 'ussd',
-            'ussd_bank_code' => '058',
-        ])
-            ->assertRedirect('https://developer-sandbox-ui-sit.flutterwave.cloud/redirects/ussd/demo');
-
-        Http::assertSent(fn ($request) => str_contains($request->url(), '/orchestration/direct-charges')
-            && data_get($request->data(), 'payment_method.type') === 'ussd'
-            && data_get($request->data(), 'payment_method.ussd.account_bank') === '058');
-    }
-
-    public function test_payment_step_requires_bank_code_for_ussd(): void
+    public function test_payment_step_rejects_ussd_method_value(): void
     {
         [$router, $package] = $this->routerWithPackage();
 
@@ -610,7 +568,7 @@ class HotspotPortalTest extends TestCase
             'email' => 'customer@example.com',
             'payment_method' => 'ussd',
         ])
-            ->assertSessionHasErrors('ussd_bank_code');
+            ->assertSessionHasErrors('payment_method');
     }
 
     public function test_payment_step_rejects_nqr_method_value(): void
