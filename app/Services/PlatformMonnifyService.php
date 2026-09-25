@@ -89,6 +89,50 @@ class PlatformMonnifyService
     }
 
     /**
+     * @return list<array{code: string, name: string}>
+     *
+     * @throws RequestException
+     */
+    public function banks(): array
+    {
+        $response = Http::withToken($this->accessToken())
+            ->acceptJson()
+            ->get($this->baseUrl().'/api/v1/banks')
+            ->throw()
+            ->json();
+
+        return collect(data_get($response, 'responseBody', []))
+            ->map(fn (array $bank): array => [
+                'code' => (string) data_get($bank, 'code'),
+                'name' => (string) data_get($bank, 'name'),
+            ])
+            ->all();
+    }
+
+    /**
+     * Monnify's disbursement account-validate endpoint -- not yet exercised
+     * against a live account, matching this codebase's honesty pattern for
+     * other freshly-added integrations.
+     *
+     * @return array{account_name: ?string}
+     *
+     * @throws RequestException
+     */
+    public function resolveAccount(string $bankCode, string $accountNumber): array
+    {
+        $response = Http::withToken($this->accessToken())
+            ->acceptJson()
+            ->get($this->baseUrl().'/api/v1/disbursements/account/validate', [
+                'accountNumber' => $accountNumber,
+                'bankCode' => $bankCode,
+            ])
+            ->throw()
+            ->json();
+
+        return ['account_name' => data_get($response, 'responseBody.accountName')];
+    }
+
+    /**
      * Monnify's webhook signature and its checkout auth both use the same
      * secret_key -- there is no separate webhook secret field for this
      * gateway, unlike Flutterwave/Stripe.

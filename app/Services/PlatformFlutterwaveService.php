@@ -89,6 +89,55 @@ class PlatformFlutterwaveService
             && filled($this->settings->clientSecret());
     }
 
+    /**
+     * @return list<array{code: string, name: string}>
+     *
+     * @throws RequestException
+     */
+    public function banks(): array
+    {
+        $response = Http::withToken($this->accessToken())
+            ->acceptJson()
+            ->get($this->baseUrl().'/banks', ['country' => 'NG'])
+            ->throw()
+            ->json();
+
+        return collect(data_get($response, 'data', []))
+            ->map(fn (array $bank): array => [
+                'code' => (string) data_get($bank, 'code'),
+                'name' => (string) data_get($bank, 'name'),
+            ])
+            ->all();
+    }
+
+    /**
+     * Confirmed against Flutterwave's own v4 docs (developer.flutterwave.com,
+     * "Bank Account Look Up") -- not yet exercised against a live account,
+     * matching this codebase's honesty pattern for other freshly-added
+     * integrations.
+     *
+     * @return array{account_name: ?string}
+     *
+     * @throws RequestException
+     */
+    public function resolveAccount(string $bankCode, string $accountNumber): array
+    {
+        $response = Http::withToken($this->accessToken())
+            ->acceptJson()
+            ->withHeaders(['X-Trace-Id' => (string) Str::uuid()])
+            ->post($this->baseUrl().'/banks/account-resolve', [
+                'currency' => 'NGN',
+                'account' => [
+                    'code' => $bankCode,
+                    'number' => $accountNumber,
+                ],
+            ])
+            ->throw()
+            ->json();
+
+        return ['account_name' => data_get($response, 'data.account_name')];
+    }
+
     public function webhookIsValid(string $rawBody, ?string $signature): bool
     {
         $secretHash = $this->settings->webhookSecretHash();

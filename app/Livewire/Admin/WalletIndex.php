@@ -5,6 +5,7 @@ namespace App\Livewire\Admin;
 use App\Models\Tenant;
 use App\Models\WalletTransaction;
 use App\Models\WalletWithdrawal;
+use App\Services\BankAccountResolutionService;
 use App\Services\WalletService;
 use App\Services\WalletWithdrawalService;
 use App\Support\BillingPlanLimits;
@@ -24,11 +25,15 @@ class WalletIndex extends Component
 
     public string $withdrawAmount = '';
 
-    public string $bankName = '';
+    public bool $editingSettlementAccount = false;
 
-    public string $accountNumber = '';
+    public string $selectedBankCode = '';
 
-    public string $accountName = '';
+    public string $settlementAccountNumber = '';
+
+    public ?string $resolvedAccountName = null;
+
+    public ?string $verifyError = null;
 
     public ?string $statusMessage = null;
 
@@ -38,6 +43,7 @@ class WalletIndex extends Component
     {
         $this->tenantId = $tenant->id;
         $this->commissionBearer = $tenant->wallet_commission_bearer ?: 'tenant';
+        $this->editingSettlementAccount = ! $tenant->hasVerifiedSettlementAccount();
     }
 
     public function enableWallet(WalletService $wallets): void
@@ -62,33 +68,91 @@ class WalletIndex extends Component
         $this->statusMessage = 'Saved who pays the platform commission.';
     }
 
+    public function startEditingSettlementAccount(): void
+    {
+        $this->editingSettlementAccount = true;
+        $this->resolvedAccountName = null;
+        $this->verifyError = null;
+    }
+
+    public function updatedSelectedBankCode(): void
+    {
+        $this->resolvedAccountName = null;
+        $this->verifyError = null;
+    }
+
+    public function updatedSettlementAccountNumber(): void
+    {
+        $this->resolvedAccountName = null;
+        $this->verifyError = null;
+    }
+
+    public function verifySettlementAccount(BankAccountResolutionService $resolver): void
+    {
+        $this->validate([
+            'selectedBankCode' => ['required', 'string'],
+            'settlementAccountNumber' => ['required', 'string', 'min:10', 'max:10'],
+        ]);
+
+        $result = $resolver->resolveAccount($this->selectedBankCode, $this->settlementAccountNumber);
+
+        $this->resolvedAccountName = $result['account_name'];
+        $this->verifyError = $result['error'];
+    }
+
+    public function saveSettlementAccount(BankAccountResolutionService $resolver): void
+    {
+        if (blank($this->resolvedAccountName)) {
+            $this->verifyError = 'Verify the account before saving it.';
+
+            return;
+        }
+
+        $bankName = collect($resolver->banks())->firstWhere('code', $this->selectedBankCode)['name'] ?? $this->selectedBankCode;
+
+        Tenant::findOrFail($this->tenantId)->forceFill([
+            'settlement_bank_code' => $this->selectedBankCode,
+            'settlement_bank_name' => $bankName,
+            'settlement_account_number' => $this->settlementAccountNumber,
+            'settlement_account_name' => $this->resolvedAccountName,
+            'settlement_verified_at' => now(),
+        ])->save();
+
+        $this->editingSettlementAccount = false;
+        $this->reset(['selectedBankCode', 'settlementAccountNumber', 'resolvedAccountName', 'verifyError']);
+        $this->statusMessage = 'Settlement account saved and verified.';
+    }
+
     public function requestWithdrawal(WalletWithdrawalService $withdrawals): void
     {
         $validated = $this->validate([
             'withdrawAmount' => ['required', 'numeric', 'min:1'],
-            'bankName' => ['required', 'string', 'max:255'],
-            'accountNumber' => ['required', 'string', 'max:50'],
-            'accountName' => ['required', 'string', 'max:255'],
         ]);
 
         $tenant = Tenant::findOrFail($this->tenantId);
+
+        if (! $tenant->hasVerifiedSettlementAccount()) {
+            $this->addError('withdrawAmount', 'Save and verify a settlement account before requesting a withdrawal.');
+
+            return;
+        }
 
         $withdrawals->request(
             $tenant,
             (float) $validated['withdrawAmount'],
             [
-                'bank_name' => $validated['bankName'],
-                'account_number' => $validated['accountNumber'],
-                'account_name' => $validated['accountName'],
+                'bank_name' => $tenant->settlement_bank_name,
+                'account_number' => $tenant->settlement_account_number,
+                'account_name' => $tenant->settlement_account_name,
             ],
             auth()->user(),
         );
 
-        $this->reset(['withdrawAmount', 'bankName', 'accountNumber', 'accountName']);
+        $this->reset(['withdrawAmount']);
         $this->statusMessage = 'Withdrawal request submitted. It will be reviewed and paid out manually.';
     }
 
-    public function render()
+    public function render(BankAccountResolutionService $resolver)
     {
         $tenant = Tenant::with('currentBillingSubscription.billingPlan', 'wallet')->findOrFail($this->tenantId);
 
@@ -109,6 +173,8 @@ class WalletIndex extends Component
             'canEnable' => $canEnable,
             'canEnableError' => $this->canEnableError ?? null,
             'balance' => (float) ($tenant->wallet?->balance ?? 0),
+            'banks' => $tenant->wallet_enabled ? $resolver->banks() : [],
+            'bankVerificationAvailable' => $resolver->activeProvider() !== null,
             'transactions' => $tenant->wallet
                 ? WalletTransaction::where('wallet_id', $tenant->wallet->id)->latest()->paginate(15)
                 : null,

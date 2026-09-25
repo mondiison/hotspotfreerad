@@ -41,6 +41,7 @@ class Tenant extends Model
             'public_site_slides' => 'array',
             'payment_gateway_settings' => 'encrypted:array',
             'wallet_enabled' => 'boolean',
+            'settlement_verified_at' => 'datetime',
         ];
     }
 
@@ -92,6 +93,11 @@ class Tenant extends Model
     public function paymentGatewaySettings(): array
     {
         return (array) ($this->payment_gateway_settings ?? []);
+    }
+
+    public function hasVerifiedSettlementAccount(): bool
+    {
+        return filled($this->settlement_account_number) && filled($this->settlement_verified_at);
     }
 
     private static function uniqueSlug(string $name, ?int $ignoreId = null): string

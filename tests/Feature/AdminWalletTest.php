@@ -4,11 +4,15 @@ namespace Tests\Feature;
 
 use App\Livewire\Admin\WalletIndex;
 use App\Models\BillingPlan;
+use App\Models\PlatformSetting;
 use App\Models\Tenant;
 use App\Models\TenantBillingSubscription;
 use App\Models\User;
 use App\Models\Wallet;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -90,15 +94,13 @@ class AdminWalletTest extends TestCase
         $tenant = $this->tenant();
         $this->subscribeTenant($tenant, supportsWallet: true, walletCommissionRate: 10);
         $tenant->forceFill(['wallet_enabled' => true])->save();
+        $this->giveTenantAVerifiedSettlementAccount($tenant);
         $wallet = Wallet::create(['tenant_id' => $tenant->id, 'balance' => 1000]);
         $user = $this->tenantAdmin($tenant);
 
         Livewire::actingAs($user)
             ->test(WalletIndex::class, ['tenant' => $tenant])
             ->set('withdrawAmount', '400')
-            ->set('bankName', 'GTBank')
-            ->set('accountNumber', '0123456789')
-            ->set('accountName', 'Demo Tenant')
             ->call('requestWithdrawal')
             ->assertSet('statusMessage', 'Withdrawal request submitted. It will be reviewed and paid out manually.');
 
@@ -106,9 +108,94 @@ class AdminWalletTest extends TestCase
             'tenant_id' => $tenant->id,
             'wallet_id' => $wallet->id,
             'amount' => 400,
+            'bank_name' => 'GTBank',
+            'account_number' => '0123456789',
+            'account_name' => 'Demo Tenant',
             'status' => 'pending',
         ]);
         $this->assertEquals(600, $wallet->fresh()->balance);
+    }
+
+    public function test_withdrawal_request_is_blocked_without_a_verified_settlement_account(): void
+    {
+        $tenant = $this->tenant();
+        $this->subscribeTenant($tenant, supportsWallet: true, walletCommissionRate: 10);
+        $tenant->forceFill(['wallet_enabled' => true])->save();
+        Wallet::create(['tenant_id' => $tenant->id, 'balance' => 1000]);
+        $user = $this->tenantAdmin($tenant);
+
+        Livewire::actingAs($user)
+            ->test(WalletIndex::class, ['tenant' => $tenant])
+            ->set('withdrawAmount', '400')
+            ->call('requestWithdrawal')
+            ->assertHasErrors('withdrawAmount');
+
+        $this->assertDatabaseMissing('wallet_withdrawals', ['tenant_id' => $tenant->id]);
+    }
+
+    /**
+     * 2026-09-25, direct request: a tenant should be able to verify and save
+     * a settlement account once (via a real bank-resolve API call) instead of
+     * retyping bank details on every withdrawal request.
+     */
+    public function test_tenant_admin_can_verify_and_save_a_settlement_account(): void
+    {
+        $tenant = $this->tenant();
+        $this->subscribeTenant($tenant, supportsWallet: true, walletCommissionRate: 10);
+        $tenant->forceFill(['wallet_enabled' => true])->save();
+        Wallet::create(['tenant_id' => $tenant->id, 'balance' => 0]);
+        $user = $this->tenantAdmin($tenant);
+
+        PlatformSetting::query()->updateOrCreate(
+            ['key' => 'payments.platform.gateway.paystack'],
+            ['value' => ['secret_key' => Crypt::encryptString('sk_test_platform')]]
+        );
+        Cache::flush();
+
+        Http::fake([
+            'api.paystack.co/bank?*' => Http::response([
+                'status' => true,
+                'data' => [
+                    ['code' => '058', 'name' => 'GTBank'],
+                ],
+            ]),
+            'api.paystack.co/bank/resolve*' => Http::response([
+                'status' => true,
+                'data' => ['account_number' => '0123456789', 'account_name' => 'Demo Tenant'],
+            ]),
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(WalletIndex::class, ['tenant' => $tenant])
+            ->set('selectedBankCode', '058')
+            ->set('settlementAccountNumber', '0123456789')
+            ->call('verifySettlementAccount')
+            ->assertSet('resolvedAccountName', 'Demo Tenant')
+            ->call('saveSettlementAccount')
+            ->assertSet('statusMessage', 'Settlement account saved and verified.');
+
+        $tenant->refresh();
+        $this->assertSame('058', $tenant->settlement_bank_code);
+        $this->assertSame('GTBank', $tenant->settlement_bank_name);
+        $this->assertSame('0123456789', $tenant->settlement_account_number);
+        $this->assertSame('Demo Tenant', $tenant->settlement_account_name);
+        $this->assertNotNull($tenant->settlement_verified_at);
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/bank/resolve')
+            && $request->hasHeader('Authorization', 'Bearer sk_test_platform')
+            && $request['account_number'] === '0123456789'
+            && $request['bank_code'] === '058');
+    }
+
+    private function giveTenantAVerifiedSettlementAccount(Tenant $tenant): void
+    {
+        $tenant->forceFill([
+            'settlement_bank_code' => '058',
+            'settlement_bank_name' => 'GTBank',
+            'settlement_account_number' => '0123456789',
+            'settlement_account_name' => 'Demo Tenant',
+            'settlement_verified_at' => now(),
+        ])->save();
     }
 
     private function tenant(): Tenant
