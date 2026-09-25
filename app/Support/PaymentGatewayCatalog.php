@@ -8,10 +8,15 @@ use App\Services\PlatformPaymentSettingsService;
 class PaymentGatewayCatalog
 {
     public const FLUTTERWAVE = 'flutterwave';
+
     public const PAYSTACK = 'paystack';
+
     public const MONNIFY = 'monnify';
+
     public const SQUAD = 'squad';
+
     public const STRIPE = 'stripe';
+
     public const MANUAL_BANK = 'manual_bank';
 
     public static function onlineGateways(): array
@@ -259,6 +264,42 @@ class PaymentGatewayCatalog
         return [self::FLUTTERWAVE, self::PAYSTACK, self::MONNIFY, self::SQUAD, self::STRIPE, self::MANUAL_BANK];
     }
 
+    /**
+     * A gateway being "live" for tenant/shop hotspot checkout (implementedGatewayKeys()
+     * above) says nothing about whether platform billing (tenants paying HotspotFreeRAD
+     * itself) also has a working adapter for it -- those are two separate integrations.
+     * Only these three have a real Platform*Service class at all (PlatformFlutterwaveService,
+     * PlatformStripeService, PlatformMonnifyService); Paystack/Squad/manual_bank can still be
+     * selected as the platform's "Active gateway" for planning purposes (the settings card's
+     * own copy says as much), but PlatformPaymentSettingsService::activeGatewayIsImplemented()
+     * keeps checkout disabled for them until a matching platform service exists.
+     *
+     * @return list<string>
+     */
+    public static function platformImplementedGatewayKeys(): array
+    {
+        return [self::FLUTTERWAVE, self::STRIPE, self::MONNIFY];
+    }
+
+    /**
+     * Platform billing's credential fields per gateway, mostly identical to
+     * credentialFields() above but narrower where the platform integration
+     * genuinely uses fewer fields than the tenant-facing one does -- Flutterwave's
+     * platform side only ever calls the v4 orchestration API (client_id/client_secret),
+     * never the v3 card-checkout endpoint tenant shops can use, so `secret_key`
+     * would be a field that saves but does nothing if shown here.
+     */
+    public static function platformCredentialFields(string $gateway): array
+    {
+        $fields = self::credentialFields($gateway);
+
+        if ($gateway === self::FLUTTERWAVE) {
+            unset($fields['secret_key']);
+        }
+
+        return $fields;
+    }
+
     public static function tenantProvider(?string $gatewayKey = null): array
     {
         $gatewayKey = $gatewayKey ?: self::FLUTTERWAVE;
@@ -374,6 +415,17 @@ class PaymentGatewayCatalog
         $gatewayKey = $gatewayKey ?: $settings->activeGateway();
         $gateway = self::onlineGateways()[$gatewayKey] ?? self::onlineGateways()[self::FLUTTERWAVE];
 
+        $channels = collect(self::platformReadiness($gatewayKey))
+            ->mapWithKeys(fn (array $item, string $key): array => [
+                $key => [
+                    'label' => $item['label'],
+                    'requires' => $item['label'],
+                    'description' => $item['hint'],
+                    'ready' => $item['ready'],
+                ],
+            ])
+            ->all();
+
         return [
             'key' => $gateway['key'],
             'name' => $gateway['name'],
@@ -382,21 +434,37 @@ class PaymentGatewayCatalog
             'label' => 'Default platform gateway',
             'summary' => 'Tenant subscription payments settle into the MMS Radius platform billing account.',
             'status' => $gateway['status'],
-            'channels' => [
-                'checkout' => [
-                    'label' => 'Platform checkout',
-                    'requires' => 'Platform gateway credentials',
-                    'description' => 'Used when tenants pay or renew their SaaS subscription.',
-                    'ready' => $settings->activeGatewayIsImplemented() && filled($settings->clientId()) && filled($settings->clientSecret()),
-                ],
-                'webhook' => [
-                    'label' => 'Platform webhook',
-                    'requires' => 'Platform webhook secret',
-                    'description' => 'Keeps platform billing active even when callback redirects are interrupted.',
-                    'ready' => $settings->activeGatewayIsImplemented() && filled($settings->webhookSecretHash()),
-                ],
-            ],
+            'channels' => $channels,
         ];
+    }
+
+    /**
+     * One ready/missing badge per platform credential field for the given
+     * gateway (defaults to the currently active one) -- the platform-side
+     * mirror of tenantReadiness(Shop $shop)'s generic non-Flutterwave branch,
+     * applied uniformly to every platform gateway rather than special-casing
+     * Flutterwave's old 2-channel (checkout/webhook) shape. Select fields
+     * (e.g. Environment) are excluded, same reasoning as tenantReadiness().
+     */
+    public static function platformReadiness(?string $gatewayKey = null): array
+    {
+        $settings = app(PlatformPaymentSettingsService::class);
+        $gatewayKey = $gatewayKey ?: $settings->activeGateway();
+        $stored = $settings->gatewaySettings($gatewayKey);
+        $selectFieldKeys = array_keys(self::selectFields($gatewayKey));
+
+        return collect(self::platformCredentialFields($gatewayKey))
+            ->reject(fn (string $label, string $key): bool => in_array($key, $selectFieldKeys, true))
+            ->map(fn (string $label, string $key): array => [
+                'label' => $label,
+                'ready_badge' => $label.' saved',
+                'missing_badge' => $label.' missing',
+                'ready' => filled($stored[$key] ?? null),
+                'hint' => filled($stored[$key] ?? null)
+                    ? 'Saved securely for platform billing'
+                    : 'Required before platform billing can use this gateway',
+            ])
+            ->all();
     }
 
     public static function tenantReadiness(Shop $shop): array

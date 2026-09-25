@@ -13,6 +13,7 @@ class PlatformBillingConfirmationService
     public function __construct(
         private readonly PlatformFlutterwaveService $flutterwave,
         private readonly PlatformStripeService $stripe,
+        private readonly PlatformMonnifyService $monnify,
     ) {}
 
     public function verifyAndActivate(PlatformBillingPayment $payment, string $providerReference, string $resourceType = 'order'): bool
@@ -23,9 +24,11 @@ class PlatformBillingConfirmationService
             return true;
         }
 
-        $verification = $payment->provider === PaymentGatewayCatalog::STRIPE
-            ? $this->stripe->verifyPayment($providerReference)
-            : $this->flutterwave->verifyPayment($providerReference, $resourceType);
+        $verification = match ($payment->provider) {
+            PaymentGatewayCatalog::STRIPE => $this->stripe->verifyPayment($providerReference),
+            PaymentGatewayCatalog::MONNIFY => $this->monnify->verifyPayment($providerReference),
+            default => $this->flutterwave->verifyPayment($providerReference, $resourceType),
+        };
 
         if (! $this->verificationMatchesPayment($verification, $payment)) {
             $payment->update([
@@ -65,7 +68,7 @@ class PlatformBillingConfirmationService
                 'current_period_starts_at' => now(),
                 'current_period_ends_at' => now()->addMonth(),
                 'provider' => $payment->provider,
-                'provider_reference' => (string) (data_get($verification, 'data.id') ?: data_get($verification, 'id') ?: $payment->provider_reference),
+                'provider_reference' => (string) $this->providerReferenceFromVerification($verification, $payment),
                 'payload' => [
                     'payment_id' => $payment->id,
                     'payment_reference' => $payment->tx_ref,
@@ -75,7 +78,7 @@ class PlatformBillingConfirmationService
             $payment->update([
                 'tenant_billing_subscription_id' => $subscription->id,
                 'status' => 'successful',
-                'provider_reference' => (string) (data_get($verification, 'data.id') ?: data_get($verification, 'id') ?: $payment->provider_reference),
+                'provider_reference' => (string) $this->providerReferenceFromVerification($verification, $payment),
                 'paid_at' => now(),
                 'payload' => array_merge($payment->payload ?? [], ['verification' => $verification]),
             ]);
@@ -93,6 +96,14 @@ class PlatformBillingConfirmationService
                 && ((float) data_get($verification, 'amount_total') / 100) >= (float) $payment->amount;
         }
 
+        if ($payment->provider === PaymentGatewayCatalog::MONNIFY) {
+            return data_get($verification, 'requestSuccessful') === true
+                && $this->statusIsSuccessful(data_get($verification, 'responseBody.paymentStatus'))
+                && data_get($verification, 'responseBody.paymentReference') === $payment->tx_ref
+                && strtoupper((string) data_get($verification, 'responseBody.currency')) === strtoupper($payment->currency)
+                && (float) data_get($verification, 'responseBody.amountPaid') >= (float) $payment->amount;
+        }
+
         return in_array(strtolower((string) data_get($verification, 'status')), ['success', 'successful', 'succeeded'], true)
             && $this->statusIsSuccessful(data_get($verification, 'data.status'))
             && (data_get($verification, 'data.reference') === $payment->tx_ref || data_get($verification, 'data.tx_ref') === $payment->tx_ref)
@@ -103,5 +114,13 @@ class PlatformBillingConfirmationService
     private function statusIsSuccessful(mixed $status): bool
     {
         return in_array(strtolower((string) $status), ['success', 'successful', 'succeeded', 'completed', 'paid'], true);
+    }
+
+    private function providerReferenceFromVerification(array $verification, PlatformBillingPayment $payment): string
+    {
+        return (string) (data_get($verification, 'data.id')
+            ?: data_get($verification, 'id')
+            ?: data_get($verification, 'responseBody.transactionReference')
+            ?: $payment->provider_reference);
     }
 }

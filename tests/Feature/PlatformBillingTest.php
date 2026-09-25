@@ -343,18 +343,18 @@ class PlatformBillingTest extends TestCase
         Livewire::actingAs($user)
             ->test(PlatformPaymentSettingsCard::class)
             ->set('active_gateway', 'flutterwave')
-            ->set('client_id', 'db-platform-client-id')
-            ->set('client_secret', 'db-platform-client-secret')
-            ->set('webhook_secret_hash', 'db-platform-webhook-secret')
+            ->set('gateway_settings.client_id', 'db-platform-client-id')
+            ->set('gateway_settings.client_secret', 'db-platform-client-secret')
+            ->set('gateway_settings.webhook_secret', 'db-platform-webhook-secret')
             ->set('default_payment_method', 'bank_transfer')
             ->call('save')
             ->assertHasNoErrors()
             ->assertSee('Platform payment settings updated.')
-            ->assertSee('Checkout ready')
-            ->assertSee('Webhook ready');
+            ->assertSee('Client ID (v4 OPay/transfer) saved')
+            ->assertSee('Secret Hash / Webhook Secret saved');
 
         $this->assertDatabaseHas('platform_settings', [
-            'key' => 'payments.platform.flutterwave',
+            'key' => 'payments.platform.gateway.flutterwave',
         ]);
 
         $service = app(PlatformPaymentSettingsService::class);
@@ -398,8 +398,8 @@ class PlatformBillingTest extends TestCase
 
         Livewire::actingAs($superAdmin)
             ->test(PlatformPaymentSettingsCard::class)
-            ->set('client_id', 'db-platform-client-id')
-            ->set('client_secret', 'db-platform-client-secret')
+            ->set('gateway_settings.client_id', 'db-platform-client-id')
+            ->set('gateway_settings.client_secret', 'db-platform-client-secret')
             ->set('default_payment_method', 'bank_transfer')
             ->call('save')
             ->assertHasNoErrors();
@@ -593,6 +593,116 @@ class PlatformBillingTest extends TestCase
         $this->assertSame('stripe', $payment->provider);
         $this->assertSame('pending', $payment->status);
         $this->assertSame('cs_platform_123', $payment->provider_reference);
+    }
+
+    /**
+     * 2026-09-25: platform billing gained a real Monnify adapter (previously
+     * Monnify could be picked as "Active gateway" in the settings card but
+     * silently fell through to Flutterwave's own credentials at checkout
+     * time -- BillingController::checkout()'s dispatch ternary only ever
+     * checked for Stripe, everything else defaulted to Flutterwave).
+     */
+    public function test_tenant_admin_can_start_platform_monnify_subscription_checkout(): void
+    {
+        $this->configurePlatformMonnify();
+        Http::fake([
+            'sandbox.monnify.com/api/v1/auth/login' => Http::response([
+                'responseBody' => ['accessToken' => 'PLATFORM_MONNIFY_TOKEN'],
+            ]),
+            'sandbox.monnify.com/api/v1/merchant/transactions/init-transaction' => Http::response([
+                'responseBody' => [
+                    'transactionReference' => 'MNFY|platform|123',
+                    'checkoutUrl' => 'https://sandbox.monnify.com/checkout/platform-subscription',
+                ],
+            ]),
+        ]);
+        $tenant = Tenant::create([
+            'company_name' => 'Tenant One',
+            'owner_email' => 'one@example.com',
+        ]);
+        $plan = BillingPlan::where('slug', 'growth')->firstOrFail();
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->post(route('admin.billing.payments.checkout'), [
+                'billing_plan_id' => $plan->id,
+            ])
+            ->assertRedirect('https://sandbox.monnify.com/checkout/platform-subscription');
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/api/v1/merchant/transactions/init-transaction')
+            && $request->hasHeader('Authorization', 'Bearer PLATFORM_MONNIFY_TOKEN')
+            && $request['amount'] === 35000.0
+            && $request['currencyCode'] === 'NGN'
+            && $request['contractCode'] === 'platform-contract-code'
+            && $request['metadata']['payment_type'] === 'platform_subscription'
+            && $request['metadata']['tenant_name'] === 'Tenant One');
+
+        $payment = PlatformBillingPayment::firstOrFail();
+        $this->assertSame('monnify', $payment->provider);
+        $this->assertSame('pending', $payment->status);
+        $this->assertSame('MNFY|platform|123', $payment->provider_reference);
+    }
+
+    public function test_successful_platform_monnify_callback_activates_billing_subscription(): void
+    {
+        $this->configurePlatformMonnify();
+        $tenant = Tenant::create([
+            'company_name' => 'Tenant One',
+            'owner_email' => 'one@example.com',
+        ]);
+        $plan = BillingPlan::where('slug', 'starter')->firstOrFail();
+        $payment = PlatformBillingPayment::create([
+            'tenant_id' => $tenant->id,
+            'billing_plan_id' => $plan->id,
+            'provider' => 'monnify',
+            'tx_ref' => 'PBF-MONNIFY-TEST-123',
+            'provider_reference' => 'MNFY|platform|callback',
+            'amount' => $plan->monthly_price,
+            'currency' => $plan->currency,
+            'status' => 'pending',
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+        Http::fake([
+            'sandbox.monnify.com/api/v1/auth/login' => Http::response([
+                'responseBody' => ['accessToken' => 'PLATFORM_MONNIFY_TOKEN'],
+            ]),
+            'sandbox.monnify.com/api/v2/transactions/*' => Http::response([
+                'requestSuccessful' => true,
+                'responseBody' => [
+                    'paymentReference' => $payment->tx_ref,
+                    'paymentStatus' => 'PAID',
+                    'currency' => 'NGN',
+                    'amountPaid' => 15000,
+                ],
+            ]),
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('admin.billing.payments.callback', [
+                'status' => 'successful',
+                'tx_ref' => $payment->tx_ref,
+                'id' => 'MNFY|platform|callback',
+            ]))
+            ->assertRedirect(route('admin.billing.index'));
+
+        $this->assertDatabaseHas('platform_billing_payments', [
+            'id' => $payment->id,
+            'status' => 'successful',
+        ]);
+        $this->assertDatabaseHas('tenant_billing_subscriptions', [
+            'tenant_id' => $tenant->id,
+            'billing_plan_id' => $plan->id,
+            'status' => 'active',
+            'provider' => 'monnify',
+        ]);
     }
 
     public function test_successful_platform_subscription_callback_activates_billing_subscription(): void
@@ -839,6 +949,65 @@ class PlatformBillingTest extends TestCase
         $this->assertSame('Provider reference is missing.', data_get($payment->payload, 'manual_verification_error'));
     }
 
+    public function test_successful_platform_monnify_webhook_activates_billing_subscription(): void
+    {
+        $this->configurePlatformMonnify();
+        $tenant = Tenant::create([
+            'company_name' => 'Tenant One',
+            'owner_email' => 'one@example.com',
+        ]);
+        $plan = BillingPlan::where('slug', 'starter')->firstOrFail();
+        $payment = PlatformBillingPayment::create([
+            'tenant_id' => $tenant->id,
+            'billing_plan_id' => $plan->id,
+            'provider' => 'monnify',
+            'tx_ref' => 'PBF-MONNIFY-WEBHOOK-123',
+            'provider_reference' => 'MNFY|platform|webhook',
+            'amount' => $plan->monthly_price,
+            'currency' => $plan->currency,
+            'status' => 'pending',
+        ]);
+        Http::fake([
+            'sandbox.monnify.com/api/v1/auth/login' => Http::response([
+                'responseBody' => ['accessToken' => 'PLATFORM_MONNIFY_TOKEN'],
+            ]),
+            'sandbox.monnify.com/api/v2/transactions/*' => Http::response([
+                'requestSuccessful' => true,
+                'responseBody' => [
+                    'paymentReference' => $payment->tx_ref,
+                    'paymentStatus' => 'PAID',
+                    'currency' => 'NGN',
+                    'amountPaid' => 15000,
+                ],
+            ]),
+        ]);
+
+        $payload = [
+            'eventType' => 'SUCCESSFUL_TRANSACTION',
+            'eventData' => [
+                'paymentReference' => $payment->tx_ref,
+                'transactionReference' => 'MNFY|platform|webhook',
+            ],
+        ];
+        $signature = hash_hmac('sha512', json_encode($payload), 'platform-monnify-secret-key');
+
+        $this->withHeaders(['monnify-signature' => $signature])
+            ->postJson(route('billing.payment.webhook'), $payload)
+            ->assertOk()
+            ->assertSee('ok');
+
+        $this->assertDatabaseHas('platform_billing_payments', [
+            'id' => $payment->id,
+            'status' => 'successful',
+        ]);
+        $this->assertDatabaseHas('tenant_billing_subscriptions', [
+            'tenant_id' => $tenant->id,
+            'billing_plan_id' => $plan->id,
+            'status' => 'active',
+            'provider' => 'monnify',
+        ]);
+    }
+
     public function test_successful_platform_subscription_webhook_activates_billing_subscription_once(): void
     {
         $this->configurePlatformFlutterwave();
@@ -1032,13 +1201,39 @@ class PlatformBillingTest extends TestCase
     private function configurePlatformStripe(): void
     {
         PlatformSetting::query()->updateOrCreate(
-            ['key' => PlatformPaymentSettingsService::FLUTTERWAVE],
+            ['key' => 'payments.platform.general'],
             ['value' => [
                 'active_gateway' => 'stripe',
-                'client_id' => Crypt::encryptString('pk_test_platform'),
-                'client_secret' => Crypt::encryptString('sk_test_platform'),
-                'webhook_secret_hash' => Crypt::encryptString('whsec_platform'),
                 'default_payment_method' => 'card',
+            ]]
+        );
+
+        PlatformSetting::query()->updateOrCreate(
+            ['key' => 'payments.platform.gateway.stripe'],
+            ['value' => [
+                'publishable_key' => Crypt::encryptString('pk_test_platform'),
+                'secret_key' => Crypt::encryptString('sk_test_platform'),
+                'webhook_secret' => Crypt::encryptString('whsec_platform'),
+            ]]
+        );
+
+        Cache::flush();
+    }
+
+    private function configurePlatformMonnify(): void
+    {
+        PlatformSetting::query()->updateOrCreate(
+            ['key' => 'payments.platform.general'],
+            ['value' => ['active_gateway' => 'monnify']]
+        );
+
+        PlatformSetting::query()->updateOrCreate(
+            ['key' => 'payments.platform.gateway.monnify'],
+            ['value' => [
+                'public_key' => Crypt::encryptString('platform-monnify-api-key'),
+                'secret_key' => Crypt::encryptString('platform-monnify-secret-key'),
+                'contract_code' => Crypt::encryptString('platform-contract-code'),
+                'environment' => Crypt::encryptString('test'),
             ]]
         );
 

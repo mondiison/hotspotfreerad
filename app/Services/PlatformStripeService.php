@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\PlatformBillingPayment;
+use App\Support\PaymentGatewayCatalog;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -94,12 +95,12 @@ class PlatformStripeService
 
     private function secretKey(): string
     {
-        return $this->normalizeSecret((string) $this->settings->clientSecret());
+        return $this->normalizeSecret((string) $this->settings->gatewayCredential(PaymentGatewayCatalog::STRIPE, 'secret_key'));
     }
 
     private function webhookSecret(): string
     {
-        return $this->normalizeSecret((string) $this->settings->webhookSecretHash());
+        return $this->normalizeSecret((string) $this->settings->gatewayCredential(PaymentGatewayCatalog::STRIPE, 'webhook_secret'));
     }
 
     private function normalizeSecret(string $secret): string

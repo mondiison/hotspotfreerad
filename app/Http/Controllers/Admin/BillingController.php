@@ -11,6 +11,7 @@ use App\Models\TenantBillingSubscription;
 use App\Services\BillingPlanManagementService;
 use App\Services\PlatformBillingConfirmationService;
 use App\Services\PlatformFlutterwaveService;
+use App\Services\PlatformMonnifyService;
 use App\Services\PlatformPaymentSettingsService;
 use App\Services\PlatformStripeService;
 use App\Support\PaymentGatewayCatalog;
@@ -146,7 +147,7 @@ class BillingController extends Controller
         return redirect()->route('admin.billing.index')->with('status', 'Billing plan deleted.');
     }
 
-    public function checkout(Request $request, PlatformFlutterwaveService $flutterwave, PlatformStripeService $stripe): RedirectResponse
+    public function checkout(Request $request, PlatformFlutterwaveService $flutterwave, PlatformStripeService $stripe, PlatformMonnifyService $monnify): RedirectResponse
     {
         $platformSettings = app(PlatformPaymentSettingsService::class);
         $data = $request->validate([
@@ -169,7 +170,11 @@ class BillingController extends Controller
         }
 
         $gateway = $platformSettings->activeGateway();
-        $gatewayService = $gateway === PaymentGatewayCatalog::STRIPE ? $stripe : $flutterwave;
+        $gatewayService = match ($gateway) {
+            PaymentGatewayCatalog::STRIPE => $stripe,
+            PaymentGatewayCatalog::MONNIFY => $monnify,
+            default => $flutterwave,
+        };
 
         if (! $gatewayService->isConfigured()) {
             return redirect()
@@ -336,11 +341,12 @@ class BillingController extends Controller
         return redirect()->route('admin.billing.index')->with('status', 'Platform payment verified and subscription activated.');
     }
 
-    public function webhook(Request $request, PlatformFlutterwaveService $flutterwave, PlatformStripeService $stripe): Response
+    public function webhook(Request $request, PlatformFlutterwaveService $flutterwave, PlatformStripeService $stripe, PlatformMonnifyService $monnify): Response
     {
         $payload = $request->all();
         $txRef = data_get($payload, 'data.reference')
             ?: data_get($payload, 'data.tx_ref')
+            ?: data_get($payload, 'eventData.paymentReference')
             ?: data_get($payload, 'data.object.client_reference_id')
             ?: data_get($payload, 'data.object.metadata.payment_reference');
 
@@ -353,14 +359,14 @@ class BillingController extends Controller
             ->first();
 
         if (! $payment) {
-            if (! $this->platformWebhookSignatureIsValid($request, $flutterwave, $stripe, app(PlatformPaymentSettingsService::class)->activeGateway())) {
+            if (! $this->platformWebhookSignatureIsValid($request, $flutterwave, $stripe, $monnify, app(PlatformPaymentSettingsService::class)->activeGateway())) {
                 abort(401);
             }
 
             return response('ignored', 200);
         }
 
-        if (! $this->platformWebhookSignatureIsValid($request, $flutterwave, $stripe, $payment->provider)) {
+        if (! $this->platformWebhookSignatureIsValid($request, $flutterwave, $stripe, $monnify, $payment->provider)) {
             abort(401);
         }
 
@@ -371,6 +377,7 @@ class BillingController extends Controller
         $providerReference = data_get($payload, 'data.id')
             ?: data_get($payload, 'data.order.id')
             ?: data_get($payload, 'data.order_id')
+            ?: data_get($payload, 'eventData.transactionReference')
             ?: data_get($payload, 'data.object.id')
             ?: $payment->provider_reference;
 
@@ -444,15 +451,21 @@ class BillingController extends Controller
             return false;
         }
 
-        return $settings->activeGateway() === PaymentGatewayCatalog::STRIPE
-            ? app(PlatformStripeService::class)->isConfigured()
-            : app(PlatformFlutterwaveService::class)->isConfigured();
+        return match ($settings->activeGateway()) {
+            PaymentGatewayCatalog::STRIPE => app(PlatformStripeService::class)->isConfigured(),
+            PaymentGatewayCatalog::MONNIFY => app(PlatformMonnifyService::class)->isConfigured(),
+            default => app(PlatformFlutterwaveService::class)->isConfigured(),
+        };
     }
 
-    private function platformWebhookSignatureIsValid(Request $request, PlatformFlutterwaveService $flutterwave, PlatformStripeService $stripe, string $gateway): bool
+    private function platformWebhookSignatureIsValid(Request $request, PlatformFlutterwaveService $flutterwave, PlatformStripeService $stripe, PlatformMonnifyService $monnify, string $gateway): bool
     {
         if ($gateway === PaymentGatewayCatalog::STRIPE) {
             return $stripe->webhookIsValid($request->getContent(), $request->header('stripe-signature'));
+        }
+
+        if ($gateway === PaymentGatewayCatalog::MONNIFY) {
+            return $monnify->webhookIsValid($request->getContent(), $request->header('monnify-signature'));
         }
 
         return $flutterwave->webhookIsValid($request->getContent(), $request->header('flutterwave-signature') ?: $request->header('verif-hash'));
