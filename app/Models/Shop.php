@@ -27,6 +27,7 @@ class Shop extends Model
             'flutterwave_secret_key' => 'encrypted',
             'flutterwave_webhook_secret' => 'encrypted',
             'is_active' => 'boolean',
+            'allow_test_access' => 'boolean',
         ];
     }
 

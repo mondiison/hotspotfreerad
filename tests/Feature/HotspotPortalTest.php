@@ -47,6 +47,7 @@ class HotspotPortalTest extends TestCase
         $shop = Shop::create([
             'tenant_id' => $tenant->id,
             'name' => 'Demo Shop',
+            'allow_test_access' => true,
         ]);
 
         Router::create([
@@ -302,6 +303,7 @@ class HotspotPortalTest extends TestCase
     public function test_grant_creates_subscription_and_radius_access(): void
     {
         [$router, $package] = $this->routerWithPackage();
+        $router->shop->update(['allow_test_access' => true]);
 
         $this->post('/hotspot/grant', [
             'mac' => 'AA:BB:CC:DD:EE:FF',
@@ -337,6 +339,50 @@ class HotspotPortalTest extends TestCase
             'username' => 'AA:BB:CC:DD:EE:FF',
             'groupname' => "tenant_{$router->shop->tenant_id}_shop_{$router->shop_id}_one_hour_ultra",
         ]);
+    }
+
+    /**
+     * 2026-09-25, direct request: the free "Start test access" button was
+     * shown unconditionally on every shop's portal with no way to turn it
+     * off, granting full access with zero payment. Now off by default per
+     * shop (allow_test_access), with the route itself rejecting a direct
+     * POST -- not just the button hidden -- since hiding the button alone
+     * wouldn't stop a request sent straight to the endpoint.
+     */
+    public function test_grant_is_blocked_when_shop_disallows_test_access(): void
+    {
+        [$router, $package] = $this->routerWithPackage();
+        $this->assertFalse($router->shop->fresh()->allow_test_access);
+
+        $this->post('/hotspot/grant', [
+            'mac' => 'AA:BB:CC:DD:EE:FF',
+            'nasid' => $router->nas_identifier,
+            'package_id' => $package->id,
+        ])->assertForbidden();
+
+        $this->assertDatabaseMissing('subscriptions', [
+            'shop_id' => $router->shop_id,
+            'mac_address' => 'AA:BB:CC:DD:EE:FF',
+        ]);
+    }
+
+    public function test_portal_hides_start_test_access_button_when_disabled(): void
+    {
+        [$router, $package] = $this->routerWithPackage();
+
+        $this->get('/hotspot/portal?mac=AA:BB:CC:DD:EE:FF&nasid='.$router->nas_identifier)
+            ->assertOk()
+            ->assertDontSee('Start test access');
+    }
+
+    public function test_portal_shows_start_test_access_button_when_enabled(): void
+    {
+        [$router, $package] = $this->routerWithPackage();
+        $router->shop->update(['allow_test_access' => true]);
+
+        $this->get('/hotspot/portal?mac=AA:BB:CC:DD:EE:FF&nasid='.$router->nas_identifier)
+            ->assertOk()
+            ->assertSee('Start test access');
     }
 
     public function test_payment_step_creates_pending_payment_and_customer(): void

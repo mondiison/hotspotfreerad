@@ -213,22 +213,24 @@
                                 </button>
                             </form>
 
-                            <form method="POST" action="{{ route('hotspot.grant') }}" class="mt-3" @submit="testing = true">
-                                @csrf
-                                <input type="hidden" name="package_id" value="{{ $package->id }}">
-                                <input type="hidden" name="mac" value="{{ $macAddress }}">
-                                <input type="hidden" name="nasid" value="{{ $router->nas_identifier }}">
-                                @if ($loginUrl)
-                                    <input type="hidden" name="link-login" value="{{ $loginUrl }}">
-                                @endif
-                                @if ($originalUrl)
-                                    <input type="hidden" name="link-orig" value="{{ $originalUrl }}">
-                                @endif
-                                <button class="flex w-full items-center justify-center gap-2 rounded-md border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-700 disabled:cursor-wait disabled:opacity-70" :disabled="testing">
-                                    <span x-show="testing" class="h-4 w-4 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-700"></span>
-                                    <span x-text="testing ? 'Connecting...' : 'Start test access'">Start test access</span>
-                                </button>
-                            </form>
+                            @if ($shop->allow_test_access)
+                                <form method="POST" action="{{ route('hotspot.grant') }}" class="mt-3" @submit="testing = true">
+                                    @csrf
+                                    <input type="hidden" name="package_id" value="{{ $package->id }}">
+                                    <input type="hidden" name="mac" value="{{ $macAddress }}">
+                                    <input type="hidden" name="nasid" value="{{ $router->nas_identifier }}">
+                                    @if ($loginUrl)
+                                        <input type="hidden" name="link-login" value="{{ $loginUrl }}">
+                                    @endif
+                                    @if ($originalUrl)
+                                        <input type="hidden" name="link-orig" value="{{ $originalUrl }}">
+                                    @endif
+                                    <button class="flex w-full items-center justify-center gap-2 rounded-md border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-700 disabled:cursor-wait disabled:opacity-70" :disabled="testing">
+                                        <span x-show="testing" class="h-4 w-4 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-700"></span>
+                                        <span x-text="testing ? 'Connecting...' : 'Start test access'">Start test access</span>
+                                    </button>
+                                </form>
+                            @endif
                         </div>
                     </article>
                 @empty

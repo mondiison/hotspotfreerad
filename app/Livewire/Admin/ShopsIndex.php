@@ -38,6 +38,8 @@ class ShopsIndex extends Component
 
     public bool $is_active = true;
 
+    public bool $allow_test_access = false;
+
     public ?string $savedMessage = null;
 
     protected $queryString = [
@@ -77,6 +79,7 @@ class ShopsIndex extends Component
         $this->name = (string) $shop->name;
         $this->location_city = (string) $shop->location_city;
         $this->is_active = (bool) $shop->is_active;
+        $this->allow_test_access = (bool) $shop->allow_test_access;
         $this->savedMessage = null;
         $this->showFormModal = true;
     }
@@ -183,6 +186,7 @@ class ShopsIndex extends Component
             'location_city',
         ]);
         $this->is_active = true;
+        $this->allow_test_access = false;
         $this->resetValidation();
     }
 

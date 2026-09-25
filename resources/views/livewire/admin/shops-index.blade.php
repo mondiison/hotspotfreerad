@@ -124,6 +124,11 @@
                     </flux:field>
 
                     <flux:checkbox wire:model.live="is_active" label="Active" />
+
+                    <flux:field class="md:col-span-2">
+                        <flux:checkbox wire:model.live="allow_test_access" label="Allow free test access on the hotspot portal" />
+                        <flux:description>Shows a "Start test access" button next to every package on this shop's captive portal, granting full access with no payment. Off by default -- only turn this on if you specifically want a free-trial option for real customers.</flux:description>
+                    </flux:field>
                 </div>
 
                 <div class="flex justify-end gap-3">

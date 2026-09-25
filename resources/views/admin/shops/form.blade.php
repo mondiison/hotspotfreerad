@@ -37,6 +37,11 @@
             </flux:field>
 
             <flux:checkbox name="is_active" value="1" :checked="(bool) old('is_active', $shop->is_active ?? true)" label="Active" />
+
+            <flux:field class="md:col-span-2">
+                <flux:checkbox name="allow_test_access" value="1" :checked="(bool) old('allow_test_access', $shop->allow_test_access ?? false)" label="Allow free test access on the hotspot portal" />
+                <flux:description>Shows a "Start test access" button next to every package on this shop's captive portal, granting full access with no payment. Off by default.</flux:description>
+            </flux:field>
         </div>
 
         <div class="mt-6 flex gap-3">

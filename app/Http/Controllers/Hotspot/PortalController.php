@@ -135,6 +135,11 @@ class PortalController extends Controller
             ]);
         }
 
+        // Guards the route itself, not just the portal button -- a shop with test
+        // access off must reject a direct POST here too, since the button being
+        // hidden alone wouldn't stop anyone who already knows this endpoint.
+        abort_unless((bool) $router->shop?->allow_test_access, 403);
+
         $package = Package::query()
             ->where('shop_id', $router->shop_id)
             ->where('is_active', true)
