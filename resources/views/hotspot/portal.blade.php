@@ -180,10 +180,7 @@
                                 <input type="hidden" name="package_id" value="{{ $package->id }}">
                                 <input type="hidden" name="mac" value="{{ $macAddress }}">
                                 <input type="hidden" name="nasid" value="{{ $router->nas_identifier }}">
-                                <div class="grid grid-cols-2 gap-2 sm:grid-cols-1 sm:gap-3">
-                                    <input type="email" name="email" placeholder="Email" class="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm">
-                                    <input name="phone" placeholder="Phone" class="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm">
-                                </div>
+                                <input name="phone" placeholder="Phone" class="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm">
                                 <fieldset>
                                     <label for="payment_method" class="mb-2 block text-xs font-medium text-zinc-500">Pay with</label>
                                     @if ($gatewayKey === \App\Support\PaymentGatewayCatalog::FLUTTERWAVE)
