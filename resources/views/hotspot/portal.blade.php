@@ -185,18 +185,13 @@
                                     <input name="phone" placeholder="Phone" class="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm">
                                 </div>
                                 <fieldset>
-                                    <legend class="mb-2 text-xs font-medium text-zinc-500">Pay with</legend>
+                                    <label for="payment_method" class="mb-2 block text-xs font-medium text-zinc-500">Pay with</label>
                                     @if ($gatewayKey === \App\Support\PaymentGatewayCatalog::FLUTTERWAVE)
-                                        <div class="grid grid-cols-3 gap-2">
-                                            @foreach ([['opay', 'OPay', true], ['bank_transfer', 'Transfer', false], ['card', 'Card', false], ['ussd', 'USSD', false], ['nqr', 'QR', false]] as [$methodValue, $methodLabel, $methodSelected])
-                                                <label class="cursor-pointer">
-                                                    <input type="radio" name="payment_method" value="{{ $methodValue }}" class="peer sr-only" @checked($methodSelected)>
-                                                    <span class="grid min-h-9 place-items-center rounded-md border border-zinc-200 px-2 text-center text-xs font-medium text-zinc-600 transition peer-checked:border-zinc-950 peer-checked:bg-zinc-950 peer-checked:text-white">
-                                                        {{ $methodLabel }}
-                                                    </span>
-                                                </label>
+                                        <select name="payment_method" id="payment_method" class="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-700">
+                                            @foreach ([['opay', 'OPay'], ['bank_transfer', 'Bank Transfer'], ['card', 'Card'], ['ussd', 'USSD'], ['nqr', 'QR (Scan to Pay)']] as [$methodValue, $methodLabel])
+                                                <option value="{{ $methodValue }}">{{ $methodLabel }}</option>
                                             @endforeach
-                                        </div>
+                                        </select>
                                     @else
                                         <div class="flex items-center gap-2 rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2">
                                             @if ($gatewayLogoUrl)
