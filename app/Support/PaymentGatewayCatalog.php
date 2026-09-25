@@ -40,7 +40,13 @@ class PaymentGatewayCatalog
                     'webhook_secret' => 'Secret Hash',
                 ],
                 'secret_fields' => ['client_secret', 'secret_key', 'webhook_secret'],
-                'walled_garden_hosts' => ['*.flutterwave.com', '*.ravepay.co'],
+                // Confirmed live 2026-09-25: a card checkout's v3 hosted-checkout
+                // link redirected to checkout-v2.dev-flutterwave.com -- a
+                // completely different domain from flutterwave.com, so it was
+                // never covered by the *.flutterwave.com wildcard below and
+                // failed with the same net::ERR_CONNECTION_CLOSED symptom
+                // documented elsewhere in this file for other missing hosts.
+                'walled_garden_hosts' => ['*.flutterwave.com', '*.ravepay.co', '*.dev-flutterwave.com'],
             ],
             self::PAYSTACK => [
                 'key' => self::PAYSTACK,
