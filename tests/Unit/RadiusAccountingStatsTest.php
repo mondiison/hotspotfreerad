@@ -3,6 +3,7 @@
 namespace Tests\Unit;
 
 use App\Models\Router;
+use App\Models\RouterMetricSample;
 use App\Models\Shop;
 use App\Models\Tenant;
 use App\Support\RadiusAccountingStats;
@@ -110,7 +111,7 @@ class RadiusAccountingStatsTest extends TestCase
         $this->assertSame('ZeroTier Router', $sessions->first()->router_name);
     }
 
-    public function test_a_router_with_no_matching_accounting_rows_reports_no_accounting_yet(): void
+    public function test_a_router_with_no_matching_accounting_rows_reports_no_data_yet(): void
     {
         $router = Router::create([
             'shop_id' => $this->shop()->id,
@@ -125,6 +126,68 @@ class RadiusAccountingStatsTest extends TestCase
         )->first();
 
         $this->assertFalse($refreshed->is_online);
-        $this->assertSame('No accounting yet', $refreshed->detected_status);
+        $this->assertSame('No data yet', $refreshed->detected_status);
+    }
+
+    /**
+     * Regression coverage for a live 2026-09-27 report: a router with zero
+     * customers currently connected (no active accounting session at all)
+     * is not the same thing as a router that's actually down, but the old
+     * "online = has an active accounting session" check couldn't tell them
+     * apart. A fresh, reachable heartbeat sample (hotspot:sample-router-metrics)
+     * now counts as online on its own, independent of accounting activity.
+     */
+    public function test_a_fresh_reachable_heartbeat_counts_as_online_with_no_accounting_activity(): void
+    {
+        $router = Router::create([
+            'shop_id' => $this->shop()->id,
+            'name' => 'Heartbeat Only Router',
+            'nas_identifier' => 'heartbeat-router',
+            'wireguard_internal_ip' => '10.8.0.24',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        RouterMetricSample::create([
+            'router_id' => $router->id,
+            'latency_ms' => 12,
+            'sampled_at' => now()->subMinutes(2),
+        ]);
+
+        $refreshed = app(RadiusAccountingStats::class)->refreshRouterHealth(
+            Router::query()->whereKey($router->id)->get()
+        )->first();
+
+        $this->assertTrue($refreshed->is_online);
+        $this->assertSame('Online', $refreshed->detected_status);
+        $this->assertNotNull($refreshed->last_seen_at);
+    }
+
+    /**
+     * A heartbeat sample that exists but is stale (older than the 15-minute
+     * freshness window) or came back unreachable (null latency) must not
+     * count as currently online -- only a recent, successful ping should.
+     */
+    public function test_a_stale_or_unreachable_heartbeat_does_not_count_as_online(): void
+    {
+        $router = Router::create([
+            'shop_id' => $this->shop()->id,
+            'name' => 'Stale Heartbeat Router',
+            'nas_identifier' => 'stale-heartbeat-router',
+            'wireguard_internal_ip' => '10.8.0.25',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        RouterMetricSample::create([
+            'router_id' => $router->id,
+            'latency_ms' => 9,
+            'sampled_at' => now()->subMinutes(30),
+        ]);
+
+        $refreshed = app(RadiusAccountingStats::class)->refreshRouterHealth(
+            Router::query()->whereKey($router->id)->get()
+        )->first();
+
+        $this->assertFalse($refreshed->is_online);
+        $this->assertNotSame('Online', $refreshed->detected_status);
     }
 }

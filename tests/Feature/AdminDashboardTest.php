@@ -512,7 +512,7 @@ class AdminDashboardTest extends TestCase
             ->get(route('admin.dashboard'))
             ->assertOk()
             ->assertSee('Quiet Router')
-            ->assertSee('No accounting yet')
+            ->assertSee('No data yet')
             ->assertSee('No users are online right now.');
     }
 

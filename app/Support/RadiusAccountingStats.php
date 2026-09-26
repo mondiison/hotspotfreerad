@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Models\Router;
+use App\Models\RouterMetricSample;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -10,6 +11,15 @@ use Illuminate\Support\Facades\Schema;
 
 class RadiusAccountingStats
 {
+    /**
+     * A router's own "does it get scheduled a fresh /hotspot:sample-router-metrics
+     * pass" cadence is 5 minutes -- this gives one full missed cycle of
+     * slack before a stale-but-present heartbeat sample stops counting as
+     * "currently reachable," the same reasoning behind the 10-minute
+     * "recently seen" window below for accounting activity.
+     */
+    private const HEARTBEAT_FRESHNESS_MINUTES = 15;
+
     public function hasAccounting(): bool
     {
         return Schema::hasTable('radacct');
@@ -38,39 +48,80 @@ class RadiusAccountingStats
         return array_values(array_filter([$router->wireguard_internal_ip, $router->zerotier_ip]));
     }
 
+    /**
+     * "Online" used to mean exactly one thing: an active (still-open)
+     * `radacct` session, i.e. at least one customer currently authenticated
+     * through that router. Confirmed live 2026-09-27 as a real, if obvious
+     * once named, accuracy gap: a router that's fully healthy and reachable
+     * but simply has zero customers connected right now (overnight, a new
+     * site with no traffic yet, etc.) showed as "Idle"/offline on the
+     * dashboard exactly like a router that's actually down -- the two are
+     * completely different conditions the old check couldn't distinguish.
+     *
+     * This app already runs a genuine per-router heartbeat independent of
+     * customer traffic -- `hotspot:sample-router-metrics` (`RouterMetricSamplingService`)
+     * pings every router every 5 minutes over ICMP regardless of whether
+     * anyone is using it, the same signal `RouterAlertNotification`'s
+     * offline/online alerts already fire from. "Online" is now `heartbeat
+     * reachable` OR `has an active accounting session` -- an OR, not a
+     * replacement, since a genuinely active customer session is still
+     * unambiguous proof of life even in the rare case ICMP itself is
+     * firewalled off while RADIUS/data traffic keeps flowing fine.
+     * `last_seen_at` similarly becomes the more recent of "last accounting
+     * activity" and "last heartbeat sample," so a router with no customers
+     * yet still shows a real, current "last seen" instead of "Never."
+     */
     public function refreshRouterHealth(EloquentCollection $routers): EloquentCollection
     {
-        if (! $this->hasAccounting() || $routers->isEmpty()) {
-            $routers->each(fn (Router $router) => $router->setAttribute('detected_status', 'Accounting unavailable'));
-
+        if ($routers->isEmpty()) {
             return $routers;
         }
 
-        $routers->each(function (Router $router): void {
-            $nasIps = $this->nasIpsFor($router);
+        $accountingReady = $this->hasAccounting();
+        $latestSamples = RouterMetricSample::query()
+            ->whereIn('router_id', $routers->pluck('id'))
+            ->orderByDesc('sampled_at')
+            ->get()
+            ->groupBy('router_id')
+            ->map(fn (Collection $samples) => $samples->first());
 
-            $latestSession = DB::table('radacct')
-                ->whereIn('nasipaddress', $nasIps)
-                ->orderByRaw('COALESCE(acctupdatetime, acctstarttime) desc')
-                ->first();
+        $routers->each(function (Router $router) use ($accountingReady, $latestSamples): void {
+            $sample = $latestSamples->get($router->id);
+            $heartbeatIsFresh = $sample && $sample->sampled_at->greaterThan(now()->subMinutes(self::HEARTBEAT_FRESHNESS_MINUTES));
+            $heartbeatIsReachable = $heartbeatIsFresh && $sample->latency_ms !== null;
 
-            $lastSeenAt = $latestSession?->acctupdatetime ?? $latestSession?->acctstarttime;
-            $hasActiveSession = DB::table('radacct')
-                ->whereIn('nasipaddress', $nasIps)
-                ->whereNull('acctstoptime')
-                ->exists();
-            if (! $latestSession) {
-                $router->setAttribute('detected_status', 'No accounting yet');
+            $hasActiveSession = false;
+            $accountingLastSeenAt = null;
 
-                return;
+            if ($accountingReady) {
+                $nasIps = $this->nasIpsFor($router);
+                $latestSession = DB::table('radacct')
+                    ->whereIn('nasipaddress', $nasIps)
+                    ->orderByRaw('COALESCE(acctupdatetime, acctstarttime) desc')
+                    ->first();
+
+                $accountingLastSeenAt = $latestSession?->acctupdatetime ?? $latestSession?->acctstarttime;
+                $hasActiveSession = DB::table('radacct')
+                    ->whereIn('nasipaddress', $nasIps)
+                    ->whereNull('acctstoptime')
+                    ->exists();
             }
 
-            $isRecentlySeen = $lastSeenAt && now()->parse($lastSeenAt)->greaterThan(now()->subMinutes(10));
-            $isOnline = $hasActiveSession;
+            $lastSeenCandidates = array_filter([
+                $accountingLastSeenAt ? now()->parse($accountingLastSeenAt) : null,
+                $sample?->sampled_at,
+            ]);
+            $lastSeenAt = $lastSeenCandidates === [] ? null : max($lastSeenCandidates);
+
+            $isRecentlySeen = $lastSeenAt && $lastSeenAt->greaterThan(now()->subMinutes(10));
+            $isOnline = $heartbeatIsReachable || $hasActiveSession;
+
             $detectedStatus = match (true) {
-                $hasActiveSession => 'Online',
+                $isOnline => 'Online',
                 $isRecentlySeen => 'Recently seen',
-                default => 'Idle / no recent sessions',
+                $lastSeenAt !== null => 'Idle / no recent sessions',
+                $accountingReady => 'No data yet',
+                default => 'Monitoring unavailable',
             };
 
             $router->forceFill([
@@ -78,6 +129,7 @@ class RadiusAccountingStats
                 'last_seen_at' => $lastSeenAt ?: $router->last_seen_at,
             ])->save();
             $router->setAttribute('detected_status', $detectedStatus);
+            $router->setAttribute('heartbeat_latency_ms', $sample?->latency_ms);
         });
 
         return $routers;

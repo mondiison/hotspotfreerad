@@ -56,6 +56,36 @@ class RouterMetricSamplingTest extends TestCase
         $this->assertGreaterThanOrEqual(0, $latency);
     }
 
+    /**
+     * Regression coverage for a live 2026-09-27 report: sample() used to
+     * ping wireguard_internal_ip only, so a tunnel_mode=zerotier router
+     * (whose wireguard_internal_ip is stored but never actually used) never
+     * produced a real latency reading regardless of its actual, working
+     * ZeroTier connectivity. A router with only a reachable ZeroTier IP
+     * (127.0.0.1, guaranteed to respond) and an unreachable WireGuard IP
+     * (the reserved documentation-only test range) must still get a
+     * non-null latency from the ZeroTier fallback.
+     */
+    public function test_sampling_a_zerotier_only_router_pings_the_zerotier_ip(): void
+    {
+        $tenant = Tenant::create(['company_name' => 'Demo ISP', 'owner_email' => 'owner@example.com']);
+        $shop = Shop::create(['tenant_id' => $tenant->id, 'name' => 'Demo Shop']);
+
+        $router = Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'ZeroTier Metrics Router',
+            'nas_identifier' => 'zerotier-metrics-router',
+            'wireguard_internal_ip' => '192.0.2.30',
+            'shared_secret' => 'radius-secret',
+            'tunnel_mode' => 'zerotier',
+            'zerotier_ip' => '127.0.0.1',
+        ]);
+
+        $sample = app(RouterMetricSamplingService::class)->sample($router);
+
+        $this->assertNotNull($sample->latency_ms);
+    }
+
     public function test_metric_history_buckets_samples_into_a_series(): void
     {
         $router = $this->makeRouter();

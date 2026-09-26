@@ -87,7 +87,7 @@
         @foreach ([
             ['label' => 'Tenants', 'value' => $tenantCount, 'hint' => auth()->user()->isSuperAdmin() ? 'Total platform customers' : 'Your assigned tenant'],
             ['label' => 'Locations', 'value' => $shopCount, 'hint' => 'Active hotspot shops/sites'],
-            ['label' => 'Routers Online', 'value' => "{$onlineRouterCount}/{$routerCount}", 'hint' => 'Only routers with active accounting sessions are counted online'],
+            ['label' => 'Routers Online', 'value' => "{$onlineRouterCount}/{$routerCount}", 'hint' => 'Reachable on a 5-minute heartbeat ping, or with an active accounting session'],
             ['label' => 'Active Plans', 'value' => "{$activePackageCount}/{$packageCount}", 'hint' => 'Published packages customers can select'],
             ['label' => 'Active Access', 'value' => $activeSubscriptionCount, 'hint' => 'Unexpired app subscriptions'],
             ['label' => 'Users Online', 'value' => is_null($onlineUserCount) ? 'Not ready' : $onlineUserCount, 'hint' => $radiusAccountingReady ? 'Unique active RADIUS usernames' : 'radacct table has not been created'],
@@ -849,7 +849,7 @@
             <div class="flex items-center justify-between gap-4">
                 <div>
                     <h2 class="text-base font-semibold">Router Health</h2>
-                    <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Status is refreshed from recent FreeRADIUS accounting activity.</p>
+                    <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Status combines a 5-minute heartbeat ping with recent FreeRADIUS accounting activity.</p>
                 </div>
                 <a href="{{ route('admin.routers.index') }}" wire:navigate class="rounded-md border border-zinc-200 dark:border-zinc-700 px-3 py-2 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800">View all</a>
             </div>
@@ -861,6 +861,7 @@
                             <th class="px-4 py-3 font-medium">Router</th>
                             <th class="px-4 py-3 font-medium">Shop</th>
                             <th class="px-4 py-3 font-medium">Status</th>
+                            <th class="px-4 py-3 font-medium">Latency</th>
                             <th class="px-4 py-3 font-medium">Last Seen</th>
                         </tr>
                     </thead>
@@ -874,10 +875,11 @@
                                         {{ $router->detected_status ?? 'Unknown' }}
                                     </span>
                                 </td>
+                                <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $router->heartbeat_latency_ms !== null ? $router->heartbeat_latency_ms.' ms' : '—' }}</td>
                                 <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $router->last_seen_at?->diffForHumans() ?? 'Never' }}</td>
                             </tr>
                         @empty
-                            <tr><td colspan="4" class="px-4 py-8 text-center text-zinc-500 dark:text-zinc-400">No routers have been registered yet.</td></tr>
+                            <tr><td colspan="5" class="px-4 py-8 text-center text-zinc-500 dark:text-zinc-400">No routers have been registered yet.</td></tr>
                         @endforelse
                     </tbody>
                 </table>

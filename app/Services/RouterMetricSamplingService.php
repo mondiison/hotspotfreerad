@@ -19,12 +19,12 @@ class RouterMetricSamplingService
     public function __construct(private readonly RouterOsConnectionService $routerOs) {}
 
     /**
-     * Samples one router: latency (ICMP ping from this host to the router's
-     * WireGuard IP -- no RouterOS API needed) plus, if API credentials are
-     * configured, CPU/RAM/disk/uptime and hardware health. Always stores a
-     * row, even if every value comes back null, so gaps are visible in the
-     * history rather than silently missing. Fires alerts on state
-     * transitions (see evaluateAlerts()) after the sample is saved.
+     * Samples one router: latency (ICMP ping from this host to the router,
+     * no RouterOS API needed) plus, if API credentials are configured,
+     * CPU/RAM/disk/uptime and hardware health. Always stores a row, even if
+     * every value comes back null, so gaps are visible in the history
+     * rather than silently missing. Fires alerts on state transitions (see
+     * evaluateAlerts()) after the sample is saved.
      */
     public function sample(Router $router): RouterMetricSample
     {
@@ -35,7 +35,7 @@ class RouterMetricSamplingService
 
         $data = [
             'router_id' => $router->id,
-            'latency_ms' => $this->pingLatencyMs($router->wireguard_internal_ip),
+            'latency_ms' => $this->pingReachableHost($router),
             'sampled_at' => now(),
         ];
 
@@ -127,6 +127,32 @@ class RouterMetricSamplingService
                     });
             })
             ->get();
+    }
+
+    /**
+     * Pings every candidate host for this router's tunnel_mode in order
+     * (WireGuard IP, then ZeroTier fallback), returning the first
+     * successful latency -- mirrors `RouterOsConnectionService::
+     * candidateHosts()`'s own "try each host until one works" pattern.
+     * Confirmed live 2026-09-27: this used to always ping
+     * `wireguard_internal_ip` specifically, so a `tunnel_mode=zerotier`
+     * router (whose `wireguard_internal_ip` is a stored-but-unused value)
+     * never once produced a real latency reading, permanently reporting it
+     * unreachable to `RadiusAccountingStats::refreshRouterHealth()`'s
+     * heartbeat check regardless of the router's actual, working ZeroTier
+     * connectivity.
+     */
+    private function pingReachableHost(Router $router): ?int
+    {
+        foreach (RouterOsConnectionService::candidateHosts($router) as $host) {
+            $latency = $this->pingLatencyMs($host);
+
+            if ($latency !== null) {
+                return $latency;
+            }
+        }
+
+        return null;
     }
 
     /**
