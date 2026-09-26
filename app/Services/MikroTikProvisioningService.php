@@ -1372,44 +1372,7 @@ HTML;
 
         $username = $this->quote($router->api_username ?: 'mmsradius-api');
         $password = $this->quote($router->api_password);
-
-        // Deny-list of every policy RouterOS 7 recognizes except read+write+api+test+sensitive --
-        // confirmed against a real RouterOS 7.18.2 router's own `/user group print
-        // detail where name=full` output. Earlier revisions of this list included
-        // "dude" and "tikapp", which RouterOS 7 rejects outright ("input does not
-        // match any value of policy"), so the whole group (and therefore the API
-        // user) silently never got created. "rest-api" replaces them -- RouterOS 7
-        // added a separate REST API surface distinct from the classic binary API
-        // this app actually uses, and it should stay denied.
-        //
-        // "write" is REQUIRED, not optional: "Provision via API" issues genuine
-        // write commands (/radius/add, /ip/hotspot/*/add, /ip/hotspot/walled-garden/add).
-        // "test" and "sensitive" are also granted so the connection checker and
-        // generated diagnostic/provisioning flows can inspect secrets and run
-        // RouterOS test commands consistently across fresh installs.
-        // A prior revision of this policy denied write ("read-only monitoring
-        // account"), which meant every one of those commands was silently rejected
-        // by RouterOS -- and, compounding it, RouterOsConnectionService::runSteps()
-        // didn't check for a RouterOS `!trap` (error) response at all, so the
-        // rejection was reported back to the admin as success. Both are fixed
-        // together: this account now genuinely needs write, and runSteps() now
-        // actually detects a trap. A router bootstrapped before this fix needs its
-        // script re-run (or a fresh "Provision via API" push once the API user's
-        // policy line has been re-applied) before writes will actually take effect.
-        //
-        // "ftp" is also REQUIRED, despite the misleading name -- RouterOS overloads
-        // this policy flag to gate local file-system writes generally (a holdover
-        // from when file transfer/backup only happened over literal FTP), not just
-        // the FTP *service* (which this app never enables via /ip service). It was
-        // originally denied here on a least-privilege assumption before this account
-        // needed to touch files at all. RouterOsConnectionService::pushHotspotLoginPage()
-        // writes the hotspot login page via `/tool fetch dst-path=...`, which RouterOS
-        // rejects with "failure: cannot open file: permission denied" without it --
-        // confirmed live 2026-08-09. A router bootstrapped before this fix needs the
-        // same remediation as the write-policy fix above: re-run the script, or just
-        // `/user group set [find name=mmsradius-api-group] policy=<the string below>`
-        // on the router directly.
-        $policy = 'read,write,api,test,sensitive,ftp,!local,!telnet,!ssh,!reboot,!policy,!winbox,!password,!web,!sniff,!romon,!rest-api';
+        $policy = $this->apiGroupPolicy();
 
         return [
             // Update-in-place if the group/user already exist (e.g. this script is
@@ -1419,6 +1382,55 @@ HTML;
             ':if ([:len [/user find name="'.$username.'"]] = 0) do={ /user add name="'.$username.'" password="'.$password.'" group=mmsradius-api-group comment="MMS Radius API provisioning" } else={ /user set [find name="'.$username.'"] password="'.$password.'" group=mmsradius-api-group comment="MMS Radius API provisioning" }',
             '/ip service set api disabled=no port=8728 address='.$this->apiServiceAddressRestriction($router),
         ];
+    }
+
+    /**
+     * The exact RouterOS `policy=` value granted to the persistent
+     * `mmsradius-api-group` user group -- public so
+     * `RouterOsConnectionService::pushFreshInfrastructureScript()` can reuse
+     * it verbatim for its own temporary `/system/script` object's policy,
+     * rather than inventing a second, independently-guessed string.
+     *
+     * Deny-list of every policy RouterOS 7 recognizes except read+write+api+test+sensitive --
+     * confirmed against a real RouterOS 7.18.2 router's own `/user group print
+     * detail where name=full` output. Earlier revisions of this list included
+     * "dude" and "tikapp", which RouterOS 7 rejects outright ("input does not
+     * match any value of policy"), so the whole group (and therefore the API
+     * user) silently never got created. "rest-api" replaces them -- RouterOS 7
+     * added a separate REST API surface distinct from the classic binary API
+     * this app actually uses, and it should stay denied.
+     *
+     * "write" is REQUIRED, not optional: "Provision via API" issues genuine
+     * write commands (/radius/add, /ip/hotspot add, /ip/hotspot/walled-garden/add).
+     * "test" and "sensitive" are also granted so the connection checker and
+     * generated diagnostic/provisioning flows can inspect secrets and run
+     * RouterOS test commands consistently across fresh installs.
+     * A prior revision of this policy denied write ("read-only monitoring
+     * account"), which meant every one of those commands was silently rejected
+     * by RouterOS -- and, compounding it, RouterOsConnectionService::runSteps()
+     * didn't check for a RouterOS `!trap` (error) response at all, so the
+     * rejection was reported back to the admin as success. Both are fixed
+     * together: this account now genuinely needs write, and runSteps() now
+     * actually detects a trap. A router bootstrapped before this fix needs its
+     * script re-run (or a fresh "Provision via API" push once the API user's
+     * policy line has been re-applied) before writes will actually take effect.
+     *
+     * "ftp" is also REQUIRED, despite the misleading name -- RouterOS overloads
+     * this policy flag to gate local file-system writes generally (a holdover
+     * from when file transfer/backup only happened over literal FTP), not just
+     * the FTP *service* (which this app never enables via /ip service). It was
+     * originally denied here on a least-privilege assumption before this account
+     * needed to touch files at all. RouterOsConnectionService::pushHotspotLoginPage()
+     * writes the hotspot login page via `/tool fetch dst-path=...`, which RouterOS
+     * rejects with "failure: cannot open file: permission denied" without it --
+     * confirmed live 2026-08-09. A router bootstrapped before this fix needs the
+     * same remediation as the write-policy fix above: re-run the script, or just
+     * `/user group set [find name=mmsradius-api-group] policy=<the string below>`
+     * on the router directly.
+     */
+    public function apiGroupPolicy(): string
+    {
+        return 'read,write,api,test,sensitive,ftp,!local,!telnet,!ssh,!reboot,!policy,!winbox,!password,!web,!sniff,!romon,!rest-api';
     }
 
     /**
