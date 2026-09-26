@@ -3,11 +3,12 @@
 namespace App\Services\Payments;
 
 use App\Models\Payment;
-use App\Services\MonnifyService;
 use App\Services\Payments\Contracts\HotspotHostedGateway;
+use App\Services\Payments\Gateways\MonnifyGateway;
 use App\Services\PaystackService;
 use App\Services\SquadService;
 use App\Services\StripeService;
+use App\Support\GuestCustomerEmail;
 use App\Support\PaymentGatewayCatalog;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Log;
@@ -16,10 +17,11 @@ use Throwable;
 class HotspotHostedCheckoutManager
 {
     public function __construct(
-        private readonly MonnifyService $monnify,
         private readonly PaystackService $paystack,
         private readonly SquadService $squad,
         private readonly StripeService $stripe,
+        private readonly MonnifyGateway $monnifyGateway,
+        private readonly GatewayCredentialResolver $credentials,
     ) {}
 
     public function supports(Payment $payment): bool
@@ -37,6 +39,14 @@ class HotspotHostedCheckoutManager
      */
     public function start(Payment $payment, array $customer): array
     {
+        // Monnify is the only gateway migrated to the shared MonnifyGateway so
+        // far (2026-09-26) -- Paystack/Squad/Stripe still go through the older
+        // HotspotHostedGateway/Payment-coupled path below until they're
+        // migrated the same way in a follow-up pass.
+        if ($payment->provider === PaymentGatewayCatalog::MONNIFY) {
+            return $this->startMonnify($payment, $customer);
+        }
+
         $gateway = $this->gatewayFor($payment);
         $credentialSource = $gateway->credentialSource($payment);
 
@@ -88,10 +98,122 @@ class HotspotHostedCheckoutManager
         }
     }
 
+    /**
+     * Called directly by PortalController::webhook() for Monnify specifically
+     * -- that controller still dispatches every other gateway's webhook
+     * signature check inline (a pre-existing pattern, not something this
+     * Monnify migration set out to change), so this is a narrow, named
+     * entry point rather than a general webhookIsValid() covering all four
+     * gateways this manager knows about.
+     */
+    public function monnifyWebhookIsValid(Payment $payment, string $rawBody, ?string $signature): bool
+    {
+        return $this->monnifyGateway->webhookIsValid(
+            $this->credentials->forPayment($payment, PaymentGatewayCatalog::MONNIFY),
+            $rawBody,
+            $signature
+        );
+    }
+
+    /**
+     * @return array{credential_source: array<string, string>, checkout_url: ?string, unavailable_reason: ?string}
+     */
+    private function startMonnify(Payment $payment, array $customer): array
+    {
+        $credentials = $this->credentials->forPayment($payment, PaymentGatewayCatalog::MONNIFY);
+        $credentialSource = $this->monnifyCredentialSource($payment, $credentials);
+
+        if (! $this->monnifyGateway->isConfigured($credentials)) {
+            return $this->result($credentialSource, null, 'missing_gateway_secret_key');
+        }
+
+        $chargeRequest = new ChargeRequest(
+            reference: $payment->tx_ref,
+            amount: (float) $payment->amount,
+            currency: $payment->currency,
+            redirectUrl: $this->callbackUrl($payment),
+            customerEmail: GuestCustomerEmail::resolve($payment, $customer['email'] ?? null),
+            customerName: (string) ($customer['name'] ?? 'Hotspot Customer'),
+            description: $payment->package->name.' hotspot access',
+            meta: [
+                'payment_id' => $payment->id,
+                'payment_reference' => $payment->tx_ref,
+                'tenant_id' => $payment->shop->tenant_id,
+                'tenant_name' => $payment->shop->tenant->company_name,
+                'shop_id' => $payment->shop_id,
+                'shop_name' => $payment->shop->name,
+                'package_id' => $payment->package_id,
+                'package_name' => $payment->package->name,
+                'device_mac' => data_get($payment->payload, 'mac'),
+                'nas_identifier' => data_get($payment->payload, 'nasid'),
+                'phone' => (string) ($customer['phone'] ?? ''),
+            ],
+        );
+
+        try {
+            $result = $this->monnifyGateway->initializeCheckout($credentials, $chargeRequest);
+
+            $payment->update([
+                'provider_reference' => $result->providerReference,
+                'payload' => array_merge($payment->payload ?? [], [
+                    'checkout_url' => $result->checkoutUrl,
+                    $payment->provider.'_account' => $credentialSource,
+                    $payment->provider.'_init_response' => $result->response,
+                ]),
+            ]);
+
+            if (filled($result->checkoutUrl)) {
+                return $this->result($credentialSource, $result->checkoutUrl, null);
+            }
+
+            Log::warning('Monnify checkout response missing checkout URL', [
+                'payment_id' => $payment->id,
+                'tx_ref' => $payment->tx_ref,
+                'response_body' => $result->response,
+            ]);
+
+            return $this->result($credentialSource, null, 'missing_checkout_url');
+        } catch (Throwable $exception) {
+            $reason = $this->checkoutFailureReason($exception);
+
+            Log::warning('Monnify checkout initialization failed', [
+                'payment_id' => $payment->id,
+                'tx_ref' => $payment->tx_ref,
+                'message' => $exception->getMessage(),
+                'response_body' => $exception instanceof RequestException
+                    ? $exception->response->json() ?: $exception->response->body()
+                    : null,
+            ]);
+
+            return $this->result($credentialSource, null, $reason);
+        }
+    }
+
+    private function monnifyCredentialSource(Payment $payment, GatewayCredentials $credentials): array
+    {
+        if ($payment->shop?->tenant?->wallet_enabled) {
+            return [
+                'source' => 'platform',
+                'label' => 'MMS Radius platform gateway',
+            ];
+        }
+
+        if ($this->monnifyGateway->isConfigured($credentials)) {
+            return [
+                'source' => 'tenant',
+                'label' => $payment->shop->tenant->company_name.' / '.$payment->shop->name,
+            ];
+        }
+
+        return [
+            'source' => 'unconfigured',
+            'label' => 'Tenant Monnify account not configured',
+        ];
+    }
+
     private function gatewayFor(Payment $payment): HotspotHostedGateway
     {
         return match ($payment->provider) {
-            PaymentGatewayCatalog::MONNIFY => $this->monnify,
             PaymentGatewayCatalog::SQUAD => $this->squad,
             PaymentGatewayCatalog::STRIPE => $this->stripe,
             default => $this->paystack,

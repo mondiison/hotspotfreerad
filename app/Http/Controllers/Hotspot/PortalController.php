@@ -13,7 +13,6 @@ use App\Services\FlutterwaveService;
 use App\Services\HotspotPaymentConfirmationService;
 use App\Services\ManualBankTransferService;
 use App\Services\MikroTikProvisioningService;
-use App\Services\MonnifyService;
 use App\Services\Payments\HotspotHostedCheckoutManager;
 use App\Services\PaystackService;
 use App\Services\RadiusProvisioningService;
@@ -702,7 +701,7 @@ class PortalController extends Controller
         ]);
     }
 
-    public function webhook(Request $request, FlutterwaveService $flutterwave, MonnifyService $monnify, PaystackService $paystack, SquadService $squad, StripeService $stripe): Response
+    public function webhook(Request $request, FlutterwaveService $flutterwave, HotspotHostedCheckoutManager $hostedGateways, PaystackService $paystack, SquadService $squad, StripeService $stripe): Response
     {
         $payload = $request->all();
         $txRef = data_get($payload, 'data.reference')
@@ -727,7 +726,7 @@ class PortalController extends Controller
                 abort(401);
             }
         } elseif ($payment->provider === PaymentGatewayCatalog::MONNIFY) {
-            if (! $monnify->webhookIsValid($request->getContent(), $request->header('monnify-signature'), $payment)) {
+            if (! $hostedGateways->monnifyWebhookIsValid($payment, $request->getContent(), $request->header('monnify-signature'))) {
                 abort(401);
             }
         } elseif ($payment->provider === PaymentGatewayCatalog::SQUAD) {

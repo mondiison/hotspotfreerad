@@ -4,6 +4,9 @@ namespace App\Services;
 
 use App\Models\PlatformBillingPayment;
 use App\Models\TenantBillingSubscription;
+use App\Services\Payments\GatewayCredentials;
+use App\Services\Payments\Gateways\MonnifyGateway;
+use App\Services\Payments\Verification\MonnifyVerificationMatcher;
 use App\Support\PaymentGatewayCatalog;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -13,9 +16,10 @@ class PlatformBillingConfirmationService
     public function __construct(
         private readonly PlatformFlutterwaveService $flutterwave,
         private readonly PlatformStripeService $stripe,
-        private readonly PlatformMonnifyService $monnify,
         private readonly PlatformPaystackService $paystack,
         private readonly PlatformSquadService $squad,
+        private readonly PlatformPaymentSettingsService $settings,
+        private readonly MonnifyGateway $monnifyGateway,
     ) {}
 
     public function verifyAndActivate(PlatformBillingPayment $payment, string $providerReference, string $resourceType = 'order'): bool
@@ -28,7 +32,7 @@ class PlatformBillingConfirmationService
 
         $verification = match ($payment->provider) {
             PaymentGatewayCatalog::STRIPE => $this->stripe->verifyPayment($providerReference),
-            PaymentGatewayCatalog::MONNIFY => $this->monnify->verifyPayment($providerReference),
+            PaymentGatewayCatalog::MONNIFY => $this->monnifyGateway->verifyPayment($this->monnifyCredentials(), $providerReference),
             PaymentGatewayCatalog::PAYSTACK => $this->paystack->verifyPayment($providerReference),
             PaymentGatewayCatalog::SQUAD => $this->squad->verifyPayment($providerReference),
             default => $this->flutterwave->verifyPayment($payment, $providerReference, $resourceType),
@@ -101,11 +105,7 @@ class PlatformBillingConfirmationService
         }
 
         if ($payment->provider === PaymentGatewayCatalog::MONNIFY) {
-            return data_get($verification, 'requestSuccessful') === true
-                && $this->statusIsSuccessful(data_get($verification, 'responseBody.paymentStatus'))
-                && data_get($verification, 'responseBody.paymentReference') === $payment->tx_ref
-                && strtoupper((string) data_get($verification, 'responseBody.currency')) === strtoupper($payment->currency)
-                && (float) data_get($verification, 'responseBody.amountPaid') >= (float) $payment->amount;
+            return MonnifyVerificationMatcher::matches($verification, $payment->tx_ref, $payment->currency, (float) $payment->amount);
         }
 
         if ($payment->provider === PaymentGatewayCatalog::PAYSTACK) {
@@ -146,6 +146,11 @@ class PlatformBillingConfirmationService
     private function statusIsSuccessful(mixed $status): bool
     {
         return in_array(strtolower((string) $status), ['success', 'successful', 'succeeded', 'completed', 'paid'], true);
+    }
+
+    private function monnifyCredentials(): GatewayCredentials
+    {
+        return new GatewayCredentials($this->settings->gatewaySettings(PaymentGatewayCatalog::MONNIFY));
     }
 
     private function providerReferenceFromVerification(array $verification, PlatformBillingPayment $payment): string

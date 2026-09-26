@@ -9,15 +9,10 @@ use App\Models\PlatformBillingPayment;
 use App\Models\Tenant;
 use App\Models\TenantBillingSubscription;
 use App\Services\BillingPlanManagementService;
+use App\Services\Payments\PlatformHostedCheckoutManager;
 use App\Services\PlatformBillingConfirmationService;
-use App\Services\PlatformFlutterwaveService;
-use App\Services\PlatformMonnifyService;
 use App\Services\PlatformPaymentSettingsService;
-use App\Services\PlatformPaystackService;
-use App\Services\PlatformSquadService;
-use App\Services\PlatformStripeService;
 use App\Support\PaymentGatewayCatalog;
-use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -149,7 +144,7 @@ class BillingController extends Controller
         return redirect()->route('admin.billing.index')->with('status', 'Billing plan deleted.');
     }
 
-    public function checkout(Request $request, PlatformFlutterwaveService $flutterwave, PlatformStripeService $stripe, PlatformMonnifyService $monnify, PlatformPaystackService $paystack, PlatformSquadService $squad): RedirectResponse
+    public function checkout(Request $request, PlatformHostedCheckoutManager $hostedGateways): RedirectResponse
     {
         $platformSettings = app(PlatformPaymentSettingsService::class);
         $data = $request->validate([
@@ -172,31 +167,11 @@ class BillingController extends Controller
         }
 
         $gateway = $platformSettings->activeGateway();
-        $gatewayService = match ($gateway) {
-            PaymentGatewayCatalog::STRIPE => $stripe,
-            PaymentGatewayCatalog::MONNIFY => $monnify,
-            PaymentGatewayCatalog::PAYSTACK => $paystack,
-            PaymentGatewayCatalog::SQUAD => $squad,
-            default => $flutterwave,
-        };
 
-        // Card can't go through Flutterwave's v4 orchestration initializeCheckout()
-        // at all -- that API's payment_method.type: "card" needs real encrypted
-        // card details this server-side redirect flow never collects, the same
-        // reason the hotspot-side PortalController::pay() routes "card" around its
-        // own initializeCheckout() call entirely. It uses the older v3 hosted
-        // checkout instead, authenticated with a separate secret key.
-        $isFlutterwaveCard = $gateway === PaymentGatewayCatalog::FLUTTERWAVE
-            && $platformSettings->defaultPaymentMethod() === 'card';
-
-        $gatewayIsConfigured = $isFlutterwaveCard
-            ? $flutterwave->hasHostedCheckout()
-            : $gatewayService->isConfigured();
-
-        if (! $gatewayIsConfigured) {
+        if (! $hostedGateways->isConfigured($gateway)) {
             return redirect()
                 ->route('admin.billing.index')
-                ->withErrors(['billing' => $isFlutterwaveCard
+                ->withErrors(['billing' => $hostedGateways->isFlutterwaveCard($gateway)
                     ? 'Card checkout needs the platform Flutterwave Secret Key (v3 card checkout). Add it under Platform Billing settings.'
                     : 'Default platform gateway credentials are not configured yet.']);
         }
@@ -204,7 +179,7 @@ class BillingController extends Controller
         $payment = PlatformBillingPayment::create([
             'tenant_id' => $tenant->id,
             'billing_plan_id' => $plan->id,
-            'provider' => $platformSettings->activeGateway(),
+            'provider' => $gateway,
             'tx_ref' => 'PBF-'.now()->format('YmdHis').'-'.str()->upper(str()->random(8)),
             'amount' => $plan->monthly_price,
             'currency' => $plan->currency,
@@ -212,54 +187,15 @@ class BillingController extends Controller
             'payload' => [
                 'started_by' => $request->user()->email,
                 'plan_name' => $plan->name,
-                'platform_gateway' => $platformSettings->activeGateway(),
+                'platform_gateway' => $gateway,
                 'platform_gateway_name' => $platformSettings->activeGatewayName(),
             ],
         ]);
 
-        try {
-            // Same reasoning as HotspotHostedCheckoutManager::callbackUrl(): Monnify
-            // (and, per that same method's own "default" grouping, Paystack too)
-            // appends its own reference query params to whatever redirectUrl it's
-            // given, using "?" rather than checking for an existing query string --
-            // pre-embedding our own ?tx_ref=... here would produce the same doubled,
-            // malformed query string confirmed live on the hotspot side for Monnify.
-            // Squad is different again -- it never appends anything of its own, so
-            // (mirroring callbackUrl()'s own Squad case) it needs an explicit
-            // transaction_ref embedded, just under its own param name rather than
-            // the generic tx_ref.
-            $redirectUrl = match (true) {
-                in_array($gateway, [PaymentGatewayCatalog::MONNIFY, PaymentGatewayCatalog::PAYSTACK], true) => route('admin.billing.payments.callback'),
-                $gateway === PaymentGatewayCatalog::SQUAD => route('admin.billing.payments.callback', ['transaction_ref' => $payment->tx_ref]),
-                default => route('admin.billing.payments.callback', ['tx_ref' => $payment->tx_ref]),
-            };
+        $result = $hostedGateways->start($payment);
 
-            $checkout = $isFlutterwaveCard
-                ? $flutterwave->createStandardHostedCheckout($payment->load(['tenant', 'billingPlan']), $redirectUrl)
-                : $gatewayService->initializeCheckout($payment->load(['tenant', 'billingPlan']), $redirectUrl);
-
-            $payment->update([
-                'provider_reference' => $checkout['provider_reference'],
-                'payload' => array_merge($payment->payload ?? [], [
-                    'checkout_url' => $checkout['checkout_url'],
-                    'gateway_init_response' => $checkout['response'],
-                    $payment->provider.'_init_response' => $checkout['response'],
-                    ...($isFlutterwaveCard ? ['flutterwave_checkout_version' => 'standard_v3'] : []),
-                ]),
-            ]);
-
-            if (filled($checkout['checkout_url'])) {
-                return redirect()->away($checkout['checkout_url']);
-            }
-        } catch (\Throwable $exception) {
-            Log::warning('Platform billing checkout initialization failed', [
-                'payment_id' => $payment->id,
-                'tx_ref' => $payment->tx_ref,
-                'message' => $exception->getMessage(),
-                'response_body' => $exception instanceof RequestException
-                    ? $exception->response->json() ?: $exception->response->body()
-                    : null,
-            ]);
+        if (filled($result['checkout_url'])) {
+            return redirect()->away($result['checkout_url']);
         }
 
         return redirect()
@@ -385,7 +321,7 @@ class BillingController extends Controller
         return redirect()->route('admin.billing.index')->with('status', 'Platform payment verified and subscription activated.');
     }
 
-    public function webhook(Request $request, PlatformFlutterwaveService $flutterwave, PlatformStripeService $stripe, PlatformMonnifyService $monnify, PlatformPaystackService $paystack, PlatformSquadService $squad): Response
+    public function webhook(Request $request, PlatformHostedCheckoutManager $hostedGateways): Response
     {
         $payload = $request->all();
         $txRef = data_get($payload, 'data.reference')
@@ -404,14 +340,14 @@ class BillingController extends Controller
             ->first();
 
         if (! $payment) {
-            if (! $this->platformWebhookSignatureIsValid($request, $flutterwave, $stripe, $monnify, $paystack, $squad, app(PlatformPaymentSettingsService::class)->activeGateway())) {
+            if (! $hostedGateways->webhookIsValid($request, app(PlatformPaymentSettingsService::class)->activeGateway())) {
                 abort(401);
             }
 
             return response('ignored', 200);
         }
 
-        if (! $this->platformWebhookSignatureIsValid($request, $flutterwave, $stripe, $monnify, $paystack, $squad, $payment->provider)) {
+        if (! $hostedGateways->webhookIsValid($request, $payment->provider)) {
             abort(401);
         }
 
@@ -504,33 +440,6 @@ class BillingController extends Controller
             return false;
         }
 
-        return match ($settings->activeGateway()) {
-            PaymentGatewayCatalog::STRIPE => app(PlatformStripeService::class)->isConfigured(),
-            PaymentGatewayCatalog::MONNIFY => app(PlatformMonnifyService::class)->isConfigured(),
-            PaymentGatewayCatalog::PAYSTACK => app(PlatformPaystackService::class)->isConfigured(),
-            PaymentGatewayCatalog::SQUAD => app(PlatformSquadService::class)->isConfigured(),
-            default => app(PlatformFlutterwaveService::class)->isConfigured(),
-        };
-    }
-
-    private function platformWebhookSignatureIsValid(Request $request, PlatformFlutterwaveService $flutterwave, PlatformStripeService $stripe, PlatformMonnifyService $monnify, PlatformPaystackService $paystack, PlatformSquadService $squad, string $gateway): bool
-    {
-        if ($gateway === PaymentGatewayCatalog::STRIPE) {
-            return $stripe->webhookIsValid($request->getContent(), $request->header('stripe-signature'));
-        }
-
-        if ($gateway === PaymentGatewayCatalog::MONNIFY) {
-            return $monnify->webhookIsValid($request->getContent(), $request->header('monnify-signature'));
-        }
-
-        if ($gateway === PaymentGatewayCatalog::PAYSTACK) {
-            return $paystack->webhookIsValid($request->getContent(), $request->header('x-paystack-signature'));
-        }
-
-        if ($gateway === PaymentGatewayCatalog::SQUAD) {
-            return $squad->webhookIsValid($request->getContent(), $request->header('x-squad-encrypted-body'));
-        }
-
-        return $flutterwave->webhookIsValid($request->getContent(), $request->header('flutterwave-signature') ?: $request->header('verif-hash'));
+        return app(PlatformHostedCheckoutManager::class)->isConfigured($settings->activeGateway());
     }
 }

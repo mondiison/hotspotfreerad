@@ -4,6 +4,9 @@ namespace App\Services;
 
 use App\Models\Payment;
 use App\Models\Subscription;
+use App\Services\Payments\GatewayCredentialResolver;
+use App\Services\Payments\Gateways\MonnifyGateway;
+use App\Services\Payments\Verification\MonnifyVerificationMatcher;
 use App\Support\PaymentGatewayCatalog;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -14,12 +17,13 @@ class HotspotPaymentConfirmationService
 
     public function __construct(
         private readonly FlutterwaveService $flutterwave,
-        private readonly MonnifyService $monnify,
         private readonly PaystackService $paystack,
         private readonly RadiusProvisioningService $radius,
         private readonly SquadService $squad,
         private readonly StripeService $stripe,
         private readonly WalletService $wallet,
+        private readonly MonnifyGateway $monnifyGateway,
+        private readonly GatewayCredentialResolver $credentials,
     ) {}
 
     public function verifyAndGrant(Payment $payment, string $providerReference, string $resourceType = 'order'): ?Subscription
@@ -102,7 +106,7 @@ class HotspotPaymentConfirmationService
         }
 
         if ($payment->provider === PaymentGatewayCatalog::MONNIFY) {
-            return $this->monnifyVerificationMatchesPayment($verification, $payment);
+            return MonnifyVerificationMatcher::matches($verification, $payment->tx_ref, $payment->currency, (float) $payment->amount);
         }
 
         if ($payment->provider === PaymentGatewayCatalog::SQUAD) {
@@ -127,7 +131,10 @@ class HotspotPaymentConfirmationService
         }
 
         if ($payment->provider === PaymentGatewayCatalog::MONNIFY) {
-            return $this->monnify->verifyPayment($payment, $providerReference);
+            return $this->monnifyGateway->verifyPayment(
+                $this->credentials->forPayment($payment, PaymentGatewayCatalog::MONNIFY),
+                $providerReference
+            );
         }
 
         if ($payment->provider === PaymentGatewayCatalog::SQUAD) {
@@ -148,15 +155,6 @@ class HotspotPaymentConfirmationService
             && data_get($verification, 'data.reference') === $payment->tx_ref
             && strtoupper((string) data_get($verification, 'data.currency')) === strtoupper($payment->currency)
             && ((float) data_get($verification, 'data.amount') / 100) >= (float) $payment->amount;
-    }
-
-    private function monnifyVerificationMatchesPayment(array $verification, Payment $payment): bool
-    {
-        return data_get($verification, 'requestSuccessful') === true
-            && $this->statusIsSuccessful(data_get($verification, 'responseBody.paymentStatus'))
-            && data_get($verification, 'responseBody.paymentReference') === $payment->tx_ref
-            && strtoupper((string) data_get($verification, 'responseBody.currency')) === strtoupper($payment->currency)
-            && (float) data_get($verification, 'responseBody.amountPaid') >= (float) $payment->amount;
     }
 
     private function squadVerificationMatchesPayment(array $verification, Payment $payment): bool
