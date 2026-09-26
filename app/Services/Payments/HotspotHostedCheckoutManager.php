@@ -4,10 +4,9 @@ namespace App\Services\Payments;
 
 use App\Models\Payment;
 use App\Services\Payments\Contracts\HostedGateway;
-use App\Services\Payments\Contracts\HotspotHostedGateway;
 use App\Services\Payments\Gateways\MonnifyGateway;
 use App\Services\Payments\Gateways\PaystackGateway;
-use App\Services\SquadService;
+use App\Services\Payments\Gateways\SquadGateway;
 use App\Services\StripeService;
 use App\Support\GuestCustomerEmail;
 use App\Support\PaymentGatewayCatalog;
@@ -18,10 +17,10 @@ use Throwable;
 class HotspotHostedCheckoutManager
 {
     public function __construct(
-        private readonly SquadService $squad,
         private readonly StripeService $stripe,
         private readonly MonnifyGateway $monnifyGateway,
         private readonly PaystackGateway $paystackGateway,
+        private readonly SquadGateway $squadGateway,
         private readonly GatewayCredentialResolver $credentials,
     ) {}
 
@@ -40,10 +39,10 @@ class HotspotHostedCheckoutManager
      */
     public function start(Payment $payment, array $customer): array
     {
-        // Monnify and Paystack are migrated to the shared HostedGateway
-        // contract so far (2026-09-26) -- Squad/Stripe still go through the
-        // older HotspotHostedGateway/Payment-coupled path below until they're
-        // migrated the same way in a follow-up pass.
+        // Monnify, Paystack, and Squad are migrated to the shared HostedGateway
+        // contract so far (2026-09-26) -- Stripe still goes through the older
+        // HotspotHostedGateway/Payment-coupled path below until it's migrated
+        // the same way in a follow-up pass.
         if ($payment->provider === PaymentGatewayCatalog::MONNIFY) {
             return $this->startSharedGateway($payment, $customer, $this->monnifyGateway, PaymentGatewayCatalog::MONNIFY, 'Monnify');
         }
@@ -52,7 +51,11 @@ class HotspotHostedCheckoutManager
             return $this->startSharedGateway($payment, $customer, $this->paystackGateway, PaymentGatewayCatalog::PAYSTACK, 'Paystack');
         }
 
-        $gateway = $this->gatewayFor($payment);
+        if ($payment->provider === PaymentGatewayCatalog::SQUAD) {
+            return $this->startSharedGateway($payment, $customer, $this->squadGateway, PaymentGatewayCatalog::SQUAD, 'Squad');
+        }
+
+        $gateway = $this->stripe;
         $credentialSource = $gateway->credentialSource($payment);
 
         if (! $gateway->isConfiguredFor($payment)) {
@@ -124,6 +127,15 @@ class HotspotHostedCheckoutManager
     {
         return $this->paystackGateway->webhookIsValid(
             $this->credentials->forPayment($payment, PaymentGatewayCatalog::PAYSTACK),
+            $rawBody,
+            $signature
+        );
+    }
+
+    public function squadWebhookIsValid(Payment $payment, string $rawBody, ?string $signature): bool
+    {
+        return $this->squadGateway->webhookIsValid(
+            $this->credentials->forPayment($payment, PaymentGatewayCatalog::SQUAD),
             $rawBody,
             $signature
         );
@@ -226,14 +238,6 @@ class HotspotHostedCheckoutManager
             'source' => 'unconfigured',
             'label' => 'Tenant '.$gatewayLabel.' account not configured',
         ];
-    }
-
-    private function gatewayFor(Payment $payment): HotspotHostedGateway
-    {
-        return match ($payment->provider) {
-            PaymentGatewayCatalog::STRIPE => $this->stripe,
-            default => $this->squad,
-        };
     }
 
     private function callbackUrl(Payment $payment): string

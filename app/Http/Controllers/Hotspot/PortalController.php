@@ -15,7 +15,6 @@ use App\Services\ManualBankTransferService;
 use App\Services\MikroTikProvisioningService;
 use App\Services\Payments\HotspotHostedCheckoutManager;
 use App\Services\RadiusProvisioningService;
-use App\Services\SquadService;
 use App\Services\StripeService;
 use App\Services\VoucherManagementService;
 use App\Support\PaymentCommission;
@@ -700,7 +699,7 @@ class PortalController extends Controller
         ]);
     }
 
-    public function webhook(Request $request, FlutterwaveService $flutterwave, HotspotHostedCheckoutManager $hostedGateways, SquadService $squad, StripeService $stripe): Response
+    public function webhook(Request $request, FlutterwaveService $flutterwave, HotspotHostedCheckoutManager $hostedGateways, StripeService $stripe): Response
     {
         $payload = $request->all();
         $txRef = data_get($payload, 'data.reference')
@@ -729,7 +728,7 @@ class PortalController extends Controller
                 abort(401);
             }
         } elseif ($payment->provider === PaymentGatewayCatalog::SQUAD) {
-            if (! $squad->webhookIsValid($request->getContent(), $request->header('x-squad-encrypted-body'), $payment)) {
+            if (! $hostedGateways->squadWebhookIsValid($payment, $request->getContent(), $request->header('x-squad-encrypted-body'))) {
                 abort(401);
             }
         } elseif ($payment->provider === PaymentGatewayCatalog::STRIPE) {

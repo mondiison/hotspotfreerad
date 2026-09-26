@@ -6,9 +6,9 @@ use App\Models\PlatformBillingPayment;
 use App\Services\Payments\Contracts\HostedGateway;
 use App\Services\Payments\Gateways\MonnifyGateway;
 use App\Services\Payments\Gateways\PaystackGateway;
+use App\Services\Payments\Gateways\SquadGateway;
 use App\Services\PlatformFlutterwaveService;
 use App\Services\PlatformPaymentSettingsService;
-use App\Services\PlatformSquadService;
 use App\Services\PlatformStripeService;
 use App\Support\PaymentGatewayCatalog;
 use Illuminate\Http\Client\RequestException;
@@ -23,23 +23,23 @@ use Throwable;
  * directly in the controller, the one asymmetry between the two checkout
  * flows this app has.
  *
- * Monnify and Paystack are migrated to the shared HostedGateway contract so
- * far (2026-09-26) -- Flutterwave/Stripe/Squad still go through their own
- * Platform*Service classes until they're migrated the same way in a
- * follow-up pass. PlatformMonnifyService/PlatformPaystackService were left
- * in place for Monnify (still backing BankAccountResolutionService's
- * banks()/resolveAccount() calls, unrelated to checkout) but deleted
- * entirely for Paystack, since nothing else depended on it.
+ * Monnify, Paystack, and Squad are migrated to the shared HostedGateway
+ * contract so far (2026-09-26) -- Flutterwave/Stripe still go through their
+ * own Platform*Service classes until they're migrated the same way in a
+ * follow-up pass. PlatformMonnifyService was left in place (still backing
+ * BankAccountResolutionService's banks()/resolveAccount() calls, unrelated
+ * to checkout), but PlatformPaystackService/PlatformSquadService were both
+ * deleted entirely, since nothing else depended on either.
  */
 class PlatformHostedCheckoutManager
 {
     public function __construct(
         private readonly PlatformFlutterwaveService $flutterwave,
         private readonly PlatformStripeService $stripe,
-        private readonly PlatformSquadService $squad,
         private readonly PlatformPaymentSettingsService $settings,
         private readonly MonnifyGateway $monnifyGateway,
         private readonly PaystackGateway $paystackGateway,
+        private readonly SquadGateway $squadGateway,
     ) {}
 
     /**
@@ -71,6 +71,10 @@ class PlatformHostedCheckoutManager
             return $this->paystackGateway->isConfigured($this->credentialsFor(PaymentGatewayCatalog::PAYSTACK));
         }
 
+        if ($gateway === PaymentGatewayCatalog::SQUAD) {
+            return $this->squadGateway->isConfigured($this->credentialsFor(PaymentGatewayCatalog::SQUAD));
+        }
+
         return $this->gatewayFor($gateway)->isConfigured();
     }
 
@@ -85,6 +89,10 @@ class PlatformHostedCheckoutManager
 
         if ($payment->provider === PaymentGatewayCatalog::PAYSTACK) {
             return $this->startSharedGateway($payment, $this->paystackGateway, PaymentGatewayCatalog::PAYSTACK);
+        }
+
+        if ($payment->provider === PaymentGatewayCatalog::SQUAD) {
+            return $this->startSharedGateway($payment, $this->squadGateway, PaymentGatewayCatalog::SQUAD);
         }
 
         $gateway = $payment->provider;
@@ -148,7 +156,7 @@ class PlatformHostedCheckoutManager
         }
 
         if ($gateway === PaymentGatewayCatalog::SQUAD) {
-            return $this->squad->webhookIsValid($request->getContent(), $request->header('x-squad-encrypted-body'));
+            return $this->squadGateway->webhookIsValid($this->credentialsFor(PaymentGatewayCatalog::SQUAD), $request->getContent(), $request->header('x-squad-encrypted-body'));
         }
 
         return $this->flutterwave->webhookIsValid($request->getContent(), $request->header('flutterwave-signature') ?: $request->header('verif-hash'));
@@ -225,11 +233,10 @@ class PlatformHostedCheckoutManager
         return new GatewayCredentials($this->settings->gatewaySettings($gateway));
     }
 
-    private function gatewayFor(string $gateway): PlatformFlutterwaveService|PlatformStripeService|PlatformSquadService
+    private function gatewayFor(string $gateway): PlatformFlutterwaveService|PlatformStripeService
     {
         return match ($gateway) {
             PaymentGatewayCatalog::STRIPE => $this->stripe,
-            PaymentGatewayCatalog::SQUAD => $this->squad,
             default => $this->flutterwave,
         };
     }

@@ -7,8 +7,10 @@ use App\Models\Subscription;
 use App\Services\Payments\GatewayCredentialResolver;
 use App\Services\Payments\Gateways\MonnifyGateway;
 use App\Services\Payments\Gateways\PaystackGateway;
+use App\Services\Payments\Gateways\SquadGateway;
 use App\Services\Payments\Verification\MonnifyVerificationMatcher;
 use App\Services\Payments\Verification\PaystackVerificationMatcher;
+use App\Services\Payments\Verification\SquadVerificationMatcher;
 use App\Support\PaymentGatewayCatalog;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -20,11 +22,11 @@ class HotspotPaymentConfirmationService
     public function __construct(
         private readonly FlutterwaveService $flutterwave,
         private readonly RadiusProvisioningService $radius,
-        private readonly SquadService $squad,
         private readonly StripeService $stripe,
         private readonly WalletService $wallet,
         private readonly MonnifyGateway $monnifyGateway,
         private readonly PaystackGateway $paystackGateway,
+        private readonly SquadGateway $squadGateway,
         private readonly GatewayCredentialResolver $credentials,
     ) {}
 
@@ -112,7 +114,7 @@ class HotspotPaymentConfirmationService
         }
 
         if ($payment->provider === PaymentGatewayCatalog::SQUAD) {
-            return $this->squadVerificationMatchesPayment($verification, $payment);
+            return SquadVerificationMatcher::matches($verification, $payment->tx_ref, $payment->currency, (float) $payment->amount);
         }
 
         if ($payment->provider === PaymentGatewayCatalog::STRIPE) {
@@ -143,7 +145,10 @@ class HotspotPaymentConfirmationService
         }
 
         if ($payment->provider === PaymentGatewayCatalog::SQUAD) {
-            return $this->squad->verifyPayment($payment, $providerReference);
+            return $this->squadGateway->verifyPayment(
+                $this->credentials->forPayment($payment, PaymentGatewayCatalog::SQUAD),
+                $providerReference
+            );
         }
 
         if ($payment->provider === PaymentGatewayCatalog::STRIPE) {
@@ -151,17 +156,6 @@ class HotspotPaymentConfirmationService
         }
 
         return $this->flutterwave->verifyPayment($payment, $providerReference, $resourceType);
-    }
-
-    private function squadVerificationMatchesPayment(array $verification, Payment $payment): bool
-    {
-        $currency = data_get($verification, 'data.currency') ?: data_get($verification, 'data.currency_id');
-
-        return data_get($verification, 'success') === true
-            && $this->statusIsSuccessful(data_get($verification, 'data.transaction_status'))
-            && data_get($verification, 'data.transaction_ref') === $payment->tx_ref
-            && (blank($currency) || strtoupper((string) $currency) === strtoupper($payment->currency))
-            && ((float) data_get($verification, 'data.transaction_amount') / 100) >= (float) $payment->amount;
     }
 
     private function stripeVerificationMatchesPayment(array $verification, Payment $payment): bool

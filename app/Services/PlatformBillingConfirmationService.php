@@ -7,8 +7,10 @@ use App\Models\TenantBillingSubscription;
 use App\Services\Payments\GatewayCredentials;
 use App\Services\Payments\Gateways\MonnifyGateway;
 use App\Services\Payments\Gateways\PaystackGateway;
+use App\Services\Payments\Gateways\SquadGateway;
 use App\Services\Payments\Verification\MonnifyVerificationMatcher;
 use App\Services\Payments\Verification\PaystackVerificationMatcher;
+use App\Services\Payments\Verification\SquadVerificationMatcher;
 use App\Support\PaymentGatewayCatalog;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -18,10 +20,10 @@ class PlatformBillingConfirmationService
     public function __construct(
         private readonly PlatformFlutterwaveService $flutterwave,
         private readonly PlatformStripeService $stripe,
-        private readonly PlatformSquadService $squad,
         private readonly PlatformPaymentSettingsService $settings,
         private readonly MonnifyGateway $monnifyGateway,
         private readonly PaystackGateway $paystackGateway,
+        private readonly SquadGateway $squadGateway,
     ) {}
 
     public function verifyAndActivate(PlatformBillingPayment $payment, string $providerReference, string $resourceType = 'order'): bool
@@ -36,7 +38,7 @@ class PlatformBillingConfirmationService
             PaymentGatewayCatalog::STRIPE => $this->stripe->verifyPayment($providerReference),
             PaymentGatewayCatalog::MONNIFY => $this->monnifyGateway->verifyPayment($this->credentialsFor(PaymentGatewayCatalog::MONNIFY), $providerReference),
             PaymentGatewayCatalog::PAYSTACK => $this->paystackGateway->verifyPayment($this->credentialsFor(PaymentGatewayCatalog::PAYSTACK), $providerReference),
-            PaymentGatewayCatalog::SQUAD => $this->squad->verifyPayment($providerReference),
+            PaymentGatewayCatalog::SQUAD => $this->squadGateway->verifyPayment($this->credentialsFor(PaymentGatewayCatalog::SQUAD), $providerReference),
             default => $this->flutterwave->verifyPayment($payment, $providerReference, $resourceType),
         };
 
@@ -115,19 +117,7 @@ class PlatformBillingConfirmationService
         }
 
         if ($payment->provider === PaymentGatewayCatalog::SQUAD) {
-            // Squad's own field names throughout -- top-level "success" boolean,
-            // data.transaction_status/transaction_ref/transaction_amount (kobo) --
-            // mirroring HotspotPaymentConfirmationService::squadVerificationMatchesPayment().
-            // Squad's currency field is genuinely optional in some responses, so a
-            // blank value is treated as a non-mismatch rather than a hard failure,
-            // matching the tenant-side behavior exactly.
-            $currency = data_get($verification, 'data.currency') ?: data_get($verification, 'data.currency_id');
-
-            return data_get($verification, 'success') === true
-                && $this->statusIsSuccessful(data_get($verification, 'data.transaction_status'))
-                && data_get($verification, 'data.transaction_ref') === $payment->tx_ref
-                && (blank($currency) || strtoupper((string) $currency) === strtoupper($payment->currency))
-                && ((float) data_get($verification, 'data.transaction_amount') / 100) >= (float) $payment->amount;
+            return SquadVerificationMatcher::matches($verification, $payment->tx_ref, $payment->currency, (float) $payment->amount);
         }
 
         return in_array(strtolower((string) data_get($verification, 'status')), ['success', 'successful', 'succeeded'], true)
