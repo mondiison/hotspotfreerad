@@ -15,6 +15,7 @@ class PlatformBillingConfirmationService
         private readonly PlatformStripeService $stripe,
         private readonly PlatformMonnifyService $monnify,
         private readonly PlatformPaystackService $paystack,
+        private readonly PlatformSquadService $squad,
     ) {}
 
     public function verifyAndActivate(PlatformBillingPayment $payment, string $providerReference, string $resourceType = 'order'): bool
@@ -29,6 +30,7 @@ class PlatformBillingConfirmationService
             PaymentGatewayCatalog::STRIPE => $this->stripe->verifyPayment($providerReference),
             PaymentGatewayCatalog::MONNIFY => $this->monnify->verifyPayment($providerReference),
             PaymentGatewayCatalog::PAYSTACK => $this->paystack->verifyPayment($providerReference),
+            PaymentGatewayCatalog::SQUAD => $this->squad->verifyPayment($providerReference),
             default => $this->flutterwave->verifyPayment($payment, $providerReference, $resourceType),
         };
 
@@ -118,6 +120,22 @@ class PlatformBillingConfirmationService
                 && ((float) data_get($verification, 'data.amount') / 100) >= (float) $payment->amount;
         }
 
+        if ($payment->provider === PaymentGatewayCatalog::SQUAD) {
+            // Squad's own field names throughout -- top-level "success" boolean,
+            // data.transaction_status/transaction_ref/transaction_amount (kobo) --
+            // mirroring HotspotPaymentConfirmationService::squadVerificationMatchesPayment().
+            // Squad's currency field is genuinely optional in some responses, so a
+            // blank value is treated as a non-mismatch rather than a hard failure,
+            // matching the tenant-side behavior exactly.
+            $currency = data_get($verification, 'data.currency') ?: data_get($verification, 'data.currency_id');
+
+            return data_get($verification, 'success') === true
+                && $this->statusIsSuccessful(data_get($verification, 'data.transaction_status'))
+                && data_get($verification, 'data.transaction_ref') === $payment->tx_ref
+                && (blank($currency) || strtoupper((string) $currency) === strtoupper($payment->currency))
+                && ((float) data_get($verification, 'data.transaction_amount') / 100) >= (float) $payment->amount;
+        }
+
         return in_array(strtolower((string) data_get($verification, 'status')), ['success', 'successful', 'succeeded'], true)
             && $this->statusIsSuccessful(data_get($verification, 'data.status'))
             && (data_get($verification, 'data.reference') === $payment->tx_ref || data_get($verification, 'data.tx_ref') === $payment->tx_ref)
@@ -134,6 +152,7 @@ class PlatformBillingConfirmationService
     {
         return (string) (data_get($verification, 'data.id')
             ?: data_get($verification, 'id')
+            ?: data_get($verification, 'data.transaction_ref')
             ?: data_get($verification, 'responseBody.transactionReference')
             ?: $payment->provider_reference);
     }

@@ -1077,6 +1077,172 @@ class PlatformBillingTest extends TestCase
         ]);
     }
 
+    /**
+     * Squad platform billing adapter (2026-09-26, same follow-up request as
+     * Paystack above -- "squad is next"). Squad's redirect convention is the
+     * odd one out among the four hosted-checkout gateways here: it never
+     * appends its own reference to the callback URL at all (Monnify/Paystack
+     * append their own; Flutterwave/Stripe accept an embedded tx_ref and
+     * preserve it), so BillingController::checkout() embeds an explicit
+     * ?transaction_ref=... for it specifically, mirroring
+     * HotspotHostedCheckoutManager::callbackUrl()'s existing Squad case.
+     */
+    public function test_tenant_admin_can_start_platform_squad_subscription_checkout(): void
+    {
+        $this->configurePlatformSquad();
+        Http::fake([
+            'sandbox-api-d.squadco.com/transaction/initiate' => fn ($request) => Http::response([
+                'status' => 200,
+                'success' => true,
+                'data' => [
+                    'transaction_amount' => $request['amount'],
+                    'transaction_ref' => $request['transaction_ref'],
+                    'checkout_url' => 'https://sandbox-pay.squadco.com/platform-subscription',
+                ],
+            ]),
+        ]);
+        $tenant = Tenant::create([
+            'company_name' => 'Tenant One',
+            'owner_email' => 'one@example.com',
+        ]);
+        $plan = BillingPlan::where('slug', 'growth')->firstOrFail();
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->post(route('admin.billing.payments.checkout'), [
+                'billing_plan_id' => $plan->id,
+            ])
+            ->assertRedirect('https://sandbox-pay.squadco.com/platform-subscription');
+
+        $payment = PlatformBillingPayment::firstOrFail();
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/transaction/initiate')
+            && $request->hasHeader('Authorization', 'Bearer sk_test_platform_squad')
+            && $request['amount'] === 3500000
+            && $request['currency'] === 'NGN'
+            && $request['transaction_ref'] === $payment->tx_ref
+            && str_contains($request['callback_url'], route('admin.billing.payments.callback'))
+            && str_contains($request['callback_url'], 'transaction_ref='.$payment->tx_ref)
+            && $request['metadata']['payment_type'] === 'platform_subscription'
+            && $request['metadata']['tenant_name'] === 'Tenant One');
+
+        $this->assertSame('squad', $payment->provider);
+        $this->assertSame('pending', $payment->status);
+        $this->assertSame($payment->tx_ref, $payment->provider_reference);
+    }
+
+    public function test_successful_platform_squad_callback_activates_billing_subscription(): void
+    {
+        $this->configurePlatformSquad();
+        $tenant = Tenant::create([
+            'company_name' => 'Tenant One',
+            'owner_email' => 'one@example.com',
+        ]);
+        $plan = BillingPlan::where('slug', 'starter')->firstOrFail();
+        $payment = PlatformBillingPayment::create([
+            'tenant_id' => $tenant->id,
+            'billing_plan_id' => $plan->id,
+            'provider' => 'squad',
+            'tx_ref' => 'PBF-SQUAD-TEST-123',
+            'provider_reference' => 'PBF-SQUAD-TEST-123',
+            'amount' => $plan->monthly_price,
+            'currency' => $plan->currency,
+            'status' => 'pending',
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+        Http::fake([
+            'sandbox-api-d.squadco.com/transaction/verify/*' => Http::response([
+                'success' => true,
+                'data' => [
+                    'transaction_ref' => $payment->tx_ref,
+                    'transaction_status' => 'success',
+                    'currency' => 'NGN',
+                    'transaction_amount' => 15000 * 100,
+                ],
+            ]),
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('admin.billing.payments.callback', [
+                'transaction_ref' => $payment->tx_ref,
+            ]))
+            ->assertRedirect(route('admin.billing.index'));
+
+        $this->assertDatabaseHas('platform_billing_payments', [
+            'id' => $payment->id,
+            'status' => 'successful',
+        ]);
+        $this->assertDatabaseHas('tenant_billing_subscriptions', [
+            'tenant_id' => $tenant->id,
+            'billing_plan_id' => $plan->id,
+            'status' => 'active',
+            'provider' => 'squad',
+        ]);
+    }
+
+    public function test_successful_platform_squad_webhook_activates_billing_subscription(): void
+    {
+        $this->configurePlatformSquad();
+        $tenant = Tenant::create([
+            'company_name' => 'Tenant One',
+            'owner_email' => 'one@example.com',
+        ]);
+        $plan = BillingPlan::where('slug', 'starter')->firstOrFail();
+        $payment = PlatformBillingPayment::create([
+            'tenant_id' => $tenant->id,
+            'billing_plan_id' => $plan->id,
+            'provider' => 'squad',
+            'tx_ref' => 'PBF-SQUAD-WEBHOOK-123',
+            'provider_reference' => 'PBF-SQUAD-WEBHOOK-123',
+            'amount' => $plan->monthly_price,
+            'currency' => $plan->currency,
+            'status' => 'pending',
+        ]);
+        Http::fake([
+            'sandbox-api-d.squadco.com/transaction/verify/*' => Http::response([
+                'success' => true,
+                'data' => [
+                    'transaction_ref' => $payment->tx_ref,
+                    'transaction_status' => 'success',
+                    'currency' => 'NGN',
+                    'transaction_amount' => 15000 * 100,
+                ],
+            ]),
+        ]);
+
+        $payload = [
+            'data' => [
+                'transaction_ref' => $payment->tx_ref,
+                'transaction_status' => 'success',
+            ],
+        ];
+        $signature = hash_hmac('sha512', json_encode($payload), 'sk_test_platform_squad');
+
+        $this->withHeaders(['x-squad-encrypted-body' => $signature])
+            ->postJson(route('billing.payment.webhook'), $payload)
+            ->assertOk()
+            ->assertSee('ok');
+
+        $this->assertDatabaseHas('platform_billing_payments', [
+            'id' => $payment->id,
+            'status' => 'successful',
+        ]);
+        $this->assertDatabaseHas('tenant_billing_subscriptions', [
+            'tenant_id' => $tenant->id,
+            'billing_plan_id' => $plan->id,
+            'status' => 'active',
+            'provider' => 'squad',
+        ]);
+    }
+
     public function test_successful_platform_subscription_callback_activates_billing_subscription(): void
     {
         $this->configurePlatformFlutterwave();
@@ -1624,6 +1790,24 @@ class PlatformBillingTest extends TestCase
             ['value' => [
                 'public_key' => Crypt::encryptString('pk_test_platform'),
                 'secret_key' => Crypt::encryptString('sk_test_platform'),
+                'environment' => Crypt::encryptString('test'),
+            ]]
+        );
+
+        Cache::flush();
+    }
+
+    private function configurePlatformSquad(): void
+    {
+        PlatformSetting::query()->updateOrCreate(
+            ['key' => 'payments.platform.general'],
+            ['value' => ['active_gateway' => 'squad']]
+        );
+
+        PlatformSetting::query()->updateOrCreate(
+            ['key' => 'payments.platform.gateway.squad'],
+            ['value' => [
+                'secret_key' => Crypt::encryptString('sk_test_platform_squad'),
                 'environment' => Crypt::encryptString('test'),
             ]]
         );

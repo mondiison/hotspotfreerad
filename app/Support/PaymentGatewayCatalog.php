@@ -274,17 +274,18 @@ class PaymentGatewayCatalog
      * A gateway being "live" for tenant/shop hotspot checkout (implementedGatewayKeys()
      * above) says nothing about whether platform billing (tenants paying HotspotFreeRAD
      * itself) also has a working adapter for it -- those are two separate integrations.
-     * Only these four have a real Platform*Service class at all (PlatformFlutterwaveService,
-     * PlatformStripeService, PlatformMonnifyService, PlatformPaystackService); Squad/manual_bank
-     * can still be selected as the platform's "Active gateway" for planning purposes (the
-     * settings card's own copy says as much), but PlatformPaymentSettingsService::activeGatewayIsImplemented()
-     * keeps checkout disabled for them until a matching platform service exists.
+     * Only these five have a real Platform*Service class at all (PlatformFlutterwaveService,
+     * PlatformStripeService, PlatformMonnifyService, PlatformPaystackService,
+     * PlatformSquadService); manual_bank can still be selected as the platform's "Active
+     * gateway" for planning purposes (the settings card's own copy says as much), but
+     * PlatformPaymentSettingsService::activeGatewayIsImplemented() keeps checkout disabled
+     * for it until a matching platform service exists.
      *
      * @return list<string>
      */
     public static function platformImplementedGatewayKeys(): array
     {
-        return [self::FLUTTERWAVE, self::STRIPE, self::MONNIFY, self::PAYSTACK];
+        return [self::FLUTTERWAVE, self::STRIPE, self::MONNIFY, self::PAYSTACK, self::SQUAD];
     }
 
     /**
