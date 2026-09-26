@@ -6,6 +6,7 @@ use App\Jobs\VerifyHotspotPaymentWebhook;
 use App\Models\Package;
 use App\Models\Payment;
 use App\Models\PlatformSetting;
+use App\Models\PosDevice;
 use App\Models\Router;
 use App\Models\Shop;
 use App\Models\Subscription;
@@ -136,6 +137,70 @@ class HotspotPortalTest extends TestCase
             ->assertDontSee('OPay')
             ->assertDontSee('Transfer')
             ->assertDontSee('name="payment_method" value="card"', false);
+    }
+
+    /**
+     * Regression/feature test for a 2026-09-27 direct request: a POS
+     * terminal whose package expired used to land on this exact same view,
+     * showing the generic customer package-purchase portal (since it has no
+     * hotspot Subscription for its MAC and the portal had no idea it was a
+     * POS device at all) -- confusing, since POS renewal isn't done through
+     * this page. A registered PosDevice on this MAC/shop should now render
+     * the dedicated pos-status view instead.
+     */
+    public function test_portal_shows_pos_status_page_for_an_expired_pos_device(): void
+    {
+        [$router, $package] = $this->routerWithPackage();
+
+        PosDevice::create([
+            'shop_id' => $router->shop_id,
+            'package_id' => $package->id,
+            'device_name' => 'Front Till',
+            'mac_address' => 'AA:BB:CC:DD:EE:FF',
+            'starts_at' => now()->subDays(30),
+            'expires_at' => now()->subDay(),
+            'is_active' => true,
+        ]);
+
+        $this->get('/hotspot/portal?mac=AA:BB:CC:DD:EE:FF&nasid=demo-router')
+            ->assertOk()
+            ->assertSee('POS package expired')
+            ->assertSee('Front Till')
+            ->assertSee('AA:BB:CC:DD:EE:FF')
+            ->assertSee('One Hour Ultra')
+            ->assertDontSee('Continue to payment')
+            ->assertDontSee('Pay with');
+    }
+
+    public function test_portal_shows_reconnecting_message_for_a_still_active_pos_device(): void
+    {
+        [$router, $package] = $this->routerWithPackage();
+
+        PosDevice::create([
+            'shop_id' => $router->shop_id,
+            'package_id' => $package->id,
+            'device_name' => 'Bar Till',
+            'mac_address' => 'AA:BB:CC:DD:EE:FF',
+            'starts_at' => now()->subDay(),
+            'expires_at' => now()->addDays(30),
+            'is_active' => true,
+        ]);
+
+        $this->get('/hotspot/portal?mac=AA:BB:CC:DD:EE:FF&nasid=demo-router')
+            ->assertOk()
+            ->assertSee('Reconnecting')
+            ->assertSee('Bar Till')
+            ->assertDontSee('POS package expired');
+    }
+
+    public function test_portal_still_shows_generic_portal_when_mac_is_not_a_pos_device(): void
+    {
+        [$router] = $this->routerWithPackage();
+
+        $this->get('/hotspot/portal?mac=AA:BB:CC:DD:EE:FF&nasid=demo-router')
+            ->assertOk()
+            ->assertSee('Pay with')
+            ->assertDontSee('POS package expired');
     }
 
     public function test_portal_hides_pppoe_only_packages(): void

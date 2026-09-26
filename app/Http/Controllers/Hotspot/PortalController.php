@@ -7,6 +7,7 @@ use App\Jobs\VerifyHotspotPaymentWebhook;
 use App\Models\Customer;
 use App\Models\Package;
 use App\Models\Payment;
+use App\Models\PosDevice;
 use App\Models\Router;
 use App\Models\Subscription;
 use App\Services\FlutterwaveService;
@@ -95,6 +96,30 @@ class PortalController extends Controller
                 'password' => self::TEST_ACCESS_PASSWORD,
                 'loginUrl' => $this->mikrotikLoginUrl($validated),
                 'originalUrl' => $validated['link-orig'] ?? null,
+            ]);
+        }
+
+        // A POS terminal has no hotspot Subscription at all (it's MAC-auth
+        // only, no username/password form) -- confirmed live 2026-09-27 that
+        // mms-pos-profile has no html-directory of its own, so a POS device
+        // that fails MAC-auth (unregistered, or its package expired) lands
+        // on this exact same generic customer portal, which then tries to
+        // sell it a hotspot package that has nothing to do with its actual
+        // problem. Checking for a registered PosDevice on this MAC/shop
+        // before falling through to the generic portal needed no router-side
+        // changes at all, since both paths already land here today.
+        $posDevice = PosDevice::query()
+            ->with('package')
+            ->where('shop_id', $router->shop_id)
+            ->where('mac_address', strtoupper($validated['mac']))
+            ->first();
+
+        if ($posDevice) {
+            return view('hotspot.pos-status', [
+                'router' => $router,
+                'shop' => $router->shop,
+                'device' => $posDevice,
+                'macAddress' => $validated['mac'],
             ]);
         }
 
