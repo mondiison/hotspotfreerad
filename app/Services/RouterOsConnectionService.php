@@ -628,12 +628,14 @@ class RouterOsConnectionService
                 ->equal('use-radius', 'yes')
                 ->equal('login-by', 'mac')
                 ->equal('mac-auth-password', RadiusProvisioningService::POS_MAC_AUTH_PASSWORD)
+                ->equal('html-directory', self::DEFAULT_POS_DIRECTORY)
                 ->equal('radius-accounting', 'yes')
             : (new Query('/ip/hotspot/profile/add'))
                 ->equal('name', 'mms-pos-profile')
                 ->equal('use-radius', 'yes')
                 ->equal('login-by', 'mac')
                 ->equal('mac-auth-password', RadiusProvisioningService::POS_MAC_AUTH_PASSWORD)
+                ->equal('html-directory', self::DEFAULT_POS_DIRECTORY)
                 ->equal('radius-accounting', 'yes');
 
         $result = $this->runSteps($router, ['Add POS MAC-auth hotspot profile' => $profileQuery]);
@@ -643,6 +645,10 @@ class RouterOsConnectionService
         $serverStep = $this->applyPosHotspotServer($router);
         $result['steps'][] = $serverStep;
         $result['success'] = $result['success'] && $serverStep['success'];
+
+        $loginPageResult = $this->pushNetworkLoginPage($router, 'pos');
+        $result['steps'] = array_merge($result['steps'], $loginPageResult['steps']);
+        $result['success'] = $result['success'] && $loginPageResult['success'];
 
         return $result;
     }
@@ -855,9 +861,14 @@ class RouterOsConnectionService
                 'mms-staff',
                 'vlan-staff',
                 'pool-staff',
+                self::DEFAULT_STAFF_DIRECTORY,
             );
             $result['steps'][] = $hotspotStep;
             $result['success'] = $result['success'] && $hotspotStep['success'];
+
+            $loginPageResult = $this->pushNetworkLoginPage($router, 'staff');
+            $result['steps'] = array_merge($result['steps'], $loginPageResult['steps']);
+            $result['success'] = $result['success'] && $loginPageResult['success'];
 
             if ($enableBuiltinWifi) {
                 $step = $this->syncWifiAccessList($router, 'wifi-staff', 'MMS Staff', TrustedWifiDevice::NETWORK_STAFF);
@@ -893,9 +904,14 @@ class RouterOsConnectionService
                 'mms-mgmt',
                 'vlan-mgmt',
                 'pool-mgmt',
+                self::DEFAULT_MGMT_DIRECTORY,
             );
             $result['steps'][] = $mgmtHotspotStep;
             $result['success'] = $result['success'] && $mgmtHotspotStep['success'];
+
+            $mgmtLoginPageResult = $this->pushNetworkLoginPage($router, 'mgmt');
+            $result['steps'] = array_merge($result['steps'], $mgmtLoginPageResult['steps']);
+            $result['success'] = $result['success'] && $mgmtLoginPageResult['success'];
 
             if ($enableMgmtWifi && $enableBuiltinWifi) {
                 $step = $this->syncWifiAccessList($router, 'wifi-mgmt', 'MMS Mgmt', TrustedWifiDevice::NETWORK_MGMT);
@@ -920,7 +936,7 @@ class RouterOsConnectionService
      *
      * @return array{label: string, success: bool, error: ?string}
      */
-    private function applyMacAuthHotspotServer(Router $router, string $label, string $profileName, string $hotspotName, string $interfaceName, string $addressPool): array
+    private function applyMacAuthHotspotServer(Router $router, string $label, string $profileName, string $hotspotName, string $interfaceName, string $addressPool, string $htmlDirectory): array
     {
         try {
             $client = $this->client($router, 8);
@@ -934,12 +950,14 @@ class RouterOsConnectionService
                     ->equal('use-radius', 'yes')
                     ->equal('login-by', 'mac')
                     ->equal('mac-auth-password', RadiusProvisioningService::TRUSTED_WIFI_MAC_AUTH_PASSWORD)
+                    ->equal('html-directory', $htmlDirectory)
                     ->equal('radius-accounting', 'yes')
                 : (new Query('/ip/hotspot/profile/add'))
                     ->equal('name', $profileName)
                     ->equal('use-radius', 'yes')
                     ->equal('login-by', 'mac')
                     ->equal('mac-auth-password', RadiusProvisioningService::TRUSTED_WIFI_MAC_AUTH_PASSWORD)
+                    ->equal('html-directory', $htmlDirectory)
                     ->equal('radius-accounting', 'yes');
 
             $raw = $client->query($profileQuery)->read(false);
@@ -1264,6 +1282,66 @@ class RouterOsConnectionService
     public static function resolveHotspotDirectory(?string $directory): string
     {
         return trim($directory ?? self::DEFAULT_HOTSPOT_DIRECTORY, '/');
+    }
+
+    /**
+     * Fixed directories for the POS/Staff/Management MAC-auth hotspot
+     * profiles' own login pages (2026-09-27, "not allowed on this network"
+     * for an unregistered device) -- unlike DEFAULT_HOTSPOT_DIRECTORY (which
+     * needs an override escape hatch, since a router might already have a
+     * customer hotspot set up another way), these three objects are always
+     * app-created with fixed names this app's own script generator always
+     * uses, so there's no equivalent "might already exist differently" case
+     * to guard against -- no admin-facing override needed.
+     */
+    public const DEFAULT_POS_DIRECTORY = 'flash/pos';
+
+    public const DEFAULT_STAFF_DIRECTORY = 'flash/staff';
+
+    public const DEFAULT_MGMT_DIRECTORY = 'flash/mgmt';
+
+    /**
+     * The live-API sibling of pushHotspotLoginPage(), for the POS/Staff/
+     * Management MAC-auth hotspot profiles instead of the open customer
+     * hotspot. Pushes a login page stub carrying `&network={$network}` baked
+     * into its own redirect target (MikroTikProvisioningService::
+     * hotspotLoginPageHtml()'s `$network` parameter) -- the one signal
+     * PortalController::show() needs to tell an unregistered device on one
+     * of these networks apart from a brand-new hotspot customer, so it can
+     * be shown "not allowed on this network" instead of the generic
+     * package-purchase portal. Called from provisionPos()/provisionStaffWifi()
+     * the same way pushHotspotLoginPage() is called from provisionHotspot() --
+     * an admin who only pastes the generated script by hand (never clicking
+     * "Provision via API") still gets a correctly-directoried profile, just
+     * without this automatic push; docs/router-onboarding.md's existing
+     * manual-login-page fallback applies here too.
+     *
+     * @return array{success: bool, steps: list<array{label: string, success: bool, error: ?string}>}
+     */
+    public function pushNetworkLoginPage(Router $router, string $network): array
+    {
+        if (! $this->isConfigured($router)) {
+            return [
+                'success' => false,
+                'steps' => [['label' => 'RouterOS API credentials', 'success' => false, 'error' => 'No RouterOS API credentials generated for this router yet.']],
+            ];
+        }
+
+        $directory = match ($network) {
+            'pos' => self::DEFAULT_POS_DIRECTORY,
+            'staff' => self::DEFAULT_STAFF_DIRECTORY,
+            'mgmt' => self::DEFAULT_MGMT_DIRECTORY,
+        };
+
+        $steps = [
+            "Push {$network} login page" => (new Query('/tool/fetch'))
+                ->equal('url', $this->provisioning->loginPageUrl($network))
+                ->equal('dst-path', $directory.'/login.html')
+                ->equal('mode', 'https')
+                ->equal('check-certificate', 'no'),
+        ];
+
+        return $this->runSteps($router, $steps);
     }
 
     private const FRESH_INFRASTRUCTURE_SCRIPT_NAME = 'mms-radius-fresh-infra';

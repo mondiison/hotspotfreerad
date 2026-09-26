@@ -339,7 +339,7 @@ class MikroTikProvisioningServiceTest extends TestCase
         $this->assertStringContainsString('/ip address add address=192.168.50.1/24 interface=vlan-pos', $script);
         $this->assertStringContainsString('/ip pool add name=pool-pos ranges=192.168.50.10-192.168.50.250', $script);
         $this->assertStringContainsString('/ip dhcp-server add name=dhcp-pos interface=vlan-pos address-pool=pool-pos', $script);
-        $this->assertStringContainsString('/ip hotspot profile add name=mms-pos-profile use-radius=yes login-by=mac mac-auth-password="'.RadiusProvisioningService::POS_MAC_AUTH_PASSWORD.'" radius-accounting=yes', $script);
+        $this->assertStringContainsString('/ip hotspot profile add name=mms-pos-profile use-radius=yes login-by=mac mac-auth-password="'.RadiusProvisioningService::POS_MAC_AUTH_PASSWORD.'" html-directory=flash/pos radius-accounting=yes', $script);
         $this->assertStringContainsString('/ip hotspot add name=mms-pos interface=vlan-pos address-pool=pool-pos profile=mms-pos-profile disabled=no', $script);
         $this->assertStringContainsString('place-before=[find action=drop in-interface-list=!WAN]', $script);
         // Deliberately no /radius add line -- POS shares the RADIUS client the
@@ -450,12 +450,12 @@ class MikroTikProvisioningServiceTest extends TestCase
         $this->assertStringContainsString('/interface bridge port add bridge=bridge-lan interface=ether6 pvid=30 comment="Extra staff access port"', $script);
         $this->assertStringContainsString('/interface bridge vlan add bridge=bridge-lan tagged=bridge-lan,ether4 untagged=wifi-staff,ether6 vlan-ids=30', $script);
         $this->assertStringContainsString('/ip address add address=192.168.30.1/24 interface=vlan-staff', $script);
-        $this->assertStringContainsString('/ip hotspot profile add name=mms-staff-profile use-radius=yes login-by=mac mac-auth-password="MmsTrustedWifi2026!" radius-accounting=yes', $script);
+        $this->assertStringContainsString('/ip hotspot profile add name=mms-staff-profile use-radius=yes login-by=mac mac-auth-password="MmsTrustedWifi2026!" html-directory=flash/staff radius-accounting=yes', $script);
         $this->assertStringContainsString('/ip hotspot add name=mms-staff interface=vlan-staff address-pool=pool-staff profile=mms-staff-profile disabled=no', $script);
 
         $this->assertStringContainsString('/interface wifi security add name=mms-mgmt-sec authentication-types=wpa2-psk,wpa3-psk passphrase="MmsMgmt2026!"', $script);
         $this->assertStringContainsString('/interface wifi add name=wifi-mgmt master-interface=wifi1 configuration=mms-mgmt-cfg disabled=no', $script);
-        $this->assertStringContainsString('/ip hotspot profile add name=mms-mgmt-profile use-radius=yes login-by=mac mac-auth-password="MmsTrustedWifi2026!" radius-accounting=yes', $script);
+        $this->assertStringContainsString('/ip hotspot profile add name=mms-mgmt-profile use-radius=yes login-by=mac mac-auth-password="MmsTrustedWifi2026!" html-directory=flash/mgmt radius-accounting=yes', $script);
         $this->assertStringContainsString('/ip hotspot add name=mms-mgmt interface=vlan-mgmt address-pool=pool-mgmt profile=mms-mgmt-profile disabled=no', $script);
         $this->assertStringNotContainsString('/interface vlan add interface=bridge-lan name=vlan-mgmt', $script);
 
@@ -495,7 +495,7 @@ class MikroTikProvisioningServiceTest extends TestCase
         $this->assertStringContainsString('/interface vlan add interface=bridge-lan name=vlan-staff vlan-id=30', $script);
         $this->assertStringContainsString('/interface bridge port add bridge=bridge-lan interface=ether6 pvid=30 comment="Extra staff access port"', $script);
         $this->assertStringContainsString('/interface bridge vlan add bridge=bridge-lan tagged=bridge-lan,ether4 untagged=ether6 vlan-ids=30', $script);
-        $this->assertStringContainsString('/ip hotspot profile add name=mms-staff-profile use-radius=yes login-by=mac mac-auth-password="MmsTrustedWifi2026!" radius-accounting=yes', $script);
+        $this->assertStringContainsString('/ip hotspot profile add name=mms-staff-profile use-radius=yes login-by=mac mac-auth-password="MmsTrustedWifi2026!" html-directory=flash/staff radius-accounting=yes', $script);
         $this->assertStringContainsString('/ip hotspot add name=mms-staff interface=vlan-staff address-pool=pool-staff profile=mms-staff-profile disabled=no', $script);
 
         $this->assertStringNotContainsString('/interface wifi security add', $script);
@@ -573,7 +573,7 @@ class MikroTikProvisioningServiceTest extends TestCase
         $this->assertStringContainsString('/queue type add name=pcq-hotspot-down kind=pcq', $script);
         $this->assertStringContainsString('Realtime voice/video small UDP upload', $script);
         $this->assertStringContainsString('MMS POS = WPA2/WPA3 SSID tagged VLAN 50', $script);
-        $this->assertStringContainsString('/ip hotspot profile add name=mms-pos-profile use-radius=yes login-by=mac mac-auth-password="'.RadiusProvisioningService::POS_MAC_AUTH_PASSWORD.'" radius-accounting=yes', $script);
+        $this->assertStringContainsString('/ip hotspot profile add name=mms-pos-profile use-radius=yes login-by=mac mac-auth-password="'.RadiusProvisioningService::POS_MAC_AUTH_PASSWORD.'" html-directory=flash/pos radius-accounting=yes', $script);
         $this->assertStringContainsString('/ip hotspot add name=mms-pos interface=vlan-pos address-pool=pool-pos profile=mms-pos-profile disabled=no', $script);
         $this->assertStringNotContainsString('# /ip hotspot profile add name=mms-pos-profile', $script);
         $this->assertStringContainsString('/system scheduler add name=mms-refresh-bandwidth interval=10m', $script);

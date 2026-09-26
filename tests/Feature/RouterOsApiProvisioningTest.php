@@ -352,13 +352,14 @@ class RouterOsApiProvisioningTest extends TestCase
 
         // Check POS VLAN infrastructure (ensurePosInfrastructure()'s own
         // connection attempt to list what already exists), then the hotspot
-        // profile, then "point hotspot server".
+        // profile, then "point hotspot server", then push the POS login page.
         $this->assertFalse($result['success']);
-        $this->assertCount(3, $result['steps']);
+        $this->assertCount(4, $result['steps']);
         $labels = array_column($result['steps'], 'label');
         $this->assertContains('Check POS VLAN infrastructure', $labels);
         $this->assertContains('Add POS MAC-auth hotspot profile', $labels);
         $this->assertContains('Point POS hotspot server at "mms-pos-profile"', $labels);
+        $this->assertContains('Push pos login page', $labels);
         $this->assertFalse($result['steps'][0]['success']);
         $this->assertNotEmpty($result['steps'][0]['error']);
     }
@@ -401,8 +402,10 @@ class RouterOsApiProvisioningTest extends TestCase
         $labels = array_column($result['steps'], 'label');
         $this->assertContains('Check Staff VLAN infrastructure', $labels);
         $this->assertContains('Apply Staff MAC-auth hotspot', $labels);
+        $this->assertContains('Push staff login page', $labels);
         $this->assertContains('Sync MMS Staff trusted-device access list', $labels);
         $this->assertContains('Apply Management MAC-auth hotspot', $labels);
+        $this->assertContains('Push mgmt login page', $labels);
         $this->assertContains('Sync MMS Mgmt trusted-device access list', $labels);
     }
 
@@ -432,7 +435,9 @@ class RouterOsApiProvisioningTest extends TestCase
         $labels = array_column($result['steps'], 'label');
         $this->assertContains('Check Staff VLAN infrastructure', $labels);
         $this->assertContains('Apply Staff MAC-auth hotspot', $labels);
+        $this->assertContains('Push staff login page', $labels);
         $this->assertContains('Apply Management MAC-auth hotspot', $labels);
+        $this->assertContains('Push mgmt login page', $labels);
         $this->assertNotContains('Sync MMS Staff trusted-device access list', $labels);
         $this->assertNotContains('Sync MMS Mgmt trusted-device access list', $labels);
     }
@@ -477,7 +482,7 @@ class RouterOsApiProvisioningTest extends TestCase
 
         $this->assertFalse($result['success']);
         $labels = array_column($result['steps'], 'label');
-        $this->assertSame(['Apply Management MAC-auth hotspot'], $labels);
+        $this->assertSame(['Apply Management MAC-auth hotspot', 'Push mgmt login page'], $labels);
     }
 
     public function test_push_hotspot_login_page_reports_a_clear_error_when_router_is_unreachable(): void
@@ -514,6 +519,25 @@ class RouterOsApiProvisioningTest extends TestCase
         $this->assertFalse($result['success']);
         $this->assertCount(1, $result['steps']);
         $this->assertSame('Push hotspot login page', $result['steps'][0]['label']);
+    }
+
+    public function test_push_network_login_page_reports_a_clear_error_when_router_is_unreachable(): void
+    {
+        $router = Router::create([
+            'shop_id' => $this->makeShop()->id,
+            'name' => 'Unreachable Network Login Page Router',
+            'nas_identifier' => 'unreachable-network-login-page-router',
+            'wireguard_internal_ip' => '192.0.2.14',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        $result = app(RouterOsConnectionService::class)->pushNetworkLoginPage($router, 'pos');
+
+        $this->assertFalse($result['success']);
+        $this->assertCount(1, $result['steps']);
+        $this->assertSame('Push pos login page', $result['steps'][0]['label']);
+        $this->assertFalse($result['steps'][0]['success']);
+        $this->assertNotEmpty($result['steps'][0]['error']);
     }
 
     public function test_list_hotspot_directories_reports_a_clear_error_when_router_is_unreachable(): void
@@ -565,6 +589,60 @@ class RouterOsApiProvisioningTest extends TestCase
         $response->assertOk();
         $response->assertHeader('Content-Type', 'text/html; charset=utf-8');
         $response->assertSee('https://mmsradius.example.com/hotspot/portal', false);
+    }
+
+    /**
+     * Regression/feature test for a 2026-09-27 direct request ("that would
+     * be better", building the fuller version of the POS/Staff/Mgmt status
+     * pages): $network selects which stub variant a router's own login-page
+     * fetch gets, so mms-pos-profile/mms-staff-profile/mms-mgmt-profile
+     * (each pointed at their own flash/pos|staff|mgmt directory) can each
+     * embed which network their request came from into the redirect target
+     * -- the one signal PortalController::show() needs to tell an
+     * unregistered device on one of those networks apart from a brand-new
+     * hotspot customer.
+     */
+    public function test_login_page_url_appends_a_network_query_param_when_given(): void
+    {
+        config(['services.mikrotik.portal_url' => 'https://mmsradius.example.com/hotspot/portal']);
+
+        $provisioning = app(MikroTikProvisioningService::class);
+
+        $this->assertSame('https://mmsradius.example.com/hotspot/login-page?network=pos', $provisioning->loginPageUrl('pos'));
+        $this->assertSame('https://mmsradius.example.com/hotspot/login-page?network=staff', $provisioning->loginPageUrl('staff'));
+        $this->assertSame('https://mmsradius.example.com/hotspot/login-page?network=mgmt', $provisioning->loginPageUrl('mgmt'));
+        $this->assertSame('https://mmsradius.example.com/hotspot/login-page', $provisioning->loginPageUrl());
+    }
+
+    public function test_hotspot_login_page_html_embeds_network_marker_when_given(): void
+    {
+        config(['services.mikrotik.portal_url' => 'https://mmsradius.example.com/hotspot/portal']);
+
+        $html = app(MikroTikProvisioningService::class)->hotspotLoginPageHtml('pos');
+
+        $this->assertStringContainsString("+ '&network=pos'", $html);
+
+        $htmlWithoutNetwork = app(MikroTikProvisioningService::class)->hotspotLoginPageHtml();
+
+        $this->assertStringNotContainsString('&network=', $htmlWithoutNetwork);
+    }
+
+    public function test_login_page_route_serves_the_network_specific_stub_when_requested(): void
+    {
+        config(['services.mikrotik.portal_url' => 'https://mmsradius.example.com/hotspot/portal']);
+
+        $response = $this->get(route('hotspot.login-page', ['network' => 'staff']));
+
+        $response->assertOk();
+        $response->assertSee("+ '&network=staff'", false);
+
+        $genericResponse = $this->get(route('hotspot.login-page'));
+        $genericResponse->assertOk();
+        $genericResponse->assertDontSee('&network=', false);
+
+        $invalidResponse = $this->get(route('hotspot.login-page', ['network' => 'not-a-real-network']));
+        $invalidResponse->assertOk();
+        $invalidResponse->assertDontSee('&network=', false);
     }
 
     public function test_provision_pppoe_reports_a_clear_error_when_router_is_unreachable(): void

@@ -36,14 +36,25 @@ class PortalController extends Controller
 
     /**
      * Fetched directly by a router's own `/tool fetch` command (see
-     * RouterOsConnectionService::pushHotspotLoginPage()), not by a
-     * customer's browser -- this replaces the router's local
-     * flash/hotspot/login.html with a stub that redirects into show()
-     * above, carrying MikroTik's own login-time variables along.
+     * RouterOsConnectionService::pushHotspotLoginPage()/pushNetworkLoginPage()),
+     * not by a customer's browser -- this replaces the router's local
+     * login.html with a stub that redirects into show() above, carrying
+     * MikroTik's own login-time variables along.
+     *
+     * `?network=pos|staff|mgmt` (2026-09-27) selects the POS/Staff/Mgmt
+     * stub variant instead of the default customer-hotspot one -- fetched
+     * from a different html-directory (flash/pos/staff/mgmt) than the
+     * customer hotspot's flash/hotspot, so each network's stub embeds its
+     * own network marker into the redirect target. An invalid/missing value
+     * falls back to the original, unmarked stub -- unchanged behavior for
+     * the customer hotspot and for any router not yet re-provisioned.
      */
-    public function loginPage(MikroTikProvisioningService $provisioning): Response
+    public function loginPage(Request $request, MikroTikProvisioningService $provisioning): Response
     {
-        return response($provisioning->hotspotLoginPageHtml())
+        $network = $request->query('network');
+        $network = in_array($network, ['pos', 'staff', 'mgmt'], true) ? $network : null;
+
+        return response($provisioning->hotspotLoginPageHtml($network))
             ->header('Content-Type', 'text/html');
     }
 
@@ -52,6 +63,7 @@ class PortalController extends Controller
         $validated = $request->validate([
             'mac' => ['nullable', 'string', 'max:64'],
             'nasid' => ['nullable', 'string', 'max:255'],
+            'network' => ['nullable', 'string', 'in:pos,staff,mgmt'],
             'link-login' => ['nullable', 'string', 'max:2048'],
             'link-login-only' => ['nullable', 'string', 'max:2048'],
             'link-orig' => ['nullable', 'string', 'max:2048'],
@@ -79,6 +91,48 @@ class PortalController extends Controller
             ]);
         }
 
+        $network = $validated['network'] ?? null;
+
+        // A request carrying &network=pos|staff|mgmt came through that
+        // network's own MAC-auth hotspot login page (2026-09-27), pushed by
+        // RouterOsConnectionService::pushNetworkLoginPage() -- unlike the
+        // legacy fallback chain below, this is definitive: an unrecognized
+        // MAC here is NOT a hotspot customer, so it's shown "not allowed on
+        // this network" rather than the package-purchase portal. A router
+        // not yet re-provisioned with the new per-network stub (still using
+        // the single customer-hotspot stub for every network) never sends
+        // this param at all, so it falls through to the unchanged legacy
+        // chain below instead.
+        if ($network === 'pos') {
+            $posDevice = PosDevice::query()
+                ->with('package')
+                ->where('shop_id', $router->shop_id)
+                ->where('mac_address', strtoupper($validated['mac']))
+                ->first();
+
+            return view('hotspot.pos-status', [
+                'router' => $router,
+                'shop' => $router->shop,
+                'device' => $posDevice,
+                'macAddress' => $validated['mac'],
+            ]);
+        }
+
+        if (in_array($network, ['staff', 'mgmt'], true)) {
+            $trustedDevice = TrustedWifiDevice::query()
+                ->where('shop_id', $router->shop_id)
+                ->where('mac_address', strtoupper($validated['mac']))
+                ->first();
+
+            return view('hotspot.staff-wifi-status', [
+                'router' => $router,
+                'shop' => $router->shop,
+                'device' => $trustedDevice,
+                'networkLabel' => $network === 'mgmt' ? 'Management' : 'Staff',
+                'macAddress' => $validated['mac'],
+            ]);
+        }
+
         $activeSubscription = Subscription::query()
             ->with('package')
             ->where('shop_id', $router->shop_id)
@@ -102,13 +156,16 @@ class PortalController extends Controller
 
         // A POS terminal has no hotspot Subscription at all (it's MAC-auth
         // only, no username/password form) -- confirmed live 2026-09-27 that
-        // mms-pos-profile has no html-directory of its own, so a POS device
-        // that fails MAC-auth (unregistered, or its package expired) lands
-        // on this exact same generic customer portal, which then tries to
+        // mms-pos-profile had no html-directory of its own, so a POS device
+        // that fails MAC-auth (unregistered, or its package expired) landed
+        // on this exact same generic customer portal, which then tried to
         // sell it a hotspot package that has nothing to do with its actual
         // problem. Checking for a registered PosDevice on this MAC/shop
         // before falling through to the generic portal needed no router-side
-        // changes at all, since both paths already land here today.
+        // changes at all, since both paths already land here today. Kept as
+        // a fallback for a router not yet re-provisioned with mms-pos-profile's
+        // own flash/pos directory (see the network==='pos' branch above,
+        // which now handles this more precisely once that's live).
         $posDevice = PosDevice::query()
             ->with('package')
             ->where('shop_id', $router->shop_id)
@@ -124,14 +181,10 @@ class PortalController extends Controller
             ]);
         }
 
-        // Same reasoning as the PosDevice check above, for Staff/Management
-        // Wi-Fi trusted devices (2026-09-27, direct request, deliberately
-        // scoped to the expired/registered case only -- an *unregistered*
-        // device on Staff/Mgmt is indistinguishable from a brand-new hotspot
-        // customer with the information available here, since neither
-        // mms-staff-profile nor mms-mgmt-profile carry any network-specific
-        // signal into this request; that would need its own login-page
-        // directory per network, deferred as separate infra work).
+        // Same reasoning as the PosDevice fallback above, for Staff/Management
+        // Wi-Fi trusted devices -- kept for a router not yet re-provisioned
+        // with mms-staff-profile/mms-mgmt-profile's own flash/staff|mgmt
+        // directories.
         $trustedDevice = TrustedWifiDevice::query()
             ->where('shop_id', $router->shop_id)
             ->where('mac_address', strtoupper($validated['mac']))
@@ -142,6 +195,7 @@ class PortalController extends Controller
                 'router' => $router,
                 'shop' => $router->shop,
                 'device' => $trustedDevice,
+                'networkLabel' => $trustedDevice->network === TrustedWifiDevice::NETWORK_MGMT ? 'Management' : 'Staff',
                 'macAddress' => $validated['mac'],
             ]);
         }

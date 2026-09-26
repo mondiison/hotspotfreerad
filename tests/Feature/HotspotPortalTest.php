@@ -258,6 +258,73 @@ class HotspotPortalTest extends TestCase
             ->assertDontSee('Wi-Fi access expired');
     }
 
+    /**
+     * Regression/feature test for a 2026-09-27 direct request ("that would
+     * be better") to close the gap the two status pages above deliberately
+     * left open: a request carrying &network=pos|staff|mgmt came through
+     * that network's own MAC-auth hotspot login page (pushed by
+     * RouterOsConnectionService::pushNetworkLoginPage() to mms-pos-profile/
+     * mms-staff-profile/mms-mgmt-profile's own flash/pos|staff|mgmt
+     * directory), so an unrecognized MAC on one of these networks is now
+     * shown "not allowed on this network" instead of the customer portal --
+     * unlike the legacy (no $network param) fallback chain, this is
+     * definitive, since the network itself is known, not inferred.
+     */
+    public function test_portal_shows_not_allowed_for_an_unregistered_device_on_the_pos_network(): void
+    {
+        [$router] = $this->routerWithPackage();
+
+        $this->get('/hotspot/portal?mac=AA:BB:CC:DD:EE:FF&nasid=demo-router&network=pos')
+            ->assertOk()
+            ->assertSee('Not allowed on this network')
+            ->assertSee('not registered for POS access')
+            ->assertDontSee('Pay with');
+    }
+
+    public function test_portal_shows_expired_pos_status_via_the_network_param_too(): void
+    {
+        [$router, $package] = $this->routerWithPackage();
+
+        PosDevice::create([
+            'shop_id' => $router->shop_id,
+            'package_id' => $package->id,
+            'device_name' => 'Front Till',
+            'mac_address' => 'AA:BB:CC:DD:EE:FF',
+            'starts_at' => now()->subDays(30),
+            'expires_at' => now()->subDay(),
+            'is_active' => true,
+        ]);
+
+        $this->get('/hotspot/portal?mac=AA:BB:CC:DD:EE:FF&nasid=demo-router&network=pos')
+            ->assertOk()
+            ->assertSee('POS package expired')
+            ->assertSee('Front Till');
+    }
+
+    public function test_portal_shows_not_allowed_for_an_unregistered_device_on_the_staff_network(): void
+    {
+        [$router] = $this->routerWithPackage();
+
+        $this->get('/hotspot/portal?mac=AA:BB:CC:DD:EE:FF&nasid=demo-router&network=staff')
+            ->assertOk()
+            ->assertSee('Not allowed on this network')
+            ->assertSee('not registered for staff Wi-Fi access')
+            ->assertSee('Staff')
+            ->assertDontSee('Pay with');
+    }
+
+    public function test_portal_shows_not_allowed_for_an_unregistered_device_on_the_mgmt_network(): void
+    {
+        [$router] = $this->routerWithPackage();
+
+        $this->get('/hotspot/portal?mac=AA:BB:CC:DD:EE:FF&nasid=demo-router&network=mgmt')
+            ->assertOk()
+            ->assertSee('Not allowed on this network')
+            ->assertSee('not registered for management Wi-Fi access')
+            ->assertSee('Management')
+            ->assertDontSee('Pay with');
+    }
+
     public function test_portal_hides_pppoe_only_packages(): void
     {
         $tenant = Tenant::create([

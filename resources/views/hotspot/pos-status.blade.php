@@ -10,14 +10,14 @@
     $tenant = $shop->tenant;
     $brandColor = $tenant?->brand_color ?? '#ef4444';
     $logoImageUrl = $tenant?->logo_image_path ? \Illuminate\Support\Facades\Storage::disk('public')->url($tenant->logo_image_path) : null;
-    $isExpired = ! $device->isCurrentlyActive();
+    $isExpired = $device && ! $device->isCurrentlyActive();
     $whatsappMessage = rawurlencode(
         "Hello, my POS device's internet access isn't working.\n\n".
         "Shop: {$shop->name}\n".
-        "Device: ".($device->device_name ?: 'Unnamed device')."\n".
-        "MAC address: {$device->mac_address}\n".
-        ($device->expires_at ? "Expires: {$device->expires_at->format('M j, Y g:i A')}\n" : '').
-        'Status: '.($isExpired ? 'Expired/inactive' : 'Active')
+        "Device: ".($device?->device_name ?: 'Unnamed device')."\n".
+        "MAC address: {$macAddress}\n".
+        ($device?->expires_at ? "Expires: {$device->expires_at->format('M j, Y g:i A')}\n" : '').
+        'Status: '.($device ? ($isExpired ? 'Expired/inactive' : 'Active') : 'Not registered')
     );
 @endphp
 <body class="min-h-screen bg-zinc-950 text-white antialiased" style="--brand: {{ $brandColor }}">
@@ -35,7 +35,11 @@
                 </div>
             </div>
 
-            @if ($isExpired)
+            @if (! $device)
+                <p class="mt-4 text-sm font-medium text-red-600">Not allowed on this network</p>
+                <h1 class="mt-2 text-2xl font-semibold">This device is not registered for POS access.</h1>
+                <p class="mt-2 text-sm text-zinc-600">Ask your administrator to register this device's MAC address before connecting it here.</p>
+            @elseif ($isExpired)
                 <p class="mt-4 text-sm font-medium text-red-600">POS package expired</p>
                 <h1 class="mt-2 text-2xl font-semibold">This POS device's package has expired.</h1>
                 <p class="mt-2 text-sm text-zinc-600">Internet access for this terminal has been suspended. Contact your administrator to renew it.</p>
@@ -46,21 +50,23 @@
             @endif
 
             <dl class="mt-5 space-y-3 text-sm">
-                <div>
-                    <dt class="text-zinc-500">Device</dt>
-                    <dd class="font-medium">{{ $device->device_name ?: 'Unnamed device' }}</dd>
-                </div>
+                @if ($device)
+                    <div>
+                        <dt class="text-zinc-500">Device</dt>
+                        <dd class="font-medium">{{ $device->device_name ?: 'Unnamed device' }}</dd>
+                    </div>
+                @endif
                 <div>
                     <dt class="text-zinc-500">MAC address</dt>
-                    <dd class="font-mono text-xs font-medium">{{ $device->mac_address }}</dd>
+                    <dd class="font-mono text-xs font-medium">{{ $macAddress }}</dd>
                 </div>
-                @if ($device->package)
+                @if ($device?->package)
                     <div>
                         <dt class="text-zinc-500">Package</dt>
                         <dd class="font-medium">{{ $device->package->name }}</dd>
                     </div>
                 @endif
-                @if ($device->expires_at)
+                @if ($device?->expires_at)
                     <div>
                         <dt class="text-zinc-500">{{ $isExpired ? 'Expired' : 'Expires' }}</dt>
                         <dd class="font-medium">{{ $device->expires_at->format('M j, Y g:i A') }}</dd>

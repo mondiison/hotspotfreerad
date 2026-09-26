@@ -197,7 +197,7 @@ SCRIPT;
 # what RadiusProvisioningService::provisionPosDevice() now stores as every
 # POS device's Cleartext-Password -- not a meaningful secret, since the MAC
 # (the username) is what actually identifies the device.
-/ip hotspot profile add name=mms-pos-profile use-radius=yes login-by=mac mac-auth-password="{$macAuthPassword}" radius-accounting=yes
+/ip hotspot profile add name=mms-pos-profile use-radius=yes login-by=mac mac-auth-password="{$macAuthPassword}" html-directory=flash/pos radius-accounting=yes
 /ip hotspot add name=mms-pos interface=vlan-pos address-pool=pool-pos profile=mms-pos-profile disabled=no
 # Best-effort firewall rules -- the input-chain accept is placed before this
 # router's own WAN-only catch-all input drop rule if one exists (confirmed
@@ -316,7 +316,7 @@ SCRIPT;
                 '# works with or without wireless. mac-auth-password is explicit, not left blank,',
                 '# for the same reason POS needs it (RouterOS\'s "defaults to the client\'s MAC"',
                 '# blank behavior does not send a CHAP-hashable password matching the MAC).',
-                '/ip hotspot profile add name=mms-staff-profile use-radius=yes login-by=mac mac-auth-password="'.$trustedWifiMacAuthPassword.'" radius-accounting=yes',
+                '/ip hotspot profile add name=mms-staff-profile use-radius=yes login-by=mac mac-auth-password="'.$trustedWifiMacAuthPassword.'" html-directory=flash/staff radius-accounting=yes',
                 '/ip hotspot add name=mms-staff interface=vlan-staff address-pool=pool-staff profile=mms-staff-profile disabled=no',
                 '/ip firewall filter add chain=input in-interface=vlan-staff protocol=tcp dst-port=80,443,64872-64875 action=accept comment="Allow Staff MAC-auth hotspot services" place-before=[find action=drop in-interface-list=!WAN]',
             ]
@@ -353,7 +353,7 @@ SCRIPT;
             '# scoped to network=mgmt Trusted Wi-Fi Devices. Management VLAN/addressing is',
             '# core infrastructure created unconditionally elsewhere, so only the MAC-auth',
             '# hotspot itself is added here, not the VLAN.',
-            '/ip hotspot profile add name=mms-mgmt-profile use-radius=yes login-by=mac mac-auth-password="'.$trustedWifiMacAuthPassword.'" radius-accounting=yes',
+            '/ip hotspot profile add name=mms-mgmt-profile use-radius=yes login-by=mac mac-auth-password="'.$trustedWifiMacAuthPassword.'" html-directory=flash/mgmt radius-accounting=yes',
             '/ip hotspot add name=mms-mgmt interface=vlan-mgmt address-pool=pool-mgmt profile=mms-mgmt-profile disabled=no',
             '/ip firewall filter add chain=input in-interface=vlan-mgmt protocol=tcp dst-port=80,443,64872-64875 action=accept comment="Allow Management MAC-auth hotspot services" place-before=[find action=drop in-interface-list=!WAN]',
         ] : [
@@ -599,7 +599,7 @@ SCRIPT;
             '# mac-auth-password is explicit, not left blank -- RouterOS\'s own "defaults to',
             '# the client\'s MAC" blank behavior does not send a password matching the MAC',
             '# in radcheck (confirmed live), rejecting every MAC-auth attempt.',
-            '/ip hotspot profile add name=mms-pos-profile use-radius=yes login-by=mac mac-auth-password="'.$this->quote(RadiusProvisioningService::POS_MAC_AUTH_PASSWORD).'" radius-accounting=yes',
+            '/ip hotspot profile add name=mms-pos-profile use-radius=yes login-by=mac mac-auth-password="'.$this->quote(RadiusProvisioningService::POS_MAC_AUTH_PASSWORD).'" html-directory=flash/pos radius-accounting=yes',
             '/ip hotspot add name=mms-pos interface=vlan-pos address-pool=pool-pos profile=mms-pos-profile disabled=no',
         ] : [
             '',
@@ -895,19 +895,27 @@ HTML;
 
     /**
      * The URL a router fetches (via `/tool fetch` -- see
-     * RouterOsConnectionService::pushHotspotLoginPage()) to replace its
-     * default local hotspot login page with the redirect stub below.
-     * Built from the same host as portalUrl() rather than Laravel's own
-     * route()/APP_URL, so it stays correct if HOTSPOT_PORTAL_URL is
+     * RouterOsConnectionService::pushHotspotLoginPage()/pushNetworkLoginPage())
+     * to replace its default local hotspot login page with the redirect stub
+     * below. Built from the same host as portalUrl() rather than Laravel's
+     * own route()/APP_URL, so it stays correct if HOTSPOT_PORTAL_URL is
      * configured to a different public host than APP_URL.
+     *
+     * $network (2026-09-27, "not allowed on this network" for unregistered
+     * POS/Staff/Mgmt devices) is only ever 'pos'/'staff'/'mgmt' -- omitted
+     * entirely for the customer hotspot's own login page, which stays byte-
+     * identical to before this feature existed. It's baked into the
+     * generated stub's own redirect target (see hotspotLoginPageHtml()), not
+     * used by this URL itself beyond selecting which stub variant to fetch.
      */
-    public function loginPageUrl(): string
+    public function loginPageUrl(?string $network = null): string
     {
         $portalUrl = $this->portalUrl();
         $host = parse_url($portalUrl, PHP_URL_HOST) ?: config('services.mikrotik.hotspot_dns_name');
         $scheme = parse_url($portalUrl, PHP_URL_SCHEME) ?: 'https';
+        $query = $network ? '?network='.$network : '';
 
-        return $scheme.'://'.$host.'/hotspot/login-page';
+        return $scheme.'://'.$host.'/hotspot/login-page'.$query;
     }
 
     /**
@@ -938,10 +946,20 @@ HTML;
      * login pages like this one, accepting a plain username/password
      * directly with no challenge handshake required -- exactly what
      * hotspot.access-granted.blade.php submits.
+     *
+     * $network (2026-09-27) bakes an extra `&network=pos|staff|mgmt` onto
+     * the generated redirect target -- the one signal PortalController::show()
+     * needs to tell "this request came through the POS/Staff/Mgmt MAC-auth
+     * hotspot" apart from the open customer hotspot, so an unregistered
+     * device on one of those networks can be told plainly it's not allowed
+     * on this network instead of being offered a package to buy. Omitted
+     * entirely (the default) for the customer hotspot's own login page,
+     * which stays byte-identical to before this existed.
      */
-    public function hotspotLoginPageHtml(): string
+    public function hotspotLoginPageHtml(?string $network = null): string
     {
         $portal = $this->portalUrl();
+        $networkQuery = $network ? "\n            + '&network=".$network."'" : '';
 
         return <<<HTML
 <!doctype html>
@@ -962,7 +980,7 @@ HTML;
             + '&nasid=' + encodeURIComponent('\$(identity)')
             + '&link-login=' + encodeURIComponent('\$(link-login)')
             + '&link-login-only=' + encodeURIComponent('\$(link-login-only)')
-            + '&link-orig=' + encodeURIComponent('\$(link-orig)');
+            + '&link-orig=' + encodeURIComponent('\$(link-orig)'){$networkQuery};
 
         document.getElementById('portal-link').href = portal;
         window.location.replace(portal);
