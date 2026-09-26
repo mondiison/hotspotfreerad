@@ -208,19 +208,23 @@ class PlatformPaymentSettingsService
      * The gateway a wallet-enabled tenant's customer payments actually route
      * through -- follows the platform's own "Active gateway" choice, but only
      * among gateways with a tenant-facing service that knows how to use
-     * platform-owned credentials (Flutterwave/Stripe/Monnify, the same set
-     * activeGatewayIsImplemented() checks). The "Active gateway" dropdown
-     * still lets an admin pick Paystack/Squad for planning purposes, but
-     * following that choice here would silently break every wallet-enabled
-     * tenant's live customer checkout the moment it's selected -- falling
-     * back to Flutterwave instead keeps wallet mode on its previous,
-     * proven-working default until those two gateways gain the same
-     * wallet-credential support FlutterwaveService/MonnifyService/StripeService
-     * already have.
+     * platform-owned credentials (PaymentGatewayCatalog::walletCapableGatewayKeys(),
+     * a deliberately narrower list than activeGatewayIsImplemented()'s -- Paystack
+     * gained a real platform-billing adapter without also gaining wallet-credential
+     * support on the tenant-facing PaystackService, so it's excluded here even
+     * though it's "implemented" for billing). The "Active gateway" dropdown still
+     * lets an admin pick Paystack/Squad for planning purposes, but following that
+     * choice here would silently break every wallet-enabled tenant's live customer
+     * checkout the moment it's selected -- falling back to Flutterwave instead
+     * keeps wallet mode on its previous, proven-working default until a gateway
+     * gains the same wallet-credential support FlutterwaveService/MonnifyService/
+     * StripeService already have.
      */
     public function walletGateway(): string
     {
-        return $this->activeGatewayIsImplemented() ? $this->activeGateway() : PaymentGatewayCatalog::FLUTTERWAVE;
+        return in_array($this->activeGateway(), PaymentGatewayCatalog::walletCapableGatewayKeys(), true)
+            ? $this->activeGateway()
+            : PaymentGatewayCatalog::FLUTTERWAVE;
     }
 
     public function hasStoredCredentials(?string $gateway = null): bool

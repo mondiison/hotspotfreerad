@@ -911,6 +911,172 @@ class PlatformBillingTest extends TestCase
         ]);
     }
 
+    /**
+     * Paystack platform billing adapter (2026-09-26, direct request after a
+     * super admin saved Paystack platform credentials and found it stuck on
+     * "Adapter pending" -- Paystack never had a Platform*Service at all,
+     * unlike Flutterwave/Stripe/Monnify).
+     */
+    public function test_tenant_admin_can_start_platform_paystack_subscription_checkout(): void
+    {
+        $this->configurePlatformPaystack();
+        Http::fake([
+            'api.paystack.co/transaction/initialize' => fn ($request) => Http::response([
+                'status' => true,
+                'data' => [
+                    'reference' => $request['reference'],
+                    'authorization_url' => 'https://checkout.paystack.com/platform-subscription',
+                ],
+            ]),
+        ]);
+        $tenant = Tenant::create([
+            'company_name' => 'Tenant One',
+            'owner_email' => 'one@example.com',
+        ]);
+        $plan = BillingPlan::where('slug', 'growth')->firstOrFail();
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->post(route('admin.billing.payments.checkout'), [
+                'billing_plan_id' => $plan->id,
+            ])
+            ->assertRedirect('https://checkout.paystack.com/platform-subscription');
+
+        $payment = PlatformBillingPayment::firstOrFail();
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/transaction/initialize')
+            && $request->hasHeader('Authorization', 'Bearer sk_test_platform')
+            && $request['email'] === 'one@example.com'
+            && $request['amount'] === 3500000
+            && $request['currency'] === 'NGN'
+            && $request['reference'] === $payment->tx_ref
+            && $request['callback_url'] === route('admin.billing.payments.callback')
+            && $request['metadata']['payment_type'] === 'platform_subscription'
+            && $request['metadata']['tenant_name'] === 'Tenant One');
+
+        $this->assertSame('paystack', $payment->provider);
+        $this->assertSame('pending', $payment->status);
+        $this->assertSame($payment->tx_ref, $payment->provider_reference);
+    }
+
+    public function test_successful_platform_paystack_callback_activates_billing_subscription(): void
+    {
+        $this->configurePlatformPaystack();
+        $tenant = Tenant::create([
+            'company_name' => 'Tenant One',
+            'owner_email' => 'one@example.com',
+        ]);
+        $plan = BillingPlan::where('slug', 'starter')->firstOrFail();
+        $payment = PlatformBillingPayment::create([
+            'tenant_id' => $tenant->id,
+            'billing_plan_id' => $plan->id,
+            'provider' => 'paystack',
+            'tx_ref' => 'PBF-PAYSTACK-TEST-123',
+            'provider_reference' => 'PBF-PAYSTACK-TEST-123',
+            'amount' => $plan->monthly_price,
+            'currency' => $plan->currency,
+            'status' => 'pending',
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+        Http::fake([
+            'api.paystack.co/transaction/verify/*' => Http::response([
+                'status' => true,
+                'data' => [
+                    'id' => 918273645,
+                    'status' => 'success',
+                    'reference' => $payment->tx_ref,
+                    'currency' => 'NGN',
+                    'amount' => 15000 * 100,
+                ],
+            ]),
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('admin.billing.payments.callback', [
+                'reference' => $payment->tx_ref,
+                'trxref' => $payment->tx_ref,
+            ]))
+            ->assertRedirect(route('admin.billing.index'));
+
+        $this->assertDatabaseHas('platform_billing_payments', [
+            'id' => $payment->id,
+            'status' => 'successful',
+            'provider_reference' => '918273645',
+        ]);
+        $this->assertDatabaseHas('tenant_billing_subscriptions', [
+            'tenant_id' => $tenant->id,
+            'billing_plan_id' => $plan->id,
+            'status' => 'active',
+            'provider' => 'paystack',
+        ]);
+    }
+
+    public function test_successful_platform_paystack_webhook_activates_billing_subscription(): void
+    {
+        $this->configurePlatformPaystack();
+        $tenant = Tenant::create([
+            'company_name' => 'Tenant One',
+            'owner_email' => 'one@example.com',
+        ]);
+        $plan = BillingPlan::where('slug', 'starter')->firstOrFail();
+        $payment = PlatformBillingPayment::create([
+            'tenant_id' => $tenant->id,
+            'billing_plan_id' => $plan->id,
+            'provider' => 'paystack',
+            'tx_ref' => 'PBF-PAYSTACK-WEBHOOK-123',
+            'provider_reference' => 'PBF-PAYSTACK-WEBHOOK-123',
+            'amount' => $plan->monthly_price,
+            'currency' => $plan->currency,
+            'status' => 'pending',
+        ]);
+        Http::fake([
+            'api.paystack.co/transaction/verify/*' => Http::response([
+                'status' => true,
+                'data' => [
+                    'id' => 918273646,
+                    'status' => 'success',
+                    'reference' => $payment->tx_ref,
+                    'currency' => 'NGN',
+                    'amount' => 15000 * 100,
+                ],
+            ]),
+        ]);
+
+        $payload = [
+            'event' => 'charge.success',
+            'data' => [
+                'id' => 918273646,
+                'reference' => $payment->tx_ref,
+                'status' => 'success',
+            ],
+        ];
+        $signature = hash_hmac('sha512', json_encode($payload), 'sk_test_platform');
+
+        $this->withHeaders(['x-paystack-signature' => $signature])
+            ->postJson(route('billing.payment.webhook'), $payload)
+            ->assertOk()
+            ->assertSee('ok');
+
+        $this->assertDatabaseHas('platform_billing_payments', [
+            'id' => $payment->id,
+            'status' => 'successful',
+        ]);
+        $this->assertDatabaseHas('tenant_billing_subscriptions', [
+            'tenant_id' => $tenant->id,
+            'billing_plan_id' => $plan->id,
+            'status' => 'active',
+            'provider' => 'paystack',
+        ]);
+    }
+
     public function test_successful_platform_subscription_callback_activates_billing_subscription(): void
     {
         $this->configurePlatformFlutterwave();
@@ -1439,6 +1605,25 @@ class PlatformBillingTest extends TestCase
                 'public_key' => Crypt::encryptString('platform-monnify-api-key'),
                 'secret_key' => Crypt::encryptString('platform-monnify-secret-key'),
                 'contract_code' => Crypt::encryptString('platform-contract-code'),
+                'environment' => Crypt::encryptString('test'),
+            ]]
+        );
+
+        Cache::flush();
+    }
+
+    private function configurePlatformPaystack(): void
+    {
+        PlatformSetting::query()->updateOrCreate(
+            ['key' => 'payments.platform.general'],
+            ['value' => ['active_gateway' => 'paystack']]
+        );
+
+        PlatformSetting::query()->updateOrCreate(
+            ['key' => 'payments.platform.gateway.paystack'],
+            ['value' => [
+                'public_key' => Crypt::encryptString('pk_test_platform'),
+                'secret_key' => Crypt::encryptString('sk_test_platform'),
                 'environment' => Crypt::encryptString('test'),
             ]]
         );

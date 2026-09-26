@@ -274,15 +274,34 @@ class PaymentGatewayCatalog
      * A gateway being "live" for tenant/shop hotspot checkout (implementedGatewayKeys()
      * above) says nothing about whether platform billing (tenants paying HotspotFreeRAD
      * itself) also has a working adapter for it -- those are two separate integrations.
-     * Only these three have a real Platform*Service class at all (PlatformFlutterwaveService,
-     * PlatformStripeService, PlatformMonnifyService); Paystack/Squad/manual_bank can still be
-     * selected as the platform's "Active gateway" for planning purposes (the settings card's
-     * own copy says as much), but PlatformPaymentSettingsService::activeGatewayIsImplemented()
+     * Only these four have a real Platform*Service class at all (PlatformFlutterwaveService,
+     * PlatformStripeService, PlatformMonnifyService, PlatformPaystackService); Squad/manual_bank
+     * can still be selected as the platform's "Active gateway" for planning purposes (the
+     * settings card's own copy says as much), but PlatformPaymentSettingsService::activeGatewayIsImplemented()
      * keeps checkout disabled for them until a matching platform service exists.
      *
      * @return list<string>
      */
     public static function platformImplementedGatewayKeys(): array
+    {
+        return [self::FLUTTERWAVE, self::STRIPE, self::MONNIFY, self::PAYSTACK];
+    }
+
+    /**
+     * Narrower than platformImplementedGatewayKeys() above -- wallet mode needs
+     * more than a working platform-billing adapter, it needs the *tenant-facing*
+     * gateway service (FlutterwaveService/StripeService/MonnifyService) to know
+     * how to substitute platform-owned credentials for a wallet-enabled shop's
+     * own (usesWalletCredentials()). PaystackService never gained that branch
+     * when platform billing did, so it stays out of this list even though it's
+     * a real platform-billing adapter now -- PlatformPaymentSettingsService::walletGateway()
+     * uses this list specifically to avoid silently breaking every wallet-enabled
+     * tenant's live customer checkout the moment an admin picks Paystack as the
+     * platform's "Active gateway".
+     *
+     * @return list<string>
+     */
+    public static function walletCapableGatewayKeys(): array
     {
         return [self::FLUTTERWAVE, self::STRIPE, self::MONNIFY];
     }

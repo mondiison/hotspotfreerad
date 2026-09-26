@@ -13,6 +13,7 @@ use App\Services\PlatformBillingConfirmationService;
 use App\Services\PlatformFlutterwaveService;
 use App\Services\PlatformMonnifyService;
 use App\Services\PlatformPaymentSettingsService;
+use App\Services\PlatformPaystackService;
 use App\Services\PlatformStripeService;
 use App\Support\PaymentGatewayCatalog;
 use Illuminate\Http\Client\RequestException;
@@ -147,7 +148,7 @@ class BillingController extends Controller
         return redirect()->route('admin.billing.index')->with('status', 'Billing plan deleted.');
     }
 
-    public function checkout(Request $request, PlatformFlutterwaveService $flutterwave, PlatformStripeService $stripe, PlatformMonnifyService $monnify): RedirectResponse
+    public function checkout(Request $request, PlatformFlutterwaveService $flutterwave, PlatformStripeService $stripe, PlatformMonnifyService $monnify, PlatformPaystackService $paystack): RedirectResponse
     {
         $platformSettings = app(PlatformPaymentSettingsService::class);
         $data = $request->validate([
@@ -173,6 +174,7 @@ class BillingController extends Controller
         $gatewayService = match ($gateway) {
             PaymentGatewayCatalog::STRIPE => $stripe,
             PaymentGatewayCatalog::MONNIFY => $monnify,
+            PaymentGatewayCatalog::PAYSTACK => $paystack,
             default => $flutterwave,
         };
 
@@ -215,12 +217,15 @@ class BillingController extends Controller
 
         try {
             // Same reasoning as HotspotHostedCheckoutManager::callbackUrl()'s Monnify
-            // case: Monnify appends its own ?paymentReference=...&paymentStatus=...
-            // to whatever redirectUrl it's given, using "?" rather than checking for
-            // an existing query string -- pre-embedding our own ?tx_ref=... here
+            // case: Monnify (and, per that same method's own "default" grouping,
+            // Paystack too) appends its own reference query params to whatever
+            // redirectUrl it's given, using "?" rather than checking for an
+            // existing query string -- pre-embedding our own ?tx_ref=... here
             // would produce the same doubled, malformed query string confirmed live
-            // on the hotspot side.
-            $redirectUrl = $gateway === PaymentGatewayCatalog::MONNIFY
+            // on the hotspot side for Monnify. callback()'s tx_ref extraction
+            // already checks paymentReference/reference as a fallback, so each
+            // gateway's own appended value alone is sufficient here.
+            $redirectUrl = in_array($gateway, [PaymentGatewayCatalog::MONNIFY, PaymentGatewayCatalog::PAYSTACK], true)
                 ? route('admin.billing.payments.callback')
                 : route('admin.billing.payments.callback', ['tx_ref' => $payment->tx_ref]);
 
@@ -279,9 +284,12 @@ class BillingController extends Controller
         // never a plain "status" param -- gating on $request->query('status') for
         // Monnify would reject every successful payment outright before ever
         // reaching real API verification below, the same exclusion the hotspot-side
-        // callback() already applies to Monnify (and Paystack/Squad) for exactly
-        // this reason.
-        if (! in_array($payment->provider, [PaymentGatewayCatalog::MONNIFY, PaymentGatewayCatalog::STRIPE], true) && ! $this->statusIsSuccessful($request->query('status'))) {
+        // callback() already applies to Monnify/Paystack/Squad/Stripe. This list
+        // previously only had Monnify/Stripe despite the comment already saying
+        // otherwise -- harmless while Paystack had no platform adapter to reach
+        // this code at all, but would have rejected every real Paystack platform
+        // billing callback outright the moment one existed.
+        if (! in_array($payment->provider, [PaymentGatewayCatalog::MONNIFY, PaymentGatewayCatalog::STRIPE, PaymentGatewayCatalog::PAYSTACK], true) && ! $this->statusIsSuccessful($request->query('status'))) {
             $payment->update(['status' => $request->query('status', 'failed')]);
 
             return redirect()->route('admin.billing.index')->withErrors(['billing' => 'Platform billing payment was not successful.']);
@@ -372,7 +380,7 @@ class BillingController extends Controller
         return redirect()->route('admin.billing.index')->with('status', 'Platform payment verified and subscription activated.');
     }
 
-    public function webhook(Request $request, PlatformFlutterwaveService $flutterwave, PlatformStripeService $stripe, PlatformMonnifyService $monnify): Response
+    public function webhook(Request $request, PlatformFlutterwaveService $flutterwave, PlatformStripeService $stripe, PlatformMonnifyService $monnify, PlatformPaystackService $paystack): Response
     {
         $payload = $request->all();
         $txRef = data_get($payload, 'data.reference')
@@ -390,14 +398,14 @@ class BillingController extends Controller
             ->first();
 
         if (! $payment) {
-            if (! $this->platformWebhookSignatureIsValid($request, $flutterwave, $stripe, $monnify, app(PlatformPaymentSettingsService::class)->activeGateway())) {
+            if (! $this->platformWebhookSignatureIsValid($request, $flutterwave, $stripe, $monnify, $paystack, app(PlatformPaymentSettingsService::class)->activeGateway())) {
                 abort(401);
             }
 
             return response('ignored', 200);
         }
 
-        if (! $this->platformWebhookSignatureIsValid($request, $flutterwave, $stripe, $monnify, $payment->provider)) {
+        if (! $this->platformWebhookSignatureIsValid($request, $flutterwave, $stripe, $monnify, $paystack, $payment->provider)) {
             abort(401);
         }
 
@@ -427,6 +435,13 @@ class BillingController extends Controller
 
     private function providerReferenceFromRequest(Request $request): ?string
     {
+        // Deliberately no "reference" key here -- unlike the hotspot-side
+        // equivalent, an existing test here already uses "reference" as the
+        // tx_ref *lookup* param for a Flutterwave-style callback, which isn't
+        // the provider reference to verify against. Paystack doesn't need an
+        // entry here anyway: its checkout_url response already echoes back
+        // the real reference (equal to tx_ref), stored as provider_reference
+        // at checkout time, so the fallback below already resolves it correctly.
         foreach (['session_id', 'id', 'order_id', 'charge_id', 'transaction_id'] as $key) {
             if (filled($request->query($key))) {
                 return (string) $request->query($key);
@@ -485,11 +500,12 @@ class BillingController extends Controller
         return match ($settings->activeGateway()) {
             PaymentGatewayCatalog::STRIPE => app(PlatformStripeService::class)->isConfigured(),
             PaymentGatewayCatalog::MONNIFY => app(PlatformMonnifyService::class)->isConfigured(),
+            PaymentGatewayCatalog::PAYSTACK => app(PlatformPaystackService::class)->isConfigured(),
             default => app(PlatformFlutterwaveService::class)->isConfigured(),
         };
     }
 
-    private function platformWebhookSignatureIsValid(Request $request, PlatformFlutterwaveService $flutterwave, PlatformStripeService $stripe, PlatformMonnifyService $monnify, string $gateway): bool
+    private function platformWebhookSignatureIsValid(Request $request, PlatformFlutterwaveService $flutterwave, PlatformStripeService $stripe, PlatformMonnifyService $monnify, PlatformPaystackService $paystack, string $gateway): bool
     {
         if ($gateway === PaymentGatewayCatalog::STRIPE) {
             return $stripe->webhookIsValid($request->getContent(), $request->header('stripe-signature'));
@@ -497,6 +513,10 @@ class BillingController extends Controller
 
         if ($gateway === PaymentGatewayCatalog::MONNIFY) {
             return $monnify->webhookIsValid($request->getContent(), $request->header('monnify-signature'));
+        }
+
+        if ($gateway === PaymentGatewayCatalog::PAYSTACK) {
+            return $paystack->webhookIsValid($request->getContent(), $request->header('x-paystack-signature'));
         }
 
         return $flutterwave->webhookIsValid($request->getContent(), $request->header('flutterwave-signature') ?: $request->header('verif-hash'));

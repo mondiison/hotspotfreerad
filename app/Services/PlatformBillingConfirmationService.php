@@ -14,6 +14,7 @@ class PlatformBillingConfirmationService
         private readonly PlatformFlutterwaveService $flutterwave,
         private readonly PlatformStripeService $stripe,
         private readonly PlatformMonnifyService $monnify,
+        private readonly PlatformPaystackService $paystack,
     ) {}
 
     public function verifyAndActivate(PlatformBillingPayment $payment, string $providerReference, string $resourceType = 'order'): bool
@@ -27,6 +28,7 @@ class PlatformBillingConfirmationService
         $verification = match ($payment->provider) {
             PaymentGatewayCatalog::STRIPE => $this->stripe->verifyPayment($providerReference),
             PaymentGatewayCatalog::MONNIFY => $this->monnify->verifyPayment($providerReference),
+            PaymentGatewayCatalog::PAYSTACK => $this->paystack->verifyPayment($providerReference),
             default => $this->flutterwave->verifyPayment($payment, $providerReference, $resourceType),
         };
 
@@ -102,6 +104,18 @@ class PlatformBillingConfirmationService
                 && data_get($verification, 'responseBody.paymentReference') === $payment->tx_ref
                 && strtoupper((string) data_get($verification, 'responseBody.currency')) === strtoupper($payment->currency)
                 && (float) data_get($verification, 'responseBody.amountPaid') >= (float) $payment->amount;
+        }
+
+        if ($payment->provider === PaymentGatewayCatalog::PAYSTACK) {
+            // Paystack's top-level "status" is a boolean (API call succeeded), not a
+            // string like the generic Flutterwave-shaped branch below expects --
+            // the real payment outcome is data.status, and amount is in kobo,
+            // mirroring HotspotPaymentConfirmationService::paystackVerificationMatchesPayment().
+            return data_get($verification, 'status') === true
+                && $this->statusIsSuccessful(data_get($verification, 'data.status'))
+                && data_get($verification, 'data.reference') === $payment->tx_ref
+                && strtoupper((string) data_get($verification, 'data.currency')) === strtoupper($payment->currency)
+                && ((float) data_get($verification, 'data.amount') / 100) >= (float) $payment->amount;
         }
 
         return in_array(strtolower((string) data_get($verification, 'status')), ['success', 'successful', 'succeeded'], true)
