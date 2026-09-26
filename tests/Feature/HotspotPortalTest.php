@@ -11,6 +11,7 @@ use App\Models\Router;
 use App\Models\Shop;
 use App\Models\Subscription;
 use App\Models\Tenant;
+use App\Models\TrustedWifiDevice;
 use App\Models\Wallet;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -201,6 +202,60 @@ class HotspotPortalTest extends TestCase
             ->assertOk()
             ->assertSee('Pay with')
             ->assertDontSee('POS package expired');
+    }
+
+    /**
+     * Regression/feature test for a 2026-09-27 direct request (same day as
+     * the POS status page above): a Staff/Management Wi-Fi trusted device
+     * whose access expired used to land on the same generic customer
+     * portal too, for the identical reason -- no hotspot Subscription, and
+     * the portal had no idea TrustedWifiDevice existed. Deliberately scoped
+     * to the registered-but-expired case only (per direct choice) -- an
+     * *unregistered* device on Staff/Mgmt is indistinguishable from a new
+     * hotspot customer with the information available here, so it's left
+     * falling through to the generic portal unchanged.
+     */
+    public function test_portal_shows_staff_wifi_status_page_for_an_expired_trusted_device(): void
+    {
+        [$router] = $this->routerWithPackage();
+
+        TrustedWifiDevice::create([
+            'shop_id' => $router->shop_id,
+            'network' => TrustedWifiDevice::NETWORK_STAFF,
+            'device_name' => 'Manager Laptop',
+            'mac_address' => 'AA:BB:CC:DD:EE:FF',
+            'is_active' => true,
+            'expires_at' => now()->subDay(),
+        ]);
+
+        $this->get('/hotspot/portal?mac=AA:BB:CC:DD:EE:FF&nasid=demo-router')
+            ->assertOk()
+            ->assertSee('Staff Wi-Fi access expired')
+            ->assertSee('Manager Laptop')
+            ->assertSee('AA:BB:CC:DD:EE:FF')
+            ->assertDontSee('Continue to payment')
+            ->assertDontSee('Pay with');
+    }
+
+    public function test_portal_shows_reconnecting_message_for_a_still_active_trusted_device(): void
+    {
+        [$router] = $this->routerWithPackage();
+
+        TrustedWifiDevice::create([
+            'shop_id' => $router->shop_id,
+            'network' => TrustedWifiDevice::NETWORK_MGMT,
+            'device_name' => 'Admin Phone',
+            'mac_address' => 'AA:BB:CC:DD:EE:FF',
+            'is_active' => true,
+            'expires_at' => now()->addDays(30),
+        ]);
+
+        $this->get('/hotspot/portal?mac=AA:BB:CC:DD:EE:FF&nasid=demo-router')
+            ->assertOk()
+            ->assertSee('Reconnecting')
+            ->assertSee('Admin Phone')
+            ->assertSee('Management')
+            ->assertDontSee('Wi-Fi access expired');
     }
 
     public function test_portal_hides_pppoe_only_packages(): void

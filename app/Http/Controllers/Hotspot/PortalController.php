@@ -10,6 +10,7 @@ use App\Models\Payment;
 use App\Models\PosDevice;
 use App\Models\Router;
 use App\Models\Subscription;
+use App\Models\TrustedWifiDevice;
 use App\Services\FlutterwaveService;
 use App\Services\HotspotPaymentConfirmationService;
 use App\Services\ManualBankTransferService;
@@ -119,6 +120,28 @@ class PortalController extends Controller
                 'router' => $router,
                 'shop' => $router->shop,
                 'device' => $posDevice,
+                'macAddress' => $validated['mac'],
+            ]);
+        }
+
+        // Same reasoning as the PosDevice check above, for Staff/Management
+        // Wi-Fi trusted devices (2026-09-27, direct request, deliberately
+        // scoped to the expired/registered case only -- an *unregistered*
+        // device on Staff/Mgmt is indistinguishable from a brand-new hotspot
+        // customer with the information available here, since neither
+        // mms-staff-profile nor mms-mgmt-profile carry any network-specific
+        // signal into this request; that would need its own login-page
+        // directory per network, deferred as separate infra work).
+        $trustedDevice = TrustedWifiDevice::query()
+            ->where('shop_id', $router->shop_id)
+            ->where('mac_address', strtoupper($validated['mac']))
+            ->first();
+
+        if ($trustedDevice) {
+            return view('hotspot.staff-wifi-status', [
+                'router' => $router,
+                'shop' => $router->shop,
+                'device' => $trustedDevice,
                 'macAddress' => $validated['mac'],
             ]);
         }
