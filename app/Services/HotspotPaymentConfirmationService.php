@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Payment;
 use App\Models\Subscription;
 use App\Services\Payments\GatewayCredentialResolver;
+use App\Services\Payments\Gateways\FlutterwaveGateway;
 use App\Services\Payments\Gateways\MonnifyGateway;
 use App\Services\Payments\Gateways\PaystackGateway;
 use App\Services\Payments\Gateways\SquadGateway;
@@ -27,6 +28,7 @@ class HotspotPaymentConfirmationService
         private readonly MonnifyGateway $monnifyGateway,
         private readonly PaystackGateway $paystackGateway,
         private readonly SquadGateway $squadGateway,
+        private readonly FlutterwaveGateway $flutterwaveGateway,
         private readonly GatewayCredentialResolver $credentials,
     ) {}
 
@@ -155,7 +157,18 @@ class HotspotPaymentConfirmationService
             return $this->stripe->verifyPayment($payment, $providerReference);
         }
 
-        return $this->flutterwave->verifyPayment($payment, $providerReference, $resourceType);
+        // Flutterwave card checkout (the v3 standard hosted flow) stays on
+        // the original service -- only OPay (v4 orchestration) migrated to
+        // the shared FlutterwaveGateway (2026-09-26, "OPay only" scope).
+        if (data_get($payment->payload, 'flutterwave_checkout_version') === 'standard_v3') {
+            return $this->flutterwave->verifyPayment($payment, $providerReference, $resourceType);
+        }
+
+        return $this->flutterwaveGateway->verifyPayment(
+            $this->credentials->forPayment($payment, PaymentGatewayCatalog::FLUTTERWAVE),
+            $providerReference,
+            $resourceType
+        );
     }
 
     private function stripeVerificationMatchesPayment(array $verification, Payment $payment): bool

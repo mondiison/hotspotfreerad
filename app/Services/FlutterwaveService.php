@@ -16,49 +16,6 @@ class FlutterwaveService
     /**
      * @throws RequestException
      */
-    public function initializeCheckout(Payment $payment, array $customer, string $redirectUrl): array
-    {
-        $response = Http::withToken($this->accessToken($payment))
-            ->acceptJson()
-            ->withHeaders([
-                'X-Trace-Id' => $payment->tx_ref,
-                'X-Idempotency-Key' => $payment->tx_ref,
-            ])
-            ->post($this->baseUrl().'/orchestration/direct-charges', [
-                'amount' => (float) $payment->amount,
-                'currency' => $payment->currency,
-                'reference' => $payment->tx_ref,
-                'redirect_url' => $redirectUrl,
-                'payment_method' => ['type' => $this->paymentMethodType($customer['payment_method'] ?? null)],
-                'customer' => $this->customerPayload($payment, $customer),
-                'meta' => [
-                    'payment_id' => $payment->id,
-                    'payment_reference' => $payment->tx_ref,
-                    'credential_source' => $this->credentialSource($payment)['source'],
-                    'credential_label' => $this->credentialSource($payment)['label'],
-                    'tenant_id' => $payment->shop->tenant_id,
-                    'tenant_name' => $payment->shop->tenant->company_name,
-                    'shop_id' => $payment->shop_id,
-                    'shop_name' => $payment->shop->name,
-                    'package_id' => $payment->package_id,
-                    'package_name' => $payment->package->name,
-                    'device_mac' => data_get($payment->payload, 'mac'),
-                    'nas_identifier' => data_get($payment->payload, 'nasid'),
-                ],
-            ])
-            ->throw()
-            ->json();
-
-        return [
-            'response' => $response,
-            'provider_reference' => $this->providerReference($response),
-            'checkout_url' => $this->checkoutUrl($response),
-        ];
-    }
-
-    /**
-     * @throws RequestException
-     */
     public function createDynamicVirtualAccount(Payment $payment, array $customer): array
     {
         $customerResponse = $this->createCustomer($payment, $customer);

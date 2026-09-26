@@ -4,6 +4,7 @@ namespace App\Services\Payments;
 
 use App\Models\Payment;
 use App\Services\Payments\Contracts\HostedGateway;
+use App\Services\Payments\Gateways\FlutterwaveGateway;
 use App\Services\Payments\Gateways\MonnifyGateway;
 use App\Services\Payments\Gateways\PaystackGateway;
 use App\Services\Payments\Gateways\SquadGateway;
@@ -21,6 +22,7 @@ class HotspotHostedCheckoutManager
         private readonly MonnifyGateway $monnifyGateway,
         private readonly PaystackGateway $paystackGateway,
         private readonly SquadGateway $squadGateway,
+        private readonly FlutterwaveGateway $flutterwaveGateway,
         private readonly GatewayCredentialResolver $credentials,
     ) {}
 
@@ -142,6 +144,72 @@ class HotspotHostedCheckoutManager
     }
 
     /**
+     * Called directly by PortalController::pay() for Flutterwave's OPay
+     * branch specifically -- Flutterwave was never routed through
+     * supports()/start() at all (card and bank transfer are dispatched by
+     * the controller itself, since neither fits this manager's
+     * checkout-URL-shaped result), so this mirrors start()'s return
+     * contract without needing supports() to know about Flutterwave.
+     * $credentialSource is passed in rather than computed here because the
+     * controller already needs it before this call, to choose which of
+     * several checkout methods to attempt.
+     *
+     * @return array{credential_source: array<string, string>, checkout_url: ?string, unavailable_reason: ?string}
+     */
+    public function startFlutterwaveOpay(Payment $payment, array $customer, array $credentialSource): array
+    {
+        $credentials = $this->credentials->forPayment($payment, PaymentGatewayCatalog::FLUTTERWAVE);
+
+        if (! $this->flutterwaveGateway->isConfigured($credentials)) {
+            return $this->result($credentialSource, null, 'missing_gateway_secret_key');
+        }
+
+        $chargeRequest = $this->hotspotChargeRequest($payment, $customer, [
+            'credential_source' => $credentialSource['source'],
+            'credential_label' => $credentialSource['label'],
+        ]);
+
+        try {
+            $result = $this->flutterwaveGateway->initializeCheckout($credentials, $chargeRequest);
+
+            $payment->update([
+                'provider_reference' => $result->providerReference,
+                'payload' => array_merge($payment->payload ?? [], [
+                    'checkout_url' => $result->checkoutUrl,
+                    'flutterwave_account' => $credentialSource,
+                    'flutterwave_init_response' => $result->response,
+                ]),
+            ]);
+
+            if (filled($result->checkoutUrl)) {
+                return $this->result($credentialSource, $result->checkoutUrl, null);
+            }
+
+            Log::warning('Flutterwave checkout response missing redirect URL', [
+                'payment_id' => $payment->id,
+                'tx_ref' => $payment->tx_ref,
+                'payment_method' => 'opay',
+                'response_body' => $result->response,
+            ]);
+
+            return $this->result($credentialSource, null, 'missing_checkout_url');
+        } catch (Throwable $exception) {
+            $reason = $this->checkoutFailureReason($exception);
+
+            Log::warning('Flutterwave checkout initialization failed', [
+                'payment_id' => $payment->id,
+                'tx_ref' => $payment->tx_ref,
+                'message' => $exception->getMessage(),
+                'response_body' => $exception instanceof RequestException
+                    ? $exception->response->json() ?: $exception->response->body()
+                    : null,
+            ]);
+
+            return $this->result($credentialSource, null, $reason);
+        }
+    }
+
+    /**
      * @return array{credential_source: array<string, string>, checkout_url: ?string, unavailable_reason: ?string}
      */
     private function startSharedGateway(Payment $payment, array $customer, HostedGateway $gateway, string $gatewayKey, string $gatewayLabel): array
@@ -192,7 +260,13 @@ class HotspotHostedCheckoutManager
         }
     }
 
-    private function hotspotChargeRequest(Payment $payment, array $customer): ChargeRequest
+    /**
+     * @param  array<string, mixed>  $extraMeta  merged into the base meta bag -- only Flutterwave's
+     *                                           old initializeCheckout() ever sent credential_source/
+     *                                           credential_label, so it's kept opt-in rather than
+     *                                           changing what Monnify/Paystack/Squad already send
+     */
+    private function hotspotChargeRequest(Payment $payment, array $customer, array $extraMeta = []): ChargeRequest
     {
         return new ChargeRequest(
             reference: $payment->tx_ref,
@@ -202,7 +276,7 @@ class HotspotHostedCheckoutManager
             customerEmail: GuestCustomerEmail::resolve($payment, $customer['email'] ?? null),
             customerName: (string) ($customer['name'] ?? 'Hotspot Customer'),
             description: $payment->package->name.' hotspot access',
-            meta: [
+            meta: array_merge([
                 'payment_id' => $payment->id,
                 'payment_reference' => $payment->tx_ref,
                 'tenant_id' => $payment->shop->tenant_id,
@@ -214,7 +288,11 @@ class HotspotHostedCheckoutManager
                 'device_mac' => data_get($payment->payload, 'mac'),
                 'nas_identifier' => data_get($payment->payload, 'nasid'),
                 'phone' => (string) ($customer['phone'] ?? ''),
-            ],
+            ], $extraMeta),
+            customerPhone: (string) ($customer['phone'] ?? ''),
+            addressCity: $payment->shop->location_city ?: 'Lagos',
+            addressState: $payment->shop->location_city ?: 'Lagos',
+            addressLine1: $payment->shop->name,
         );
     }
 
@@ -254,7 +332,7 @@ class HotspotHostedCheckoutManager
             // own appended value alone is all that's needed here.
             PaymentGatewayCatalog::MONNIFY => route('hotspot.payment.callback'),
             PaymentGatewayCatalog::SQUAD => route('hotspot.payment.callback', ['transaction_ref' => $payment->tx_ref]),
-            PaymentGatewayCatalog::STRIPE => route('hotspot.payment.callback', ['tx_ref' => $payment->tx_ref]),
+            PaymentGatewayCatalog::STRIPE, PaymentGatewayCatalog::FLUTTERWAVE => route('hotspot.payment.callback', ['tx_ref' => $payment->tx_ref]),
             default => route('hotspot.payment.callback'),
         };
     }

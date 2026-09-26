@@ -14,6 +14,10 @@ final class ChargeRequest
 {
     /**
      * @param  array<string, mixed>  $meta  passed straight through to the gateway's metadata/meta field
+     *
+     * customerPhone/address* only exist for Flutterwave's v4 orchestration
+     * API, which needs a full customer.phone/customer.address block --
+     * Monnify/Paystack/Squad's initializeCheckout() ignores them entirely.
      */
     public function __construct(
         public readonly string $reference,
@@ -24,5 +28,9 @@ final class ChargeRequest
         public readonly string $customerName,
         public readonly string $description,
         public readonly array $meta = [],
+        public readonly string $customerPhone = '',
+        public readonly string $addressCity = '',
+        public readonly string $addressState = '',
+        public readonly string $addressLine1 = '',
     ) {}
 }

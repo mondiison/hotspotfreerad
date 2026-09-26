@@ -392,6 +392,40 @@ class PortalController extends Controller
                     ]);
                 }
             }
+        } elseif ($paymentMethod === 'opay' && $flutterwave->isConfiguredFor($payment)) {
+            // OPay goes through the v4 orchestration direct-charge endpoint,
+            // via the shared FlutterwaveGateway (2026-09-26) -- the only one
+            // of Flutterwave's three checkout flows migrated onto the same
+            // HostedGateway abstraction Monnify/Paystack/Squad use, since it's
+            // the only one whose result shape (a checkout URL) fits. Card and
+            // bank transfer stay on FlutterwaveService below. Gated on the
+            // same isConfiguredFor() check bank_transfer's branch already
+            // uses (rather than relying on startFlutterwaveOpay()'s own,
+            // narrower client_id/client_secret check) so an incomplete
+            // credential set surfaces the generic "missing_credentials"
+            // message instead of a sub-flow-specific one -- confirmed live
+            // by test_incomplete_tenant_flutterwave_credentials_do_not_use_platform_account_for_customer_payments,
+            // which expects exactly that generic message.
+            //
+            // USSD was removed 2026-09-25 -- Flutterwave's live API rejected
+            // every bank code as "Invalid bank code", including their own
+            // documented example value, meaning inline USSD via this
+            // endpoint isn't actually functional for this account despite
+            // matching their published request schema. NQR was removed the
+            // same day for a related but distinct reason -- confirmed via
+            // Flutterwave's own docs it isn't a valid payment_method.type
+            // at all for this endpoint.
+            $attempt = $hostedGateways->startFlutterwaveOpay($payment, [
+                'email' => $validated['email'] ?? null,
+                'phone' => $validated['phone'] ?? null,
+                'name' => 'Hotspot Customer',
+            ], $credentialSource);
+            $credentialSource = $attempt['credential_source'];
+            $checkoutUnavailableReason = $attempt['unavailable_reason'] ?? $checkoutUnavailableReason;
+
+            if (filled($attempt['checkout_url'] ?? null)) {
+                return redirect()->away($attempt['checkout_url']);
+            }
         } elseif ($flutterwave->isConfiguredFor($payment)) {
             try {
                 if ($paymentMethod === 'bank_transfer') {
@@ -423,50 +457,6 @@ class PortalController extends Controller
                         'loginUrl' => $this->mikrotikLoginUrl($validated),
                         'originalUrl' => $validated['link-orig'] ?? null,
                     ]);
-                }
-
-                // OPay goes through the v4 orchestration direct-charge endpoint.
-                // USSD was removed 2026-09-25 -- Flutterwave's live API rejected
-                // every bank code as "Invalid bank code", including their own
-                // documented example value, meaning inline USSD via this
-                // endpoint isn't actually functional for this account despite
-                // matching their published request schema. NQR was removed the
-                // same day for a related but distinct reason -- confirmed via
-                // Flutterwave's own docs it isn't a valid payment_method.type
-                // at all for this endpoint.
-                if ($paymentMethod === 'opay') {
-                    $checkout = $flutterwave->initializeCheckout(
-                        $payment,
-                        [
-                            'email' => $validated['email'] ?? null,
-                            'phone' => $validated['phone'] ?? null,
-                            'payment_method' => $validated['payment_method'] ?? null,
-                            'name' => 'Hotspot Customer',
-                        ],
-                        route('hotspot.payment.callback', ['tx_ref' => $payment->tx_ref])
-                    );
-
-                    $payment->update([
-                        'provider_reference' => $checkout['provider_reference'],
-                        'payload' => array_merge($payment->payload ?? [], [
-                            'checkout_url' => $checkout['checkout_url'],
-                            'flutterwave_account' => $credentialSource,
-                            'flutterwave_init_response' => $checkout['response'],
-                        ]),
-                    ]);
-
-                    if (filled($checkout['checkout_url'])) {
-                        return redirect()->away($checkout['checkout_url']);
-                    }
-
-                    Log::warning('Flutterwave checkout response missing redirect URL', [
-                        'payment_id' => $payment->id,
-                        'tx_ref' => $payment->tx_ref,
-                        'payment_method' => $paymentMethod,
-                        'response_body' => $checkout['response'] ?? null,
-                    ]);
-
-                    $checkoutUnavailableReason = 'missing_checkout_url';
                 }
             } catch (Throwable $exception) {
                 $checkoutUnavailableReason = 'initialization_failed';

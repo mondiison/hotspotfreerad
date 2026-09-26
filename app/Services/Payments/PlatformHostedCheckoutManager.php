@@ -26,7 +26,17 @@ use Throwable;
  * Monnify, Paystack, and Squad are migrated to the shared HostedGateway
  * contract so far (2026-09-26) -- Flutterwave/Stripe still go through their
  * own Platform*Service classes until they're migrated the same way in a
- * follow-up pass. PlatformMonnifyService was left in place (still backing
+ * follow-up pass. Flutterwave in particular doesn't fit the tenant-side
+ * hotspot checkout's "OPay only" FlutterwaveGateway pilot at all: unlike the
+ * hotspot portal (where OPay is one of three fixed, user-selected checkout
+ * methods), platform billing's own non-card Flutterwave flow sends whatever
+ * v4 payment_method.type PlatformPaymentSettingsService::defaultPaymentMethod()
+ * is currently configured to (opay OR bank_transfer, both through the same
+ * orchestration endpoint) -- a dynamic choice the OPay-only gateway class
+ * deliberately hardcodes away, confirmed live by
+ * test_platform_checkout_uses_database_payment_settings_before_env failing
+ * outright the moment this path was pointed at FlutterwaveGateway during
+ * this migration. PlatformMonnifyService was left in place (still backing
  * BankAccountResolutionService's banks()/resolveAccount() calls, unrelated
  * to checkout), but PlatformPaystackService/PlatformSquadService were both
  * deleted entirely, since nothing else depended on either.
@@ -189,6 +199,10 @@ class PlatformHostedCheckoutManager
                     'billing_plan_id' => $payment->billing_plan_id,
                     'billing_plan_name' => $payment->billingPlan->name,
                 ],
+                customerPhone: (string) ($payment->tenant->contact_phone ?? ''),
+                addressCity: 'Lagos',
+                addressState: 'Lagos',
+                addressLine1: $payment->tenant->company_name,
             );
 
             $result = $gateway->initializeCheckout($credentials, $chargeRequest);
@@ -235,10 +249,7 @@ class PlatformHostedCheckoutManager
 
     private function gatewayFor(string $gateway): PlatformFlutterwaveService|PlatformStripeService
     {
-        return match ($gateway) {
-            PaymentGatewayCatalog::STRIPE => $this->stripe,
-            default => $this->flutterwave,
-        };
+        return $gateway === PaymentGatewayCatalog::STRIPE ? $this->stripe : $this->flutterwave;
     }
 
     /**

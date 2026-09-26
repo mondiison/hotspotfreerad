@@ -4,6 +4,7 @@ namespace App\Services\Payments;
 
 use App\Models\Payment;
 use App\Services\PlatformPaymentSettingsService;
+use App\Support\PaymentGatewayCatalog;
 
 /**
  * Resolves which credentials a tenant hotspot Payment should use for a given
@@ -21,10 +22,24 @@ class GatewayCredentialResolver
 
     public function forPayment(Payment $payment, string $gateway): GatewayCredentials
     {
-        $settings = $payment->shop?->tenant?->wallet_enabled
-            ? $this->platformSettings->gatewaySettings($gateway)
-            : (array) ($payment->shop?->paymentGatewaySettings()[$gateway] ?? []);
+        if ($payment->shop?->tenant?->wallet_enabled) {
+            return new GatewayCredentials($this->platformSettings->gatewaySettings($gateway));
+        }
 
-        return new GatewayCredentials($settings);
+        // Flutterwave is the odd one out: its credentials live in four
+        // dedicated encrypted Shop columns (flutterwave_client_id/client_secret/
+        // secret_key/webhook_secret), not the generic payment_gateway_settings
+        // JSON blob Monnify/Paystack/Squad use -- normalize it into the same
+        // shape here rather than teaching every caller about this difference.
+        if ($gateway === PaymentGatewayCatalog::FLUTTERWAVE) {
+            return new GatewayCredentials([
+                'client_id' => $payment->shop?->flutterwave_client_id,
+                'client_secret' => $payment->shop?->flutterwave_client_secret,
+                'secret_key' => $payment->shop?->flutterwave_secret_key,
+                'webhook_secret' => $payment->shop?->flutterwave_webhook_secret,
+            ]);
+        }
+
+        return new GatewayCredentials((array) ($payment->shop?->paymentGatewaySettings()[$gateway] ?? []));
     }
 }
