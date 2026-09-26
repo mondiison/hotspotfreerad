@@ -1404,16 +1404,88 @@ class HotspotPortalTest extends TestCase
     }
 
     /**
-     * A gateway with no wallet-credential support yet (Paystack/Squad --
-     * PlatformPaymentSettingsService::walletGateway()'s deliberate safety
-     * fallback) must never silently break wallet checkout just because an
-     * admin picked it as "Active gateway" for planning purposes.
+     * Regression coverage for the same live 2026-09-27 report the fallback
+     * test below documents: PaymentGatewayCatalog::walletCapableGatewayKeys()
+     * used to exclude Paystack, so setting the platform's "Active gateway" to
+     * Paystack silently kept every wallet-enabled tenant's checkout on
+     * Flutterwave instead. Mirrors
+     * test_wallet_mode_follows_the_platforms_active_gateway_to_monnify()
+     * exactly, just against Paystack's simpler bearer-token checkout shape.
+     */
+    public function test_wallet_mode_follows_the_platforms_active_gateway_to_paystack(): void
+    {
+        PlatformSetting::query()->updateOrCreate(
+            ['key' => 'payments.platform.general'],
+            ['value' => ['active_gateway' => 'paystack']]
+        );
+        PlatformSetting::query()->updateOrCreate(
+            ['key' => 'payments.platform.gateway.paystack'],
+            ['value' => [
+                'public_key' => Crypt::encryptString('pk_test_platform'),
+                'secret_key' => Crypt::encryptString('sk_test_platform'),
+                'environment' => Crypt::encryptString('test'),
+            ]]
+        );
+        Cache::flush();
+        config(['services.paystack.base_url' => 'https://api.paystack.co']);
+
+        [$router, $package] = $this->routerWithPackage([
+            'wallet_enabled' => true,
+            'billing_model' => 'commission',
+            'commission_rate' => 10,
+            'wallet_commission_bearer' => 'tenant',
+        ]);
+
+        Http::fake([
+            'api.paystack.co/transaction/initialize' => fn ($request) => Http::response([
+                'status' => true,
+                'message' => 'Authorization URL created',
+                'data' => [
+                    'authorization_url' => 'https://checkout.paystack.com/pay/wallet-hotspot',
+                    'access_code' => 'wallet-access-code',
+                    'reference' => $request['reference'],
+                ],
+            ]),
+        ]);
+
+        // Deliberately no shop-level Paystack gateway_settings saved -- wallet
+        // mode must resolve credentials from the platform's own settings.
+        $this->post(route('hotspot.pay'), [
+            'mac' => 'AA:BB:CC:DD:EE:FF',
+            'nasid' => $router->nas_identifier,
+            'package_id' => $package->id,
+            'email' => 'customer@example.com',
+        ])
+            ->assertRedirect('https://checkout.paystack.com/pay/wallet-hotspot');
+
+        $payment = Payment::firstOrFail();
+        $this->assertSame('paystack', $payment->provider);
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/transaction/initialize')
+            && $request->hasHeader('Authorization', 'Bearer sk_test_platform')
+            && $request['reference'] === $payment->tx_ref);
+    }
+
+    /**
+     * Regression coverage for a live 2026-09-27 report: setting the
+     * platform's "Active gateway" to Paystack still silently used Flutterwave
+     * for wallet-mode tenant checkout, because PaymentGatewayCatalog::
+     * walletCapableGatewayKeys() had never been updated after the gateway
+     * consolidation gave Paystack/Squad the same generic wallet-credential
+     * support Flutterwave/Monnify/Stripe already had (via the shared
+     * GatewayCredentialResolver). Every real online gateway is wallet-capable
+     * now, so walletGateway()'s Flutterwave fallback is purely defensive --
+     * exercised here with "manual_bank" specifically, since that's the one
+     * value PlatformPaymentSettingsService::activeGateway() itself still
+     * accepts as valid (it's a real onlineGateways() key) while genuinely
+     * having no wallet-credential concept at all (there's no "platform-owned
+     * bank account" a customer could transfer into).
      */
     public function test_wallet_mode_falls_back_to_flutterwave_when_active_gateway_has_no_wallet_support(): void
     {
         PlatformSetting::query()->updateOrCreate(
             ['key' => 'payments.platform.general'],
-            ['value' => ['active_gateway' => 'paystack']]
+            ['value' => ['active_gateway' => 'manual_bank']]
         );
         Cache::flush();
         $this->configureFlutterwave();

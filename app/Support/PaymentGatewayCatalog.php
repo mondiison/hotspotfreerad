@@ -289,22 +289,33 @@ class PaymentGatewayCatalog
     }
 
     /**
-     * Narrower than platformImplementedGatewayKeys() above -- wallet mode needs
-     * more than a working platform-billing adapter, it needs the *tenant-facing*
-     * gateway service (FlutterwaveService/StripeService/MonnifyService) to know
-     * how to substitute platform-owned credentials for a wallet-enabled shop's
-     * own (usesWalletCredentials()). PaystackService never gained that branch
-     * when platform billing did, so it stays out of this list even though it's
-     * a real platform-billing adapter now -- PlatformPaymentSettingsService::walletGateway()
-     * uses this list specifically to avoid silently breaking every wallet-enabled
-     * tenant's live customer checkout the moment an admin picks Paystack as the
-     * platform's "Active gateway".
+     * Used to be narrower than platformImplementedGatewayKeys() above, back
+     * when wallet mode needed more than a working platform-billing adapter --
+     * it needed the *tenant-facing* gateway service itself
+     * (FlutterwaveService/StripeService/MonnifyService) to carry its own
+     * usesWalletCredentials() branch, which PaystackService/SquadService never
+     * gained. That per-service branching no longer exists at all: the later
+     * gateway consolidation (2026-09-26) replaced every tenant-facing gateway
+     * service with one shared `*Gateway` class per provider, and
+     * `App\Services\Payments\GatewayCredentialResolver::forPayment()` now
+     * substitutes platform-owned credentials for a wallet-enabled shop
+     * *before* any gateway-specific branching runs -- generically, for
+     * whichever gateway is passed in, Paystack/Squad included. Confirmed live
+     * 2026-09-27: a super admin setting the platform's "Active gateway" to
+     * Paystack still saw wallet-mode tenant checkout silently keep using
+     * Flutterwave, because this list was never updated after the
+     * consolidation closed the actual gap it existed to guard against. Now
+     * identical to platformImplementedGatewayKeys() -- kept as its own named
+     * method since the two answer conceptually different questions ("does
+     * platform billing have an adapter" vs "can wallet-mode tenant checkout
+     * use this gateway"), even though every currently-implemented gateway
+     * satisfies both today.
      *
      * @return list<string>
      */
     public static function walletCapableGatewayKeys(): array
     {
-        return [self::FLUTTERWAVE, self::STRIPE, self::MONNIFY];
+        return [self::FLUTTERWAVE, self::STRIPE, self::MONNIFY, self::PAYSTACK, self::SQUAD];
     }
 
     /**

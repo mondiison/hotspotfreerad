@@ -94,9 +94,11 @@ class PlatformPaymentSettingsService
         // the same "gateway changed" trigger PaymentSettingsService::update() already
         // uses for a tenant's own gateway switch. Compares the *effective* wallet
         // gateway (walletGateway()'s Flutterwave-fallback-aware result), not the raw
-        // active_gateway, so picking a not-yet-wallet-capable gateway like Paystack
-        // -- which silently keeps every wallet tenant on Flutterwave under the hood
-        // -- doesn't dispatch a pointless resync.
+        // active_gateway, so picking a gateway outside walletCapableGatewayKeys()
+        // (a defensive/legacy case only, now that every implemented gateway
+        // qualifies -- see that method's own docblock) doesn't dispatch a
+        // pointless resync when it silently keeps every wallet tenant on
+        // Flutterwave under the hood.
         if ($this->walletGateway() !== $previousWalletGateway) {
             Router::whereHas('shop.tenant', fn ($query) => $query->where('wallet_enabled', true))
                 ->pluck('id')
@@ -206,19 +208,13 @@ class PlatformPaymentSettingsService
 
     /**
      * The gateway a wallet-enabled tenant's customer payments actually route
-     * through -- follows the platform's own "Active gateway" choice, but only
-     * among gateways with a tenant-facing service that knows how to use
-     * platform-owned credentials (PaymentGatewayCatalog::walletCapableGatewayKeys(),
-     * a deliberately narrower list than activeGatewayIsImplemented()'s -- Paystack
-     * gained a real platform-billing adapter without also gaining wallet-credential
-     * support on the tenant-facing PaystackService, so it's excluded here even
-     * though it's "implemented" for billing). The "Active gateway" dropdown still
-     * lets an admin pick Paystack/Squad for planning purposes, but following that
-     * choice here would silently break every wallet-enabled tenant's live customer
-     * checkout the moment it's selected -- falling back to Flutterwave instead
-     * keeps wallet mode on its previous, proven-working default until a gateway
-     * gains the same wallet-credential support FlutterwaveService/MonnifyService/
-     * StripeService already have.
+     * through -- follows the platform's own "Active gateway" choice, among
+     * gateways in PaymentGatewayCatalog::walletCapableGatewayKeys() (see that
+     * method's own docblock for why every currently-implemented gateway
+     * qualifies now, post gateway-consolidation). Still falls back to
+     * Flutterwave defensively if `active_gateway` is somehow set to something
+     * outside that list at all (an invalid/legacy value), rather than
+     * breaking wallet-mode checkout outright.
      */
     public function walletGateway(): string
     {
