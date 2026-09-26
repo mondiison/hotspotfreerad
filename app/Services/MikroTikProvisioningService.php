@@ -419,8 +419,13 @@ SCRIPT;
      * `remote-address`). `pool-pppoe` (a real `/ip pool`, not an
      * `/ip dhcp-server`, which PPPoE has no use for) is the actual "DHCP
      * equivalent" here, bound via the profile's `remote-address=`;
-     * `local-address=vlan-pppoe` borrows that interface's own gateway IP as
-     * the server side of every session. No firewall input-chain accept rule
+     * `local-address=` is that VLAN's own bare gateway IP, borrowed from
+     * `pppoe_gateway`'s configured value -- confirmed live 2026-09-26 that
+     * RouterOS's `local-address` property only accepts an IP address or an
+     * `/ip pool` name, never a bare interface name the way an early version
+     * of this line assumed (`local-address=vlan-pppoe` failed outright with
+     * "input does not match any value of pool" / "invalid value for
+     * argument address"). No firewall input-chain accept rule
      * is needed here the way POS's MAC-auth hotspot needs one -- PPPoE
      * discovery/session negotiation is Ethernet-level (EtherType
      * 0x8863/0x8864), never passes through `/ip firewall filter` (which
@@ -437,6 +442,7 @@ SCRIPT;
         $taggedPorts = $lanBridgeName.','.$settings['trunk_port'];
         $extraPppoePorts = $this->extraPortInterfaces($settings, 'extra_pppoe_ports');
         $pppoeInterface = 'vlan-pppoe';
+        $pppoeLocalAddress = (string) str($settings['pppoe_gateway'])->before('/');
 
         $extraPortLines = array_map(
             fn (string $port): string => '/interface bridge port add bridge='.$lanBridgeName.' interface='.$port.' pvid='.$settings['pppoe_vlan'].' comment="Extra PPPoE access port"',
@@ -471,9 +477,12 @@ SCRIPT;
         # PPPoE bandwidth is controlled by MMS Radius packages through Mikrotik-Rate-Limit.
         # Keep this profile generic; do not hard-code rate-limit here unless you want a
         # router-side override. remote-address hands each PPP session an IP from
-        # pool-pppoe (PPP's own IPCP addressing, not DHCP); local-address borrows
-        # {$pppoeInterface}'s own gateway IP as the server side of every session.
-        /ppp profile add name=mms-pppoe-profile only-one=yes change-tcp-mss=yes local-address={$pppoeInterface} remote-address=pool-pppoe
+        # pool-pppoe (PPP's own IPCP addressing, not DHCP); local-address is
+        # {$pppoeInterface}'s own bare gateway IP (RouterOS's local-address
+        # property only accepts an IP address or pool name, never an
+        # interface name -- confirmed live 2026-09-26, "input does not match
+        # any value of pool" / "invalid value for argument address").
+        /ppp profile add name=mms-pppoe-profile only-one=yes change-tcp-mss=yes local-address={$pppoeLocalAddress} remote-address=pool-pppoe
         /interface pppoe-server server add interface={$pppoeInterface} service-name=mms-radius default-profile=mms-pppoe-profile authentication=pap,chap,mschap1,mschap2 disabled=no
         SCRIPT;
     }
@@ -615,9 +624,10 @@ SCRIPT;
             '/ppp aaa set use-radius=yes accounting=yes interim-update=5m',
             '# remote-address hands each PPP session an IP from pool-pppoe -- PPP assigns',
             '# addresses itself via IPCP, not DHCP, so this pool is the actual "DHCP',
-            '# equivalent" for PPPoE clients. local-address borrows vlan-pppoe\'s own',
-            '# gateway IP as the server side of every session.',
-            '/ppp profile add name=mms-pppoe-profile only-one=yes change-tcp-mss=yes local-address=vlan-pppoe remote-address=pool-pppoe',
+            '# equivalent" for PPPoE clients. local-address is vlan-pppoe\'s own bare',
+            '# gateway IP -- RouterOS\'s local-address property only accepts an IP',
+            '# address or pool name, never an interface name (confirmed live 2026-09-26).',
+            '/ppp profile add name=mms-pppoe-profile only-one=yes change-tcp-mss=yes local-address='.str($settings['pppoe_gateway'])->before('/').' remote-address=pool-pppoe',
             '/interface pppoe-server server add interface=vlan-pppoe service-name=mms-radius default-profile=mms-pppoe-profile authentication=pap,chap,mschap1,mschap2 disabled=no',
             ...array_map(fn (string $p): string => '/interface bridge port add bridge=$lanBridge interface='.$p.' pvid=$pppoeVlan comment="Extra PPPoE access port"', $extraPppoePorts),
         ] : [

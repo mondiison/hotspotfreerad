@@ -1657,6 +1657,27 @@ class RouterOsConnectionService
     }
 
     /**
+     * The bare (no CIDR suffix) gateway IP `applyPppoeProfileAndServer()`
+     * should bind `mms-pppoe-profile`'s `local-address=` to -- RouterOS
+     * requires an actual address or `/ip pool` name there, never an
+     * interface name. Only has an answer for the app's own default
+     * `vlan-pppoe` interface, whose gateway is this router's own
+     * `pppoe_gateway` setting (the same one `ensurePppoeInfrastructure()`
+     * uses to address that VLAN); returns null for a caller-overridden
+     * custom interface, since this app has no way to know its real gateway.
+     */
+    private function pppoeLocalAddress(Router $router, string $pppoeInterface): ?string
+    {
+        if ($pppoeInterface !== 'vlan-pppoe') {
+            return null;
+        }
+
+        $settings = $this->provisioning->provisioningSettings($router, (string) (((array) $router->provisioning_settings)['profile'] ?? 'starlink_plaza'));
+
+        return (string) str((string) $settings['pppoe_gateway'])->before('/');
+    }
+
+    /**
      * Idempotent add-or-set of both the PPPoE PPP profile and server object
      * -- confirmed via the same reasoning as `existingHotspotProfileId()`'s
      * own docblock that a plain `/add` would fail every provisioning
@@ -1666,11 +1687,28 @@ class RouterOsConnectionService
      * `$pppoeInterface` are fixed, app-owned names/values, never a
      * router-specific choice from a manual setup elsewhere.
      *
+     * `local-address=` was `$pppoeInterface` (the interface name) until
+     * confirmed live 2026-09-26 that RouterOS's `local-address` property
+     * only accepts an IP address or an `/ip pool` name -- it rejected an
+     * interface name outright with "input does not match any value of
+     * pool" / "invalid value for argument address", which also cascaded
+     * into the `/interface/pppoe-server/server` step failing with "input
+     * does not match any value of default-profile" since the profile it
+     * references was never actually created. Fixed via `pppoeLocalAddress()`
+     * below, which only has a real answer for the app's own default
+     * `vlan-pppoe` interface (the same `pppoe_gateway` setting
+     * `ensurePppoeInfrastructure()` already reads to address that VLAN) --
+     * for a caller-overridden custom interface, this app has no way to know
+     * the correct gateway, so `local-address` is simply omitted rather than
+     * guessed, the same "assume the admin manages this another way" stance
+     * `ensurePppoeInfrastructure()`'s own no-op already takes for that case.
+     *
      * @return array{label: string, success: bool, error: ?string}
      */
     private function applyPppoeProfileAndServer(Router $router, string $pppoeInterface): array
     {
         $label = 'Apply PPPoE profile and server';
+        $localAddress = $this->pppoeLocalAddress($router, $pppoeInterface);
 
         try {
             $client = $this->client($router, 8);
@@ -1683,14 +1721,16 @@ class RouterOsConnectionService
                     ->equal('numbers', $existingProfileId)
                     ->equal('only-one', 'yes')
                     ->equal('change-tcp-mss', 'yes')
-                    ->equal('local-address', $pppoeInterface)
                     ->equal('remote-address', 'pool-pppoe')
                 : (new Query('/ppp/profile/add'))
                     ->equal('name', 'mms-pppoe-profile')
                     ->equal('only-one', 'yes')
                     ->equal('change-tcp-mss', 'yes')
-                    ->equal('local-address', $pppoeInterface)
                     ->equal('remote-address', 'pool-pppoe');
+
+            if ($localAddress !== null) {
+                $profileQuery->equal('local-address', $localAddress);
+            }
 
             $raw = $client->query($profileQuery)->read(false);
 
