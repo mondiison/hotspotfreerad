@@ -15,7 +15,6 @@ use App\Services\ManualBankTransferService;
 use App\Services\MikroTikProvisioningService;
 use App\Services\Payments\HotspotHostedCheckoutManager;
 use App\Services\RadiusProvisioningService;
-use App\Services\StripeService;
 use App\Services\VoucherManagementService;
 use App\Support\PaymentCommission;
 use App\Support\PaymentGatewayCatalog;
@@ -689,7 +688,7 @@ class PortalController extends Controller
         ]);
     }
 
-    public function webhook(Request $request, FlutterwaveService $flutterwave, HotspotHostedCheckoutManager $hostedGateways, StripeService $stripe): Response
+    public function webhook(Request $request, FlutterwaveService $flutterwave, HotspotHostedCheckoutManager $hostedGateways): Response
     {
         $payload = $request->all();
         $txRef = data_get($payload, 'data.reference')
@@ -722,7 +721,7 @@ class PortalController extends Controller
                 abort(401);
             }
         } elseif ($payment->provider === PaymentGatewayCatalog::STRIPE) {
-            if (! $stripe->webhookIsValid($request->getContent(), $request->header('stripe-signature'), $payment)) {
+            if (! $hostedGateways->stripeWebhookIsValid($payment, $request->getContent(), $request->header('stripe-signature'))) {
                 abort(401);
             }
         } elseif (! $flutterwave->webhookIsValid($request->header('verif-hash'), $payment)) {

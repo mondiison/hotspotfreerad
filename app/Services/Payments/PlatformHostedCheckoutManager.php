@@ -7,9 +7,9 @@ use App\Services\Payments\Contracts\HostedGateway;
 use App\Services\Payments\Gateways\MonnifyGateway;
 use App\Services\Payments\Gateways\PaystackGateway;
 use App\Services\Payments\Gateways\SquadGateway;
+use App\Services\Payments\Gateways\StripeGateway;
 use App\Services\PlatformFlutterwaveService;
 use App\Services\PlatformPaymentSettingsService;
-use App\Services\PlatformStripeService;
 use App\Support\PaymentGatewayCatalog;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Request;
@@ -23,33 +23,33 @@ use Throwable;
  * directly in the controller, the one asymmetry between the two checkout
  * flows this app has.
  *
- * Monnify, Paystack, and Squad are migrated to the shared HostedGateway
- * contract so far (2026-09-26) -- Flutterwave/Stripe still go through their
- * own Platform*Service classes until they're migrated the same way in a
- * follow-up pass. Flutterwave in particular doesn't fit the tenant-side
- * hotspot checkout's "OPay only" FlutterwaveGateway pilot at all: unlike the
- * hotspot portal (where OPay is one of three fixed, user-selected checkout
- * methods), platform billing's own non-card Flutterwave flow sends whatever
- * v4 payment_method.type PlatformPaymentSettingsService::defaultPaymentMethod()
- * is currently configured to (opay OR bank_transfer, both through the same
- * orchestration endpoint) -- a dynamic choice the OPay-only gateway class
- * deliberately hardcodes away, confirmed live by
+ * Monnify, Paystack, Squad, and (2026-09-26) Stripe are all migrated to the
+ * shared HostedGateway contract now -- Flutterwave alone still goes through
+ * its own PlatformFlutterwaveService until a future pass, since it doesn't
+ * fit the tenant-side hotspot checkout's "OPay only" FlutterwaveGateway
+ * pilot at all: unlike the hotspot portal (where OPay is one of three fixed,
+ * user-selected checkout methods), platform billing's own non-card
+ * Flutterwave flow sends whatever v4 payment_method.type
+ * PlatformPaymentSettingsService::defaultPaymentMethod() is currently
+ * configured to (opay OR bank_transfer, both through the same orchestration
+ * endpoint) -- a dynamic choice the OPay-only gateway class deliberately
+ * hardcodes away, confirmed live by
  * test_platform_checkout_uses_database_payment_settings_before_env failing
  * outright the moment this path was pointed at FlutterwaveGateway during
- * this migration. PlatformMonnifyService was left in place (still backing
+ * that migration. PlatformMonnifyService was left in place (still backing
  * BankAccountResolutionService's banks()/resolveAccount() calls, unrelated
- * to checkout), but PlatformPaystackService/PlatformSquadService were both
- * deleted entirely, since nothing else depended on either.
+ * to checkout), but PlatformPaystackService/PlatformSquadService/PlatformStripeService
+ * were all deleted entirely, since nothing else depended on any of them.
  */
 class PlatformHostedCheckoutManager
 {
     public function __construct(
         private readonly PlatformFlutterwaveService $flutterwave,
-        private readonly PlatformStripeService $stripe,
         private readonly PlatformPaymentSettingsService $settings,
         private readonly MonnifyGateway $monnifyGateway,
         private readonly PaystackGateway $paystackGateway,
         private readonly SquadGateway $squadGateway,
+        private readonly StripeGateway $stripeGateway,
     ) {}
 
     /**
@@ -85,7 +85,11 @@ class PlatformHostedCheckoutManager
             return $this->squadGateway->isConfigured($this->credentialsFor(PaymentGatewayCatalog::SQUAD));
         }
 
-        return $this->gatewayFor($gateway)->isConfigured();
+        if ($gateway === PaymentGatewayCatalog::STRIPE) {
+            return $this->stripeGateway->isConfigured($this->credentialsFor(PaymentGatewayCatalog::STRIPE));
+        }
+
+        return $this->flutterwave->isConfigured();
     }
 
     /**
@@ -105,6 +109,14 @@ class PlatformHostedCheckoutManager
             return $this->startSharedGateway($payment, $this->squadGateway, PaymentGatewayCatalog::SQUAD);
         }
 
+        if ($payment->provider === PaymentGatewayCatalog::STRIPE) {
+            return $this->startSharedGateway($payment, $this->stripeGateway, PaymentGatewayCatalog::STRIPE);
+        }
+
+        // Only Flutterwave reaches here now -- card via the v3 hosted
+        // checkout, everything else via v4 orchestration with whatever
+        // payment_method.type is currently configured (see this class's own
+        // docblock for why that flow doesn't fit the shared gateway).
         $gateway = $payment->provider;
         $isFlutterwaveCard = $this->isFlutterwaveCard($gateway);
 
@@ -113,7 +125,7 @@ class PlatformHostedCheckoutManager
 
             $checkout = $isFlutterwaveCard
                 ? $this->flutterwave->createStandardHostedCheckout($payment->load(['tenant', 'billingPlan']), $redirectUrl)
-                : $this->gatewayFor($gateway)->initializeCheckout($payment->load(['tenant', 'billingPlan']), $redirectUrl);
+                : $this->flutterwave->initializeCheckout($payment->load(['tenant', 'billingPlan']), $redirectUrl);
 
             $payment->update([
                 'provider_reference' => $checkout['provider_reference'],
@@ -154,7 +166,7 @@ class PlatformHostedCheckoutManager
     public function webhookIsValid(Request $request, string $gateway): bool
     {
         if ($gateway === PaymentGatewayCatalog::STRIPE) {
-            return $this->stripe->webhookIsValid($request->getContent(), $request->header('stripe-signature'));
+            return $this->stripeGateway->webhookIsValid($this->credentialsFor(PaymentGatewayCatalog::STRIPE), $request->getContent(), $request->header('stripe-signature'));
         }
 
         if ($gateway === PaymentGatewayCatalog::MONNIFY) {
@@ -203,6 +215,8 @@ class PlatformHostedCheckoutManager
                 addressCity: 'Lagos',
                 addressState: 'Lagos',
                 addressLine1: $payment->tenant->company_name,
+                cancelUrl: route('admin.billing.index'),
+                productName: $payment->billingPlan->name,
             );
 
             $result = $gateway->initializeCheckout($credentials, $chargeRequest);
@@ -245,11 +259,6 @@ class PlatformHostedCheckoutManager
     private function credentialsFor(string $gateway): GatewayCredentials
     {
         return new GatewayCredentials($this->settings->gatewaySettings($gateway));
-    }
-
-    private function gatewayFor(string $gateway): PlatformFlutterwaveService|PlatformStripeService
-    {
-        return $gateway === PaymentGatewayCatalog::STRIPE ? $this->stripe : $this->flutterwave;
     }
 
     /**

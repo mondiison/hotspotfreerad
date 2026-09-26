@@ -8,7 +8,7 @@ use App\Services\Payments\Gateways\FlutterwaveGateway;
 use App\Services\Payments\Gateways\MonnifyGateway;
 use App\Services\Payments\Gateways\PaystackGateway;
 use App\Services\Payments\Gateways\SquadGateway;
-use App\Services\StripeService;
+use App\Services\Payments\Gateways\StripeGateway;
 use App\Support\GuestCustomerEmail;
 use App\Support\PaymentGatewayCatalog;
 use Illuminate\Http\Client\RequestException;
@@ -18,11 +18,11 @@ use Throwable;
 class HotspotHostedCheckoutManager
 {
     public function __construct(
-        private readonly StripeService $stripe,
         private readonly MonnifyGateway $monnifyGateway,
         private readonly PaystackGateway $paystackGateway,
         private readonly SquadGateway $squadGateway,
         private readonly FlutterwaveGateway $flutterwaveGateway,
+        private readonly StripeGateway $stripeGateway,
         private readonly GatewayCredentialResolver $credentials,
     ) {}
 
@@ -41,10 +41,10 @@ class HotspotHostedCheckoutManager
      */
     public function start(Payment $payment, array $customer): array
     {
-        // Monnify, Paystack, and Squad are migrated to the shared HostedGateway
-        // contract so far (2026-09-26) -- Stripe still goes through the older
-        // HotspotHostedGateway/Payment-coupled path below until it's migrated
-        // the same way in a follow-up pass.
+        // Monnify, Paystack, Squad, and (2026-09-26) Stripe are all migrated
+        // to the shared HostedGateway contract now -- Flutterwave's OPay flow
+        // is handled separately by startFlutterwaveOpay() below, since it
+        // was never part of supports()/start() to begin with.
         if ($payment->provider === PaymentGatewayCatalog::MONNIFY) {
             return $this->startSharedGateway($payment, $customer, $this->monnifyGateway, PaymentGatewayCatalog::MONNIFY, 'Monnify');
         }
@@ -57,55 +57,7 @@ class HotspotHostedCheckoutManager
             return $this->startSharedGateway($payment, $customer, $this->squadGateway, PaymentGatewayCatalog::SQUAD, 'Squad');
         }
 
-        $gateway = $this->stripe;
-        $credentialSource = $gateway->credentialSource($payment);
-
-        if (! $gateway->isConfiguredFor($payment)) {
-            return $this->result($credentialSource, null, 'missing_gateway_secret_key');
-        }
-
-        try {
-            $checkout = $gateway->initializeCheckout(
-                $payment,
-                $customer,
-                $this->callbackUrl($payment)
-            );
-
-            $payment->update([
-                'provider_reference' => $checkout['provider_reference'],
-                'payload' => array_merge($payment->payload ?? [], [
-                    'checkout_url' => $checkout['checkout_url'],
-                    $payment->provider.'_account' => $credentialSource,
-                    $payment->provider.'_init_response' => $checkout['response'],
-                ]),
-            ]);
-
-            if (filled($checkout['checkout_url'])) {
-                return $this->result($credentialSource, $checkout['checkout_url'], null);
-            }
-
-            Log::warning(PaymentGatewayCatalog::gatewayName($payment->provider).' checkout response missing checkout URL', [
-                'payment_id' => $payment->id,
-                'tx_ref' => $payment->tx_ref,
-                'payment_method' => data_get($payment->payload, 'payment_method'),
-                'response_body' => $checkout['response'] ?? null,
-            ]);
-
-            return $this->result($credentialSource, null, 'missing_checkout_url');
-        } catch (Throwable $exception) {
-            $reason = $this->checkoutFailureReason($exception);
-
-            Log::warning(PaymentGatewayCatalog::gatewayName($payment->provider).' checkout initialization failed', [
-                'payment_id' => $payment->id,
-                'tx_ref' => $payment->tx_ref,
-                'message' => $exception->getMessage(),
-                'response_body' => $exception instanceof RequestException
-                    ? $exception->response->json() ?: $exception->response->body()
-                    : null,
-            ]);
-
-            return $this->result($credentialSource, null, $reason);
-        }
+        return $this->startSharedGateway($payment, $customer, $this->stripeGateway, PaymentGatewayCatalog::STRIPE, 'Stripe');
     }
 
     /**
@@ -138,6 +90,15 @@ class HotspotHostedCheckoutManager
     {
         return $this->squadGateway->webhookIsValid(
             $this->credentials->forPayment($payment, PaymentGatewayCatalog::SQUAD),
+            $rawBody,
+            $signature
+        );
+    }
+
+    public function stripeWebhookIsValid(Payment $payment, string $rawBody, ?string $signature): bool
+    {
+        return $this->stripeGateway->webhookIsValid(
+            $this->credentials->forPayment($payment, PaymentGatewayCatalog::STRIPE),
             $rawBody,
             $signature
         );
@@ -293,6 +254,8 @@ class HotspotHostedCheckoutManager
             addressCity: $payment->shop->location_city ?: 'Lagos',
             addressState: $payment->shop->location_city ?: 'Lagos',
             addressLine1: $payment->shop->name,
+            cancelUrl: route('hotspot.payment.callback', ['tx_ref' => $payment->tx_ref, 'status' => 'cancelled']),
+            productName: $payment->package->name,
         );
     }
 

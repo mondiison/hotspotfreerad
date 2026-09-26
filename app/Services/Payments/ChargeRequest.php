@@ -18,6 +18,10 @@ final class ChargeRequest
      * customerPhone/address* only exist for Flutterwave's v4 orchestration
      * API, which needs a full customer.phone/customer.address block --
      * Monnify/Paystack/Squad's initializeCheckout() ignores them entirely.
+     * cancelUrl/productName only exist for Stripe, whose Checkout Session
+     * API needs a separate cancel_url (every other gateway has just one
+     * redirect URL) and a bare product name distinct from the longer
+     * `description` line-item field the other gateways already read.
      */
     public function __construct(
         public readonly string $reference,
@@ -32,5 +36,7 @@ final class ChargeRequest
         public readonly string $addressCity = '',
         public readonly string $addressState = '',
         public readonly string $addressLine1 = '',
+        public readonly string $cancelUrl = '',
+        public readonly string $productName = '',
     ) {}
 }

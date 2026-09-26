@@ -8,9 +8,11 @@ use App\Services\Payments\GatewayCredentials;
 use App\Services\Payments\Gateways\MonnifyGateway;
 use App\Services\Payments\Gateways\PaystackGateway;
 use App\Services\Payments\Gateways\SquadGateway;
+use App\Services\Payments\Gateways\StripeGateway;
 use App\Services\Payments\Verification\MonnifyVerificationMatcher;
 use App\Services\Payments\Verification\PaystackVerificationMatcher;
 use App\Services\Payments\Verification\SquadVerificationMatcher;
+use App\Services\Payments\Verification\StripeVerificationMatcher;
 use App\Support\PaymentGatewayCatalog;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -19,11 +21,11 @@ class PlatformBillingConfirmationService
 {
     public function __construct(
         private readonly PlatformFlutterwaveService $flutterwave,
-        private readonly PlatformStripeService $stripe,
         private readonly PlatformPaymentSettingsService $settings,
         private readonly MonnifyGateway $monnifyGateway,
         private readonly PaystackGateway $paystackGateway,
         private readonly SquadGateway $squadGateway,
+        private readonly StripeGateway $stripeGateway,
     ) {}
 
     public function verifyAndActivate(PlatformBillingPayment $payment, string $providerReference, string $resourceType = 'order'): bool
@@ -35,7 +37,7 @@ class PlatformBillingConfirmationService
         }
 
         $verification = match ($payment->provider) {
-            PaymentGatewayCatalog::STRIPE => $this->stripe->verifyPayment($providerReference),
+            PaymentGatewayCatalog::STRIPE => $this->stripeGateway->verifyPayment($this->credentialsFor(PaymentGatewayCatalog::STRIPE), $providerReference),
             PaymentGatewayCatalog::MONNIFY => $this->monnifyGateway->verifyPayment($this->credentialsFor(PaymentGatewayCatalog::MONNIFY), $providerReference),
             PaymentGatewayCatalog::PAYSTACK => $this->paystackGateway->verifyPayment($this->credentialsFor(PaymentGatewayCatalog::PAYSTACK), $providerReference),
             PaymentGatewayCatalog::SQUAD => $this->squadGateway->verifyPayment($this->credentialsFor(PaymentGatewayCatalog::SQUAD), $providerReference),
@@ -100,12 +102,7 @@ class PlatformBillingConfirmationService
     public function verificationMatchesPayment(array $verification, PlatformBillingPayment $payment): bool
     {
         if ($payment->provider === PaymentGatewayCatalog::STRIPE) {
-            return data_get($verification, 'object') === 'checkout.session'
-                && $this->statusIsSuccessful(data_get($verification, 'payment_status'))
-                && (data_get($verification, 'client_reference_id') === $payment->tx_ref
-                    || data_get($verification, 'metadata.payment_reference') === $payment->tx_ref)
-                && strtoupper((string) data_get($verification, 'currency')) === strtoupper($payment->currency)
-                && ((float) data_get($verification, 'amount_total') / 100) >= (float) $payment->amount;
+            return StripeVerificationMatcher::matches($verification, $payment->tx_ref, $payment->currency, (float) $payment->amount);
         }
 
         if ($payment->provider === PaymentGatewayCatalog::MONNIFY) {
