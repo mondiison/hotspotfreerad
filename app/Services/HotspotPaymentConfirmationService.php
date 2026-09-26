@@ -6,7 +6,9 @@ use App\Models\Payment;
 use App\Models\Subscription;
 use App\Services\Payments\GatewayCredentialResolver;
 use App\Services\Payments\Gateways\MonnifyGateway;
+use App\Services\Payments\Gateways\PaystackGateway;
 use App\Services\Payments\Verification\MonnifyVerificationMatcher;
+use App\Services\Payments\Verification\PaystackVerificationMatcher;
 use App\Support\PaymentGatewayCatalog;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -17,12 +19,12 @@ class HotspotPaymentConfirmationService
 
     public function __construct(
         private readonly FlutterwaveService $flutterwave,
-        private readonly PaystackService $paystack,
         private readonly RadiusProvisioningService $radius,
         private readonly SquadService $squad,
         private readonly StripeService $stripe,
         private readonly WalletService $wallet,
         private readonly MonnifyGateway $monnifyGateway,
+        private readonly PaystackGateway $paystackGateway,
         private readonly GatewayCredentialResolver $credentials,
     ) {}
 
@@ -102,7 +104,7 @@ class HotspotPaymentConfirmationService
     public function verificationMatchesPayment(array $verification, Payment $payment): bool
     {
         if ($payment->provider === PaymentGatewayCatalog::PAYSTACK) {
-            return $this->paystackVerificationMatchesPayment($verification, $payment);
+            return PaystackVerificationMatcher::matches($verification, $payment->tx_ref, $payment->currency, (float) $payment->amount);
         }
 
         if ($payment->provider === PaymentGatewayCatalog::MONNIFY) {
@@ -127,7 +129,10 @@ class HotspotPaymentConfirmationService
     private function verifyProviderPayment(Payment $payment, string $providerReference, string $resourceType): array
     {
         if ($payment->provider === PaymentGatewayCatalog::PAYSTACK) {
-            return $this->paystack->verifyPayment($payment, $providerReference);
+            return $this->paystackGateway->verifyPayment(
+                $this->credentials->forPayment($payment, PaymentGatewayCatalog::PAYSTACK),
+                $providerReference
+            );
         }
 
         if ($payment->provider === PaymentGatewayCatalog::MONNIFY) {
@@ -146,15 +151,6 @@ class HotspotPaymentConfirmationService
         }
 
         return $this->flutterwave->verifyPayment($payment, $providerReference, $resourceType);
-    }
-
-    private function paystackVerificationMatchesPayment(array $verification, Payment $payment): bool
-    {
-        return data_get($verification, 'status') === true
-            && $this->statusIsSuccessful(data_get($verification, 'data.status'))
-            && data_get($verification, 'data.reference') === $payment->tx_ref
-            && strtoupper((string) data_get($verification, 'data.currency')) === strtoupper($payment->currency)
-            && ((float) data_get($verification, 'data.amount') / 100) >= (float) $payment->amount;
     }
 
     private function squadVerificationMatchesPayment(array $verification, Payment $payment): bool

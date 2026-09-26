@@ -3,10 +3,11 @@
 namespace App\Services\Payments;
 
 use App\Models\PlatformBillingPayment;
+use App\Services\Payments\Contracts\HostedGateway;
 use App\Services\Payments\Gateways\MonnifyGateway;
+use App\Services\Payments\Gateways\PaystackGateway;
 use App\Services\PlatformFlutterwaveService;
 use App\Services\PlatformPaymentSettingsService;
-use App\Services\PlatformPaystackService;
 use App\Services\PlatformSquadService;
 use App\Services\PlatformStripeService;
 use App\Support\PaymentGatewayCatalog;
@@ -22,22 +23,23 @@ use Throwable;
  * directly in the controller, the one asymmetry between the two checkout
  * flows this app has.
  *
- * Monnify is the one gateway migrated to the shared MonnifyGateway so far
- * (2026-09-26) -- Flutterwave/Stripe/Paystack/Squad still go through their
- * own Platform*Service classes until they're migrated the same way in a
- * follow-up pass. PlatformMonnifyService itself is left in place,
- * unrefactored -- it still backs BankAccountResolutionService's
- * banks()/resolveAccount() calls, unrelated to checkout.
+ * Monnify and Paystack are migrated to the shared HostedGateway contract so
+ * far (2026-09-26) -- Flutterwave/Stripe/Squad still go through their own
+ * Platform*Service classes until they're migrated the same way in a
+ * follow-up pass. PlatformMonnifyService/PlatformPaystackService were left
+ * in place for Monnify (still backing BankAccountResolutionService's
+ * banks()/resolveAccount() calls, unrelated to checkout) but deleted
+ * entirely for Paystack, since nothing else depended on it.
  */
 class PlatformHostedCheckoutManager
 {
     public function __construct(
         private readonly PlatformFlutterwaveService $flutterwave,
         private readonly PlatformStripeService $stripe,
-        private readonly PlatformPaystackService $paystack,
         private readonly PlatformSquadService $squad,
         private readonly PlatformPaymentSettingsService $settings,
         private readonly MonnifyGateway $monnifyGateway,
+        private readonly PaystackGateway $paystackGateway,
     ) {}
 
     /**
@@ -62,7 +64,11 @@ class PlatformHostedCheckoutManager
         }
 
         if ($gateway === PaymentGatewayCatalog::MONNIFY) {
-            return $this->monnifyGateway->isConfigured($this->monnifyCredentials());
+            return $this->monnifyGateway->isConfigured($this->credentialsFor(PaymentGatewayCatalog::MONNIFY));
+        }
+
+        if ($gateway === PaymentGatewayCatalog::PAYSTACK) {
+            return $this->paystackGateway->isConfigured($this->credentialsFor(PaymentGatewayCatalog::PAYSTACK));
         }
 
         return $this->gatewayFor($gateway)->isConfigured();
@@ -74,7 +80,11 @@ class PlatformHostedCheckoutManager
     public function start(PlatformBillingPayment $payment): array
     {
         if ($payment->provider === PaymentGatewayCatalog::MONNIFY) {
-            return $this->startMonnify($payment);
+            return $this->startSharedGateway($payment, $this->monnifyGateway, PaymentGatewayCatalog::MONNIFY);
+        }
+
+        if ($payment->provider === PaymentGatewayCatalog::PAYSTACK) {
+            return $this->startSharedGateway($payment, $this->paystackGateway, PaymentGatewayCatalog::PAYSTACK);
         }
 
         $gateway = $payment->provider;
@@ -130,11 +140,11 @@ class PlatformHostedCheckoutManager
         }
 
         if ($gateway === PaymentGatewayCatalog::MONNIFY) {
-            return $this->monnifyGateway->webhookIsValid($this->monnifyCredentials(), $request->getContent(), $request->header('monnify-signature'));
+            return $this->monnifyGateway->webhookIsValid($this->credentialsFor(PaymentGatewayCatalog::MONNIFY), $request->getContent(), $request->header('monnify-signature'));
         }
 
         if ($gateway === PaymentGatewayCatalog::PAYSTACK) {
-            return $this->paystack->webhookIsValid($request->getContent(), $request->header('x-paystack-signature'));
+            return $this->paystackGateway->webhookIsValid($this->credentialsFor(PaymentGatewayCatalog::PAYSTACK), $request->getContent(), $request->header('x-paystack-signature'));
         }
 
         if ($gateway === PaymentGatewayCatalog::SQUAD) {
@@ -147,9 +157,9 @@ class PlatformHostedCheckoutManager
     /**
      * @return array{checkout_url: ?string, unavailable_reason: ?string}
      */
-    private function startMonnify(PlatformBillingPayment $payment): array
+    private function startSharedGateway(PlatformBillingPayment $payment, HostedGateway $gateway, string $gatewayKey): array
     {
-        $credentials = $this->monnifyCredentials();
+        $credentials = $this->credentialsFor($gatewayKey);
 
         try {
             $payment->load(['tenant', 'billingPlan']);
@@ -173,7 +183,7 @@ class PlatformHostedCheckoutManager
                 ],
             );
 
-            $result = $this->monnifyGateway->initializeCheckout($credentials, $chargeRequest);
+            $result = $gateway->initializeCheckout($credentials, $chargeRequest);
 
             $payment->update([
                 'provider_reference' => $result->providerReference,
@@ -210,16 +220,15 @@ class PlatformHostedCheckoutManager
         }
     }
 
-    private function monnifyCredentials(): GatewayCredentials
+    private function credentialsFor(string $gateway): GatewayCredentials
     {
-        return new GatewayCredentials($this->settings->gatewaySettings(PaymentGatewayCatalog::MONNIFY));
+        return new GatewayCredentials($this->settings->gatewaySettings($gateway));
     }
 
-    private function gatewayFor(string $gateway): PlatformFlutterwaveService|PlatformStripeService|PlatformPaystackService|PlatformSquadService
+    private function gatewayFor(string $gateway): PlatformFlutterwaveService|PlatformStripeService|PlatformSquadService
     {
         return match ($gateway) {
             PaymentGatewayCatalog::STRIPE => $this->stripe,
-            PaymentGatewayCatalog::PAYSTACK => $this->paystack,
             PaymentGatewayCatalog::SQUAD => $this->squad,
             default => $this->flutterwave,
         };

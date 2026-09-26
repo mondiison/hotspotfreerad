@@ -14,7 +14,6 @@ use App\Services\HotspotPaymentConfirmationService;
 use App\Services\ManualBankTransferService;
 use App\Services\MikroTikProvisioningService;
 use App\Services\Payments\HotspotHostedCheckoutManager;
-use App\Services\PaystackService;
 use App\Services\RadiusProvisioningService;
 use App\Services\SquadService;
 use App\Services\StripeService;
@@ -701,7 +700,7 @@ class PortalController extends Controller
         ]);
     }
 
-    public function webhook(Request $request, FlutterwaveService $flutterwave, HotspotHostedCheckoutManager $hostedGateways, PaystackService $paystack, SquadService $squad, StripeService $stripe): Response
+    public function webhook(Request $request, FlutterwaveService $flutterwave, HotspotHostedCheckoutManager $hostedGateways, SquadService $squad, StripeService $stripe): Response
     {
         $payload = $request->all();
         $txRef = data_get($payload, 'data.reference')
@@ -722,7 +721,7 @@ class PortalController extends Controller
         }
 
         if ($payment->provider === PaymentGatewayCatalog::PAYSTACK) {
-            if (! $paystack->webhookIsValid($request->getContent(), $request->header('x-paystack-signature'), $payment)) {
+            if (! $hostedGateways->paystackWebhookIsValid($payment, $request->getContent(), $request->header('x-paystack-signature'))) {
                 abort(401);
             }
         } elseif ($payment->provider === PaymentGatewayCatalog::MONNIFY) {
