@@ -134,6 +134,36 @@ class AdminIndexFilterTest extends TestCase
         ]);
     }
 
+    /**
+     * 2026-09-27, direct follow-up to the hotspot portal's "call to get a
+     * voucher" link: a tenant with several shops may staff each with a
+     * different attendant, so contact_phone needed to become a per-shop
+     * field (falling back to the tenant's own contact_phone when unset),
+     * not just a tenant-wide one.
+     */
+    public function test_livewire_shop_index_saves_a_shop_specific_contact_phone(): void
+    {
+        $tenant = $this->tenant();
+        $shop = Shop::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Branch Shop',
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs($this->superAdmin())
+            ->test(ShopsIndex::class)
+            ->call('edit', $shop->id)
+            ->assertSet('contact_phone', '')
+            ->set('contact_phone', '+2349000000001')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $this->assertDatabaseHas('shops', [
+            'id' => $shop->id,
+            'contact_phone' => '+2349000000001',
+        ]);
+    }
+
     public function test_livewire_shop_index_edit_flyout_embeds_payment_settings_card(): void
     {
         $tenant = $this->tenant();

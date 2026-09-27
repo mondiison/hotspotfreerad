@@ -36,6 +36,13 @@
                 <flux:error name="location_city" />
             </flux:field>
 
+            <flux:field>
+                <flux:label>Contact phone</flux:label>
+                <flux:input name="contact_phone" value="{{ old('contact_phone', $shop->contact_phone) }}" icon="phone" placeholder="+234 800 000 0000" />
+                <flux:description>Shown on the hotspot portal's "Call to get a voucher" link. Leave blank to use the tenant's own contact phone.</flux:description>
+                <flux:error name="contact_phone" />
+            </flux:field>
+
             <flux:checkbox name="is_active" value="1" :checked="(bool) old('is_active', $shop->is_active ?? true)" label="Active" />
 
             <flux:field class="md:col-span-2">

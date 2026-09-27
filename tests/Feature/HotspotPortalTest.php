@@ -121,6 +121,26 @@ class HotspotPortalTest extends TestCase
             ->assertDontSee('to get one.');
     }
 
+    /**
+     * 2026-09-27, direct follow-up: a tenant with several shops may staff
+     * each one with a different attendant, so the "call to get a voucher"
+     * number needs a per-shop override rather than always using the
+     * tenant-wide contact_phone.
+     */
+    public function test_portal_prefers_the_shops_own_contact_phone_over_the_tenants(): void
+    {
+        [$router, $package] = $this->routerWithPackage([
+            'contact_phone' => '+2348000000000',
+        ]);
+        $router->shop->update(['contact_phone' => '+2349000000001']);
+
+        $this->get('/hotspot/portal?mac=AA:BB:CC:DD:EE:FF&nasid='.$router->nas_identifier)
+            ->assertOk()
+            ->assertSee('tel:+2349000000001', false)
+            ->assertSee('Call +2349000000001 to get one.')
+            ->assertDontSee('+2348000000000');
+    }
+
     public function test_portal_shows_the_shops_active_non_flutterwave_gateway_instead_of_opay_transfer_card(): void
     {
         $tenant = Tenant::create([

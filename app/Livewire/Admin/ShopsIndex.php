@@ -36,6 +36,8 @@ class ShopsIndex extends Component
 
     public string $location_city = '';
 
+    public string $contact_phone = '';
+
     public bool $is_active = true;
 
     public bool $allow_test_access = false;
@@ -86,6 +88,7 @@ class ShopsIndex extends Component
         $this->tenant_id = (string) $shop->tenant_id;
         $this->name = (string) $shop->name;
         $this->location_city = (string) $shop->location_city;
+        $this->contact_phone = (string) $shop->contact_phone;
         $this->is_active = (bool) $shop->is_active;
         $this->allow_test_access = (bool) $shop->allow_test_access;
         $this->trial_enabled = (bool) $shop->trial_enabled;
@@ -196,6 +199,7 @@ class ShopsIndex extends Component
             'tenant_id',
             'name',
             'location_city',
+            'contact_phone',
         ]);
         $this->is_active = true;
         $this->allow_test_access = false;

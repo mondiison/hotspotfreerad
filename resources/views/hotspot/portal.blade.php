@@ -132,9 +132,9 @@
                             </button>
                         </form>
 
-                        @if ($tenant->contact_phone)
-                            <a href="tel:{{ $tenant->contact_phone }}" class="mt-3 inline-block text-xs font-medium underline decoration-zinc-300 underline-offset-4" style="color: var(--brand)">
-                                Don't have a code? Call {{ $tenant->contact_phone }} to get one.
+                        @if ($shop->contactPhone())
+                            <a href="tel:{{ $shop->contactPhone() }}" class="mt-3 inline-block text-xs font-medium underline decoration-zinc-300 underline-offset-4" style="color: var(--brand)">
+                                Don't have a code? Call {{ $shop->contactPhone() }} to get one.
                             </a>
                         @endif
                     </div>

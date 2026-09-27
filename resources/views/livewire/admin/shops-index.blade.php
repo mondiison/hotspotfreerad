@@ -123,6 +123,13 @@
                         <flux:error name="location_city" />
                     </flux:field>
 
+                    <flux:field>
+                        <flux:label>Contact phone</flux:label>
+                        <flux:input wire:model.blur="contact_phone" icon="phone" placeholder="+234 800 000 0000" />
+                        <flux:description>Shown on the hotspot portal's "Call to get a voucher" link. Leave blank to use the tenant's own contact phone.</flux:description>
+                        <flux:error name="contact_phone" />
+                    </flux:field>
+
                     <flux:checkbox wire:model.live="is_active" label="Active" />
 
                     <flux:field class="md:col-span-2">

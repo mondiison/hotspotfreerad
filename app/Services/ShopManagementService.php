@@ -16,6 +16,7 @@ class ShopManagementService
             'tenant_id' => ['required', 'exists:tenants,id'],
             'name' => ['required', 'string', 'max:255'],
             'location_city' => ['nullable', 'string', 'max:255'],
+            'contact_phone' => ['nullable', 'string', 'max:255'],
             'is_active' => ['nullable', 'boolean'],
             'allow_test_access' => ['nullable', 'boolean'],
             'trial_enabled' => ['nullable', 'boolean'],
@@ -63,6 +64,7 @@ class ShopManagementService
         }
 
         $data['location_city'] = filled($data['location_city'] ?? null) ? $data['location_city'] : null;
+        $data['contact_phone'] = filled($data['contact_phone'] ?? null) ? $data['contact_phone'] : null;
         $data['is_active'] = (bool) ($data['is_active'] ?? false);
         $data['allow_test_access'] = (bool) ($data['allow_test_access'] ?? false);
         $data['trial_enabled'] = (bool) ($data['trial_enabled'] ?? false);

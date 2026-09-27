@@ -181,6 +181,17 @@ class Shop extends Model
         return max(0, (int) $this->trial_max_uses_per_day - $this->trialUsesToday($macAddress));
     }
 
+    /**
+     * A tenant with several shops may staff each one with a different
+     * attendant/contact -- this shop's own contact_phone overrides the
+     * tenant-wide default (Tenant::contact_phone) when set, falling back to
+     * it otherwise so a shop that's never set its own still shows something.
+     */
+    public function contactPhone(): ?string
+    {
+        return $this->contact_phone ?: $this->tenant?->contact_phone;
+    }
+
     public function hasCompleteFlutterwaveCredentials(): bool
     {
         return filled($this->flutterwave_client_id) && filled($this->flutterwave_client_secret);
