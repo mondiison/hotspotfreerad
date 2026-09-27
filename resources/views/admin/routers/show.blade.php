@@ -72,6 +72,7 @@
                     <flux:tab name="ap-guide" icon="book-open">AP / SSID Guide</flux:tab>
                     <flux:tab name="live" icon="bolt">Live</flux:tab>
                     <flux:tab name="insight" icon="cpu-chip">Insight</flux:tab>
+                    <flux:tab name="availability" icon="signal">Availability</flux:tab>
                 </flux:tabs>
 
                 <flux:tab.panel name="overview" class="space-y-6">
@@ -488,6 +489,12 @@ sudo freeradius -X</code></pre>
                 <flux:tab.panel name="insight" class="space-y-6">
                     <section class="min-w-0 overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
                         <livewire:admin.router-insight :router="$router" :key="'insight-'.$router->id" />
+                    </section>
+                </flux:tab.panel>
+
+                <flux:tab.panel name="availability" class="space-y-6">
+                    <section class="min-w-0 overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
+                        <livewire:admin.router-availability :router="$router" :key="'availability-'.$router->id" />
                     </section>
                 </flux:tab.panel>
             </flux:tab.group>

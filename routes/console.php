@@ -3,15 +3,16 @@
 use App\Mail\HotspotTestMail;
 use App\Models\PosDevice;
 use App\Models\PppoeSubscriber;
+use App\Models\Router;
+use App\Models\RouterMetricSample;
 use App\Models\SecurityActivity;
 use App\Models\Subscription;
 use App\Models\Tenant;
 use App\Models\User;
-use App\Models\Router;
 use App\Models\Voucher;
-use App\Services\PppoeSubscriberManagementService;
-use App\Services\PosDeviceManagementService;
 use App\Services\FreeRadiusClientSyncService;
+use App\Services\PosDeviceManagementService;
+use App\Services\PppoeSubscriberManagementService;
 use App\Services\RadiusProvisioningService;
 use App\Services\RouterAutoProvisioningService;
 use App\Services\RouterMetricSamplingService;
@@ -135,6 +136,35 @@ Artisan::command('hotspot:prune-security-activity {--days=} {--dry-run}', functi
 
     return Command::SUCCESS;
 })->purpose('Prune old security activity audit records');
+
+Artisan::command('hotspot:prune-router-metrics {--days=} {--dry-run}', function (): int {
+    $optionDays = $this->option('days');
+    $days = (int) ($optionDays !== null && $optionDays !== ''
+        ? $optionDays
+        : config('hotspot.router_metrics_retention_days', 90));
+
+    if ($days < 1) {
+        $this->error('Retention days must be at least 1.');
+
+        return Command::FAILURE;
+    }
+
+    $cutoff = now()->subDays($days);
+    $query = RouterMetricSample::query()->where('sampled_at', '<', $cutoff);
+    $count = (clone $query)->count();
+
+    if ($this->option('dry-run')) {
+        $this->info("{$count} router metric sample(s) older than {$days} day(s) would be pruned.");
+
+        return Command::SUCCESS;
+    }
+
+    $deleted = $query->delete();
+
+    $this->info("Pruned {$deleted} router metric sample(s) older than {$days} day(s).");
+
+    return Command::SUCCESS;
+})->purpose('Prune old router metric samples (one row per router every 5 minutes otherwise grows unbounded)');
 
 Artisan::command('hotspot:backfill-voucher-payments {--dry-run}', function (VoucherManagementService $vouchers): int {
     $query = Voucher::query()
@@ -267,6 +297,10 @@ Schedule::command('hotspot:prune-security-activity')
     ->dailyAt('02:15')
     ->withoutOverlapping();
 
+Schedule::command('hotspot:prune-router-metrics')
+    ->dailyAt('02:20')
+    ->withoutOverlapping();
+
 Schedule::command('hotspot:scheduler-heartbeat')
     ->everyMinute()
     ->withoutOverlapping();
@@ -395,7 +429,7 @@ Artisan::command('hotspot:auto-provision-routers {--dry-run}', function (RouterA
     }
 
     $provisionedLabel = $dryRun ? 'would provision' : 'provisioned';
-    $this->info("Router auto-provisioning: {$provisionedLabel} ".count($result['provisioned'])." router(s), ".count($result['pending'])." still pending, ".count($result['errors']).' error(s).');
+    $this->info("Router auto-provisioning: {$provisionedLabel} ".count($result['provisioned']).' router(s), '.count($result['pending']).' still pending, '.count($result['errors']).' error(s).');
 
     foreach ($result['errors'] as $error) {
         $this->error($error);
@@ -454,7 +488,7 @@ Artisan::command('hotspot:sample-router-metrics', function (RouterMetricSampling
         try {
             $sampler->sample($router);
             $sampled++;
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             $this->error("Failed to sample router {$router->id} ({$router->name}): {$e->getMessage()}");
         }
     }
