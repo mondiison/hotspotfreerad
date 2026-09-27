@@ -9,6 +9,7 @@ use App\Services\BankAccountResolutionService;
 use App\Services\WalletService;
 use App\Services\WalletWithdrawalService;
 use App\Support\BillingPlanLimits;
+use Flux\Flux;
 use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
@@ -37,8 +38,6 @@ class WalletIndex extends Component
 
     public ?string $verifyError = null;
 
-    public ?string $statusMessage = null;
-
     public ?string $canEnableError = null;
 
     public function mount(Tenant $tenant): void
@@ -56,7 +55,11 @@ class WalletIndex extends Component
 
         $wallets->enable($tenant);
 
-        $this->statusMessage = 'Wallet enabled. Customer payments for this tenant now route through the platform gateway.';
+        Flux::toast(
+            heading: 'Wallet enabled',
+            text: 'Customer payments for this tenant now route through the platform gateway.',
+            variant: 'success',
+        );
     }
 
     public function saveCommissionBearer(): void
@@ -67,7 +70,7 @@ class WalletIndex extends Component
             'wallet_commission_bearer' => $this->commissionBearer,
         ])->save();
 
-        $this->statusMessage = 'Saved who pays the platform commission.';
+        Flux::toast(heading: 'Saved', text: 'Updated who pays the platform commission.', variant: 'success');
     }
 
     public function startEditingSettlementAccount(): void
@@ -122,7 +125,8 @@ class WalletIndex extends Component
 
         $this->editingSettlementAccount = false;
         $this->reset(['selectedBankCode', 'settlementAccountNumber', 'resolvedAccountName', 'verifyError']);
-        $this->statusMessage = 'Settlement account saved and verified.';
+
+        Flux::toast(heading: 'Settlement account saved', text: 'Verified and ready for withdrawals.', variant: 'success');
     }
 
     public function openWithdrawModal(): void
@@ -157,7 +161,12 @@ class WalletIndex extends Component
 
         $this->reset(['withdrawAmount']);
         $this->showWithdrawModal = false;
-        $this->statusMessage = 'Withdrawal request submitted. It will be reviewed and paid out manually.';
+
+        Flux::toast(
+            heading: 'Withdrawal requested',
+            text: 'It will be reviewed and paid out manually. Track its status under "Withdrawal requests" below.',
+            variant: 'success',
+        );
     }
 
     public function render(BankAccountResolutionService $resolver)

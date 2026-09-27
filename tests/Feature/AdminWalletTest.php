@@ -69,7 +69,7 @@ class AdminWalletTest extends TestCase
         Livewire::actingAs($user)
             ->test(WalletIndex::class, ['tenant' => $tenant])
             ->call('enableWallet')
-            ->assertSet('statusMessage', 'Wallet enabled. Customer payments for this tenant now route through the platform gateway.');
+            ->assertDispatched('toast-show');
 
         $tenant->refresh();
         $this->assertTrue($tenant->wallet_enabled);
@@ -139,7 +139,8 @@ class AdminWalletTest extends TestCase
             ->test(WalletIndex::class, ['tenant' => $tenant])
             ->set('withdrawAmount', '400')
             ->call('requestWithdrawal')
-            ->assertSet('statusMessage', 'Withdrawal request submitted. It will be reviewed and paid out manually.');
+            ->assertDispatched('toast-show')
+            ->assertSet('showWithdrawModal', false);
 
         $this->assertDatabaseHas('wallet_withdrawals', [
             'tenant_id' => $tenant->id,
@@ -209,7 +210,7 @@ class AdminWalletTest extends TestCase
             ->call('verifySettlementAccount')
             ->assertSet('resolvedAccountName', 'Demo Tenant')
             ->call('saveSettlementAccount')
-            ->assertSet('statusMessage', 'Settlement account saved and verified.');
+            ->assertDispatched('toast-show');
 
         $tenant->refresh();
         $this->assertSame('058', $tenant->settlement_bank_code);

@@ -188,13 +188,13 @@
                             <div class="flex flex-wrap items-center gap-2">
                                 <h1 class="truncate text-xl font-semibold">{{ $heading ?? $title ?? 'Dashboard' }}</h1>
                                 @auth
-                                    <flux:badge :color="auth()->user()->isSuperAdmin() ? 'blue' : (auth()->user()->isTenantStaff() ? 'amber' : 'green')">
+                                    <flux:badge class="hidden sm:inline-flex" :color="auth()->user()->isSuperAdmin() ? 'blue' : (auth()->user()->isTenantStaff() ? 'amber' : 'green')">
                                         {{ auth()->user()->isSuperAdmin() ? 'Platform Admin' : (auth()->user()->isTenantStaff() ? 'Staff' : 'Tenant Admin') }}
                                     </flux:badge>
                                 @endauth
                             </div>
                             @isset($subheading)
-                                <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{{ $subheading }}</p>
+                                <p class="mt-1 hidden text-sm text-zinc-500 sm:block dark:text-zinc-400">{{ $subheading }}</p>
                             @endisset
                         </div>
                     </div>
@@ -288,6 +288,19 @@
                 >
                     <flux:icon icon="loading" class="size-8 text-zinc-400 dark:text-zinc-500" />
                 </div>
+
+                @if (isset($subheading) || auth()->check())
+                    <div class="mb-5 sm:hidden">
+                        @auth
+                            <flux:badge :color="auth()->user()->isSuperAdmin() ? 'blue' : (auth()->user()->isTenantStaff() ? 'amber' : 'green')">
+                                {{ auth()->user()->isSuperAdmin() ? 'Platform Admin' : (auth()->user()->isTenantStaff() ? 'Staff' : 'Tenant Admin') }}
+                            </flux:badge>
+                        @endauth
+                        @isset($subheading)
+                            <p class="mt-2 text-sm text-zinc-500 dark:text-zinc-400">{{ $subheading }}</p>
+                        @endisset
+                    </div>
+                @endif
 
                 @if (session('status'))
                     <div class="mb-5 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">

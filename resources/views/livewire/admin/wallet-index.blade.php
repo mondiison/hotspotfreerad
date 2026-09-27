@@ -1,10 +1,4 @@
 <div class="space-y-6">
-    @if ($statusMessage)
-        <div class="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-            {{ $statusMessage }}
-        </div>
-    @endif
-
     @if (! $tenant->wallet_enabled)
         <section class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-6 shadow-sm">
             <h2 class="text-base font-semibold">Enable the platform wallet</h2>
@@ -161,11 +155,13 @@
             </form>
         </flux:modal>
 
-        @if ($withdrawals->isNotEmpty())
-            <section class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm">
-                <div class="border-b border-zinc-200 dark:border-zinc-700 px-6 py-4">
-                    <h2 class="text-base font-semibold">Withdrawal requests</h2>
-                </div>
+        <section class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm">
+            <div class="border-b border-zinc-200 dark:border-zinc-700 px-6 py-4">
+                <h2 class="text-base font-semibold">Withdrawal requests</h2>
+                <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Every request you've submitted, and its current status.</p>
+            </div>
+
+            @if ($withdrawals->isNotEmpty())
                 <div class="divide-y divide-zinc-200 dark:divide-zinc-700">
                     @foreach ($withdrawals as $withdrawal)
                         <div class="flex items-center justify-between px-6 py-3 text-sm">
@@ -179,8 +175,10 @@
                         </div>
                     @endforeach
                 </div>
-            </section>
-        @endif
+            @else
+                <p class="px-6 py-6 text-sm text-zinc-500 dark:text-zinc-400">No withdrawal requests yet.</p>
+            @endif
+        </section>
 
         <section class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm">
             <div class="border-b border-zinc-200 dark:border-zinc-700 px-6 py-4">
