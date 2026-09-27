@@ -103,7 +103,7 @@
             <h2 class="text-lg font-semibold">Choose internet access</h2>
 
             <flux:accordion exclusive transition class="mt-3 rounded-lg border border-white/10 bg-white px-3 text-zinc-950 shadow-sm sm:mt-5 sm:px-5">
-                <flux:accordion.item heading="Have a voucher?" :expanded="$errors->has('voucher_code')">
+                <flux:accordion.item heading="Have a voucher?" expanded>
                     <div x-data="{ redeeming: false }">
                         <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
                             <p class="text-sm text-zinc-500">Enter a prepaid code from this hotspot operator to connect this device.</p>
@@ -260,5 +260,7 @@
             <p>Powered by HotspotFreeRAD.</p>
         </footer>
     </main>
+
+    @fluxScripts
 </body>
 </html>
