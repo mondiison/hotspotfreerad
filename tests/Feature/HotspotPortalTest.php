@@ -100,6 +100,27 @@ class HotspotPortalTest extends TestCase
             ->assertSee('grid-cols-3 gap-2', false);
     }
 
+    public function test_portal_shows_a_call_to_get_a_voucher_link_when_tenant_has_a_contact_phone(): void
+    {
+        [$router, $package] = $this->routerWithPackage([
+            'contact_phone' => '+2348000000000',
+        ]);
+
+        $this->get('/hotspot/portal?mac=AA:BB:CC:DD:EE:FF&nasid='.$router->nas_identifier)
+            ->assertOk()
+            ->assertSee('tel:+2348000000000', false)
+            ->assertSee('Call +2348000000000 to get one.');
+    }
+
+    public function test_portal_hides_the_call_to_get_a_voucher_link_when_tenant_has_no_contact_phone(): void
+    {
+        [$router, $package] = $this->routerWithPackage();
+
+        $this->get('/hotspot/portal?mac=AA:BB:CC:DD:EE:FF&nasid='.$router->nas_identifier)
+            ->assertOk()
+            ->assertDontSee('to get one.');
+    }
+
     public function test_portal_shows_the_shops_active_non_flutterwave_gateway_instead_of_opay_transfer_card(): void
     {
         $tenant = Tenant::create([

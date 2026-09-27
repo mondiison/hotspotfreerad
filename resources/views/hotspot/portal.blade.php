@@ -102,11 +102,11 @@
         <section class="py-4 sm:py-8">
             <h2 class="text-lg font-semibold">Choose internet access</h2>
 
-            <flux:accordion exclusive transition class="mt-3 rounded-lg border border-white/10 bg-white px-3 text-zinc-950 shadow-sm sm:mt-5 sm:px-5">
+            <flux:accordion exclusive transition class="mt-3 rounded-lg border border-white/10 bg-white px-3 py-3 text-zinc-950 shadow-sm sm:mt-5 sm:px-5 sm:py-5">
                 <flux:accordion.item heading="Have a voucher?" expanded>
                     <div x-data="{ redeeming: false }">
                         <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-                            <p class="text-sm text-zinc-500">Enter a prepaid code from this hotspot operator to connect this device.</p>
+                            <p class="text-sm text-zinc-500">Enter your voucher code.</p>
                             <span class="shrink-0 rounded-md bg-zinc-100 px-2 py-1 text-xs font-medium text-zinc-600">One-time code</span>
                         </div>
 
@@ -131,6 +131,12 @@
                                 <span x-text="redeeming ? 'Checking...' : 'Redeem voucher'">Redeem voucher</span>
                             </button>
                         </form>
+
+                        @if ($tenant->contact_phone)
+                            <a href="tel:{{ $tenant->contact_phone }}" class="mt-3 inline-block text-xs font-medium underline decoration-zinc-300 underline-offset-4" style="color: var(--brand)">
+                                Don't have a code? Call {{ $tenant->contact_phone }} to get one.
+                            </a>
+                        @endif
                     </div>
                 </flux:accordion.item>
 
@@ -257,7 +263,7 @@
         </section>
 
         <footer class="mt-auto border-t border-white/10 pt-5 text-xs text-zinc-400">
-            <p>Powered by HotspotFreeRAD.</p>
+            <p>Powered by {{ $poweredByText }}.</p>
         </footer>
     </main>
 

@@ -1,6 +1,9 @@
 import './bootstrap';
 import { Passkeys } from '@laravel/passkeys';
 import Alpine from 'alpinejs';
+import collapse from '@alpinejs/collapse';
+
+Alpine.plugin(collapse);
 
 window.copyText = async (text) => {
     if (! text) {

@@ -225,6 +225,7 @@ class PortalController extends Controller
             'trialUsesRemaining' => $router->shop->trial_enabled
                 ? $router->shop->trialUsesRemainingToday($validated['mac'])
                 : null,
+            'poweredByText' => config('app.name'),
         ]);
     }
 
