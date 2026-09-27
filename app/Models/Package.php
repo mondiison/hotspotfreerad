@@ -2,9 +2,9 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Model;
 
 class Package extends Model
 {
@@ -17,6 +17,7 @@ class Package extends Model
             'fup_data_threshold_bytes' => 'integer',
             'price' => 'decimal:2',
             'is_active' => 'boolean',
+            'is_system' => 'boolean',
         ];
     }
 

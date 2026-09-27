@@ -188,6 +188,7 @@ class PackagesIndex extends Component
         $user = auth()->user();
 
         $packages = TenantAccess::scopePackages(InternetPackage::with('shop.tenant'), $user)
+            ->where('is_system', false)
             ->when($this->search, function ($query): void {
                 $query->where(function ($query): void {
                     $query
@@ -218,7 +219,7 @@ class PackagesIndex extends Component
 
     private function summary($user): array
     {
-        $query = TenantAccess::scopePackages(InternetPackage::query(), $user);
+        $query = TenantAccess::scopePackages(InternetPackage::query(), $user)->where('is_system', false);
 
         return [
             'total' => (clone $query)->count(),

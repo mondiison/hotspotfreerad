@@ -10,6 +10,7 @@ use App\Models\Payment;
 use App\Models\PosDevice;
 use App\Models\Router;
 use App\Models\Subscription;
+use App\Models\TrialRedemption;
 use App\Models\TrustedWifiDevice;
 use App\Services\FlutterwaveService;
 use App\Services\HotspotPaymentConfirmationService;
@@ -27,11 +28,25 @@ use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Throwable;
 
 class PortalController extends Controller
 {
+    /**
+     * Every RadiusProvisioningService::grantSubscriptionAccess() caller in
+     * this codebase (paid subscriptions, voucher redemption, this debug
+     * button, and the free trial below) uses this exact same literal value
+     * -- confirmed live: show()'s "you already have an active subscription"
+     * re-display branch further down hardcodes this same constant as the
+     * password it resubmits to MikroTik's login endpoint, regardless of
+     * which flow originally granted access. Giving the free trial a
+     * genuinely different password here would silently break that re-login
+     * for any device revisiting mid-trial (RADIUS would reject the
+     * mismatched password), so this stays one shared value on purpose, not
+     * split into a per-flow constant.
+     */
     private const TEST_ACCESS_PASSWORD = 'authenticated_device_pass';
 
     /**
@@ -207,6 +222,9 @@ class PortalController extends Controller
             'macAddress' => $validated['mac'],
             'loginUrl' => $this->mikrotikLoginUrl($validated),
             'originalUrl' => $validated['link-orig'] ?? null,
+            'trialUsesRemaining' => $router->shop->trial_enabled
+                ? $router->shop->trialUsesRemainingToday($validated['mac'])
+                : null,
         ]);
     }
 
@@ -273,6 +291,100 @@ class PortalController extends Controller
         return view('hotspot.access-granted', [
             'router' => $router,
             'package' => $package,
+            'subscription' => $subscription,
+            'macAddress' => $validated['mac'],
+            'username' => $validated['mac'],
+            'password' => self::TEST_ACCESS_PASSWORD,
+            'loginUrl' => $this->mikrotikLoginUrl($validated),
+            'originalUrl' => $validated['link-orig'] ?? null,
+        ]);
+    }
+
+    /**
+     * The free trial (2026-09-27) -- a separate, admin-configured customer
+     * promotion, not the per-package "Start test access" debugging button
+     * above (grant()/allow_test_access). No package_id: duration and
+     * bandwidth come entirely from the shop's own trial_* settings via
+     * Shop::ensureTrialPackage(), and a device is capped at
+     * trial_max_uses_per_day uses per calendar day, tracked in the
+     * append-only trial_redemptions table (Subscription rows can't serve
+     * that purpose -- they're upserted per shop+mac, so a same-day repeat
+     * grant would silently overwrite rather than leave a countable history).
+     */
+    public function startTrial(Request $request, RadiusProvisioningService $radius): RedirectResponse|View
+    {
+        $validated = $request->validate([
+            'mac' => ['required', 'string', 'max:64'],
+            'nasid' => ['required', 'string', 'max:255'],
+            'link-login' => ['nullable', 'string', 'max:2048'],
+            'link-login-only' => ['nullable', 'string', 'max:2048'],
+            'link-orig' => ['nullable', 'string', 'max:2048'],
+        ]);
+
+        $router = Router::query()
+            ->with('shop.tenant')
+            ->where('nas_identifier', $validated['nasid'])
+            ->first();
+
+        if (! $router) {
+            return view('hotspot.unknown-router', [
+                'macAddress' => $validated['mac'],
+                'nasIdentifier' => $validated['nasid'],
+            ]);
+        }
+
+        $shop = $router->shop;
+
+        // Guards the route itself, not just the portal button -- a shop with
+        // the free trial off must reject a direct POST here too, matching
+        // grant()'s own allow_test_access guard above.
+        abort_unless((bool) $shop?->trial_enabled, 403);
+
+        if ($shop->trialUsesRemainingToday($validated['mac']) <= 0) {
+            throw ValidationException::withMessages([
+                'trial' => 'This device has used up its free trial for today. Please try again tomorrow, or choose a package above.',
+            ]);
+        }
+
+        $subscription = DB::transaction(function () use ($router, $shop, $validated, $radius) {
+            Customer::updateOrCreate(
+                [
+                    'shop_id' => $router->shop_id,
+                    'mac_address' => $validated['mac'],
+                ],
+                []
+            );
+
+            $package = $shop->ensureTrialPackage();
+
+            $subscription = Subscription::updateOrCreate(
+                [
+                    'shop_id' => $router->shop_id,
+                    'mac_address' => $validated['mac'],
+                ],
+                [
+                    'package_id' => $package->id,
+                    'starts_at' => now(),
+                    'expires_at' => now()->addMinutes($shop->trial_duration_minutes),
+                    'is_throttled' => true,
+                ]
+            );
+
+            TrialRedemption::create([
+                'shop_id' => $router->shop_id,
+                'mac_address' => $validated['mac'],
+            ]);
+
+            $radius->grantSubscriptionAccess($subscription, self::TEST_ACCESS_PASSWORD);
+
+            return $subscription;
+        });
+
+        $subscription->loadMissing('package');
+
+        return view('hotspot.access-granted', [
+            'router' => $router,
+            'package' => $subscription->package,
             'subscription' => $subscription,
             'macAddress' => $validated['mac'],
             'username' => $validated['mac'],

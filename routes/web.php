@@ -70,6 +70,7 @@ Route::post('/hotspot/payment/webhook', [PortalController::class, 'webhook'])
     ->withoutMiddleware([ValidateCsrfToken::class])
     ->name('hotspot.payment.webhook');
 Route::post('/hotspot/grant', [PortalController::class, 'grant'])->name('hotspot.grant');
+Route::post('/hotspot/trial/start', [PortalController::class, 'startTrial'])->name('hotspot.trial.start');
 Route::post('/hotspot/voucher/redeem', [PortalController::class, 'redeemVoucher'])->name('hotspot.voucher.redeem');
 Route::post('/billing/payment/webhook', [BillingController::class, 'webhook'])
     ->withoutMiddleware([ValidateCsrfToken::class])

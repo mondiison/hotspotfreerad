@@ -28,6 +28,9 @@ class Shop extends Model
             'flutterwave_webhook_secret' => 'encrypted',
             'is_active' => 'boolean',
             'allow_test_access' => 'boolean',
+            'trial_enabled' => 'boolean',
+            'trial_duration_minutes' => 'integer',
+            'trial_max_uses_per_day' => 'integer',
         ];
     }
 
@@ -108,6 +111,74 @@ class Shop extends Model
     public function vouchers(): HasMany
     {
         return $this->hasMany(Voucher::class);
+    }
+
+    public function trialPackage(): BelongsTo
+    {
+        return $this->belongsTo(Package::class, 'trial_package_id');
+    }
+
+    public function trialRedemptions(): HasMany
+    {
+        return $this->hasMany(TrialRedemption::class);
+    }
+
+    /**
+     * The free trial (2026-09-27, an admin-configured promotional feature,
+     * deliberately separate from the per-package "Start test access"
+     * debugging button/allow_test_access above) reuses the exact same
+     * RadiusProvisioningService::grantSubscriptionAccess() path every real
+     * paid package uses -- which needs a real Package row to read
+     * limit_uptime_seconds/speed_limit_profile from and to derive a RADIUS
+     * group. Rather than teach RADIUS provisioning a second, package-less
+     * code path, each shop gets one hidden (is_active=false, so it never
+     * appears in the customer-facing package grid) auto-managed Package
+     * that always mirrors this shop's current trial_duration_minutes/
+     * trial_speed_limit_profile -- created once, then kept in sync on every
+     * call so an admin's settings change takes effect on the very next
+     * trial grant with no separate sync step required.
+     */
+    public function ensureTrialPackage(): Package
+    {
+        $package = $this->trial_package_id ? $this->trialPackage()->first() : null;
+
+        $attributes = [
+            'limit_uptime_seconds' => max(60, (int) $this->trial_duration_minutes * 60),
+            'speed_limit_profile' => (string) ($this->trial_speed_limit_profile ?: '1M/1M'),
+        ];
+
+        if ($package) {
+            $package->forceFill($attributes)->save();
+
+            return $package;
+        }
+
+        $package = Package::create($attributes + [
+            'shop_id' => $this->id,
+            'name' => 'Free Trial',
+            'service_type' => 'hotspot',
+            'price' => 0,
+            'currency' => 'NGN',
+            'is_active' => false,
+            'is_system' => true,
+        ]);
+
+        $this->forceFill(['trial_package_id' => $package->id])->save();
+
+        return $package;
+    }
+
+    public function trialUsesToday(string $macAddress): int
+    {
+        return $this->trialRedemptions()
+            ->where('mac_address', $macAddress)
+            ->whereDate('created_at', now()->toDateString())
+            ->count();
+    }
+
+    public function trialUsesRemainingToday(string $macAddress): int
+    {
+        return max(0, (int) $this->trial_max_uses_per_day - $this->trialUsesToday($macAddress));
     }
 
     public function hasCompleteFlutterwaveCredentials(): bool

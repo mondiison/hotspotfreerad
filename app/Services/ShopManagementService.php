@@ -18,6 +18,10 @@ class ShopManagementService
             'location_city' => ['nullable', 'string', 'max:255'],
             'is_active' => ['nullable', 'boolean'],
             'allow_test_access' => ['nullable', 'boolean'],
+            'trial_enabled' => ['nullable', 'boolean'],
+            'trial_duration_minutes' => ['nullable', 'integer', 'min:1', 'max:1440'],
+            'trial_max_uses_per_day' => ['nullable', 'integer', 'min:1', 'max:255'],
+            'trial_speed_limit_profile' => ['nullable', 'string', 'max:255'],
         ];
     }
 
@@ -61,6 +65,10 @@ class ShopManagementService
         $data['location_city'] = filled($data['location_city'] ?? null) ? $data['location_city'] : null;
         $data['is_active'] = (bool) ($data['is_active'] ?? false);
         $data['allow_test_access'] = (bool) ($data['allow_test_access'] ?? false);
+        $data['trial_enabled'] = (bool) ($data['trial_enabled'] ?? false);
+        $data['trial_duration_minutes'] = (int) ($data['trial_duration_minutes'] ?? 15);
+        $data['trial_max_uses_per_day'] = (int) ($data['trial_max_uses_per_day'] ?? 1);
+        $data['trial_speed_limit_profile'] = filled($data['trial_speed_limit_profile'] ?? null) ? $data['trial_speed_limit_profile'] : '1M/1M';
 
         return $data;
     }

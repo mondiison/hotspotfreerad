@@ -126,9 +126,37 @@
                     <flux:checkbox wire:model.live="is_active" label="Active" />
 
                     <flux:field class="md:col-span-2">
-                        <flux:checkbox wire:model.live="allow_test_access" label="Allow free test access on the hotspot portal" />
-                        <flux:description>Shows a "Start test access" button next to every package on this shop's captive portal, granting full access with no payment. Off by default -- only turn this on if you specifically want a free-trial option for real customers.</flux:description>
+                        <flux:checkbox wire:model.live="allow_test_access" label="Allow free test access (per package, debugging only)" />
+                        <flux:description>Shows a "Start test access" button inside every package's details on this shop's captive portal, granting that package's full duration and bandwidth with no payment. Intended for staff to verify a router/package is working -- not a customer-facing promotion. Off by default.</flux:description>
                     </flux:field>
+
+                    <div class="md:col-span-2 rounded-lg border border-zinc-200 dark:border-zinc-700 p-4">
+                        <flux:field>
+                            <flux:checkbox wire:model.live="trial_enabled" label="Enable free trial (customer-facing promotion)" />
+                            <flux:description>Shows a standalone "Free trial" option on the captive portal, separate from every package -- a limited, throttled taste of the service meant to draw in real customers. Capped per device per day.</flux:description>
+                        </flux:field>
+
+                        @if ($trial_enabled)
+                            <div class="mt-4 grid gap-4 sm:grid-cols-3">
+                                <flux:field>
+                                    <flux:label>Duration (minutes)</flux:label>
+                                    <flux:input type="number" min="1" max="1440" wire:model.blur="trial_duration_minutes" />
+                                    <flux:error name="trial_duration_minutes" />
+                                </flux:field>
+                                <flux:field>
+                                    <flux:label>Uses per device / day</flux:label>
+                                    <flux:input type="number" min="1" max="255" wire:model.blur="trial_max_uses_per_day" />
+                                    <flux:error name="trial_max_uses_per_day" />
+                                </flux:field>
+                                <flux:field>
+                                    <flux:label>Bandwidth (rate limit)</flux:label>
+                                    <flux:input wire:model.blur="trial_speed_limit_profile" placeholder="1M/1M" />
+                                    <flux:description>MikroTik rate-limit format: upload/download, e.g. 1M/1M.</flux:description>
+                                    <flux:error name="trial_speed_limit_profile" />
+                                </flux:field>
+                            </div>
+                        @endif
+                    </div>
                 </div>
 
                 <div class="flex justify-end gap-3">

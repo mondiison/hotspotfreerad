@@ -102,60 +102,44 @@
         <section class="py-4 sm:py-8">
             <h2 class="text-lg font-semibold">Choose internet access</h2>
 
-            <section class="mt-3 rounded-lg border border-white/10 bg-white p-3 text-zinc-950 shadow-sm sm:mt-5 sm:p-5" x-data="{ redeeming: false }">
-                <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-                    <div>
-                        <h3 class="text-base font-semibold">Have a voucher?</h3>
-                        <p class="mt-1 text-sm text-zinc-500">Enter a prepaid code from this hotspot operator to connect this device.</p>
-                    </div>
-                    <span class="rounded-md bg-zinc-100 px-2 py-1 text-xs font-medium text-zinc-600">One-time code</span>
-                </div>
+            <flux:accordion exclusive transition class="mt-3 rounded-lg border border-white/10 bg-white px-3 text-zinc-950 shadow-sm sm:mt-5 sm:px-5">
+                <flux:accordion.item heading="Have a voucher?" :expanded="$errors->has('voucher_code')">
+                    <div x-data="{ redeeming: false }">
+                        <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+                            <p class="text-sm text-zinc-500">Enter a prepaid code from this hotspot operator to connect this device.</p>
+                            <span class="shrink-0 rounded-md bg-zinc-100 px-2 py-1 text-xs font-medium text-zinc-600">One-time code</span>
+                        </div>
 
-                <form method="POST" action="{{ route('hotspot.voucher.redeem') }}" class="mt-4 grid gap-2 sm:grid-cols-[1fr_auto]" @submit="redeeming = true">
-                    @csrf
-                    <input type="hidden" name="mac" value="{{ $macAddress }}">
-                    <input type="hidden" name="nasid" value="{{ $router->nas_identifier }}">
-                    @if ($loginUrl)
-                        <input type="hidden" name="link-login" value="{{ $loginUrl }}">
-                    @endif
-                    @if ($originalUrl)
-                        <input type="hidden" name="link-orig" value="{{ $originalUrl }}">
-                    @endif
-                    <div>
-                        <input name="voucher_code" value="{{ old('voucher_code') }}" placeholder="Enter voucher code" class="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm font-medium uppercase tracking-wide" required>
-                        @error('voucher_code')
-                            <p class="mt-2 text-xs text-red-600">{{ $message }}</p>
-                        @enderror
-                    </div>
-                    <button class="flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium text-white disabled:cursor-wait disabled:opacity-75" style="background-color: var(--brand)" :disabled="redeeming">
-                        <span x-show="redeeming" class="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"></span>
-                        <span x-text="redeeming ? 'Checking...' : 'Redeem voucher'">Redeem voucher</span>
-                    </button>
-                </form>
-            </section>
-
-            <div class="mt-3 grid gap-3 sm:mt-5 sm:grid-cols-2 lg:grid-cols-3" x-data="{ selectedPlan: null }">
-                @forelse ($packages as $package)
-                    <article
-                        class="rounded-lg border border-white/10 bg-white p-3 text-zinc-950 shadow-sm transition sm:p-5"
-                        x-data="{ paying: false, testing: false }"
-                        :class="selectedPlan === {{ $package->id }} ? 'ring-2 ring-[var(--brand)]' : ''"
-                    >
-                        <button type="button" class="w-full text-left" @click="selectedPlan = selectedPlan === {{ $package->id }} ? null : {{ $package->id }}">
-                            <div class="flex items-start justify-between gap-3">
-                                <div class="min-w-0">
-                                    <h3 class="truncate text-base font-semibold sm:text-lg">{{ $package->name }}</h3>
-                                    <p class="mt-1 text-xs text-zinc-500">{{ $formatDuration($package->limit_uptime_seconds) }} / {{ $formatData($package->data_limit_bytes) }} / {{ $package->speed_limit_profile }}</p>
-                                </div>
-                                <div class="shrink-0 text-right">
-                                    <p class="text-lg font-semibold sm:text-3xl">{{ $package->currency }} {{ number_format($package->price, 0) }}</p>
-                                    <p class="mt-1 text-xs font-medium" style="color: var(--brand)" x-text="selectedPlan === {{ $package->id }} ? 'Hide details' : 'View plan'">View plan</p>
-                                </div>
+                        <form method="POST" action="{{ route('hotspot.voucher.redeem') }}" class="mt-4 grid gap-2 sm:grid-cols-[1fr_auto]" @submit="redeeming = true">
+                            @csrf
+                            <input type="hidden" name="mac" value="{{ $macAddress }}">
+                            <input type="hidden" name="nasid" value="{{ $router->nas_identifier }}">
+                            @if ($loginUrl)
+                                <input type="hidden" name="link-login" value="{{ $loginUrl }}">
+                            @endif
+                            @if ($originalUrl)
+                                <input type="hidden" name="link-orig" value="{{ $originalUrl }}">
+                            @endif
+                            <div>
+                                <input name="voucher_code" value="{{ old('voucher_code') }}" placeholder="Enter voucher code" class="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm font-medium uppercase tracking-wide" required>
+                                @error('voucher_code')
+                                    <p class="mt-2 text-xs text-red-600">{{ $message }}</p>
+                                @enderror
                             </div>
-                        </button>
+                            <button class="flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium text-white disabled:cursor-wait disabled:opacity-75" style="background-color: var(--brand)" :disabled="redeeming">
+                                <span x-show="redeeming" class="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"></span>
+                                <span x-text="redeeming ? 'Checking...' : 'Redeem voucher'">Redeem voucher</span>
+                            </button>
+                        </form>
+                    </div>
+                </flux:accordion.item>
 
-                        <div x-show="selectedPlan === {{ $package->id }}" x-cloak>
-                            <dl class="mt-3 grid grid-cols-3 gap-2 text-xs text-zinc-600 sm:mt-4 sm:block sm:space-y-2 sm:text-sm">
+                @forelse ($packages as $package)
+                    <flux:accordion.item heading="{{ $package->name }} — {{ $package->currency }} {{ number_format($package->price, 0) }}">
+                        <div x-data="{ paying: false, testing: false }">
+                            <p class="text-xs text-zinc-500">{{ $formatDuration($package->limit_uptime_seconds) }} / {{ $formatData($package->data_limit_bytes) }} / {{ $package->speed_limit_profile }}</p>
+
+                            <dl class="mt-3 grid grid-cols-3 gap-2 text-xs text-zinc-600 sm:block sm:space-y-2 sm:text-sm">
                                 <div class="rounded-md bg-zinc-50 p-2 sm:flex sm:justify-between sm:gap-4 sm:bg-transparent sm:p-0">
                                     <dt>Speed</dt>
                                     <dd class="mt-1 font-medium text-zinc-950 sm:mt-0">{{ $package->speed_limit_profile }}</dd>
@@ -210,6 +194,9 @@
                             </form>
 
                             @if ($shop->allow_test_access)
+                                {{-- Debugging-only convenience for staff (allow_test_access) -- deliberately
+                                     separate from the standalone "Free trial" item below (trial_enabled),
+                                     which is the real customer-facing promotion. --}}
                                 <form method="POST" action="{{ route('hotspot.grant') }}" class="mt-3" @submit="testing = true">
                                     @csrf
                                     <input type="hidden" name="package_id" value="{{ $package->id }}">
@@ -228,13 +215,45 @@
                                 </form>
                             @endif
                         </div>
-                    </article>
+                    </flux:accordion.item>
                 @empty
-                    <div class="rounded-lg border border-white/10 bg-white/5 p-5 text-sm text-zinc-300 md:col-span-3">
-                        No active packages are available for this hotspot yet.
-                    </div>
+                    <p class="py-5 text-sm text-zinc-500">No active packages are available for this hotspot yet.</p>
                 @endforelse
-            </div>
+
+                @if ($shop->trial_enabled)
+                    <flux:accordion.item heading="Free trial{{ $trialUsesRemaining > 0 ? ' — '.$trialUsesRemaining.' left today' : ' — used up for today' }}" :expanded="$errors->has('trial')">
+                        <div x-data="{ starting: false }">
+                            @error('trial')
+                                <p class="mb-3 text-xs text-red-600">{{ $message }}</p>
+                            @enderror
+
+                            @if ($trialUsesRemaining > 0)
+                                <p class="text-sm text-zinc-500">
+                                    Try this hotspot free for {{ $formatDuration($shop->trial_duration_minutes * 60) }} at {{ $shop->trial_speed_limit_profile }}.
+                                    {{ $trialUsesRemaining }} {{ \Illuminate\Support\Str::plural('use', $trialUsesRemaining) }} left on this device today.
+                                </p>
+                                <form method="POST" action="{{ route('hotspot.trial.start') }}" class="mt-3" @submit="starting = true">
+                                    @csrf
+                                    <input type="hidden" name="mac" value="{{ $macAddress }}">
+                                    <input type="hidden" name="nasid" value="{{ $router->nas_identifier }}">
+                                    @if ($loginUrl)
+                                        <input type="hidden" name="link-login" value="{{ $loginUrl }}">
+                                    @endif
+                                    @if ($originalUrl)
+                                        <input type="hidden" name="link-orig" value="{{ $originalUrl }}">
+                                    @endif
+                                    <button class="flex w-full items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-white disabled:cursor-wait disabled:opacity-75" style="background-color: var(--brand)" :disabled="starting">
+                                        <span x-show="starting" class="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"></span>
+                                        <span x-text="starting ? 'Connecting...' : 'Start free trial'">Start free trial</span>
+                                    </button>
+                                </form>
+                            @else
+                                <p class="text-sm text-zinc-500">This device has used today's free trial. Come back tomorrow, or choose a package above.</p>
+                            @endif
+                        </div>
+                    </flux:accordion.item>
+                @endif
+            </flux:accordion>
         </section>
 
         <footer class="mt-auto border-t border-white/10 pt-5 text-xs text-zinc-400">

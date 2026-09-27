@@ -513,6 +513,42 @@ class AdminIndexFilterTest extends TestCase
             ->assertDontSee($hotspotPackage->name);
     }
 
+    /**
+     * 2026-09-27, surfaced while building the admin-configured free trial
+     * feature: Shop::ensureTrialPackage() auto-creates one hidden Package per
+     * shop (is_active=false, is_system=true) to reuse the existing RADIUS
+     * provisioning path. Every customer-facing package picker already filters
+     * is_active, so it was never at risk there -- but this admin management
+     * screen deliberately lists inactive packages too, so it needed its own
+     * explicit is_system exclusion or an admin would see a confusing,
+     * unexplained "Free Trial" package with a 0 price that they never created.
+     */
+    public function test_package_index_hides_the_auto_managed_trial_package(): void
+    {
+        $shop = $this->shop();
+        $realPackage = Package::create([
+            'shop_id' => $shop->id,
+            'name' => 'Daily 5GB',
+            'price' => 1000,
+            'currency' => 'NGN',
+            'limit_uptime_seconds' => 86400,
+            'speed_limit_profile' => '5M/5M',
+            'is_active' => true,
+        ]);
+        $shop->update(['trial_enabled' => true]);
+        $trialPackage = $shop->ensureTrialPackage();
+
+        $this->actingAs($this->superAdmin())
+            ->get(route('admin.packages.index'))
+            ->assertOk()
+            ->assertSee($realPackage->name)
+            ->assertDontSee($trialPackage->name);
+
+        Livewire::actingAs($this->superAdmin())
+            ->test(PackagesIndex::class)
+            ->assertViewHas('summary', fn (array $summary): bool => $summary['total'] === 1);
+    }
+
     public function test_livewire_package_index_creates_package_and_syncs_radius(): void
     {
         $shop = $this->shop();

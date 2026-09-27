@@ -11,6 +11,7 @@ use App\Models\Router;
 use App\Models\Shop;
 use App\Models\Subscription;
 use App\Models\Tenant;
+use App\Models\TrialRedemption;
 use App\Models\TrustedWifiDevice;
 use App\Models\Wallet;
 use Illuminate\Database\Schema\Blueprint;
@@ -84,7 +85,6 @@ class HotspotPortalTest extends TestCase
             ->assertSee('AA:BB:CC:DD:EE:FF')
             ->assertSee('One Hour Ultra')
             ->assertSee('NGN 500')
-            ->assertSee('View plan')
             ->assertSee('1 hour')
             ->assertSee('5 GB')
             ->assertSee('After 2 GB: 1M/1M')
@@ -94,9 +94,9 @@ class HotspotPortalTest extends TestCase
             ->assertSee('Card')
             ->assertSee('Transfer')
             ->assertSee('Start test access')
-            ->assertSee('x-data="{ selectedPlan: null }"', false)
+            ->assertSee('Have a voucher?')
+            ->assertSee('exclusive', false)
             ->assertSee('x-cloak', false)
-            ->assertSee('sm:grid-cols-2 lg:grid-cols-3', false)
             ->assertSee('grid-cols-3 gap-2', false);
     }
 
@@ -600,6 +600,189 @@ class HotspotPortalTest extends TestCase
             ->assertOk()
             ->assertSee('Card checkout needs the tenant gateway secret key')
             ->assertDontSee('Start test access');
+    }
+
+    /**
+     * 2026-09-27, direct request: an admin-configured free trial, deliberately
+     * separate from the per-package "Start test access" debugging button
+     * (allow_test_access/grant()) covered above -- this is a customer-facing
+     * promotion with its own duration, bandwidth throttle, and a daily
+     * per-device use cap, independent of any package.
+     */
+    public function test_portal_hides_free_trial_when_disabled(): void
+    {
+        [$router, $package] = $this->routerWithPackage();
+
+        $this->get('/hotspot/portal?mac=AA:BB:CC:DD:EE:FF&nasid='.$router->nas_identifier)
+            ->assertOk()
+            ->assertDontSee('Free trial');
+    }
+
+    public function test_portal_shows_free_trial_with_remaining_uses_when_enabled(): void
+    {
+        [$router, $package] = $this->routerWithPackage();
+        $router->shop->update([
+            'trial_enabled' => true,
+            'trial_duration_minutes' => 20,
+            'trial_max_uses_per_day' => 2,
+            'trial_speed_limit_profile' => '2M/2M',
+        ]);
+
+        $this->get('/hotspot/portal?mac=AA:BB:CC:DD:EE:FF&nasid='.$router->nas_identifier)
+            ->assertOk()
+            ->assertSee('Free trial')
+            ->assertSee('2 left today')
+            ->assertSee('Start free trial')
+            ->assertSee('20 minutes')
+            ->assertSee('2M/2M');
+    }
+
+    public function test_start_trial_creates_subscription_and_radius_access_with_shop_settings(): void
+    {
+        [$router, $package] = $this->routerWithPackage();
+        $router->shop->update([
+            'trial_enabled' => true,
+            'trial_duration_minutes' => 20,
+            'trial_max_uses_per_day' => 1,
+            'trial_speed_limit_profile' => '2M/2M',
+        ]);
+
+        $this->post('/hotspot/trial/start', [
+            'mac' => 'AA:BB:CC:DD:EE:FF',
+            'nasid' => $router->nas_identifier,
+            'link-login' => 'http://hotspot.local/login',
+            'link-orig' => 'http://neverssl.com',
+        ])
+            ->assertOk()
+            ->assertSee('Access provisioned')
+            ->assertSee('AA:BB:CC:DD:EE:FF');
+
+        $this->assertDatabaseHas('subscriptions', [
+            'shop_id' => $router->shop_id,
+            'mac_address' => 'AA:BB:CC:DD:EE:FF',
+        ]);
+        $this->assertDatabaseHas('trial_redemptions', [
+            'shop_id' => $router->shop_id,
+            'mac_address' => 'AA:BB:CC:DD:EE:FF',
+        ]);
+        $this->assertDatabaseHas('radcheck', [
+            'username' => 'AA:BB:CC:DD:EE:FF',
+            'attribute' => 'Cleartext-Password',
+        ]);
+
+        $trialPackage = Package::where('shop_id', $router->shop_id)->where('name', 'Free Trial')->firstOrFail();
+        $this->assertSame(20 * 60, $trialPackage->limit_uptime_seconds);
+        $this->assertSame('2M/2M', $trialPackage->speed_limit_profile);
+        $this->assertFalse($trialPackage->is_active);
+
+        $this->assertDatabaseHas('radgroupreply', [
+            'groupname' => $trialPackage->radius_group_name,
+            'attribute' => 'Mikrotik-Rate-Limit',
+            'value' => '2M/2M',
+        ]);
+
+        // The real package this shop already sells must be untouched by the
+        // hidden trial package's own RADIUS group/provisioning.
+        $this->assertDatabaseHas('packages', [
+            'id' => $package->id,
+            'name' => 'One Hour Ultra',
+            'is_active' => true,
+        ]);
+    }
+
+    public function test_start_trial_is_blocked_when_shop_disables_free_trial(): void
+    {
+        [$router, $package] = $this->routerWithPackage();
+        $this->assertFalse($router->shop->fresh()->trial_enabled);
+
+        $this->post('/hotspot/trial/start', [
+            'mac' => 'AA:BB:CC:DD:EE:FF',
+            'nasid' => $router->nas_identifier,
+        ])->assertForbidden();
+
+        $this->assertDatabaseMissing('subscriptions', [
+            'shop_id' => $router->shop_id,
+            'mac_address' => 'AA:BB:CC:DD:EE:FF',
+        ]);
+    }
+
+    public function test_start_trial_enforces_daily_use_limit_per_device(): void
+    {
+        [$router, $package] = $this->routerWithPackage();
+        $router->shop->update([
+            'trial_enabled' => true,
+            'trial_max_uses_per_day' => 1,
+        ]);
+
+        $this->post('/hotspot/trial/start', [
+            'mac' => 'AA:BB:CC:DD:EE:FF',
+            'nasid' => $router->nas_identifier,
+        ])->assertOk();
+
+        $this->assertSame(1, TrialRedemption::where('shop_id', $router->shop_id)->count());
+
+        $this->post('/hotspot/trial/start', [
+            'mac' => 'AA:BB:CC:DD:EE:FF',
+            'nasid' => $router->nas_identifier,
+        ])->assertSessionHasErrors('trial');
+
+        // Still only one redemption logged -- the second attempt must not
+        // have granted anything or logged a second use.
+        $this->assertSame(1, TrialRedemption::where('shop_id', $router->shop_id)->count());
+    }
+
+    public function test_start_trial_allows_a_second_use_for_a_different_device_the_same_day(): void
+    {
+        [$router, $package] = $this->routerWithPackage();
+        $router->shop->update([
+            'trial_enabled' => true,
+            'trial_max_uses_per_day' => 1,
+        ]);
+
+        $this->post('/hotspot/trial/start', [
+            'mac' => 'AA:BB:CC:DD:EE:FF',
+            'nasid' => $router->nas_identifier,
+        ])->assertOk();
+
+        $this->post('/hotspot/trial/start', [
+            'mac' => 'AA:BB:CC:DD:EE:00',
+            'nasid' => $router->nas_identifier,
+        ])->assertOk();
+
+        $this->assertDatabaseHas('subscriptions', ['mac_address' => 'AA:BB:CC:DD:EE:FF']);
+        $this->assertDatabaseHas('subscriptions', ['mac_address' => 'AA:BB:CC:DD:EE:00']);
+    }
+
+    /**
+     * The two features must coexist independently -- enabling one must never
+     * imply or require the other.
+     */
+    public function test_free_trial_and_debug_test_access_coexist_independently(): void
+    {
+        [$router, $package] = $this->routerWithPackage();
+        $router->shop->update([
+            'allow_test_access' => true,
+            'trial_enabled' => true,
+        ]);
+
+        $this->get('/hotspot/portal?mac=AA:BB:CC:DD:EE:FF&nasid='.$router->nas_identifier)
+            ->assertOk()
+            ->assertSee('Start test access')
+            ->assertSee('Free trial')
+            ->assertSee('Start free trial');
+
+        // The debug button still needs an explicit package_id and grants that
+        // package's own duration/bandwidth -- unaffected by the trial feature.
+        $this->post('/hotspot/grant', [
+            'mac' => 'AA:BB:CC:DD:EE:FF',
+            'nasid' => $router->nas_identifier,
+            'package_id' => $package->id,
+        ])->assertOk();
+
+        $this->assertDatabaseHas('subscriptions', [
+            'mac_address' => 'AA:BB:CC:DD:EE:FF',
+            'package_id' => $package->id,
+        ]);
     }
 
     public function test_payment_step_creates_pending_payment_and_customer(): void
