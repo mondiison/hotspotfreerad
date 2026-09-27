@@ -20,6 +20,11 @@
 
             return number_format($value, $index === 0 ? 0 : 1).' '.$units[$index];
         };
+
+        $paymentAttentionCount = (int) ($paymentHealth['attention_count'] ?? 0);
+        $billingUsageNeedsAttention = $tenantBillingSummary
+            ? collect($tenantBillingSummary['usage'])->contains(fn (array $usage): bool => $usage['is_limited'] && $usage['percent'] >= 90)
+            : false;
     @endphp
 
     @if ($tenantWorkspaceSummary)
@@ -83,21 +88,14 @@
         </section>
     @endif
 
-    <section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+    {{-- Trimmed to the 6 numbers that matter at a glance; the rest live in "More KPIs" below. --}}
+    <section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
         @foreach ([
-            ['label' => 'Tenants', 'value' => $tenantCount, 'hint' => auth()->user()->isSuperAdmin() ? 'Total platform customers' : 'Your assigned tenant'],
-            ['label' => 'Locations', 'value' => $shopCount, 'hint' => 'Active hotspot shops/sites'],
             ['label' => 'Routers Online', 'value' => "{$onlineRouterCount}/{$routerCount}", 'hint' => 'Reachable on a 5-minute heartbeat ping, or with an active accounting session'],
             ['label' => 'Active Plans', 'value' => "{$activePackageCount}/{$packageCount}", 'hint' => 'Published packages customers can select'],
             ['label' => 'Active Access', 'value' => $activeSubscriptionCount, 'hint' => 'Unexpired app subscriptions'],
             ['label' => 'Users Online', 'value' => is_null($onlineUserCount) ? 'Not ready' : $onlineUserCount, 'hint' => $radiusAccountingReady ? 'Unique active RADIUS usernames' : 'radacct table has not been created'],
-            ['label' => 'RADIUS Sessions', 'value' => is_null($activeSessionCount) ? 'Not ready' : $activeSessionCount, 'hint' => $radiusAccountingReady ? 'Live accounting sessions' : 'radacct table has not been created'],
-            ['label' => 'Usage Today', 'value' => $formatBytes($todayUsageBytes), 'hint' => 'Upload + download from sessions started today'],
-            ['label' => 'Total Usage', 'value' => $formatBytes($totalUsageBytes), 'hint' => 'All accounting traffic for scoped routers'],
             ['label' => 'Gross Sales', 'value' => 'NGN '.number_format($paidRevenue, 2), 'hint' => 'Successful customer payments'],
-            ['label' => auth()->user()->isSuperAdmin() ? 'Platform Commission' : 'Platform Fees', 'value' => 'NGN '.number_format($platformCommission, 2), 'hint' => 'Commission deducted from sales'],
-            ['label' => 'Tenant Net', 'value' => 'NGN '.number_format($tenantNetRevenue, 2), 'hint' => 'Successful sales after commission'],
-            ['label' => 'Expenses', 'value' => 'NGN '.number_format($totalExpenses, 2), 'hint' => 'Recorded operating costs'],
             ['label' => 'Estimated Profit', 'value' => 'NGN '.number_format($estimatedProfit, 2), 'hint' => 'Tenant net sales minus expenses'],
         ] as $stat)
             <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
@@ -109,784 +107,49 @@
     </section>
 
     <section class="mt-6 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
-        <div class="flex flex-col justify-between gap-4 md:flex-row md:items-center">
+        <div class="flex items-center justify-between gap-4">
             <div>
-                <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">Scheduler Health</p>
-                <div class="mt-2 flex flex-wrap items-center gap-2">
-                    <h2 class="text-xl font-semibold">{{ $schedulerHealth['label'] }}</h2>
-                    <flux:badge :color="$schedulerHealth['is_healthy'] ? 'green' : ($schedulerHealth['last_run_at'] ? 'amber' : 'zinc')">
-                        {{ $schedulerHealth['is_healthy'] ? 'Cron active' : 'Check cron' }}
-                    </flux:badge>
-                </div>
-                <p class="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">{{ $schedulerHealth['description'] }}</p>
-                <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                    {{ $schedulerHealth['last_run_at'] ? 'Last heartbeat '.$schedulerHealth['last_run_at']->diffForHumans().' at '.$schedulerHealth['last_run_at']->format('M j, Y g:i A') : 'Run php artisan schedule:run or wait for cron to check in.' }}
-                </p>
+                <h2 class="text-base font-semibold">Router Health</h2>
+                <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Status combines a 5-minute heartbeat ping with recent FreeRADIUS accounting activity.</p>
             </div>
-
-            <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4 font-mono text-xs leading-5 text-zinc-700 dark:text-zinc-300">
-                * * * * * cd /var/www/hotspotfreerad && php artisan schedule:run &gt;&gt; /dev/null 2&gt;&amp;1
-            </div>
-        </div>
-    </section>
-
-    <section class="mt-6 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
-        <div class="flex flex-col justify-between gap-3 md:flex-row md:items-center">
-            <div>
-                <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">POS Access Desk</p>
-                <h2 class="mt-1 text-xl font-semibold">{{ number_format($posSummary['total']) }} POS terminal{{ $posSummary['total'] === 1 ? '' : 's' }}</h2>
-                <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Password Wi-Fi devices managed by MAC address, renewal date, package, and RADIUS sync.</p>
-            </div>
-
-            <div class="flex flex-wrap gap-2">
-                <flux:button href="{{ route('admin.packages.index', ['service' => 'hotspot_capable']) }}" wire:navigate variant="outline" size="sm" icon="radio">POS Plans</flux:button>
-                <flux:button href="{{ route('admin.pos-devices.index', ['status' => 'expiring_soon']) }}" wire:navigate variant="outline" size="sm" icon="clock">Due soon</flux:button>
-                <flux:button href="{{ route('admin.pos-devices.index') }}" wire:navigate variant="primary" size="sm" icon="device-phone-mobile">Manage POS</flux:button>
-            </div>
-        </div>
-
-        <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-            @foreach ([
-                ['label' => 'Active', 'value' => $posSummary['active'], 'href' => route('admin.pos-devices.index', ['status' => 'active']), 'hint' => 'Can authenticate now'],
-                ['label' => 'Online', 'value' => is_null($posSummary['online']) ? 'Not ready' : $posSummary['online'], 'href' => route('admin.pos-devices.index', ['status' => 'active']), 'hint' => $posSummary['accounting_ready'] ? 'Open accounting sessions' : 'radacct not ready'],
-                ['label' => 'Due Soon', 'value' => $posSummary['due_soon'], 'href' => route('admin.pos-devices.index', ['status' => 'expiring_soon']), 'hint' => 'Expires within 7 days'],
-                ['label' => 'Expired', 'value' => $posSummary['expired'], 'href' => route('admin.pos-devices.index', ['status' => 'expired']), 'hint' => 'Needs renewal'],
-                ['label' => 'Unsynced', 'value' => $posSummary['unsynced'], 'href' => route('admin.pos-devices.index', ['status' => 'unsynced']), 'hint' => 'Not pushed to RADIUS'],
-                ['label' => 'Disabled', 'value' => $posSummary['disabled'], 'href' => route('admin.pos-devices.index', ['status' => 'disabled']), 'hint' => 'Blocked from access'],
-            ] as $stat)
-                <a href="{{ $stat['href'] }}" wire:navigate class="rounded-lg border border-zinc-200 dark:border-zinc-700 p-4 transition hover:border-zinc-400 dark:hover:border-zinc-500">
-                    <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">{{ $stat['label'] }}</p>
-                    <p class="mt-3 text-2xl font-semibold">{{ is_numeric($stat['value']) ? number_format($stat['value']) : $stat['value'] }}</p>
-                    <p class="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{{ $stat['hint'] }}</p>
-                </a>
-            @endforeach
+            <a href="{{ route('admin.routers.index') }}" wire:navigate class="rounded-md border border-zinc-200 dark:border-zinc-700 px-3 py-2 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800">View all</a>
         </div>
 
         <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 dark:border-zinc-700">
             <table class="min-w-[760px] w-full text-left text-sm">
                 <thead class="bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
                     <tr>
-                        <th class="px-4 py-3 font-medium">Renewal Queue</th>
-                        <th class="px-4 py-3 font-medium">Package</th>
+                        <th class="px-4 py-3 font-medium">Router</th>
                         <th class="px-4 py-3 font-medium">Shop</th>
-                        <th class="px-4 py-3 font-medium">Expires</th>
+                        <th class="px-4 py-3 font-medium">Status</th>
+                        <th class="px-4 py-3 font-medium">Latency</th>
+                        <th class="px-4 py-3 font-medium">Last Seen</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
-                    @forelse ($posSummary['renewal_queue'] as $device)
+                    @forelse ($routerHealth as $router)
                         <tr>
+                            <td class="px-4 py-3 font-medium">{{ $router->name }}</td>
+                            <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $router->shop->name }}</td>
                             <td class="px-4 py-3">
-                                <p class="font-medium">{{ $device->device_name }}</p>
-                                <p class="mt-1 font-mono text-xs text-zinc-500 dark:text-zinc-400">{{ $device->mac_address }}</p>
+                                <span class="rounded-full px-2 py-1 text-xs font-medium {{ $router->detected_status === 'Online' ? 'bg-emerald-50 text-emerald-700' : ($router->detected_status === 'Recently seen' ? 'bg-blue-50 text-blue-700' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400') }}">
+                                    {{ $router->detected_status ?? 'Unknown' }}
+                                </span>
                             </td>
-                            <td class="px-4 py-3">
-                                <p>{{ $device->package?->name ?? 'Deleted package' }}</p>
-                                <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $device->package?->speed_limit_profile ?: 'No speed profile' }}</p>
-                            </td>
-                            <td class="px-4 py-3">
-                                <p>{{ $device->shop?->name ?? 'Deleted shop' }}</p>
-                                <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $device->shop?->tenant?->company_name }}</p>
-                            </td>
-                            <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $device->expires_at?->format('M j, Y g:i A') }}</td>
+                            <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $router->heartbeat_latency_ms !== null ? $router->heartbeat_latency_ms.' ms' : '—' }}</td>
+                            <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $router->last_seen_at?->diffForHumans() ?? 'Never' }}</td>
                         </tr>
                     @empty
-                        <tr>
-                            <td colspan="4" class="px-4 py-8 text-center text-zinc-500 dark:text-zinc-400">No POS renewals due in the next 7 days.</td>
-                        </tr>
+                        <tr><td colspan="5" class="px-4 py-8 text-center text-zinc-500 dark:text-zinc-400">No routers have been registered yet.</td></tr>
                     @endforelse
                 </tbody>
             </table>
         </div>
     </section>
 
-    <section class="mt-6 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
-        <div class="flex flex-col justify-between gap-3 md:flex-row md:items-center">
-            <div>
-                <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">PPPoE Service Desk</p>
-                <h2 class="mt-1 text-xl font-semibold">{{ number_format($pppoeSummary['total']) }} fixed subscriber{{ $pppoeSummary['total'] === 1 ? '' : 's' }}</h2>
-                <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Renewal, sync, and online-session snapshot for PPPoE customers.</p>
-            </div>
-
-            <div class="flex flex-wrap gap-2">
-                <flux:button href="{{ route('admin.packages.index', ['service' => 'pppoe_capable']) }}" wire:navigate variant="outline" size="sm" icon="radio">PPPoE Plans</flux:button>
-                <flux:button href="{{ route('admin.pppoe-subscribers.index', ['status' => 'expiring_soon']) }}" wire:navigate variant="outline" size="sm" icon="clock">Due soon</flux:button>
-                <flux:button href="{{ route('admin.pppoe-subscribers.index') }}" wire:navigate variant="primary" size="sm" icon="wifi">Manage PPPoE</flux:button>
-            </div>
-        </div>
-
-        <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-            @foreach ([
-                ['label' => 'Active', 'value' => $pppoeSummary['active'], 'href' => route('admin.pppoe-subscribers.index', ['status' => 'active']), 'hint' => 'Can authenticate now'],
-                ['label' => 'Online', 'value' => is_null($pppoeSummary['online']) ? 'Not ready' : $pppoeSummary['online'], 'href' => route('admin.pppoe-subscribers.index', ['status' => 'active']), 'hint' => $pppoeSummary['accounting_ready'] ? 'Open accounting sessions' : 'radacct not ready'],
-                ['label' => 'Due Soon', 'value' => $pppoeSummary['due_soon'], 'href' => route('admin.pppoe-subscribers.index', ['status' => 'expiring_soon']), 'hint' => 'Expires within 7 days'],
-                ['label' => 'Expired', 'value' => $pppoeSummary['expired'], 'href' => route('admin.pppoe-subscribers.index', ['status' => 'expired']), 'hint' => 'Needs renewal'],
-                ['label' => 'Unsynced', 'value' => $pppoeSummary['unsynced'], 'href' => route('admin.pppoe-subscribers.index', ['status' => 'unsynced']), 'hint' => 'Not pushed to RADIUS'],
-                ['label' => 'Disabled', 'value' => $pppoeSummary['disabled'], 'href' => route('admin.pppoe-subscribers.index', ['status' => 'disabled']), 'hint' => 'Blocked from access'],
-            ] as $stat)
-                <a href="{{ $stat['href'] }}" wire:navigate class="rounded-lg border border-zinc-200 dark:border-zinc-700 p-4 transition hover:border-zinc-400 dark:hover:border-zinc-500">
-                    <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">{{ $stat['label'] }}</p>
-                    <p class="mt-3 text-2xl font-semibold">{{ is_numeric($stat['value']) ? number_format($stat['value']) : $stat['value'] }}</p>
-                    <p class="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{{ $stat['hint'] }}</p>
-                </a>
-            @endforeach
-        </div>
-
-        <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 dark:border-zinc-700">
-            <table class="min-w-[760px] w-full text-left text-sm">
-                <thead class="bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
-                    <tr>
-                        <th class="px-4 py-3 font-medium">Renewal Queue</th>
-                        <th class="px-4 py-3 font-medium">Package</th>
-                        <th class="px-4 py-3 font-medium">Shop</th>
-                        <th class="px-4 py-3 font-medium">Expires</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
-                    @forelse ($pppoeSummary['renewal_queue'] as $subscriber)
-                        <tr>
-                            <td class="px-4 py-3">
-                                <p class="font-medium">{{ $subscriber->full_name ?: $subscriber->username }}</p>
-                                <p class="mt-1 font-mono text-xs text-zinc-500 dark:text-zinc-400">{{ $subscriber->username }}</p>
-                            </td>
-                            <td class="px-4 py-3">
-                                <p>{{ $subscriber->package?->name ?? 'Deleted package' }}</p>
-                                <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $subscriber->package?->speed_limit_profile ?: 'No speed profile' }}</p>
-                            </td>
-                            <td class="px-4 py-3">
-                                <p>{{ $subscriber->shop?->name ?? 'Deleted shop' }}</p>
-                                <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $subscriber->shop?->tenant?->company_name }}</p>
-                            </td>
-                            <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $subscriber->expires_at?->format('M j, Y g:i A') }}</td>
-                        </tr>
-                    @empty
-                        <tr>
-                            <td colspan="4" class="px-4 py-8 text-center text-zinc-500 dark:text-zinc-400">No PPPoE renewals due in the next 7 days.</td>
-                        </tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
-    </section>
-
-    <section class="mt-6 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
-        <div class="flex flex-col justify-between gap-3 md:flex-row md:items-center">
-            <div>
-                <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">Security Attention</p>
-                <h2 class="mt-1 text-xl font-semibold">{{ number_format($securityAttention['count']) }} event{{ $securityAttention['count'] === 1 ? '' : 's' }} in the last 30 days</h2>
-                <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Failed 2FA, blocked tenant access, password changes, reset links, and disabled 2FA.</p>
-            </div>
-
-            <flux:button href="{{ route('admin.security-activity.index', ['attention' => '1']) }}" wire:navigate variant="outline" size="sm" icon="shield-exclamation">
-                Review activity
-            </flux:button>
-        </div>
-
-        @if ($securityAttention['reasons']->isNotEmpty())
-            <div class="mt-4 flex flex-wrap gap-2">
-                @foreach ($securityAttention['reasons'] as $reason)
-                    <a
-                        href="{{ route('admin.security-activity.index', ['attention' => '1', 'action' => $reason['action']]) }}"
-                        wire:navigate
-                        class="inline-flex items-center gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-1.5 text-sm font-medium text-rose-700 hover:bg-rose-100"
-                    >
-                        <span>{{ $reason['label'] }}</span>
-                        <span class="rounded bg-white dark:bg-zinc-900 px-1.5 py-0.5 text-xs">{{ number_format($reason['count']) }}</span>
-                    </a>
-                @endforeach
-            </div>
-        @endif
-
-        <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 dark:border-zinc-700">
-            <table class="min-w-[680px] w-full text-left text-sm">
-                <thead class="bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
-                    <tr>
-                        <th class="px-4 py-3 font-medium">Event</th>
-                        <th class="px-4 py-3 font-medium">Admin</th>
-                        <th class="px-4 py-3 font-medium">Tenant</th>
-                        <th class="px-4 py-3 font-medium">When</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
-                    @forelse ($securityAttention['events'] as $activity)
-                        <tr>
-                            <td class="px-4 py-3">
-                                <p class="font-medium text-zinc-950 dark:text-zinc-100">{{ $activity->label }}</p>
-                                <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ str($activity->action)->replace('_', ' ')->title() }}</p>
-                            </td>
-                            <td class="px-4 py-3">
-                                <p class="font-medium">{{ $activity->user?->name ?? 'Deleted user' }}</p>
-                                <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $activity->user?->email ?? '-' }}</p>
-                            </td>
-                            <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $activity->tenant?->company_name ?? 'Platform' }}</td>
-                            <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $activity->created_at->diffForHumans() }}</td>
-                        </tr>
-                    @empty
-                        <tr>
-                            <td colspan="4" class="px-4 py-8 text-center text-zinc-500 dark:text-zinc-400">No security attention events in the last 30 days.</td>
-                        </tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
-    </section>
-
-    <section class="mt-6 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
-        <div class="flex flex-col justify-between gap-3 md:flex-row md:items-center">
-            <div>
-                <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">This Month Finance</p>
-                <h2 class="mt-1 text-xl font-semibold">{{ $monthFinanceSummary['period'] }} performance</h2>
-            </div>
-
-            <div class="flex flex-wrap gap-2">
-                <flux:button
-                    href="{{ route('admin.reports.sales', ['from' => $monthFinanceSummary['from'], 'to' => $monthFinanceSummary['to']]) }}"
-                    wire:navigate
-                    variant="outline"
-                    size="sm"
-                    icon="chart-bar"
-                >
-                    Sales report
-                </flux:button>
-                <flux:button
-                    href="{{ route('admin.expenses.index', ['from' => $monthFinanceSummary['from'], 'to' => $monthFinanceSummary['to']]) }}"
-                    wire:navigate
-                    variant="outline"
-                    size="sm"
-                    icon="receipt-percent"
-                >
-                    Expenses
-                </flux:button>
-            </div>
-        </div>
-
-        <div class="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
-            @foreach ([
-                ['label' => 'Gross Sales', 'value' => 'NGN '.number_format($monthFinanceSummary['gross_sales'], 2), 'hint' => 'Customer payments received this month'],
-                ['label' => auth()->user()->isSuperAdmin() ? 'Commission' : 'Platform Fees', 'value' => 'NGN '.number_format($monthFinanceSummary['platform_commission'], 2), 'hint' => 'Platform commission deducted this month'],
-                ['label' => 'Tenant Net', 'value' => 'NGN '.number_format($monthFinanceSummary['tenant_net'], 2), 'hint' => 'Sales retained by the tenant'],
-                ['label' => 'Expenses', 'value' => 'NGN '.number_format($monthFinanceSummary['expenses'], 2), 'hint' => 'Costs recorded this month'],
-                ['label' => 'Profit', 'value' => 'NGN '.number_format($monthFinanceSummary['profit'], 2), 'hint' => 'Tenant net sales minus expenses'],
-                ['label' => 'Margin', 'value' => is_null($monthFinanceSummary['margin']) ? 'No sales' : $monthFinanceSummary['margin'].'%', 'hint' => 'Profit as a share of tenant net sales'],
-            ] as $monthlyStat)
-                <article class="rounded-lg border border-zinc-200 dark:border-zinc-700 p-4">
-                    <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">{{ $monthlyStat['label'] }}</p>
-                    <p class="mt-3 text-2xl font-semibold">{{ $monthlyStat['value'] }}</p>
-                    <p class="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{{ $monthlyStat['hint'] }}</p>
-                </article>
-            @endforeach
-        </div>
-    </section>
-
-    <section class="mt-6 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
-        <div class="flex flex-col justify-between gap-3 md:flex-row md:items-center">
-            <div>
-                <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">Payment Health</p>
-                <h2 class="mt-1 text-xl font-semibold">{{ $paymentHealth['period'] }} checkout flow</h2>
-                <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Attempts are counted by checkout creation date, so pending and failed payments do not inflate sales.</p>
-            </div>
-
-            <div class="flex flex-wrap gap-2">
-                <flux:button href="{{ route('admin.payments.index', ['status' => 'pending']) }}" wire:navigate variant="outline" size="sm" icon="clock">
-                    Pending
-                </flux:button>
-                <flux:button href="{{ route('admin.payments.index', ['status' => 'failed']) }}" wire:navigate variant="outline" size="sm" icon="exclamation-triangle">
-                    Failed
-                </flux:button>
-                <flux:button href="{{ route('admin.payments.index', ['status' => 'attention']) }}" wire:navigate variant="outline" size="sm" icon="exclamation-triangle">
-                    Needs attention
-                </flux:button>
-                <flux:button href="{{ route('admin.payments.index') }}" wire:navigate variant="outline" size="sm" icon="credit-card">
-                    All payments
-                </flux:button>
-            </div>
-        </div>
-
-        <div class="mt-5 grid gap-4 md:grid-cols-5">
-            @foreach ([
-                ['label' => 'Attempts', 'value' => number_format($paymentHealth['total_attempts']), 'hint' => 'All checkout attempts this month'],
-                ['label' => 'Success Rate', 'value' => is_null($paymentHealth['success_rate']) ? 'No attempts' : $paymentHealth['success_rate'].'%', 'hint' => 'Successful payments divided by attempts'],
-                ['label' => 'Successful', 'value' => number_format($paymentHealth['successful_count']), 'hint' => 'NGN '.number_format($paymentHealth['successful_value'], 2).' confirmed'],
-                ['label' => 'Pending', 'value' => number_format($paymentHealth['pending_count']), 'hint' => 'NGN '.number_format($paymentHealth['pending_value'], 2).' awaiting callback/webhook'],
-                ['label' => 'Needs Attention', 'value' => number_format($paymentHealth['attention_count']), 'hint' => 'NGN '.number_format($paymentHealth['attention_value'], 2).' pending or failed'],
-            ] as $stat)
-                <article class="rounded-lg border border-zinc-200 dark:border-zinc-700 p-4">
-                    <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">{{ $stat['label'] }}</p>
-                    <p class="mt-3 text-2xl font-semibold">{{ $stat['value'] }}</p>
-                    <p class="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{{ $stat['hint'] }}</p>
-                </article>
-            @endforeach
-        </div>
-    </section>
-
-    <section class="mt-6 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
-        <div class="flex flex-col justify-between gap-3 md:flex-row md:items-center">
-            <div>
-                <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">Top Packages</p>
-                <h2 class="mt-1 text-xl font-semibold">{{ $monthFinanceSummary['period'] }} best sellers</h2>
-            </div>
-            <flux:button href="{{ route('admin.payments.index', ['status' => 'successful']) }}" wire:navigate variant="outline" size="sm" icon="credit-card">
-                Payment report
-            </flux:button>
-        </div>
-
-        <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 dark:border-zinc-700">
-            <table class="min-w-[760px] w-full text-left text-sm">
-                <thead class="bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
-                    <tr>
-                        <th class="px-4 py-3 font-medium">Package</th>
-                        <th class="px-4 py-3 font-medium">Shop</th>
-                        <th class="px-4 py-3 text-right font-medium">Sales</th>
-                        <th class="px-4 py-3 text-right font-medium">Gross</th>
-                        <th class="px-4 py-3 text-right font-medium">Tenant Net</th>
-                        <th class="px-4 py-3 text-right font-medium">Share</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
-                    @forelse ($topPackages as $row)
-                        <tr>
-                            <td class="px-4 py-3 font-medium">{{ $row['package'] }}</td>
-                            <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $row['shop'] }}</td>
-                            <td class="px-4 py-3 text-right">{{ number_format($row['sales_count']) }}</td>
-                            <td class="px-4 py-3 text-right font-semibold">NGN {{ number_format($row['gross_sales'], 2) }}</td>
-                            <td class="px-4 py-3 text-right">NGN {{ number_format($row['tenant_net'], 2) }}</td>
-                            <td class="px-4 py-3 text-right">
-                                <div class="ml-auto flex w-28 flex-col items-end gap-1">
-                                    <span>{{ is_null($row['share']) ? 'No sales' : $row['share'].'%' }}</span>
-                                    <span class="block h-1.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
-                                        <span class="block h-full rounded-full bg-zinc-950 dark:bg-zinc-100" style="width: {{ $row['share'] ?? 0 }}%"></span>
-                                    </span>
-                                </div>
-                            </td>
-                        </tr>
-                    @empty
-                        <tr>
-                            <td colspan="6" class="px-4 py-8 text-center text-zinc-500 dark:text-zinc-400">No successful package sales this month.</td>
-                        </tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
-    </section>
-
-    <section class="mt-6 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
-        <div class="flex flex-col justify-between gap-3 md:flex-row md:items-center">
-            <div>
-                <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">Top Locations</p>
-                <h2 class="mt-1 text-xl font-semibold">{{ $monthFinanceSummary['period'] }} shop performance</h2>
-            </div>
-            <flux:button href="{{ route('admin.shops.index') }}" wire:navigate variant="outline" size="sm" icon="building-storefront">
-                Manage shops
-            </flux:button>
-        </div>
-
-        <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 dark:border-zinc-700">
-            <table class="min-w-[820px] w-full text-left text-sm">
-                <thead class="bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
-                    <tr>
-                        <th class="px-4 py-3 font-medium">Shop</th>
-                        <th class="px-4 py-3 font-medium">Tenant</th>
-                        <th class="px-4 py-3 text-right font-medium">Sales</th>
-                        <th class="px-4 py-3 text-right font-medium">Active Access</th>
-                        <th class="px-4 py-3 text-right font-medium">Gross</th>
-                        <th class="px-4 py-3 text-right font-medium">Tenant Net</th>
-                        <th class="px-4 py-3 text-right font-medium">Share</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
-                    @forelse ($topShops as $row)
-                        <tr>
-                            <td class="px-4 py-3 font-medium">{{ $row['shop'] }}</td>
-                            <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $row['tenant'] ?: 'Current tenant' }}</td>
-                            <td class="px-4 py-3 text-right">{{ number_format($row['sales_count']) }}</td>
-                            <td class="px-4 py-3 text-right">{{ number_format($row['active_access_count']) }}</td>
-                            <td class="px-4 py-3 text-right font-semibold">NGN {{ number_format($row['gross_sales'], 2) }}</td>
-                            <td class="px-4 py-3 text-right">NGN {{ number_format($row['tenant_net'], 2) }}</td>
-                            <td class="px-4 py-3 text-right">
-                                <div class="ml-auto flex w-28 flex-col items-end gap-1">
-                                    <span>{{ is_null($row['share']) ? 'No sales' : $row['share'].'%' }}</span>
-                                    <span class="block h-1.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
-                                        <span class="block h-full rounded-full bg-zinc-950 dark:bg-zinc-100" style="width: {{ $row['share'] ?? 0 }}%"></span>
-                                    </span>
-                                </div>
-                            </td>
-                        </tr>
-                    @empty
-                        <tr>
-                            <td colspan="7" class="px-4 py-8 text-center text-zinc-500 dark:text-zinc-400">No successful shop sales this month.</td>
-                        </tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
-    </section>
-
-    <section class="mt-6 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
-        @php
-            $financeTrendMax = max(1, (float) collect($financeTrend)
-                ->flatMap(fn (array $row) => [(float) $row['sales'], (float) $row['expenses'], abs((float) $row['profit'])])
-                ->max());
-        @endphp
-        <div class="flex flex-col justify-between gap-3 md:flex-row md:items-center">
-            <div>
-                <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">Finance Trend</p>
-                <h2 class="mt-1 text-xl font-semibold">Last 6 months</h2>
-            </div>
-            <flux:button href="{{ route('admin.reports.sales', ['preset' => 'this_year', 'group' => 'month']) }}" wire:navigate variant="outline" size="sm" icon="chart-bar">
-                Full report
-            </flux:button>
-        </div>
-
-        <div class="mt-5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4" aria-label="Finance trend chart">
-            <div class="flex items-center gap-4 text-xs text-zinc-500 dark:text-zinc-400">
-                <span class="inline-flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-sm bg-zinc-950 dark:bg-zinc-100"></span>Gross</span>
-                <span class="inline-flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-sm bg-amber-500"></span>Expense</span>
-                <span class="inline-flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-sm bg-emerald-600"></span>Profit</span>
-            </div>
-
-            <div class="mt-5 grid min-h-44 grid-cols-6 items-end gap-3">
-                @foreach ($financeTrend as $row)
-                    @php
-                        $salesHeight = max(4, round(((float) $row['sales'] / $financeTrendMax) * 100));
-                        $expenseHeight = max(4, round(((float) $row['expenses'] / $financeTrendMax) * 100));
-                        $profitHeight = max(4, round((abs((float) $row['profit']) / $financeTrendMax) * 100));
-                    @endphp
-                    <div class="flex min-w-0 flex-col items-center gap-2">
-                        <div class="flex h-32 w-full items-end justify-center gap-1">
-                            <span class="w-3 rounded-t-sm bg-zinc-950 dark:bg-zinc-100" title="Gross sales: NGN {{ number_format($row['sales'], 2) }}" style="height: {{ $salesHeight }}%"></span>
-                            <span class="w-3 rounded-t-sm bg-amber-500" title="Expenses: NGN {{ number_format($row['expenses'], 2) }}" style="height: {{ $expenseHeight }}%"></span>
-                            <span class="w-3 rounded-t-sm {{ $row['profit'] < 0 ? 'bg-red-600' : 'bg-emerald-600' }}" title="Profit: NGN {{ number_format($row['profit'], 2) }}" style="height: {{ $profitHeight }}%"></span>
-                        </div>
-                        <span class="truncate text-xs font-medium text-zinc-600 dark:text-zinc-400">{{ str($row['label'])->before(' ') }}</span>
-                    </div>
-                @endforeach
-            </div>
-        </div>
-
-        <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 dark:border-zinc-700">
-            <table class="min-w-[860px] w-full text-left text-sm">
-                <thead class="bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
-                    <tr>
-                        <th class="px-4 py-3 font-medium">Month</th>
-                        <th class="px-4 py-3 text-right font-medium">Gross Sales</th>
-                        <th class="px-4 py-3 text-right font-medium">Tenant Net</th>
-                        <th class="px-4 py-3 text-right font-medium">Expenses</th>
-                        <th class="px-4 py-3 text-right font-medium">Profit</th>
-                        <th class="px-4 py-3 text-right font-medium">Margin</th>
-                        <th class="px-4 py-3 text-right font-medium">Action</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
-                    @foreach ($financeTrend as $row)
-                        <tr>
-                            <td class="px-4 py-3 font-medium">{{ $row['label'] }}</td>
-                            <td class="px-4 py-3 text-right font-semibold">NGN {{ number_format($row['sales'], 2) }}</td>
-                            <td class="px-4 py-3 text-right">NGN {{ number_format($row['net'], 2) }}</td>
-                            <td class="px-4 py-3 text-right">NGN {{ number_format($row['expenses'], 2) }}</td>
-                            <td class="px-4 py-3 text-right {{ $row['profit'] < 0 ? 'font-semibold text-red-700' : 'font-semibold text-zinc-950 dark:text-zinc-100' }}">NGN {{ number_format($row['profit'], 2) }}</td>
-                            <td class="px-4 py-3 text-right">{{ is_null($row['margin']) ? 'No sales' : $row['margin'].'%' }}</td>
-                            <td class="px-4 py-3 text-right">
-                                <flux:button
-                                    href="{{ route('admin.reports.sales', ['from' => $row['from'], 'to' => $row['to'], 'group' => 'day']) }}"
-                                    wire:navigate
-                                    variant="outline"
-                                    size="sm"
-                                    icon="magnifying-glass"
-                                >
-                                    Details
-                                </flux:button>
-                            </td>
-                        </tr>
-                    @endforeach
-                </tbody>
-            </table>
-        </div>
-    </section>
-
-    @if ($budgetWatch->isNotEmpty() || $budgetCategoryCount > 0)
-        <section class="mt-6 rounded-lg border {{ $budgetWatch->isNotEmpty() ? 'border-amber-200 bg-amber-50' : 'border-emerald-200 bg-emerald-50' }} p-5 shadow-sm">
-            <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-                <div>
-                    <h2 class="text-base font-semibold {{ $budgetWatch->isNotEmpty() ? 'text-amber-950' : 'text-emerald-950' }}">Budget Watch</h2>
-                    <p class="mt-1 text-sm {{ $budgetWatch->isNotEmpty() ? 'text-amber-700' : 'text-emerald-700' }}">
-                        @if ($budgetWatch->isNotEmpty())
-                            Current-month expense categories at 80% or more of their monthly budget.
-                        @else
-                            {{ number_format($budgetCategoryCount) }} budgeted categories are currently below the 80% watch threshold.
-                        @endif
-                    </p>
-                </div>
-                <div class="flex flex-wrap gap-2">
-                    <flux:button
-                        href="{{ route('admin.reports.sales', ['from' => $monthFinanceSummary['from'], 'to' => $monthFinanceSummary['to']]) }}"
-                        wire:navigate
-                        variant="outline"
-                        size="sm"
-                        icon="chart-bar"
-                    >
-                        Review report
-                    </flux:button>
-                    <flux:button
-                        href="{{ route('admin.expenses.index', ['from' => $monthFinanceSummary['from'], 'to' => $monthFinanceSummary['to']]) }}"
-                        wire:navigate
-                        variant="outline"
-                        size="sm"
-                        icon="receipt-percent"
-                    >
-                        View expenses
-                    </flux:button>
-                </div>
-            </div>
-
-            @if ($budgetWatch->isEmpty())
-                <div class="mt-5 rounded-lg border border-emerald-200 bg-white dark:bg-zinc-900 p-4">
-                    <p class="text-sm font-medium text-emerald-950">All budgeted categories are under watch level.</p>
-                    <p class="mt-1 text-sm text-emerald-700">The dashboard will highlight a category here once current-month spending reaches 80% of its monthly budget.</p>
-                </div>
-            @else
-            <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-amber-200 bg-white dark:bg-zinc-900">
-                <table class="min-w-[860px] w-full text-left text-sm">
-                    <thead class="bg-amber-50 text-amber-800">
-                        <tr>
-                            <th class="px-4 py-3 font-medium">Category</th>
-                            <th class="px-4 py-3 font-medium">Tenant</th>
-                            <th class="px-4 py-3 text-right font-medium">Spent</th>
-                            <th class="px-4 py-3 text-right font-medium">Budget</th>
-                            <th class="px-4 py-3 text-right font-medium">Variance</th>
-                            <th class="px-4 py-3 text-right font-medium">Usage</th>
-                            <th class="px-4 py-3 text-right font-medium">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-amber-100">
-                        @foreach ($budgetWatch as $row)
-                            <tr>
-                                <td class="px-4 py-3">
-                                    <p class="font-medium">{{ $row['category'] }}</p>
-                                    <p class="mt-1 text-xs {{ $row['usage'] > 100 ? 'text-red-700' : 'text-amber-700' }}">{{ $row['status'] }}</p>
-                                </td>
-                                <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $row['tenant'] ?: 'All tenants' }}</td>
-                                <td class="px-4 py-3 text-right font-semibold">NGN {{ number_format($row['spent'], 2) }}</td>
-                                <td class="px-4 py-3 text-right">NGN {{ number_format($row['budget'], 2) }}</td>
-                                <td class="px-4 py-3 text-right {{ $row['variance'] < 0 ? 'font-semibold text-red-700' : 'text-zinc-700 dark:text-zinc-300' }}">
-                                    NGN {{ number_format($row['variance'], 2) }}
-                                </td>
-                                <td class="px-4 py-3 text-right">
-                                    <div class="ml-auto flex w-28 flex-col items-end gap-1">
-                                        <span class="{{ $row['usage'] > 100 ? 'font-semibold text-red-700' : 'text-zinc-700 dark:text-zinc-300' }}">{{ $row['usage'] }}%</span>
-                                        <span class="block h-1.5 w-full overflow-hidden rounded-full bg-amber-100">
-                                            <span class="block h-full rounded-full {{ $row['usage'] > 100 ? 'bg-red-600' : 'bg-amber-500' }}" style="width: {{ min($row['usage'], 100) }}%"></span>
-                                        </span>
-                                    </div>
-                                </td>
-                                <td class="px-4 py-3 text-right">
-                                    <flux:button
-                                        href="{{ route('admin.expenses.index', ['from' => $monthFinanceSummary['from'], 'to' => $monthFinanceSummary['to'], 'category' => $row['category_id']]) }}"
-                                        wire:navigate
-                                        variant="outline"
-                                        size="sm"
-                                        icon="magnifying-glass"
-                                    >
-                                        Details
-                                    </flux:button>
-                                </td>
-                            </tr>
-                        @endforeach
-                    </tbody>
-                </table>
-            </div>
-            @endif
-        </section>
-    @endif
-
-    @if ($tenantBillingSummary)
+    @if (auth()->user()->isSuperAdmin())
+        {{-- Tenant admins get the richer "Launch Checklist" card above instead -- this generic list would just repeat the same steps for them. --}}
         <section class="mt-6 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
-            <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                <div>
-                    <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">Platform Plan</p>
-                    <h2 class="mt-2 text-2xl font-semibold">{{ $tenantBillingSummary['plan_name'] }}</h2>
-                    <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{{ $tenantBillingSummary['price'] }}</p>
-                </div>
-
-                <div class="flex flex-wrap gap-2">
-                    <span class="rounded-full bg-zinc-100 dark:bg-zinc-800 px-3 py-1 text-sm font-medium text-zinc-700 dark:text-zinc-300">{{ $tenantBillingSummary['status'] }}</span>
-                    <span class="rounded-full bg-blue-50 px-3 py-1 text-sm font-medium text-blue-700">{{ $tenantBillingSummary['period_label'] }}</span>
-                    <a href="{{ route('admin.billing.index') }}" wire:navigate class="rounded-md border border-zinc-200 dark:border-zinc-700 px-3 py-1.5 text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800">Manage billing</a>
-                </div>
-            </div>
-
-            <div class="mt-5 grid gap-4 md:grid-cols-3">
-                @foreach ($tenantBillingSummary['usage'] as $usage)
-                    <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 p-4">
-                        <div class="flex items-center justify-between gap-3">
-                            <p class="text-sm font-medium">{{ $usage['label'] }}</p>
-                            <p class="text-sm text-zinc-500 dark:text-zinc-400">{{ number_format($usage['used']) }} / {{ $usage['limit_label'] }}</p>
-                        </div>
-                        <div class="mt-3 h-2 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
-                            <div
-                                class="h-full rounded-full {{ $usage['is_limited'] && $usage['percent'] >= 90 ? 'bg-amber-500' : 'bg-zinc-950 dark:bg-zinc-100' }}"
-                                style="width: {{ $usage['percent'] }}%"
-                            ></div>
-                        </div>
-                        <p class="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">
-                            {{ $usage['is_limited'] ? 'Upgrade before adding beyond this plan limit.' : 'No plan limit is applied to this resource.' }}
-                        </p>
-                    </div>
-                @endforeach
-            </div>
-        </section>
-    @endif
-
-    @if ($platformBillingSummary)
-        <section class="mt-6 grid gap-4 md:grid-cols-4">
-            @foreach ([
-                ['label' => 'Billing Plans', 'value' => $platformBillingSummary['plan_count'], 'hint' => 'Plans tenant admins can subscribe to'],
-                ['label' => 'Active Tenants', 'value' => $platformBillingSummary['active_subscription_count'], 'hint' => 'Active or trialing platform subscriptions'],
-                ['label' => 'Past Due', 'value' => $platformBillingSummary['past_due_subscription_count'], 'hint' => 'Tenants needing billing attention'],
-                ['label' => 'Platform MRR', 'value' => 'NGN '.number_format($platformBillingSummary['monthly_recurring_revenue'], 2), 'hint' => 'Active subscription amount per month'],
-            ] as $billingStat)
-                <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
-                    <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">{{ $billingStat['label'] }}</p>
-                    <p class="mt-3 text-2xl font-semibold">{{ is_numeric($billingStat['value']) ? number_format($billingStat['value']) : $billingStat['value'] }}</p>
-                    <p class="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{{ $billingStat['hint'] }}</p>
-                </div>
-            @endforeach
-        </section>
-    @endif
-
-    @if ($overdueRecurringExpenses->isNotEmpty())
-        <section class="mt-6 rounded-lg border border-red-200 bg-red-50 p-5 shadow-sm">
-            <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-                <div>
-                    <h2 class="text-base font-semibold text-red-950">Overdue Recurring Expenses</h2>
-                    <p class="mt-1 text-sm text-red-700">These recurring costs have due dates before today.</p>
-                </div>
-                <flux:button href="{{ route('admin.expenses.index', ['schedule' => 'overdue']) }}" wire:navigate variant="outline" size="sm" icon="receipt-percent">Review overdue</flux:button>
-            </div>
-
-            <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-red-200 bg-white dark:bg-zinc-900">
-                <table class="min-w-[720px] w-full text-left text-sm">
-                    <thead class="bg-red-50 text-red-700">
-                        <tr>
-                            <th class="px-4 py-3 font-medium">Expense</th>
-                            <th class="px-4 py-3 font-medium">Tenant</th>
-                            <th class="px-4 py-3 font-medium">Due</th>
-                            <th class="px-4 py-3 text-right font-medium">Amount</th>
-                            <th class="px-4 py-3 text-right font-medium">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-red-100">
-                        @foreach ($overdueRecurringExpenses as $expense)
-                            <tr>
-                                <td class="px-4 py-3">
-                                    <p class="font-medium">{{ $expense->title }}</p>
-                                    <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $expense->category?->name ?? 'Uncategorized' }}</p>
-                                </td>
-                                <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $expense->tenant?->company_name }}</td>
-                                <td class="px-4 py-3 text-red-700">{{ $expense->next_due_on?->toFormattedDateString() }}</td>
-                                <td class="px-4 py-3 text-right font-semibold">{{ $expense->currency }} {{ number_format($expense->amount, 2) }}</td>
-                                <td class="px-4 py-3">
-                                    <form method="POST" action="{{ route('admin.expenses.record-recurring', $expense) }}" class="flex justify-end">
-                                        @csrf
-                                        <flux:button type="submit" variant="primary" size="sm" icon="check">Record</flux:button>
-                                    </form>
-                                </td>
-                            </tr>
-                        @endforeach
-                    </tbody>
-                </table>
-            </div>
-        </section>
-    @endif
-
-    <section class="mt-6 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
-        <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-            <div>
-                <h2 class="text-base font-semibold">Upcoming Recurring Expenses</h2>
-                <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Costs due within the next 30 days.</p>
-            </div>
-            <flux:button href="{{ route('admin.expenses.index', ['schedule' => 'due_soon']) }}" wire:navigate variant="outline" size="sm" icon="receipt-percent">View due soon</flux:button>
-        </div>
-
-        <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 dark:border-zinc-700">
-            <table class="min-w-[760px] w-full text-left text-sm">
-                <thead class="bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
-                    <tr>
-                        <th class="px-4 py-3 font-medium">Expense</th>
-                        <th class="px-4 py-3 font-medium">Tenant</th>
-                        <th class="px-4 py-3 font-medium">Frequency</th>
-                        <th class="px-4 py-3 font-medium">Due</th>
-                        <th class="px-4 py-3 text-right font-medium">Amount</th>
-                        <th class="px-4 py-3 text-right font-medium">Action</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
-                    @forelse ($upcomingRecurringExpenses as $expense)
-                        <tr>
-                            <td class="px-4 py-3">
-                                <p class="font-medium">{{ $expense->title }}</p>
-                                <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $expense->category?->name ?? 'Uncategorized' }}</p>
-                            </td>
-                            <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $expense->tenant?->company_name }}</td>
-                            <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $expense->recurring_frequency ? str($expense->recurring_frequency)->title() : 'Not set' }}</td>
-                            <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $expense->next_due_on?->toFormattedDateString() }}</td>
-                            <td class="px-4 py-3 text-right font-semibold">{{ $expense->currency }} {{ number_format($expense->amount, 2) }}</td>
-                            <td class="px-4 py-3">
-                                <form method="POST" action="{{ route('admin.expenses.record-recurring', $expense) }}" class="flex justify-end">
-                                    @csrf
-                                    <flux:button type="submit" variant="outline" size="sm" icon="check">Record</flux:button>
-                                </form>
-                            </td>
-                        </tr>
-                    @empty
-                        <tr><td colspan="6" class="px-4 py-8 text-center text-zinc-500 dark:text-zinc-400">No recurring expenses are due in the next 30 days.</td></tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
-    </section>
-
-    <section class="mt-6 grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-        <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
-            <div class="flex items-center justify-between gap-4">
-                <div>
-                    <h2 class="text-base font-semibold">Router Health</h2>
-                    <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Status combines a 5-minute heartbeat ping with recent FreeRADIUS accounting activity.</p>
-                </div>
-                <a href="{{ route('admin.routers.index') }}" wire:navigate class="rounded-md border border-zinc-200 dark:border-zinc-700 px-3 py-2 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800">View all</a>
-            </div>
-
-            <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 dark:border-zinc-700">
-                <table class="min-w-[760px] w-full text-left text-sm">
-                    <thead class="bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
-                        <tr>
-                            <th class="px-4 py-3 font-medium">Router</th>
-                            <th class="px-4 py-3 font-medium">Shop</th>
-                            <th class="px-4 py-3 font-medium">Status</th>
-                            <th class="px-4 py-3 font-medium">Latency</th>
-                            <th class="px-4 py-3 font-medium">Last Seen</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
-                        @forelse ($routerHealth as $router)
-                            <tr>
-                                <td class="px-4 py-3 font-medium">{{ $router->name }}</td>
-                                <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $router->shop->name }}</td>
-                                <td class="px-4 py-3">
-                                    <span class="rounded-full px-2 py-1 text-xs font-medium {{ $router->detected_status === 'Online' ? 'bg-emerald-50 text-emerald-700' : ($router->detected_status === 'Recently seen' ? 'bg-blue-50 text-blue-700' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400') }}">
-                                        {{ $router->detected_status ?? 'Unknown' }}
-                                    </span>
-                                </td>
-                                <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $router->heartbeat_latency_ms !== null ? $router->heartbeat_latency_ms.' ms' : '—' }}</td>
-                                <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $router->last_seen_at?->diffForHumans() ?? 'Never' }}</td>
-                            </tr>
-                        @empty
-                            <tr><td colspan="5" class="px-4 py-8 text-center text-zinc-500 dark:text-zinc-400">No routers have been registered yet.</td></tr>
-                        @endforelse
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
             <h2 class="text-base font-semibold">Setup Progress</h2>
             <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">The clean path from platform setup to live customer access.</p>
 
@@ -908,87 +171,838 @@
                     </div>
                 @endforeach
             </div>
-        </div>
-    </section>
+        </section>
+    @endif
 
-    <section class="mt-6 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
-        <div class="flex items-center justify-between gap-4">
-            <div>
-                <h2 class="text-base font-semibold">Users Online</h2>
-                <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Live sessions from FreeRADIUS accounting, grouped by routers this admin can access.</p>
+    {{--
+        Everything below is detail, not daily-glance info -- collapsed by
+        default so the page opens short, but nothing is removed: click any
+        heading to expand it in place. A section that currently needs
+        attention (an overdue expense, a security event, a router license
+        near its plan limit, etc.) opens expanded automatically instead of
+        hiding behind a click.
+    --}}
+    <flux:accordion transition class="mt-6 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-5 shadow-sm">
+        <flux:accordion.item heading="More KPIs">
+            <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                @foreach ([
+                    ['label' => 'Tenants', 'value' => $tenantCount, 'hint' => auth()->user()->isSuperAdmin() ? 'Total platform customers' : 'Your assigned tenant'],
+                    ['label' => 'Locations', 'value' => $shopCount, 'hint' => 'Active hotspot shops/sites'],
+                    ['label' => 'RADIUS Sessions', 'value' => is_null($activeSessionCount) ? 'Not ready' : $activeSessionCount, 'hint' => $radiusAccountingReady ? 'Live accounting sessions' : 'radacct table has not been created'],
+                    ['label' => 'Usage Today', 'value' => $formatBytes($todayUsageBytes), 'hint' => 'Upload + download from sessions started today'],
+                    ['label' => 'Total Usage', 'value' => $formatBytes($totalUsageBytes), 'hint' => 'All accounting traffic for scoped routers'],
+                    ['label' => auth()->user()->isSuperAdmin() ? 'Platform Commission' : 'Platform Fees', 'value' => 'NGN '.number_format($platformCommission, 2), 'hint' => 'Commission deducted from sales'],
+                    ['label' => 'Tenant Net', 'value' => 'NGN '.number_format($tenantNetRevenue, 2), 'hint' => 'Successful sales after commission'],
+                    ['label' => 'Expenses', 'value' => 'NGN '.number_format($totalExpenses, 2), 'hint' => 'Recorded operating costs'],
+                ] as $stat)
+                    <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 p-4">
+                        <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">{{ $stat['label'] }}</p>
+                        <p class="mt-3 text-2xl font-semibold">{{ is_numeric($stat['value']) ? number_format($stat['value']) : $stat['value'] }}</p>
+                        <p class="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{{ $stat['hint'] }}</p>
+                    </div>
+                @endforeach
             </div>
-        </div>
+        </flux:accordion.item>
 
-        <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 dark:border-zinc-700">
-            <table class="min-w-[720px] w-full text-left text-sm">
-                <thead class="bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
-                    <tr>
-                        <th class="px-4 py-3 font-medium">User / Device</th>
-                        <th class="px-4 py-3 font-medium">Router</th>
-                        <th class="px-4 py-3 font-medium">Framed IP</th>
-                        <th class="px-4 py-3 font-medium">Online Since</th>
-                        <th class="px-4 py-3 font-medium">Usage</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
-                    @forelse ($onlineSessions as $session)
-                        <tr>
-                            <td class="px-4 py-3">
-                                <p class="font-medium">{{ $session->username }}</p>
-                                <p class="mt-1 font-mono text-xs text-zinc-500 dark:text-zinc-400">{{ $session->callingstationid ?: 'No MAC reported' }}</p>
-                            </td>
-                            <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">
-                                <p>{{ $session->router_name }}</p>
-                                <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $session->shop_name ?: $session->nasipaddress }}</p>
-                            </td>
-                            <td class="px-4 py-3 font-mono text-xs text-zinc-600 dark:text-zinc-400">{{ $session->framedipaddress ?: 'None' }}</td>
-                            <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $session->acctstarttime ? \Illuminate\Support\Carbon::parse($session->acctstarttime)->diffForHumans() : 'Unknown' }}</td>
-                            <td class="px-4 py-3 font-medium">{{ $formatBytes($session->total_bytes) }}</td>
-                        </tr>
-                    @empty
-                        <tr>
-                            <td colspan="5" class="px-4 py-8 text-center text-zinc-500 dark:text-zinc-400">
-                                {{ $radiusAccountingReady ? 'No users are online right now.' : 'FreeRADIUS accounting is not available yet.' }}
-                            </td>
-                        </tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
-    </section>
+        <flux:accordion.item heading="Scheduler Health" :expanded="! $schedulerHealth['is_healthy']">
+            <div class="flex flex-col justify-between gap-4 md:flex-row md:items-center">
+                <div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <h3 class="text-lg font-semibold text-zinc-950 dark:text-zinc-100">{{ $schedulerHealth['label'] }}</h3>
+                        <flux:badge :color="$schedulerHealth['is_healthy'] ? 'green' : ($schedulerHealth['last_run_at'] ? 'amber' : 'zinc')">
+                            {{ $schedulerHealth['is_healthy'] ? 'Cron active' : 'Check cron' }}
+                        </flux:badge>
+                    </div>
+                    <p class="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">{{ $schedulerHealth['description'] }}</p>
+                    <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                        {{ $schedulerHealth['last_run_at'] ? 'Last heartbeat '.$schedulerHealth['last_run_at']->diffForHumans().' at '.$schedulerHealth['last_run_at']->format('M j, Y g:i A') : 'Run php artisan schedule:run or wait for cron to check in.' }}
+                    </p>
+                </div>
 
-    <section class="mt-6 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
-        <div class="flex items-center justify-between gap-4">
-            <div>
-                <h2 class="text-base font-semibold">Recent Access Grants</h2>
-                <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Latest subscriptions created from the captive portal or package flow.</p>
+                <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4 font-mono text-xs leading-5 text-zinc-700 dark:text-zinc-300">
+                    * * * * * cd /var/www/hotspotfreerad && php artisan schedule:run &gt;&gt; /dev/null 2&gt;&amp;1
+                </div>
             </div>
-            <a href="{{ route('admin.packages.index') }}" wire:navigate class="rounded-md border border-zinc-200 dark:border-zinc-700 px-3 py-2 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800">Manage plans</a>
-        </div>
+        </flux:accordion.item>
 
-        <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 dark:border-zinc-700">
-            <table class="min-w-[640px] w-full text-left text-sm">
-                <thead class="bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
-                    <tr>
-                        <th class="px-4 py-3 font-medium">Device</th>
-                        <th class="px-4 py-3 font-medium">Package</th>
-                        <th class="px-4 py-3 font-medium">Shop</th>
-                        <th class="px-4 py-3 font-medium">Expires</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
-                    @forelse ($recentSubscriptions as $subscription)
+        <flux:accordion.item heading="POS Access Desk" :expanded="($posSummary['due_soon'] + $posSummary['expired']) > 0">
+            <div class="flex flex-col justify-between gap-3 md:flex-row md:items-center">
+                <div>
+                    <h3 class="text-lg font-semibold text-zinc-950 dark:text-zinc-100">{{ number_format($posSummary['total']) }} POS terminal{{ $posSummary['total'] === 1 ? '' : 's' }}</h3>
+                    <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Password Wi-Fi devices managed by MAC address, renewal date, package, and RADIUS sync.</p>
+                </div>
+
+                <div class="flex flex-wrap gap-2">
+                    <flux:button href="{{ route('admin.packages.index', ['service' => 'hotspot_capable']) }}" wire:navigate variant="outline" size="sm" icon="radio">POS Plans</flux:button>
+                    <flux:button href="{{ route('admin.pos-devices.index', ['status' => 'expiring_soon']) }}" wire:navigate variant="outline" size="sm" icon="clock">Due soon</flux:button>
+                    <flux:button href="{{ route('admin.pos-devices.index') }}" wire:navigate variant="primary" size="sm" icon="device-phone-mobile">Manage POS</flux:button>
+                </div>
+            </div>
+
+            <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+                @foreach ([
+                    ['label' => 'Active', 'value' => $posSummary['active'], 'href' => route('admin.pos-devices.index', ['status' => 'active']), 'hint' => 'Can authenticate now'],
+                    ['label' => 'Online', 'value' => is_null($posSummary['online']) ? 'Not ready' : $posSummary['online'], 'href' => route('admin.pos-devices.index', ['status' => 'active']), 'hint' => $posSummary['accounting_ready'] ? 'Open accounting sessions' : 'radacct not ready'],
+                    ['label' => 'Due Soon', 'value' => $posSummary['due_soon'], 'href' => route('admin.pos-devices.index', ['status' => 'expiring_soon']), 'hint' => 'Expires within 7 days'],
+                    ['label' => 'Expired', 'value' => $posSummary['expired'], 'href' => route('admin.pos-devices.index', ['status' => 'expired']), 'hint' => 'Needs renewal'],
+                    ['label' => 'Unsynced', 'value' => $posSummary['unsynced'], 'href' => route('admin.pos-devices.index', ['status' => 'unsynced']), 'hint' => 'Not pushed to RADIUS'],
+                    ['label' => 'Disabled', 'value' => $posSummary['disabled'], 'href' => route('admin.pos-devices.index', ['status' => 'disabled']), 'hint' => 'Blocked from access'],
+                ] as $stat)
+                    <a href="{{ $stat['href'] }}" wire:navigate class="rounded-lg border border-zinc-200 dark:border-zinc-700 p-4 transition hover:border-zinc-400 dark:hover:border-zinc-500">
+                        <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">{{ $stat['label'] }}</p>
+                        <p class="mt-3 text-2xl font-semibold">{{ is_numeric($stat['value']) ? number_format($stat['value']) : $stat['value'] }}</p>
+                        <p class="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{{ $stat['hint'] }}</p>
+                    </a>
+                @endforeach
+            </div>
+
+            <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 dark:border-zinc-700">
+                <table class="min-w-[760px] w-full text-left text-sm">
+                    <thead class="bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
                         <tr>
-                            <td class="px-4 py-3 font-medium">{{ $subscription->mac_address }}</td>
-                            <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $subscription->package->name }}</td>
-                            <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $subscription->shop->name }}</td>
-                            <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $subscription->expires_at->diffForHumans() }}</td>
+                            <th class="px-4 py-3 font-medium">Renewal Queue</th>
+                            <th class="px-4 py-3 font-medium">Package</th>
+                            <th class="px-4 py-3 font-medium">Shop</th>
+                            <th class="px-4 py-3 font-medium">Expires</th>
                         </tr>
-                    @empty
-                        <tr><td colspan="4" class="px-4 py-8 text-center text-zinc-500 dark:text-zinc-400">No access grants have been created yet.</td></tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
-    </section>
+                    </thead>
+                    <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
+                        @forelse ($posSummary['renewal_queue'] as $device)
+                            <tr>
+                                <td class="px-4 py-3">
+                                    <p class="font-medium">{{ $device->device_name }}</p>
+                                    <p class="mt-1 font-mono text-xs text-zinc-500 dark:text-zinc-400">{{ $device->mac_address }}</p>
+                                </td>
+                                <td class="px-4 py-3">
+                                    <p>{{ $device->package?->name ?? 'Deleted package' }}</p>
+                                    <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $device->package?->speed_limit_profile ?: 'No speed profile' }}</p>
+                                </td>
+                                <td class="px-4 py-3">
+                                    <p>{{ $device->shop?->name ?? 'Deleted shop' }}</p>
+                                    <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $device->shop?->tenant?->company_name }}</p>
+                                </td>
+                                <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $device->expires_at?->format('M j, Y g:i A') }}</td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="4" class="px-4 py-8 text-center text-zinc-500 dark:text-zinc-400">No POS renewals due in the next 7 days.</td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </flux:accordion.item>
+
+        <flux:accordion.item heading="PPPoE Service Desk" :expanded="($pppoeSummary['due_soon'] + $pppoeSummary['expired']) > 0">
+            <div class="flex flex-col justify-between gap-3 md:flex-row md:items-center">
+                <div>
+                    <h3 class="text-lg font-semibold text-zinc-950 dark:text-zinc-100">{{ number_format($pppoeSummary['total']) }} fixed subscriber{{ $pppoeSummary['total'] === 1 ? '' : 's' }}</h3>
+                    <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Renewal, sync, and online-session snapshot for PPPoE customers.</p>
+                </div>
+
+                <div class="flex flex-wrap gap-2">
+                    <flux:button href="{{ route('admin.packages.index', ['service' => 'pppoe_capable']) }}" wire:navigate variant="outline" size="sm" icon="radio">PPPoE Plans</flux:button>
+                    <flux:button href="{{ route('admin.pppoe-subscribers.index', ['status' => 'expiring_soon']) }}" wire:navigate variant="outline" size="sm" icon="clock">Due soon</flux:button>
+                    <flux:button href="{{ route('admin.pppoe-subscribers.index') }}" wire:navigate variant="primary" size="sm" icon="wifi">Manage PPPoE</flux:button>
+                </div>
+            </div>
+
+            <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+                @foreach ([
+                    ['label' => 'Active', 'value' => $pppoeSummary['active'], 'href' => route('admin.pppoe-subscribers.index', ['status' => 'active']), 'hint' => 'Can authenticate now'],
+                    ['label' => 'Online', 'value' => is_null($pppoeSummary['online']) ? 'Not ready' : $pppoeSummary['online'], 'href' => route('admin.pppoe-subscribers.index', ['status' => 'active']), 'hint' => $pppoeSummary['accounting_ready'] ? 'Open accounting sessions' : 'radacct not ready'],
+                    ['label' => 'Due Soon', 'value' => $pppoeSummary['due_soon'], 'href' => route('admin.pppoe-subscribers.index', ['status' => 'expiring_soon']), 'hint' => 'Expires within 7 days'],
+                    ['label' => 'Expired', 'value' => $pppoeSummary['expired'], 'href' => route('admin.pppoe-subscribers.index', ['status' => 'expired']), 'hint' => 'Needs renewal'],
+                    ['label' => 'Unsynced', 'value' => $pppoeSummary['unsynced'], 'href' => route('admin.pppoe-subscribers.index', ['status' => 'unsynced']), 'hint' => 'Not pushed to RADIUS'],
+                    ['label' => 'Disabled', 'value' => $pppoeSummary['disabled'], 'href' => route('admin.pppoe-subscribers.index', ['status' => 'disabled']), 'hint' => 'Blocked from access'],
+                ] as $stat)
+                    <a href="{{ $stat['href'] }}" wire:navigate class="rounded-lg border border-zinc-200 dark:border-zinc-700 p-4 transition hover:border-zinc-400 dark:hover:border-zinc-500">
+                        <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">{{ $stat['label'] }}</p>
+                        <p class="mt-3 text-2xl font-semibold">{{ is_numeric($stat['value']) ? number_format($stat['value']) : $stat['value'] }}</p>
+                        <p class="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{{ $stat['hint'] }}</p>
+                    </a>
+                @endforeach
+            </div>
+
+            <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 dark:border-zinc-700">
+                <table class="min-w-[760px] w-full text-left text-sm">
+                    <thead class="bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
+                        <tr>
+                            <th class="px-4 py-3 font-medium">Renewal Queue</th>
+                            <th class="px-4 py-3 font-medium">Package</th>
+                            <th class="px-4 py-3 font-medium">Shop</th>
+                            <th class="px-4 py-3 font-medium">Expires</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
+                        @forelse ($pppoeSummary['renewal_queue'] as $subscriber)
+                            <tr>
+                                <td class="px-4 py-3">
+                                    <p class="font-medium">{{ $subscriber->full_name ?: $subscriber->username }}</p>
+                                    <p class="mt-1 font-mono text-xs text-zinc-500 dark:text-zinc-400">{{ $subscriber->username }}</p>
+                                </td>
+                                <td class="px-4 py-3">
+                                    <p>{{ $subscriber->package?->name ?? 'Deleted package' }}</p>
+                                    <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $subscriber->package?->speed_limit_profile ?: 'No speed profile' }}</p>
+                                </td>
+                                <td class="px-4 py-3">
+                                    <p>{{ $subscriber->shop?->name ?? 'Deleted shop' }}</p>
+                                    <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $subscriber->shop?->tenant?->company_name }}</p>
+                                </td>
+                                <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $subscriber->expires_at?->format('M j, Y g:i A') }}</td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="4" class="px-4 py-8 text-center text-zinc-500 dark:text-zinc-400">No PPPoE renewals due in the next 7 days.</td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </flux:accordion.item>
+
+        <flux:accordion.item heading="Security Attention" :expanded="$securityAttention['count'] > 0">
+            <div class="flex flex-col justify-between gap-3 md:flex-row md:items-center">
+                <div>
+                    <h3 class="text-lg font-semibold text-zinc-950 dark:text-zinc-100">{{ number_format($securityAttention['count']) }} event{{ $securityAttention['count'] === 1 ? '' : 's' }} in the last 30 days</h3>
+                    <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Failed 2FA, blocked tenant access, password changes, reset links, and disabled 2FA.</p>
+                </div>
+
+                <flux:button href="{{ route('admin.security-activity.index', ['attention' => '1']) }}" wire:navigate variant="outline" size="sm" icon="shield-exclamation">
+                    Review activity
+                </flux:button>
+            </div>
+
+            @if ($securityAttention['reasons']->isNotEmpty())
+                <div class="mt-4 flex flex-wrap gap-2">
+                    @foreach ($securityAttention['reasons'] as $reason)
+                        <a
+                            href="{{ route('admin.security-activity.index', ['attention' => '1', 'action' => $reason['action']]) }}"
+                            wire:navigate
+                            class="inline-flex items-center gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-1.5 text-sm font-medium text-rose-700 hover:bg-rose-100"
+                        >
+                            <span>{{ $reason['label'] }}</span>
+                            <span class="rounded bg-white dark:bg-zinc-900 px-1.5 py-0.5 text-xs">{{ number_format($reason['count']) }}</span>
+                        </a>
+                    @endforeach
+                </div>
+            @endif
+
+            <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 dark:border-zinc-700">
+                <table class="min-w-[680px] w-full text-left text-sm">
+                    <thead class="bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
+                        <tr>
+                            <th class="px-4 py-3 font-medium">Event</th>
+                            <th class="px-4 py-3 font-medium">Admin</th>
+                            <th class="px-4 py-3 font-medium">Tenant</th>
+                            <th class="px-4 py-3 font-medium">When</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
+                        @forelse ($securityAttention['events'] as $activity)
+                            <tr>
+                                <td class="px-4 py-3">
+                                    <p class="font-medium text-zinc-950 dark:text-zinc-100">{{ $activity->label }}</p>
+                                    <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ str($activity->action)->replace('_', ' ')->title() }}</p>
+                                </td>
+                                <td class="px-4 py-3">
+                                    <p class="font-medium">{{ $activity->user?->name ?? 'Deleted user' }}</p>
+                                    <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $activity->user?->email ?? '-' }}</p>
+                                </td>
+                                <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $activity->tenant?->company_name ?? 'Platform' }}</td>
+                                <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $activity->created_at->diffForHumans() }}</td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="4" class="px-4 py-8 text-center text-zinc-500 dark:text-zinc-400">No security attention events in the last 30 days.</td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </flux:accordion.item>
+
+        <flux:accordion.item heading="This Month Finance">
+            <div class="flex flex-col justify-between gap-3 md:flex-row md:items-center">
+                <div>
+                    <h3 class="text-lg font-semibold text-zinc-950 dark:text-zinc-100">{{ $monthFinanceSummary['period'] }} performance</h3>
+                </div>
+
+                <div class="flex flex-wrap gap-2">
+                    <flux:button
+                        href="{{ route('admin.reports.sales', ['from' => $monthFinanceSummary['from'], 'to' => $monthFinanceSummary['to']]) }}"
+                        wire:navigate
+                        variant="outline"
+                        size="sm"
+                        icon="chart-bar"
+                    >
+                        Sales report
+                    </flux:button>
+                    <flux:button
+                        href="{{ route('admin.expenses.index', ['from' => $monthFinanceSummary['from'], 'to' => $monthFinanceSummary['to']]) }}"
+                        wire:navigate
+                        variant="outline"
+                        size="sm"
+                        icon="receipt-percent"
+                    >
+                        Expenses
+                    </flux:button>
+                </div>
+            </div>
+
+            <div class="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
+                @foreach ([
+                    ['label' => 'Gross Sales', 'value' => 'NGN '.number_format($monthFinanceSummary['gross_sales'], 2), 'hint' => 'Customer payments received this month'],
+                    ['label' => auth()->user()->isSuperAdmin() ? 'Commission' : 'Platform Fees', 'value' => 'NGN '.number_format($monthFinanceSummary['platform_commission'], 2), 'hint' => 'Platform commission deducted this month'],
+                    ['label' => 'Tenant Net', 'value' => 'NGN '.number_format($monthFinanceSummary['tenant_net'], 2), 'hint' => 'Sales retained by the tenant'],
+                    ['label' => 'Expenses', 'value' => 'NGN '.number_format($monthFinanceSummary['expenses'], 2), 'hint' => 'Costs recorded this month'],
+                    ['label' => 'Profit', 'value' => 'NGN '.number_format($monthFinanceSummary['profit'], 2), 'hint' => 'Tenant net sales minus expenses'],
+                    ['label' => 'Margin', 'value' => is_null($monthFinanceSummary['margin']) ? 'No sales' : $monthFinanceSummary['margin'].'%', 'hint' => 'Profit as a share of tenant net sales'],
+                ] as $monthlyStat)
+                    <article class="rounded-lg border border-zinc-200 dark:border-zinc-700 p-4">
+                        <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">{{ $monthlyStat['label'] }}</p>
+                        <p class="mt-3 text-2xl font-semibold">{{ $monthlyStat['value'] }}</p>
+                        <p class="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{{ $monthlyStat['hint'] }}</p>
+                    </article>
+                @endforeach
+            </div>
+        </flux:accordion.item>
+
+        <flux:accordion.item heading="Payment Health" :expanded="$paymentAttentionCount > 0">
+            <div class="flex flex-col justify-between gap-3 md:flex-row md:items-center">
+                <div>
+                    <h3 class="text-lg font-semibold text-zinc-950 dark:text-zinc-100">{{ $paymentHealth['period'] }} checkout flow</h3>
+                    <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Attempts are counted by checkout creation date, so pending and failed payments do not inflate sales.</p>
+                </div>
+
+                <div class="flex flex-wrap gap-2">
+                    <flux:button href="{{ route('admin.payments.index', ['status' => 'pending']) }}" wire:navigate variant="outline" size="sm" icon="clock">
+                        Pending
+                    </flux:button>
+                    <flux:button href="{{ route('admin.payments.index', ['status' => 'failed']) }}" wire:navigate variant="outline" size="sm" icon="exclamation-triangle">
+                        Failed
+                    </flux:button>
+                    <flux:button href="{{ route('admin.payments.index', ['status' => 'attention']) }}" wire:navigate variant="outline" size="sm" icon="exclamation-triangle">
+                        Needs attention
+                    </flux:button>
+                    <flux:button href="{{ route('admin.payments.index') }}" wire:navigate variant="outline" size="sm" icon="credit-card">
+                        All payments
+                    </flux:button>
+                </div>
+            </div>
+
+            <div class="mt-5 grid gap-4 md:grid-cols-5">
+                @foreach ([
+                    ['label' => 'Attempts', 'value' => number_format($paymentHealth['total_attempts']), 'hint' => 'All checkout attempts this month'],
+                    ['label' => 'Success Rate', 'value' => is_null($paymentHealth['success_rate']) ? 'No attempts' : $paymentHealth['success_rate'].'%', 'hint' => 'Successful payments divided by attempts'],
+                    ['label' => 'Successful', 'value' => number_format($paymentHealth['successful_count']), 'hint' => 'NGN '.number_format($paymentHealth['successful_value'], 2).' confirmed'],
+                    ['label' => 'Pending', 'value' => number_format($paymentHealth['pending_count']), 'hint' => 'NGN '.number_format($paymentHealth['pending_value'], 2).' awaiting callback/webhook'],
+                    ['label' => 'Needs Attention', 'value' => number_format($paymentHealth['attention_count']), 'hint' => 'NGN '.number_format($paymentHealth['attention_value'], 2).' pending or failed'],
+                ] as $stat)
+                    <article class="rounded-lg border border-zinc-200 dark:border-zinc-700 p-4">
+                        <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">{{ $stat['label'] }}</p>
+                        <p class="mt-3 text-2xl font-semibold">{{ $stat['value'] }}</p>
+                        <p class="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{{ $stat['hint'] }}</p>
+                    </article>
+                @endforeach
+            </div>
+        </flux:accordion.item>
+
+        <flux:accordion.item heading="Top Packages">
+            <div class="flex flex-col justify-between gap-3 md:flex-row md:items-center">
+                <div>
+                    <h3 class="text-lg font-semibold text-zinc-950 dark:text-zinc-100">{{ $monthFinanceSummary['period'] }} best sellers</h3>
+                </div>
+                <flux:button href="{{ route('admin.payments.index', ['status' => 'successful']) }}" wire:navigate variant="outline" size="sm" icon="credit-card">
+                    Payment report
+                </flux:button>
+            </div>
+
+            <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 dark:border-zinc-700">
+                <table class="min-w-[760px] w-full text-left text-sm">
+                    <thead class="bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
+                        <tr>
+                            <th class="px-4 py-3 font-medium">Package</th>
+                            <th class="px-4 py-3 font-medium">Shop</th>
+                            <th class="px-4 py-3 text-right font-medium">Sales</th>
+                            <th class="px-4 py-3 text-right font-medium">Gross</th>
+                            <th class="px-4 py-3 text-right font-medium">Tenant Net</th>
+                            <th class="px-4 py-3 text-right font-medium">Share</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
+                        @forelse ($topPackages as $row)
+                            <tr>
+                                <td class="px-4 py-3 font-medium">{{ $row['package'] }}</td>
+                                <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $row['shop'] }}</td>
+                                <td class="px-4 py-3 text-right">{{ number_format($row['sales_count']) }}</td>
+                                <td class="px-4 py-3 text-right font-semibold">NGN {{ number_format($row['gross_sales'], 2) }}</td>
+                                <td class="px-4 py-3 text-right">NGN {{ number_format($row['tenant_net'], 2) }}</td>
+                                <td class="px-4 py-3 text-right">
+                                    <div class="ml-auto flex w-28 flex-col items-end gap-1">
+                                        <span>{{ is_null($row['share']) ? 'No sales' : $row['share'].'%' }}</span>
+                                        <span class="block h-1.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                                            <span class="block h-full rounded-full bg-zinc-950 dark:bg-zinc-100" style="width: {{ $row['share'] ?? 0 }}%"></span>
+                                        </span>
+                                    </div>
+                                </td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="6" class="px-4 py-8 text-center text-zinc-500 dark:text-zinc-400">No successful package sales this month.</td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </flux:accordion.item>
+
+        <flux:accordion.item heading="Top Locations">
+            <div class="flex flex-col justify-between gap-3 md:flex-row md:items-center">
+                <div>
+                    <h3 class="text-lg font-semibold text-zinc-950 dark:text-zinc-100">{{ $monthFinanceSummary['period'] }} shop performance</h3>
+                </div>
+                <flux:button href="{{ route('admin.shops.index') }}" wire:navigate variant="outline" size="sm" icon="building-storefront">
+                    Manage shops
+                </flux:button>
+            </div>
+
+            <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 dark:border-zinc-700">
+                <table class="min-w-[820px] w-full text-left text-sm">
+                    <thead class="bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
+                        <tr>
+                            <th class="px-4 py-3 font-medium">Shop</th>
+                            <th class="px-4 py-3 font-medium">Tenant</th>
+                            <th class="px-4 py-3 text-right font-medium">Sales</th>
+                            <th class="px-4 py-3 text-right font-medium">Active Access</th>
+                            <th class="px-4 py-3 text-right font-medium">Gross</th>
+                            <th class="px-4 py-3 text-right font-medium">Tenant Net</th>
+                            <th class="px-4 py-3 text-right font-medium">Share</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
+                        @forelse ($topShops as $row)
+                            <tr>
+                                <td class="px-4 py-3 font-medium">{{ $row['shop'] }}</td>
+                                <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $row['tenant'] ?: 'Current tenant' }}</td>
+                                <td class="px-4 py-3 text-right">{{ number_format($row['sales_count']) }}</td>
+                                <td class="px-4 py-3 text-right">{{ number_format($row['active_access_count']) }}</td>
+                                <td class="px-4 py-3 text-right font-semibold">NGN {{ number_format($row['gross_sales'], 2) }}</td>
+                                <td class="px-4 py-3 text-right">NGN {{ number_format($row['tenant_net'], 2) }}</td>
+                                <td class="px-4 py-3 text-right">
+                                    <div class="ml-auto flex w-28 flex-col items-end gap-1">
+                                        <span>{{ is_null($row['share']) ? 'No sales' : $row['share'].'%' }}</span>
+                                        <span class="block h-1.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                                            <span class="block h-full rounded-full bg-zinc-950 dark:bg-zinc-100" style="width: {{ $row['share'] ?? 0 }}%"></span>
+                                        </span>
+                                    </div>
+                                </td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="7" class="px-4 py-8 text-center text-zinc-500 dark:text-zinc-400">No successful shop sales this month.</td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </flux:accordion.item>
+
+        <flux:accordion.item heading="Finance Trend">
+            @php
+                $financeTrendMax = max(1, (float) collect($financeTrend)
+                    ->flatMap(fn (array $row) => [(float) $row['sales'], (float) $row['expenses'], abs((float) $row['profit'])])
+                    ->max());
+            @endphp
+
+            <div class="flex flex-col justify-between gap-3 md:flex-row md:items-center">
+                <div>
+                    <h3 class="text-lg font-semibold text-zinc-950 dark:text-zinc-100">Last 6 months</h3>
+                </div>
+                <flux:button href="{{ route('admin.reports.sales', ['preset' => 'this_year', 'group' => 'month']) }}" wire:navigate variant="outline" size="sm" icon="chart-bar">
+                    Full report
+                </flux:button>
+            </div>
+
+            <div class="mt-5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4" aria-label="Finance trend chart">
+                <div class="flex items-center gap-4 text-xs text-zinc-500 dark:text-zinc-400">
+                    <span class="inline-flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-sm bg-zinc-950 dark:bg-zinc-100"></span>Gross</span>
+                    <span class="inline-flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-sm bg-amber-500"></span>Expense</span>
+                    <span class="inline-flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-sm bg-emerald-600"></span>Profit</span>
+                </div>
+
+                <div class="mt-5 grid min-h-44 grid-cols-6 items-end gap-3">
+                    @foreach ($financeTrend as $row)
+                        @php
+                            $salesHeight = max(4, round(((float) $row['sales'] / $financeTrendMax) * 100));
+                            $expenseHeight = max(4, round(((float) $row['expenses'] / $financeTrendMax) * 100));
+                            $profitHeight = max(4, round((abs((float) $row['profit']) / $financeTrendMax) * 100));
+                        @endphp
+                        <div class="flex min-w-0 flex-col items-center gap-2">
+                            <div class="flex h-32 w-full items-end justify-center gap-1">
+                                <span class="w-3 rounded-t-sm bg-zinc-950 dark:bg-zinc-100" title="Gross sales: NGN {{ number_format($row['sales'], 2) }}" style="height: {{ $salesHeight }}%"></span>
+                                <span class="w-3 rounded-t-sm bg-amber-500" title="Expenses: NGN {{ number_format($row['expenses'], 2) }}" style="height: {{ $expenseHeight }}%"></span>
+                                <span class="w-3 rounded-t-sm {{ $row['profit'] < 0 ? 'bg-red-600' : 'bg-emerald-600' }}" title="Profit: NGN {{ number_format($row['profit'], 2) }}" style="height: {{ $profitHeight }}%"></span>
+                            </div>
+                            <span class="truncate text-xs font-medium text-zinc-600 dark:text-zinc-400">{{ str($row['label'])->before(' ') }}</span>
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+
+            <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 dark:border-zinc-700">
+                <table class="min-w-[860px] w-full text-left text-sm">
+                    <thead class="bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
+                        <tr>
+                            <th class="px-4 py-3 font-medium">Month</th>
+                            <th class="px-4 py-3 text-right font-medium">Gross Sales</th>
+                            <th class="px-4 py-3 text-right font-medium">Tenant Net</th>
+                            <th class="px-4 py-3 text-right font-medium">Expenses</th>
+                            <th class="px-4 py-3 text-right font-medium">Profit</th>
+                            <th class="px-4 py-3 text-right font-medium">Margin</th>
+                            <th class="px-4 py-3 text-right font-medium">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
+                        @foreach ($financeTrend as $row)
+                            <tr>
+                                <td class="px-4 py-3 font-medium">{{ $row['label'] }}</td>
+                                <td class="px-4 py-3 text-right font-semibold">NGN {{ number_format($row['sales'], 2) }}</td>
+                                <td class="px-4 py-3 text-right">NGN {{ number_format($row['net'], 2) }}</td>
+                                <td class="px-4 py-3 text-right">NGN {{ number_format($row['expenses'], 2) }}</td>
+                                <td class="px-4 py-3 text-right {{ $row['profit'] < 0 ? 'font-semibold text-red-700' : 'font-semibold text-zinc-950 dark:text-zinc-100' }}">NGN {{ number_format($row['profit'], 2) }}</td>
+                                <td class="px-4 py-3 text-right">{{ is_null($row['margin']) ? 'No sales' : $row['margin'].'%' }}</td>
+                                <td class="px-4 py-3 text-right">
+                                    <flux:button
+                                        href="{{ route('admin.reports.sales', ['from' => $row['from'], 'to' => $row['to'], 'group' => 'day']) }}"
+                                        wire:navigate
+                                        variant="outline"
+                                        size="sm"
+                                        icon="magnifying-glass"
+                                    >
+                                        Details
+                                    </flux:button>
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        </flux:accordion.item>
+
+        @if ($budgetWatch->isNotEmpty() || $budgetCategoryCount > 0)
+            <flux:accordion.item heading="Budget Watch" :expanded="$budgetWatch->isNotEmpty()">
+                <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+                    <div>
+                        <p class="text-sm {{ $budgetWatch->isNotEmpty() ? 'text-amber-700' : 'text-emerald-700' }}">
+                            @if ($budgetWatch->isNotEmpty())
+                                Current-month expense categories at 80% or more of their monthly budget.
+                            @else
+                                {{ number_format($budgetCategoryCount) }} budgeted categories are currently below the 80% watch threshold.
+                            @endif
+                        </p>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <flux:button
+                            href="{{ route('admin.reports.sales', ['from' => $monthFinanceSummary['from'], 'to' => $monthFinanceSummary['to']]) }}"
+                            wire:navigate
+                            variant="outline"
+                            size="sm"
+                            icon="chart-bar"
+                        >
+                            Review report
+                        </flux:button>
+                        <flux:button
+                            href="{{ route('admin.expenses.index', ['from' => $monthFinanceSummary['from'], 'to' => $monthFinanceSummary['to']]) }}"
+                            wire:navigate
+                            variant="outline"
+                            size="sm"
+                            icon="receipt-percent"
+                        >
+                            View expenses
+                        </flux:button>
+                    </div>
+                </div>
+
+                @if ($budgetWatch->isEmpty())
+                    <div class="mt-5 rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+                        <p class="text-sm font-medium text-emerald-950">All budgeted categories are under watch level.</p>
+                        <p class="mt-1 text-sm text-emerald-700">The dashboard will highlight a category here once current-month spending reaches 80% of its monthly budget.</p>
+                    </div>
+                @else
+                <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-amber-200 bg-white dark:bg-zinc-900">
+                    <table class="min-w-[860px] w-full text-left text-sm">
+                        <thead class="bg-amber-50 text-amber-800">
+                            <tr>
+                                <th class="px-4 py-3 font-medium">Category</th>
+                                <th class="px-4 py-3 font-medium">Tenant</th>
+                                <th class="px-4 py-3 text-right font-medium">Spent</th>
+                                <th class="px-4 py-3 text-right font-medium">Budget</th>
+                                <th class="px-4 py-3 text-right font-medium">Variance</th>
+                                <th class="px-4 py-3 text-right font-medium">Usage</th>
+                                <th class="px-4 py-3 text-right font-medium">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-amber-100">
+                            @foreach ($budgetWatch as $row)
+                                <tr>
+                                    <td class="px-4 py-3">
+                                        <p class="font-medium">{{ $row['category'] }}</p>
+                                        <p class="mt-1 text-xs {{ $row['usage'] > 100 ? 'text-red-700' : 'text-amber-700' }}">{{ $row['status'] }}</p>
+                                    </td>
+                                    <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $row['tenant'] ?: 'All tenants' }}</td>
+                                    <td class="px-4 py-3 text-right font-semibold">NGN {{ number_format($row['spent'], 2) }}</td>
+                                    <td class="px-4 py-3 text-right">NGN {{ number_format($row['budget'], 2) }}</td>
+                                    <td class="px-4 py-3 text-right {{ $row['variance'] < 0 ? 'font-semibold text-red-700' : 'text-zinc-700 dark:text-zinc-300' }}">
+                                        NGN {{ number_format($row['variance'], 2) }}
+                                    </td>
+                                    <td class="px-4 py-3 text-right">
+                                        <div class="ml-auto flex w-28 flex-col items-end gap-1">
+                                            <span class="{{ $row['usage'] > 100 ? 'font-semibold text-red-700' : 'text-zinc-700 dark:text-zinc-300' }}">{{ $row['usage'] }}%</span>
+                                            <span class="block h-1.5 w-full overflow-hidden rounded-full bg-amber-100">
+                                                <span class="block h-full rounded-full {{ $row['usage'] > 100 ? 'bg-red-600' : 'bg-amber-500' }}" style="width: {{ min($row['usage'], 100) }}%"></span>
+                                            </span>
+                                        </div>
+                                    </td>
+                                    <td class="px-4 py-3 text-right">
+                                        <flux:button
+                                            href="{{ route('admin.expenses.index', ['from' => $monthFinanceSummary['from'], 'to' => $monthFinanceSummary['to'], 'category' => $row['category_id']]) }}"
+                                            wire:navigate
+                                            variant="outline"
+                                            size="sm"
+                                            icon="magnifying-glass"
+                                        >
+                                            Details
+                                        </flux:button>
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+                @endif
+            </flux:accordion.item>
+        @endif
+
+        @if ($tenantBillingSummary)
+            <flux:accordion.item heading="Platform Plan" :expanded="$billingUsageNeedsAttention">
+                <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                    <div>
+                        <h3 class="text-xl font-semibold text-zinc-950 dark:text-zinc-100">{{ $tenantBillingSummary['plan_name'] }}</h3>
+                        <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{{ $tenantBillingSummary['price'] }}</p>
+                    </div>
+
+                    <div class="flex flex-wrap gap-2">
+                        <span class="rounded-full bg-zinc-100 dark:bg-zinc-800 px-3 py-1 text-sm font-medium text-zinc-700 dark:text-zinc-300">{{ $tenantBillingSummary['status'] }}</span>
+                        <span class="rounded-full bg-blue-50 px-3 py-1 text-sm font-medium text-blue-700">{{ $tenantBillingSummary['period_label'] }}</span>
+                        <a href="{{ route('admin.billing.index') }}" wire:navigate class="rounded-md border border-zinc-200 dark:border-zinc-700 px-3 py-1.5 text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800">Manage billing</a>
+                    </div>
+                </div>
+
+                <div class="mt-5 grid gap-4 md:grid-cols-3">
+                    @foreach ($tenantBillingSummary['usage'] as $usage)
+                        <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 p-4">
+                            <div class="flex items-center justify-between gap-3">
+                                <p class="text-sm font-medium">{{ $usage['label'] }}</p>
+                                <p class="text-sm text-zinc-500 dark:text-zinc-400">{{ number_format($usage['used']) }} / {{ $usage['limit_label'] }}</p>
+                            </div>
+                            <div class="mt-3 h-2 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                                <div
+                                    class="h-full rounded-full {{ $usage['is_limited'] && $usage['percent'] >= 90 ? 'bg-amber-500' : 'bg-zinc-950 dark:bg-zinc-100' }}"
+                                    style="width: {{ $usage['percent'] }}%"
+                                ></div>
+                            </div>
+                            <p class="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">
+                                {{ $usage['is_limited'] ? 'Upgrade before adding beyond this plan limit.' : 'No plan limit is applied to this resource.' }}
+                            </p>
+                        </div>
+                    @endforeach
+                </div>
+            </flux:accordion.item>
+        @endif
+
+        @if ($platformBillingSummary)
+            <flux:accordion.item heading="Platform Billing Overview" :expanded="$platformBillingSummary['past_due_subscription_count'] > 0">
+                <div class="grid gap-4 md:grid-cols-4">
+                    @foreach ([
+                        ['label' => 'Billing Plans', 'value' => $platformBillingSummary['plan_count'], 'hint' => 'Plans tenant admins can subscribe to'],
+                        ['label' => 'Active Tenants', 'value' => $platformBillingSummary['active_subscription_count'], 'hint' => 'Active or trialing platform subscriptions'],
+                        ['label' => 'Past Due', 'value' => $platformBillingSummary['past_due_subscription_count'], 'hint' => 'Tenants needing billing attention'],
+                        ['label' => 'Platform MRR', 'value' => 'NGN '.number_format($platformBillingSummary['monthly_recurring_revenue'], 2), 'hint' => 'Active subscription amount per month'],
+                    ] as $billingStat)
+                        <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 p-4">
+                            <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">{{ $billingStat['label'] }}</p>
+                            <p class="mt-3 text-2xl font-semibold">{{ is_numeric($billingStat['value']) ? number_format($billingStat['value']) : $billingStat['value'] }}</p>
+                            <p class="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{{ $billingStat['hint'] }}</p>
+                        </div>
+                    @endforeach
+                </div>
+            </flux:accordion.item>
+        @endif
+
+        @if ($overdueRecurringExpenses->isNotEmpty())
+            <flux:accordion.item heading="Overdue Recurring Expenses" expanded>
+                <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+                    <div>
+                        <p class="text-sm text-rose-700">These recurring costs have due dates before today.</p>
+                    </div>
+                    <flux:button href="{{ route('admin.expenses.index', ['schedule' => 'overdue']) }}" wire:navigate variant="outline" size="sm" icon="receipt-percent">Review overdue</flux:button>
+                </div>
+
+                <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-red-200 bg-white dark:bg-zinc-900">
+                    <table class="min-w-[720px] w-full text-left text-sm">
+                        <thead class="bg-red-50 text-red-700">
+                            <tr>
+                                <th class="px-4 py-3 font-medium">Expense</th>
+                                <th class="px-4 py-3 font-medium">Tenant</th>
+                                <th class="px-4 py-3 font-medium">Due</th>
+                                <th class="px-4 py-3 text-right font-medium">Amount</th>
+                                <th class="px-4 py-3 text-right font-medium">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-red-100">
+                            @foreach ($overdueRecurringExpenses as $expense)
+                                <tr>
+                                    <td class="px-4 py-3">
+                                        <p class="font-medium">{{ $expense->title }}</p>
+                                        <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $expense->category?->name ?? 'Uncategorized' }}</p>
+                                    </td>
+                                    <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $expense->tenant?->company_name }}</td>
+                                    <td class="px-4 py-3 text-red-700">{{ $expense->next_due_on?->toFormattedDateString() }}</td>
+                                    <td class="px-4 py-3 text-right font-semibold">{{ $expense->currency }} {{ number_format($expense->amount, 2) }}</td>
+                                    <td class="px-4 py-3">
+                                        <form method="POST" action="{{ route('admin.expenses.record-recurring', $expense) }}" class="flex justify-end">
+                                            @csrf
+                                            <flux:button type="submit" variant="primary" size="sm" icon="check">Record</flux:button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </flux:accordion.item>
+        @endif
+
+        <flux:accordion.item heading="Upcoming Recurring Expenses">
+            <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+                <div>
+                    <p class="text-sm text-zinc-500 dark:text-zinc-400">Costs due within the next 30 days.</p>
+                </div>
+                <flux:button href="{{ route('admin.expenses.index', ['schedule' => 'due_soon']) }}" wire:navigate variant="outline" size="sm" icon="receipt-percent">View due soon</flux:button>
+            </div>
+
+            <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 dark:border-zinc-700">
+                <table class="min-w-[760px] w-full text-left text-sm">
+                    <thead class="bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
+                        <tr>
+                            <th class="px-4 py-3 font-medium">Expense</th>
+                            <th class="px-4 py-3 font-medium">Tenant</th>
+                            <th class="px-4 py-3 font-medium">Frequency</th>
+                            <th class="px-4 py-3 font-medium">Due</th>
+                            <th class="px-4 py-3 text-right font-medium">Amount</th>
+                            <th class="px-4 py-3 text-right font-medium">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
+                        @forelse ($upcomingRecurringExpenses as $expense)
+                            <tr>
+                                <td class="px-4 py-3">
+                                    <p class="font-medium">{{ $expense->title }}</p>
+                                    <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $expense->category?->name ?? 'Uncategorized' }}</p>
+                                </td>
+                                <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $expense->tenant?->company_name }}</td>
+                                <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $expense->recurring_frequency ? str($expense->recurring_frequency)->title() : 'Not set' }}</td>
+                                <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $expense->next_due_on?->toFormattedDateString() }}</td>
+                                <td class="px-4 py-3 text-right font-semibold">{{ $expense->currency }} {{ number_format($expense->amount, 2) }}</td>
+                                <td class="px-4 py-3">
+                                    <form method="POST" action="{{ route('admin.expenses.record-recurring', $expense) }}" class="flex justify-end">
+                                        @csrf
+                                        <flux:button type="submit" variant="outline" size="sm" icon="check">Record</flux:button>
+                                    </form>
+                                </td>
+                            </tr>
+                        @empty
+                            <tr><td colspan="6" class="px-4 py-8 text-center text-zinc-500 dark:text-zinc-400">No recurring expenses are due in the next 30 days.</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </flux:accordion.item>
+
+        <flux:accordion.item heading="Users Online">
+            <div class="flex items-center justify-between gap-4">
+                <p class="text-sm text-zinc-500 dark:text-zinc-400">Live sessions from FreeRADIUS accounting, grouped by routers this admin can access.</p>
+            </div>
+
+            <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 dark:border-zinc-700">
+                <table class="min-w-[720px] w-full text-left text-sm">
+                    <thead class="bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
+                        <tr>
+                            <th class="px-4 py-3 font-medium">User / Device</th>
+                            <th class="px-4 py-3 font-medium">Router</th>
+                            <th class="px-4 py-3 font-medium">Framed IP</th>
+                            <th class="px-4 py-3 font-medium">Online Since</th>
+                            <th class="px-4 py-3 font-medium">Usage</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
+                        @forelse ($onlineSessions as $session)
+                            <tr>
+                                <td class="px-4 py-3">
+                                    <p class="font-medium">{{ $session->username }}</p>
+                                    <p class="mt-1 font-mono text-xs text-zinc-500 dark:text-zinc-400">{{ $session->callingstationid ?: 'No MAC reported' }}</p>
+                                </td>
+                                <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">
+                                    <p>{{ $session->router_name }}</p>
+                                    <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $session->shop_name ?: $session->nasipaddress }}</p>
+                                </td>
+                                <td class="px-4 py-3 font-mono text-xs text-zinc-600 dark:text-zinc-400">{{ $session->framedipaddress ?: 'None' }}</td>
+                                <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $session->acctstarttime ? \Illuminate\Support\Carbon::parse($session->acctstarttime)->diffForHumans() : 'Unknown' }}</td>
+                                <td class="px-4 py-3 font-medium">{{ $formatBytes($session->total_bytes) }}</td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="5" class="px-4 py-8 text-center text-zinc-500 dark:text-zinc-400">
+                                    {{ $radiusAccountingReady ? 'No users are online right now.' : 'FreeRADIUS accounting is not available yet.' }}
+                                </td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </flux:accordion.item>
+
+        <flux:accordion.item heading="Recent Access Grants">
+            <div class="flex items-center justify-between gap-4">
+                <p class="text-sm text-zinc-500 dark:text-zinc-400">Latest subscriptions created from the captive portal or package flow.</p>
+                <a href="{{ route('admin.packages.index') }}" wire:navigate class="rounded-md border border-zinc-200 dark:border-zinc-700 px-3 py-2 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800">Manage plans</a>
+            </div>
+
+            <div class="mt-5 overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 dark:border-zinc-700">
+                <table class="min-w-[640px] w-full text-left text-sm">
+                    <thead class="bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
+                        <tr>
+                            <th class="px-4 py-3 font-medium">Device</th>
+                            <th class="px-4 py-3 font-medium">Package</th>
+                            <th class="px-4 py-3 font-medium">Shop</th>
+                            <th class="px-4 py-3 font-medium">Expires</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
+                        @forelse ($recentSubscriptions as $subscription)
+                            <tr>
+                                <td class="px-4 py-3 font-medium">{{ $subscription->mac_address }}</td>
+                                <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $subscription->package->name }}</td>
+                                <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $subscription->shop->name }}</td>
+                                <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $subscription->expires_at->diffForHumans() }}</td>
+                            </tr>
+                        @empty
+                            <tr><td colspan="4" class="px-4 py-8 text-center text-zinc-500 dark:text-zinc-400">No access grants have been created yet.</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </flux:accordion.item>
+    </flux:accordion>
 </x-layouts.admin>
