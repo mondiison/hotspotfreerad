@@ -19,6 +19,7 @@ class StaffPermissionsTest extends TestCase
     {
         return [
             'dashboard is always allowed' => ['admin.dashboard', true],
+            'settings landing is always allowed' => ['admin.settings.index', true],
             'profile is always allowed' => ['admin.profile.edit', true],
             'vouchers index maps to vouchers' => ['admin.vouchers.index', StaffPermissions::VOUCHERS],
             'voucher batch export maps to vouchers' => ['admin.voucher-batches.export', StaffPermissions::VOUCHERS],

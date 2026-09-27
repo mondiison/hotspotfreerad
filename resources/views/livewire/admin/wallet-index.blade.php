@@ -122,26 +122,44 @@
         </section>
 
         <section class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-6 shadow-sm">
-            <h2 class="text-base font-semibold">Request a withdrawal</h2>
-            <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Requests are reviewed and paid out manually to your saved settlement account above. The amount is set aside from your balance as soon as you submit the request.</p>
+            <div class="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                    <h2 class="text-base font-semibold">Request a withdrawal</h2>
+                    <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Requests are reviewed and paid out manually to your saved settlement account above. The amount is set aside from your balance as soon as you submit the request.</p>
+                </div>
+
+                @if ($tenant->hasVerifiedSettlementAccount())
+                    <flux:button type="button" wire:click="openWithdrawModal" variant="primary" size="sm">Request withdrawal</flux:button>
+                @endif
+            </div>
 
             @if (! $tenant->hasVerifiedSettlementAccount())
                 <p class="mt-4 text-sm text-amber-700">Save and verify a settlement account above before requesting a withdrawal.</p>
-            @else
-                <form wire:submit="requestWithdrawal" class="mt-4 flex flex-wrap items-end gap-4">
-                    <flux:field class="max-w-xs">
-                        <flux:label>Amount</flux:label>
-                        <flux:input type="number" step="0.01" min="1" wire:model="withdrawAmount" placeholder="0.00" />
-                        <flux:error name="withdrawAmount" />
-                    </flux:field>
+            @endif
+        </section>
 
+        <flux:modal wire:model.self="showWithdrawModal" class="md:w-96">
+            <form wire:submit="requestWithdrawal" class="space-y-4">
+                <div>
+                    <flux:heading size="lg">Request a withdrawal</flux:heading>
+                    <flux:subheading>Paid out manually to {{ $tenant->settlement_bank_name }} — {{ $tenant->settlement_account_number }}.</flux:subheading>
+                </div>
+
+                <flux:field>
+                    <flux:label>Amount</flux:label>
+                    <flux:input type="number" step="0.01" min="1" wire:model="withdrawAmount" placeholder="0.00" autofocus />
+                    <flux:error name="withdrawAmount" />
+                </flux:field>
+
+                <div class="flex justify-end gap-3">
+                    <flux:button type="button" variant="ghost" wire:click="$set('showWithdrawModal', false)">Cancel</flux:button>
                     <flux:button type="submit" variant="primary" wire:loading.attr="disabled" wire:target="requestWithdrawal">
                         <span wire:loading.remove wire:target="requestWithdrawal">Submit request</span>
                         <span wire:loading wire:target="requestWithdrawal">Submitting...</span>
                     </flux:button>
-                </form>
-            @endif
-        </section>
+                </div>
+            </form>
+        </flux:modal>
 
         @if ($withdrawals->isNotEmpty())
             <section class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm">

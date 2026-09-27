@@ -30,7 +30,7 @@ class StaffPermissions
             self::POS => 'POS devices',
             self::PPPOE => 'PPPoE subscribers',
             self::CUSTOMERS => 'Customer access',
-            self::ROUTERS => 'Network (routers, topology, trusted Wi-Fi)',
+            self::ROUTERS => 'Network (routers, topology, trusted Wi-Fi -- trusted Wi-Fi surfaces under Access, not Settings)',
             self::PAYMENTS => 'Payments',
             self::EXPENSES => 'Expenses',
             self::REPORTS => 'Reports',
@@ -56,6 +56,7 @@ class StaffPermissions
      */
     private const ROUTE_PERMISSIONS = [
         'admin.dashboard' => true,
+        'admin.settings' => true,
         'admin.setup' => true,
         'admin.profile' => true,
         'admin.passkeys' => true,

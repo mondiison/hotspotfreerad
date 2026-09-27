@@ -25,6 +25,8 @@ class WalletIndex extends Component
 
     public string $withdrawAmount = '';
 
+    public bool $showWithdrawModal = false;
+
     public bool $editingSettlementAccount = false;
 
     public string $selectedBankCode = '';
@@ -123,6 +125,11 @@ class WalletIndex extends Component
         $this->statusMessage = 'Settlement account saved and verified.';
     }
 
+    public function openWithdrawModal(): void
+    {
+        $this->showWithdrawModal = true;
+    }
+
     public function requestWithdrawal(WalletWithdrawalService $withdrawals): void
     {
         $validated = $this->validate([
@@ -149,6 +156,7 @@ class WalletIndex extends Component
         );
 
         $this->reset(['withdrawAmount']);
+        $this->showWithdrawModal = false;
         $this->statusMessage = 'Withdrawal request submitted. It will be reviewed and paid out manually.';
     }
 

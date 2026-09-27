@@ -10,7 +10,10 @@
     <p class="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
         @if ($savedDirectory)
             Saved directory for this router: <code>{{ $savedDirectory }}</code>.
-            <button type="button" wire:click="resetToDefault" class="font-medium text-blue-600 hover:underline">Reset to default</button>
+            <button type="button" wire:click="resetToDefault" wire:loading.attr="disabled" wire:target="resetToDefault" class="font-medium text-blue-600 hover:underline disabled:opacity-50">
+                <span wire:loading.remove wire:target="resetToDefault">Reset to default</span>
+                <span wire:loading wire:target="resetToDefault">Resetting...</span>
+            </button>
         @else
             No directory saved for this router yet -- using the default (<code>{{ $defaultDirectory }}</code>).
         @endif

@@ -78,6 +78,7 @@ Route::post('/billing/payment/webhook', [BillingController::class, 'webhook'])
 
 Route::middleware(['auth', AuthorizeTenantStaff::class])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/', DashboardController::class)->name('dashboard');
+    Route::view('settings', 'admin.settings.index')->name('settings.index');
     Route::get('setup', SetupCenterController::class)->name('setup.index');
     Route::get('profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::put('profile', [ProfileController::class, 'update'])->name('profile.update');

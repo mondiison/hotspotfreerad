@@ -12,7 +12,10 @@
             <div class="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-700 px-4 py-3">
                 <p class="text-sm font-semibold">Notifications</p>
                 @if ($unreadCount > 0)
-                    <button type="button" wire:click="markAllAsRead" class="text-xs font-medium text-blue-600 hover:underline">Mark all read</button>
+                    <button type="button" wire:click="markAllAsRead" wire:loading.attr="disabled" wire:target="markAllAsRead" class="text-xs font-medium text-blue-600 hover:underline disabled:opacity-50">
+                        <span wire:loading.remove wire:target="markAllAsRead">Mark all read</span>
+                        <span wire:loading wire:target="markAllAsRead">Marking...</span>
+                    </button>
                 @endif
             </div>
 
