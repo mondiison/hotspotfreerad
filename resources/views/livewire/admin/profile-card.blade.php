@@ -1,4 +1,4 @@
-<form wire:submit="save" class="relative max-w-4xl rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-6 shadow-sm">
+<form wire:submit="save" class="relative min-w-0 max-w-4xl rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-6 shadow-sm">
     <div wire:loading.flex wire:target="save,avatar,removeAvatar" class="absolute inset-0 z-10 hidden items-center justify-center rounded-lg bg-white/70 backdrop-blur-[1px]">
         <div class="rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-4 py-3 text-sm font-medium text-zinc-700 dark:text-zinc-300 shadow-sm">
             Saving profile...
@@ -11,7 +11,7 @@
         </div>
     @endif
 
-    <div class="grid gap-6">
+    <div class="grid min-w-0 gap-6 [&>*]:min-w-0">
         <section>
             <div class="flex flex-col justify-between gap-3 md:flex-row md:items-start">
                 <div>
