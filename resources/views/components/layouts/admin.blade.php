@@ -178,7 +178,7 @@
 
         <main class="min-w-0 max-w-full flex-1 overflow-x-hidden">
             <header class="border-b border-zinc-200 bg-white px-5 py-5 lg:px-8 dark:border-zinc-800 dark:bg-zinc-900">
-                <div class="flex items-center justify-between gap-4">
+                <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
                     <div class="flex min-w-0 items-center gap-3">
                         <button type="button" @click="mobileSidebarOpen = true" class="rounded-md border border-zinc-200 p-2 text-zinc-600 hover:bg-zinc-100 lg:hidden dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800" aria-label="Open navigation">
                             <span aria-hidden="true">&#9776;</span>
@@ -201,7 +201,7 @@
                         </div>
                     </div>
 
-                    <div class="flex shrink-0 items-center gap-2">
+                    <div class="ml-auto flex shrink-0 items-center gap-2">
                         <flux:dropdown x-data align="end">
                             <flux:button variant="subtle" square aria-label="Preferred color scheme">
                                 <flux:icon.sun x-show="$flux.appearance === 'light'" variant="mini" />
