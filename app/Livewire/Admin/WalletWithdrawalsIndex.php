@@ -3,6 +3,7 @@
 namespace App\Livewire\Admin;
 
 use App\Models\WalletWithdrawal;
+use App\Services\WalletWithdrawalFeeSettingsService;
 use App\Services\WalletWithdrawalService;
 use Illuminate\Validation\ValidationException;
 use Livewire\Component;
@@ -22,9 +23,36 @@ class WalletWithdrawalsIndex extends Component
 
     public ?string $errorMessage = null;
 
-    public function mount(): void
+    public string $feeType = 'fixed';
+
+    public string $feeValue = '0';
+
+    public function mount(WalletWithdrawalFeeSettingsService $feeSettings): void
     {
         abort_unless(auth()->user()?->isSuperAdmin(), 403);
+
+        $settings = $feeSettings->settings();
+        $this->feeType = $settings['type'];
+        $this->feeValue = rtrim(rtrim(number_format($settings['value'], 2, '.', ''), '0'), '.') ?: '0';
+    }
+
+    public function saveFeeSettings(WalletWithdrawalFeeSettingsService $feeSettings): void
+    {
+        $validated = $this->validate([
+            'feeType' => ['required', 'in:fixed,percentage'],
+            'feeValue' => ['required', 'numeric', 'min:0'],
+        ], [], [
+            'feeType' => 'fee type',
+            'feeValue' => 'fee value',
+        ]);
+
+        $feeSettings->update([
+            'type' => $validated['feeType'],
+            'value' => $validated['feeValue'],
+        ], auth()->user());
+
+        $this->statusMessage = 'Withdrawal fee settings saved.';
+        $this->errorMessage = null;
     }
 
     public function startNotes(int $withdrawalId): void

@@ -11,6 +11,30 @@
         </div>
     @endif
 
+    <section class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-6 shadow-sm">
+        <h2 class="text-base font-semibold">Withdrawal fee</h2>
+        <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Charged on every tenant withdrawal, on top of the amount they request — the tenant sees this fee before submitting.</p>
+
+        <form wire:submit="saveFeeSettings" class="mt-4 flex flex-wrap items-end gap-3">
+            <flux:field>
+                <flux:label>Type</flux:label>
+                <flux:select wire:model="feeType" class="w-40">
+                    <flux:select.option value="fixed">Fixed amount</flux:select.option>
+                    <flux:select.option value="percentage">Percentage</flux:select.option>
+                </flux:select>
+            </flux:field>
+            <flux:field>
+                <flux:label>{{ $feeType === 'percentage' ? 'Rate (%)' : 'Amount' }}</flux:label>
+                <flux:input type="number" step="0.01" min="0" wire:model="feeValue" class="w-32" />
+                <flux:error name="feeValue" />
+            </flux:field>
+            <flux:button type="submit" variant="primary" wire:loading.attr="disabled" wire:target="saveFeeSettings">
+                <span wire:loading.remove wire:target="saveFeeSettings">Save</span>
+                <span wire:loading wire:target="saveFeeSettings">Saving...</span>
+            </flux:button>
+        </form>
+    </section>
+
     <div class="flex items-center gap-2">
         @foreach (['pending' => 'Pending', 'approved' => 'Approved', 'paid' => 'Paid', 'rejected' => 'Rejected', 'all' => 'All'] as $value => $label)
             <button
@@ -33,6 +57,9 @@
                         <div class="flex flex-wrap items-start justify-between gap-3">
                             <div>
                                 <p class="font-medium">{{ $withdrawal->tenant->company_name }} — {{ $withdrawal->wallet?->currency ?? 'NGN' }} {{ number_format($withdrawal->amount, 2) }}</p>
+                                @if ((float) $withdrawal->fee_amount > 0)
+                                    <p class="text-xs text-zinc-400 dark:text-zinc-500">+ {{ number_format($withdrawal->fee_amount, 2) }} fee — {{ number_format($withdrawal->grossAmount(), 2) }} debited from wallet</p>
+                                @endif
                                 <p class="text-sm text-zinc-500 dark:text-zinc-400">{{ $withdrawal->bank_name }} — {{ $withdrawal->account_number }} — {{ $withdrawal->account_name }}</p>
                                 <p class="mt-1 text-xs text-zinc-400 dark:text-zinc-500">Requested by {{ $withdrawal->requestedBy?->name }} {{ $withdrawal->created_at->diffForHumans() }}</p>
                                 @if ($withdrawal->processedBy)

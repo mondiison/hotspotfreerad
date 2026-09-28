@@ -6,36 +6,52 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Models\Wallet;
 use App\Models\WalletWithdrawal;
+use App\Support\WalletWithdrawalFee;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class WalletWithdrawalService
 {
-    public function __construct(private readonly WalletService $wallets) {}
+    public function __construct(
+        private readonly WalletService $wallets,
+        private readonly WalletWithdrawalFeeSettingsService $feeSettings,
+    ) {}
 
     /**
-     * Reserves the requested amount immediately (debits the wallet as soon as
-     * the request is made, not when it's eventually paid out) -- this is what
-     * stops two withdrawal requests submitted back to back from both passing
-     * a "sufficient balance" check and overdrawing the wallet between them.
-     * reject() reverses this reservation; markPaid() makes no further balance
-     * change, since the funds were already set aside at request time.
+     * The requested amount is always the NET figure the tenant wants paid
+     * into their bank account -- the platform's withdrawal fee (super-admin
+     * configured, see WalletWithdrawalFeeSettingsService) is added on top,
+     * so what actually leaves the wallet is amount + fee, never less than
+     * what the tenant asked to receive.
+     *
+     * Reserves that full gross amount immediately (debits the wallet as soon
+     * as the request is made, not when it's eventually paid out) -- this is
+     * what stops two withdrawal requests submitted back to back from both
+     * passing a "sufficient balance" check and overdrawing the wallet
+     * between them. reject() reverses this reservation (both the net amount
+     * and the fee); markPaid() makes no further balance change, since the
+     * funds were already set aside at request time.
      */
     public function request(Tenant $tenant, float $amount, array $bankDetails, User $requestedBy): WalletWithdrawal
     {
         return DB::transaction(function () use ($tenant, $amount, $bankDetails, $requestedBy): WalletWithdrawal {
             $wallet = Wallet::query()->lockForUpdate()->where('tenant_id', $tenant->id)->first();
 
-            if (! $wallet || $amount <= 0 || $amount > (float) $wallet->balance) {
+            $fee = WalletWithdrawalFee::calculate($amount, $this->feeSettings->settings());
+
+            if (! $wallet || $amount <= 0 || $fee['gross_amount'] > (float) $wallet->balance) {
                 throw ValidationException::withMessages([
-                    'amount' => 'You can only withdraw up to your current wallet balance.',
+                    'withdrawAmount' => $wallet && $amount > 0
+                        ? 'Including the '.number_format($fee['fee_amount'], 2).' withdrawal fee, this needs '.number_format($fee['gross_amount'], 2).' — more than your '.number_format((float) $wallet->balance, 2).' balance.'
+                        : 'You can only withdraw up to your current wallet balance.',
                 ]);
             }
 
             $withdrawal = WalletWithdrawal::create([
                 'tenant_id' => $tenant->id,
                 'wallet_id' => $wallet->id,
-                'amount' => round($amount, 2),
+                'amount' => $fee['net_amount'],
+                'fee_amount' => $fee['fee_amount'],
                 'bank_name' => (string) ($bankDetails['bank_name'] ?? ''),
                 'account_number' => (string) ($bankDetails['account_number'] ?? ''),
                 'account_name' => (string) ($bankDetails['account_name'] ?? ''),
@@ -50,6 +66,16 @@ class WalletWithdrawalService
                 'Withdrawal requested — '.$withdrawal->bank_name.' '.$withdrawal->account_number,
                 withdrawalId: $withdrawal->id,
             );
+
+            if ($fee['fee_amount'] > 0) {
+                $this->wallets->applyEntry(
+                    $wallet,
+                    'debit',
+                    $fee['fee_amount'],
+                    'Withdrawal fee',
+                    withdrawalId: $withdrawal->id,
+                );
+            }
 
             return $withdrawal;
         });
@@ -73,6 +99,16 @@ class WalletWithdrawalService
                 'Withdrawal request rejected — funds returned to wallet',
                 withdrawalId: $withdrawal->id,
             );
+
+            if ((float) $withdrawal->fee_amount > 0) {
+                $this->wallets->applyEntry(
+                    $wallet,
+                    'credit',
+                    (float) $withdrawal->fee_amount,
+                    'Withdrawal fee refunded — request rejected',
+                    withdrawalId: $withdrawal->id,
+                );
+            }
 
             $withdrawal->forceFill([
                 'status' => 'rejected',

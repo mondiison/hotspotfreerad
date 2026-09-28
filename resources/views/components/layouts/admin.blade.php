@@ -188,9 +188,11 @@
                             <div class="flex flex-wrap items-center gap-2">
                                 <h1 class="truncate text-xl font-semibold">{{ $heading ?? $title ?? 'Dashboard' }}</h1>
                                 @auth
-                                    <flux:badge class="hidden sm:inline-flex" :color="auth()->user()->isSuperAdmin() ? 'blue' : (auth()->user()->isTenantStaff() ? 'amber' : 'green')">
-                                        {{ auth()->user()->isSuperAdmin() ? 'Platform Admin' : (auth()->user()->isTenantStaff() ? 'Staff' : 'Tenant Admin') }}
-                                    </flux:badge>
+                                    <span class="hidden sm:inline-flex">
+                                        <flux:badge :color="auth()->user()->isSuperAdmin() ? 'blue' : (auth()->user()->isTenantStaff() ? 'amber' : 'green')">
+                                            {{ auth()->user()->isSuperAdmin() ? 'Platform Admin' : (auth()->user()->isTenantStaff() ? 'Staff' : 'Tenant Admin') }}
+                                        </flux:badge>
+                                    </span>
                                 @endauth
                             </div>
                             @isset($subheading)

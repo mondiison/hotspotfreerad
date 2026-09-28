@@ -7,8 +7,10 @@ use App\Models\WalletTransaction;
 use App\Models\WalletWithdrawal;
 use App\Services\BankAccountResolutionService;
 use App\Services\WalletService;
+use App\Services\WalletWithdrawalFeeSettingsService;
 use App\Services\WalletWithdrawalService;
 use App\Support\BillingPlanLimits;
+use App\Support\WalletWithdrawalFee;
 use Flux\Flux;
 use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Locked;
@@ -39,6 +41,14 @@ class WalletIndex extends Component
     public ?string $verifyError = null;
 
     public ?string $canEnableError = null;
+
+    public string $txType = '';
+
+    public string $txFrom = '';
+
+    public string $txTo = '';
+
+    public string $withdrawalStatus = '';
 
     public function mount(Tenant $tenant): void
     {
@@ -134,6 +144,38 @@ class WalletIndex extends Component
         $this->showWithdrawModal = true;
     }
 
+    public function clearTransactionFilters(): void
+    {
+        $this->reset(['txType', 'txFrom', 'txTo']);
+        $this->resetPage('page');
+    }
+
+    public function clearWithdrawalFilters(): void
+    {
+        $this->reset(['withdrawalStatus']);
+        $this->resetPage('withdrawalsPage');
+    }
+
+    public function updatedTxType(): void
+    {
+        $this->resetPage('page');
+    }
+
+    public function updatedTxFrom(): void
+    {
+        $this->resetPage('page');
+    }
+
+    public function updatedTxTo(): void
+    {
+        $this->resetPage('page');
+    }
+
+    public function updatedWithdrawalStatus(): void
+    {
+        $this->resetPage('withdrawalsPage');
+    }
+
     public function requestWithdrawal(WalletWithdrawalService $withdrawals): void
     {
         $validated = $this->validate([
@@ -169,7 +211,7 @@ class WalletIndex extends Component
         );
     }
 
-    public function render(BankAccountResolutionService $resolver)
+    public function render(BankAccountResolutionService $resolver, WalletWithdrawalFeeSettingsService $feeSettings)
     {
         $tenant = Tenant::with('currentBillingSubscription.billingPlan', 'wallet')->findOrFail($this->tenantId);
 
@@ -185,18 +227,31 @@ class WalletIndex extends Component
             }
         }
 
+        $feePreview = is_numeric($this->withdrawAmount) && (float) $this->withdrawAmount > 0
+            ? WalletWithdrawalFee::calculate((float) $this->withdrawAmount, $feeSettings->settings())
+            : null;
+
         return view('livewire.admin.wallet-index', [
             'tenant' => $tenant,
             'canEnable' => $canEnable,
             'canEnableError' => $this->canEnableError ?? null,
             'balance' => (float) ($tenant->wallet?->balance ?? 0),
+            'feePreview' => $feePreview,
             'banks' => $tenant->wallet_enabled ? $resolver->banks() : [],
             'bankVerificationAvailable' => $resolver->activeProvider() !== null,
             'transactions' => $tenant->wallet
-                ? WalletTransaction::where('wallet_id', $tenant->wallet->id)->latest()->paginate(15)
+                ? WalletTransaction::where('wallet_id', $tenant->wallet->id)
+                    ->when(filled($this->txType), fn ($query) => $query->where('type', $this->txType))
+                    ->when(filled($this->txFrom), fn ($query) => $query->whereDate('created_at', '>=', $this->txFrom))
+                    ->when(filled($this->txTo), fn ($query) => $query->whereDate('created_at', '<=', $this->txTo))
+                    ->latest()
+                    ->paginate(15, pageName: 'page')
                 : null,
             'withdrawals' => $tenant->wallet
-                ? WalletWithdrawal::where('tenant_id', $tenant->id)->latest()->get()
+                ? WalletWithdrawal::where('tenant_id', $tenant->id)
+                    ->when(filled($this->withdrawalStatus), fn ($query) => $query->where('status', $this->withdrawalStatus))
+                    ->latest()
+                    ->paginate(10, pageName: 'withdrawalsPage')
                 : collect(),
         ]);
     }

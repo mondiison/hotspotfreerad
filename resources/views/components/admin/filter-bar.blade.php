@@ -1,6 +1,7 @@
 @props([
     'modalName',
     'active' => [],
+    'clearAll' => 'clearFilters',
 ])
 
 <div {{ $attributes->class('mb-4 flex flex-wrap items-center gap-2') }}>
@@ -31,7 +32,7 @@
     @endforeach
 
     @if (count($active) > 1)
-        <flux:button type="button" variant="ghost" size="sm" tooltip="Clear all filters" wire:click="clearFilters" wire:loading.attr="disabled">
+        <flux:button type="button" variant="ghost" size="sm" tooltip="Clear all filters" wire:click="{{ $clearAll }}" wire:loading.attr="disabled">
             Clear all
         </flux:button>
     @endif

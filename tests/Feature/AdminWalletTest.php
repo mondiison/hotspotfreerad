@@ -12,6 +12,8 @@ use App\Models\Tenant;
 use App\Models\TenantBillingSubscription;
 use App\Models\User;
 use App\Models\Wallet;
+use App\Models\WalletWithdrawal;
+use App\Services\WalletService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
@@ -152,6 +154,130 @@ class AdminWalletTest extends TestCase
             'status' => 'pending',
         ]);
         $this->assertEquals(600, $wallet->fresh()->balance);
+    }
+
+    /**
+     * 2026-09-28, direct request: bank charges must apply to every
+     * withdrawal, on top of the amount the tenant asks to receive, and the
+     * tenant must be able to see the fee before submitting.
+     */
+    public function test_a_fixed_withdrawal_fee_is_debited_on_top_of_the_requested_amount(): void
+    {
+        PlatformSetting::query()->create(['key' => 'wallet.withdrawal_fee', 'value' => ['type' => 'fixed', 'value' => 40]]);
+
+        $tenant = $this->tenant();
+        $this->subscribeTenant($tenant, supportsWallet: true, walletCommissionRate: 10);
+        $tenant->forceFill(['wallet_enabled' => true])->save();
+        $this->giveTenantAVerifiedSettlementAccount($tenant);
+        $wallet = Wallet::create(['tenant_id' => $tenant->id, 'balance' => 500]);
+        $user = $this->tenantAdmin($tenant);
+
+        Livewire::actingAs($user)
+            ->test(WalletIndex::class, ['tenant' => $tenant])
+            ->set('withdrawAmount', '450')
+            ->assertSee('40.00')
+            ->assertSee('490.00')
+            ->call('requestWithdrawal')
+            ->assertDispatched('toast-show');
+
+        $this->assertDatabaseHas('wallet_withdrawals', [
+            'tenant_id' => $tenant->id,
+            'amount' => 450,
+            'fee_amount' => 40,
+        ]);
+        $this->assertEquals(10, $wallet->fresh()->balance);
+    }
+
+    public function test_a_percentage_withdrawal_fee_scales_with_the_requested_amount(): void
+    {
+        PlatformSetting::query()->create(['key' => 'wallet.withdrawal_fee', 'value' => ['type' => 'percentage', 'value' => 10]]);
+
+        $tenant = $this->tenant();
+        $this->subscribeTenant($tenant, supportsWallet: true, walletCommissionRate: 10);
+        $tenant->forceFill(['wallet_enabled' => true])->save();
+        $this->giveTenantAVerifiedSettlementAccount($tenant);
+        $wallet = Wallet::create(['tenant_id' => $tenant->id, 'balance' => 1000]);
+        $user = $this->tenantAdmin($tenant);
+
+        Livewire::actingAs($user)
+            ->test(WalletIndex::class, ['tenant' => $tenant])
+            ->set('withdrawAmount', '400')
+            ->call('requestWithdrawal')
+            ->assertDispatched('toast-show');
+
+        $this->assertDatabaseHas('wallet_withdrawals', [
+            'tenant_id' => $tenant->id,
+            'amount' => 400,
+            'fee_amount' => 40,
+        ]);
+        $this->assertEquals(560, $wallet->fresh()->balance);
+    }
+
+    public function test_withdrawal_is_rejected_when_the_fee_would_push_it_past_the_balance(): void
+    {
+        PlatformSetting::query()->create(['key' => 'wallet.withdrawal_fee', 'value' => ['type' => 'fixed', 'value' => 40]]);
+
+        $tenant = $this->tenant();
+        $this->subscribeTenant($tenant, supportsWallet: true, walletCommissionRate: 10);
+        $tenant->forceFill(['wallet_enabled' => true])->save();
+        $this->giveTenantAVerifiedSettlementAccount($tenant);
+        $wallet = Wallet::create(['tenant_id' => $tenant->id, 'balance' => 500]);
+        $user = $this->tenantAdmin($tenant);
+
+        Livewire::actingAs($user)
+            ->test(WalletIndex::class, ['tenant' => $tenant])
+            ->set('withdrawAmount', '480')
+            ->call('requestWithdrawal')
+            ->assertHasErrors('withdrawAmount');
+
+        $this->assertDatabaseMissing('wallet_withdrawals', ['tenant_id' => $tenant->id]);
+        $this->assertEquals(500, $wallet->fresh()->balance);
+    }
+
+    /**
+     * 2026-09-28, direct request: the transaction history and withdrawal
+     * requests lists had no way to filter at all.
+     */
+    public function test_transaction_history_can_be_filtered_by_type(): void
+    {
+        $tenant = $this->tenant();
+        $this->subscribeTenant($tenant, supportsWallet: true, walletCommissionRate: 10);
+        $tenant->forceFill(['wallet_enabled' => true])->save();
+        $wallet = Wallet::create(['tenant_id' => $tenant->id, 'balance' => 1000]);
+        app(WalletService::class)->applyEntry($wallet, 'credit', 200, 'Payment received');
+        app(WalletService::class)->applyEntry($wallet, 'debit', 50, 'Platform commission');
+        $user = $this->tenantAdmin($tenant);
+
+        Livewire::actingAs($user)
+            ->test(WalletIndex::class, ['tenant' => $tenant])
+            ->assertSee('Payment received')
+            ->assertSee('Platform commission')
+            ->set('txType', 'credit')
+            ->assertSee('Payment received')
+            ->assertDontSee('Platform commission');
+    }
+
+    public function test_withdrawal_requests_can_be_filtered_by_status(): void
+    {
+        $tenant = $this->tenant();
+        $this->subscribeTenant($tenant, supportsWallet: true, walletCommissionRate: 10);
+        $tenant->forceFill(['wallet_enabled' => true])->save();
+        $this->giveTenantAVerifiedSettlementAccount($tenant);
+        Wallet::create(['tenant_id' => $tenant->id, 'balance' => 1000]);
+        $user = $this->tenantAdmin($tenant);
+
+        Livewire::actingAs($user)
+            ->test(WalletIndex::class, ['tenant' => $tenant])
+            ->set('withdrawAmount', '100')
+            ->call('requestWithdrawal');
+
+        WalletWithdrawal::query()->where('tenant_id', $tenant->id)->update(['status' => 'paid']);
+
+        Livewire::actingAs($user)
+            ->test(WalletIndex::class, ['tenant' => $tenant])
+            ->assertSee('Paid')
+            ->set('withdrawalStatus', 'pending')
+            ->assertSee('No withdrawal requests match this view.');
     }
 
     public function test_withdrawal_request_is_blocked_without_a_verified_settlement_account(): void

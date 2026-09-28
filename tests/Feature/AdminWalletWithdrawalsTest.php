@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Livewire\Admin\WalletWithdrawalsIndex;
+use App\Models\PlatformSetting;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Models\Wallet;
@@ -89,6 +90,36 @@ class AdminWalletWithdrawalsTest extends TestCase
 
         $this->assertSame('paid', $withdrawal->fresh()->status);
         $this->assertEquals($balanceBeforeMarkPaid, $wallet->fresh()->balance);
+    }
+
+    public function test_rejecting_a_withdrawal_refunds_both_the_amount_and_the_fee(): void
+    {
+        $withdrawal = $this->pendingWithdrawal();
+        $withdrawal->forceFill(['fee_amount' => 40])->save();
+        $wallet = $withdrawal->wallet;
+        $balanceBeforeReject = (float) $wallet->balance;
+
+        Livewire::actingAs($this->superAdmin())
+            ->test(WalletWithdrawalsIndex::class)
+            ->call('reject', $withdrawal->id);
+
+        $this->assertSame('rejected', $withdrawal->fresh()->status);
+        $this->assertEquals($balanceBeforeReject + 400 + 40, $wallet->fresh()->balance);
+    }
+
+    public function test_super_admin_can_save_withdrawal_fee_settings(): void
+    {
+        Livewire::actingAs($this->superAdmin())
+            ->test(WalletWithdrawalsIndex::class)
+            ->set('feeType', 'percentage')
+            ->set('feeValue', '5')
+            ->call('saveFeeSettings')
+            ->assertSet('statusMessage', 'Withdrawal fee settings saved.');
+
+        $this->assertDatabaseHas('platform_settings', ['key' => 'wallet.withdrawal_fee']);
+        $stored = PlatformSetting::query()->where('key', 'wallet.withdrawal_fee')->first()->value;
+        $this->assertSame('percentage', $stored['type']);
+        $this->assertEquals(5.0, $stored['value']);
     }
 
     public function test_the_status_filter_scopes_the_listed_withdrawals(): void

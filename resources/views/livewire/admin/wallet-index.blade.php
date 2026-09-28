@@ -140,10 +140,30 @@
                 </div>
 
                 <flux:field>
-                    <flux:label>Amount</flux:label>
-                    <flux:input type="number" step="0.01" min="1" wire:model="withdrawAmount" placeholder="0.00" autofocus />
+                    <flux:label>Amount you want to receive</flux:label>
+                    <flux:input type="number" step="0.01" min="1" wire:model.live.debounce.400ms="withdrawAmount" placeholder="0.00" autofocus />
                     <flux:error name="withdrawAmount" />
                 </flux:field>
+
+                @if ($feePreview)
+                    <div class="rounded-md border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm dark:border-zinc-700 dark:bg-zinc-800">
+                        <div class="flex items-center justify-between">
+                            <span class="text-zinc-500 dark:text-zinc-400">You receive</span>
+                            <span class="font-medium">{{ $tenant->wallet?->currency ?? 'NGN' }} {{ number_format($feePreview['net_amount'], 2) }}</span>
+                        </div>
+                        <div class="mt-1 flex items-center justify-between">
+                            <span class="text-zinc-500 dark:text-zinc-400">Withdrawal fee</span>
+                            <span class="font-medium">{{ $tenant->wallet?->currency ?? 'NGN' }} {{ number_format($feePreview['fee_amount'], 2) }}</span>
+                        </div>
+                        <div class="mt-2 flex items-center justify-between border-t border-zinc-200 pt-2 dark:border-zinc-700">
+                            <span class="font-medium">Total deducted from wallet</span>
+                            <span class="font-semibold">{{ $tenant->wallet?->currency ?? 'NGN' }} {{ number_format($feePreview['gross_amount'], 2) }}</span>
+                        </div>
+                        @if ($feePreview['gross_amount'] > $balance)
+                            <p class="mt-2 text-xs text-red-600">This exceeds your {{ $tenant->wallet?->currency ?? 'NGN' }} {{ number_format($balance, 2) }} balance once the fee is included.</p>
+                        @endif
+                    </div>
+                @endif
 
                 <div class="flex justify-end gap-3">
                     <flux:button type="button" variant="ghost" wire:click="$set('showWithdrawModal', false)">Cancel</flux:button>
@@ -161,12 +181,33 @@
                 <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Every request you've submitted, and its current status.</p>
             </div>
 
+            <div class="px-6 pt-4">
+                @php
+                    $withdrawalActiveFilters = [];
+                    if (filled($withdrawalStatus)) {
+                        $withdrawalActiveFilters[] = ['label' => 'Status: '.ucfirst($withdrawalStatus), 'clear' => "\$set('withdrawalStatus', '')"];
+                    }
+                @endphp
+                <x-admin.filter-bar modal-name="filters-wallet-withdrawals" :active="$withdrawalActiveFilters" clear-all="clearWithdrawalFilters">
+                    <flux:select wire:model.live="withdrawalStatus">
+                        <flux:select.option value="">All statuses</flux:select.option>
+                        <flux:select.option value="pending">Pending</flux:select.option>
+                        <flux:select.option value="approved">Approved</flux:select.option>
+                        <flux:select.option value="paid">Paid</flux:select.option>
+                        <flux:select.option value="rejected">Rejected</flux:select.option>
+                    </flux:select>
+                </x-admin.filter-bar>
+            </div>
+
             @if ($withdrawals->isNotEmpty())
                 <div class="divide-y divide-zinc-200 dark:divide-zinc-700">
                     @foreach ($withdrawals as $withdrawal)
                         <div class="flex items-center justify-between px-6 py-3 text-sm">
                             <div>
                                 <p class="font-medium">{{ $tenant->wallet?->currency ?? 'NGN' }} {{ number_format($withdrawal->amount, 2) }}</p>
+                                @if ((float) $withdrawal->fee_amount > 0)
+                                    <p class="text-xs text-zinc-400 dark:text-zinc-500">+ {{ number_format($withdrawal->fee_amount, 2) }} fee — {{ number_format($withdrawal->grossAmount(), 2) }} deducted</p>
+                                @endif
                                 <p class="text-zinc-500 dark:text-zinc-400">{{ $withdrawal->bank_name }} — {{ $withdrawal->account_number }} — {{ $withdrawal->created_at->diffForHumans() }}</p>
                             </div>
                             <flux:badge :color="match($withdrawal->status) { 'paid' => 'emerald', 'approved' => 'blue', 'rejected' => 'red', default => 'amber' }">
@@ -175,14 +216,47 @@
                         </div>
                     @endforeach
                 </div>
+                <div class="px-6 py-4">
+                    {{ $withdrawals->links() }}
+                </div>
             @else
-                <p class="px-6 py-6 text-sm text-zinc-500 dark:text-zinc-400">No withdrawal requests yet.</p>
+                <p class="px-6 py-6 text-sm text-zinc-500 dark:text-zinc-400">No withdrawal requests match this view.</p>
             @endif
         </section>
 
         <section class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm">
             <div class="border-b border-zinc-200 dark:border-zinc-700 px-6 py-4">
                 <h2 class="text-base font-semibold">Transaction history</h2>
+            </div>
+
+            <div class="px-6 pt-4">
+                @php
+                    $txActiveFilters = [];
+                    if (filled($txType)) {
+                        $txActiveFilters[] = ['label' => 'Type: '.ucfirst($txType), 'clear' => "\$set('txType', '')"];
+                    }
+                    if (filled($txFrom)) {
+                        $txActiveFilters[] = ['label' => 'From: '.$txFrom, 'clear' => "\$set('txFrom', '')"];
+                    }
+                    if (filled($txTo)) {
+                        $txActiveFilters[] = ['label' => 'To: '.$txTo, 'clear' => "\$set('txTo', '')"];
+                    }
+                @endphp
+                <x-admin.filter-bar modal-name="filters-wallet-transactions" :active="$txActiveFilters" clear-all="clearTransactionFilters">
+                    <flux:select wire:model.live="txType">
+                        <flux:select.option value="">All types</flux:select.option>
+                        <flux:select.option value="credit">Credit</flux:select.option>
+                        <flux:select.option value="debit">Debit</flux:select.option>
+                    </flux:select>
+                    <flux:field>
+                        <flux:label>From</flux:label>
+                        <flux:input type="date" wire:model.live="txFrom" />
+                    </flux:field>
+                    <flux:field>
+                        <flux:label>To</flux:label>
+                        <flux:input type="date" wire:model.live="txTo" />
+                    </flux:field>
+                </x-admin.filter-bar>
             </div>
 
             @if ($transactions && $transactions->isNotEmpty())
@@ -203,7 +277,7 @@
                     {{ $transactions->links() }}
                 </div>
             @else
-                <p class="px-6 py-6 text-sm text-zinc-500 dark:text-zinc-400">No transactions yet.</p>
+                <p class="px-6 py-6 text-sm text-zinc-500 dark:text-zinc-400">No transactions match this view.</p>
             @endif
         </section>
     @endif
