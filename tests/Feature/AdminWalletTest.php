@@ -235,6 +235,55 @@ class AdminWalletTest extends TestCase
     }
 
     /**
+     * 2026-09-28, direct request: the withdrawal modal should show the
+     * wallet balance before and after the transaction live as the tenant
+     * types the amount.
+     */
+    public function test_withdrawal_modal_shows_balance_before_and_after_live(): void
+    {
+        PlatformSetting::query()->create(['key' => 'wallet.withdrawal_fee', 'value' => ['type' => 'fixed', 'value' => 40]]);
+
+        $tenant = $this->tenant();
+        $this->subscribeTenant($tenant, supportsWallet: true, walletCommissionRate: 10);
+        $tenant->forceFill(['wallet_enabled' => true])->save();
+        Wallet::create(['tenant_id' => $tenant->id, 'balance' => 500]);
+        $user = $this->tenantAdmin($tenant);
+
+        Livewire::actingAs($user)
+            ->test(WalletIndex::class, ['tenant' => $tenant])
+            ->assertDontSee('Wallet balance after')
+            ->set('withdrawAmount', '450')
+            ->assertSeeInOrder(['Wallet balance now', '500.00', 'Wallet balance after', '10.00']);
+    }
+
+    /**
+     * 2026-09-28, direct request: a tenant had no way to see why a
+     * withdrawal was rejected -- an info icon should reveal the admin's
+     * note when one was left.
+     */
+    public function test_a_rejected_withdrawals_admin_note_is_visible_via_the_info_icon(): void
+    {
+        $tenant = $this->tenant();
+        $this->subscribeTenant($tenant, supportsWallet: true, walletCommissionRate: 10);
+        $tenant->forceFill(['wallet_enabled' => true])->save();
+        $this->giveTenantAVerifiedSettlementAccount($tenant);
+        Wallet::create(['tenant_id' => $tenant->id, 'balance' => 1000]);
+        $user = $this->tenantAdmin($tenant);
+
+        Livewire::actingAs($user)
+            ->test(WalletIndex::class, ['tenant' => $tenant])
+            ->set('withdrawAmount', '100')
+            ->call('requestWithdrawal');
+
+        $withdrawal = WalletWithdrawal::where('tenant_id', $tenant->id)->firstOrFail();
+        $withdrawal->forceFill(['status' => 'rejected', 'admin_notes' => 'Settlement account name did not match bank records.'])->save();
+
+        Livewire::actingAs($user)
+            ->test(WalletIndex::class, ['tenant' => $tenant])
+            ->assertSee('Settlement account name did not match bank records.');
+    }
+
+    /**
      * 2026-09-28, direct request: the transaction history and withdrawal
      * requests lists had no way to filter at all.
      */

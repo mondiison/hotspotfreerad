@@ -159,6 +159,14 @@
                             <span class="font-medium">Total deducted from wallet</span>
                             <span class="font-semibold">{{ $tenant->wallet?->currency ?? 'NGN' }} {{ number_format($feePreview['gross_amount'], 2) }}</span>
                         </div>
+                        <div class="mt-2 flex items-center justify-between border-t border-zinc-200 pt-2 dark:border-zinc-700">
+                            <span class="text-zinc-500 dark:text-zinc-400">Wallet balance now</span>
+                            <span class="font-medium">{{ $tenant->wallet?->currency ?? 'NGN' }} {{ number_format($balance, 2) }}</span>
+                        </div>
+                        <div class="mt-1 flex items-center justify-between">
+                            <span class="text-zinc-500 dark:text-zinc-400">Wallet balance after</span>
+                            <span class="font-semibold {{ $feePreview['gross_amount'] > $balance ? 'text-red-600' : '' }}">{{ $tenant->wallet?->currency ?? 'NGN' }} {{ number_format($balance - $feePreview['gross_amount'], 2) }}</span>
+                        </div>
                         @if ($feePreview['gross_amount'] > $balance)
                             <p class="mt-2 text-xs text-red-600">This exceeds your {{ $tenant->wallet?->currency ?? 'NGN' }} {{ number_format($balance, 2) }} balance once the fee is included.</p>
                         @endif
@@ -210,9 +218,22 @@
                                 @endif
                                 <p class="text-zinc-500 dark:text-zinc-400">{{ $withdrawal->bank_name }} — {{ $withdrawal->account_number }} — {{ $withdrawal->created_at->diffForHumans() }}</p>
                             </div>
-                            <flux:badge :color="match($withdrawal->status) { 'paid' => 'emerald', 'approved' => 'blue', 'rejected' => 'red', default => 'amber' }">
-                                {{ ucfirst($withdrawal->status) }}
-                            </flux:badge>
+                            <div class="flex shrink-0 items-center gap-1.5">
+                                <flux:badge :color="match($withdrawal->status) { 'paid' => 'emerald', 'approved' => 'blue', 'rejected' => 'red', default => 'amber' }">
+                                    {{ ucfirst($withdrawal->status) }}
+                                </flux:badge>
+                                @if (filled($withdrawal->admin_notes))
+                                    <flux:button
+                                        type="button"
+                                        icon="information-circle"
+                                        variant="ghost"
+                                        size="xs"
+                                        square
+                                        tooltip="{{ $withdrawal->admin_notes }}"
+                                        aria-label="Why this request was {{ $withdrawal->status }}"
+                                    />
+                                @endif
+                            </div>
                         </div>
                     @endforeach
                 </div>

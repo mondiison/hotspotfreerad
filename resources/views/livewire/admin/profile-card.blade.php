@@ -24,7 +24,7 @@
                 </flux:badge>
             </div>
 
-            <div class="mt-5 grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)]">
+            <div class="mt-5 grid min-w-0 gap-5 lg:grid-cols-[220px_minmax(0,1fr)] [&>*]:min-w-0">
                 <div
                     x-data="{
                         cameraActive: false,
@@ -113,7 +113,14 @@
 
                     <flux:field class="mt-4">
                         <flux:label>Profile photo</flux:label>
-                        <input x-ref="avatarInput" type="file" wire:model="avatar" accept=".jpg,.jpeg,.png,.webp" capture="user" @change="if (! cameraActive) { if (capturedPreview) URL.revokeObjectURL(capturedPreview); capturedPreview = null }" class="block w-full rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 file:mr-3 file:rounded-md file:border-0 file:bg-zinc-950 dark:file:bg-zinc-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white dark:file:text-zinc-900 hover:file:bg-zinc-800 dark:hover:file:bg-zinc-200">
+                        <flux:input
+                            type="file"
+                            x-ref="avatarInput"
+                            wire:model="avatar"
+                            accept=".jpg,.jpeg,.png,.webp"
+                            capture="user"
+                            @change="if (! cameraActive) { if (capturedPreview) URL.revokeObjectURL(capturedPreview); capturedPreview = null }"
+                        />
                         <flux:description>Upload an image or take a camera photo. JPG, PNG, or WEBP up to 2 MB.</flux:description>
                         <flux:error name="avatar" />
                     </flux:field>
