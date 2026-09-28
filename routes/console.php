@@ -235,8 +235,11 @@ Artisan::command('hotspot:sync-expired-pppoe {--dry-run}', function (PppoeSubscr
     return Command::SUCCESS;
 })->purpose('Revoke expired or disabled PPPoE subscribers from FreeRADIUS');
 
-Artisan::command('hotspot:sync-expired-hotspot {--dry-run}', function (RadiusProvisioningService $radius): int {
-    $expiredMacs = Subscription::query()
+Artisan::command('hotspot:sync-expired-hotspot {--dry-run}', function (RadiusProvisioningService $radius, RouterOsConnectionService $routerOs): int {
+    // Grouped by mac_address (not a flat pluck) so each expired device keeps
+    // its shop_id(s) -- needed below to know which router(s) to actively
+    // disconnect it from, not just which RADIUS rows to delete.
+    $expiredByMac = Subscription::query()
         ->where('expires_at', '<=', now())
         ->whereNotExists(function ($query): void {
             $query
@@ -245,23 +248,49 @@ Artisan::command('hotspot:sync-expired-hotspot {--dry-run}', function (RadiusPro
                 ->whereColumn('active_subscriptions.mac_address', 'subscriptions.mac_address')
                 ->where('active_subscriptions.expires_at', '>', now());
         })
-        ->distinct()
-        ->pluck('mac_address')
-        ->filter()
-        ->values();
+        ->whereNotNull('mac_address')
+        ->get(['mac_address', 'shop_id'])
+        ->groupBy('mac_address');
 
     if ($this->option('dry-run')) {
-        $this->info($expiredMacs->count().' expired hotspot device(s) would be revoked from RADIUS.');
+        $this->info($expiredByMac->count().' expired hotspot device(s) would be revoked from RADIUS.');
 
         return Command::SUCCESS;
     }
 
-    $expiredMacs->each(fn (string $macAddress) => $radius->revokeMacAccess($macAddress));
+    $disconnected = 0;
 
-    $this->info('Revoked '.$expiredMacs->count().' expired hotspot device(s) from RADIUS.');
+    $expiredByMac->each(function ($rows, string $macAddress) use ($radius, $routerOs, &$disconnected): void {
+        $radius->revokeMacAccess($macAddress);
+
+        // Confirmed live 2026-09-28: revoking RADIUS access alone leaves an
+        // already-authenticated hotspot session completely untouched --
+        // RouterOS only consults RADIUS at login/session-renewal time, not
+        // on every packet, so a phone that's already connected just has its
+        // traffic silently stop working with no indication why. Most phones
+        // don't spontaneously re-open their captive-portal login screen once
+        // they've already decided they have working internet, so a customer
+        // sees what looks like a bad network rather than an expired plan,
+        // until they manually disconnect and reconnect. Removing the
+        // matching /ip/hotspot/active entry is what actually ends the
+        // session -- RouterOS then intercepts the device's very next request
+        // and serves the login page again. Best-effort across every router
+        // on the shop(s) this mac's now-expired subscription(s) belonged to
+        // -- a mac not currently active on a given router is a normal no-op,
+        // not a failure.
+        $shopIds = $rows->pluck('shop_id')->filter()->unique();
+
+        Router::query()->whereIn('shop_id', $shopIds)->get()->each(function (Router $router) use ($routerOs, $macAddress, &$disconnected): void {
+            if ($routerOs->disconnectHotspotUser($router, $macAddress)['success']) {
+                $disconnected++;
+            }
+        });
+    });
+
+    $this->info('Revoked '.$expiredByMac->count().' expired hotspot device(s) from RADIUS; disconnected '.$disconnected.' active router session/lease check(s).');
 
     return Command::SUCCESS;
-})->purpose('Revoke expired hotspot MAC access from FreeRADIUS');
+})->purpose('Revoke expired hotspot MAC access from FreeRADIUS and disconnect any already-active hotspot session');
 
 Artisan::command('hotspot:sync-expired-pos {--dry-run}', function (PosDeviceManagementService $devices): int {
     $query = PosDevice::query()

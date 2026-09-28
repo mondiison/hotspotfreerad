@@ -268,6 +268,89 @@ class RouterOsConnectionService
     }
 
     /**
+     * Forces a device off an already-authenticated hotspot session the
+     * moment its access is revoked (subscription/POS device expiry) --
+     * confirmed live 2026-09-28, from a direct report: revoking RADIUS
+     * access alone leaves an already-connected phone's Wi-Fi/DHCP lease
+     * completely untouched, since RouterOS only consults RADIUS at
+     * login/session-renewal time, not on every packet, so its traffic just
+     * silently stops working. Most phones don't spontaneously re-open their
+     * captive-portal login screen once they've already decided they have
+     * working internet, so a customer sees what looks like a bad network
+     * rather than an expired plan, until they manually disconnect and
+     * reconnect. Removing the matching `/ip/hotspot/active` entry is the
+     * actual mechanism that ends an authenticated hotspot session --
+     * RouterOS then intercepts the device's very next request and serves
+     * the login page again. The DHCP lease is removed too, forcing a fresh
+     * DHCP negotiation on reconnect as a second layer -- but the active-
+     * session removal is what actually solves the "customer has no idea
+     * they need to log in again" problem; the lease alone would not.
+     *
+     * A no-op, not a failure, when the mac isn't currently active on this
+     * router at all -- the common case, since most expiries happen well
+     * after a device already went idle/out of range on its own.
+     *
+     * @return array{success: bool, steps: list<array{label: string, success: bool, error: ?string}>}
+     */
+    public function disconnectHotspotUser(Router $router, string $macAddress): array
+    {
+        if (! $this->isConfigured($router)) {
+            return [
+                'success' => false,
+                'steps' => [['label' => 'Disconnect hotspot user', 'success' => false, 'error' => 'No RouterOS API credentials generated for this router yet.']],
+            ];
+        }
+
+        $needle = self::normalizeMacAddress($macAddress);
+
+        try {
+            $client = $this->client($router, 8);
+
+            $activeRow = collect($client->query(new Query('/ip/hotspot/active/print'))->read())
+                ->first(fn ($row) => is_array($row) && self::normalizeMacAddress((string) ($row['mac-address'] ?? '')) === $needle);
+
+            $leaseRow = collect($client->query(new Query('/ip/dhcp-server/lease/print'))->read())
+                ->first(fn ($row) => is_array($row) && self::normalizeMacAddress((string) ($row['mac-address'] ?? '')) === $needle);
+        } catch (\Throwable $e) {
+            return ['success' => false, 'steps' => [['label' => 'Disconnect hotspot user', 'success' => false, 'error' => $e->getMessage()]]];
+        }
+
+        if ($activeRow === null && $leaseRow === null) {
+            return [
+                'success' => true,
+                'steps' => [['label' => 'Disconnect hotspot user', 'success' => true, 'error' => 'Device is not currently active on this router, skipped.']],
+            ];
+        }
+
+        $steps = [];
+
+        if ($activeRow !== null) {
+            $steps['Remove active hotspot session'] = (new Query('/ip/hotspot/active/remove'))
+                ->equal('numbers', (string) ($activeRow['.id'] ?? ''));
+        }
+
+        if ($leaseRow !== null) {
+            $steps['Remove DHCP lease'] = (new Query('/ip/dhcp-server/lease/remove'))
+                ->equal('numbers', (string) ($leaseRow['.id'] ?? ''));
+        }
+
+        return $this->runSteps($router, $steps);
+    }
+
+    /**
+     * Same shape as RadiusProvisioningService's own private mac-address
+     * normalizer -- kept separate rather than shared, since that one lives
+     * on a class this service doesn't otherwise depend on, and both are
+     * simple one-liners unlikely to drift.
+     */
+    private static function normalizeMacAddress(string $macAddress): string
+    {
+        $hex = strtoupper(preg_replace('/[^A-Fa-f0-9]/', '', $macAddress) ?? '');
+
+        return implode(':', str_split(substr($hex, 0, 12), 2));
+    }
+
+    /**
      * A read-only RouterOS "terminal" -- accepts a CLI-style `print` command
      * (e.g. "/interface print", "/ip hotspot active print where server=hotspot1")
      * and runs it as a live API query. Only `print` is accepted; this is
@@ -479,6 +562,7 @@ class RouterOsConnectionService
         }
 
         $apiRestrictionResult = $this->syncApiServiceRestriction($router);
+        $managementRestrictionResult = $this->syncManagementServiceRestriction($router);
         $radiusResult = $this->syncRadiusClients($router, 'hotspot,ppp');
         $zeroTierResult = $this->syncZeroTierNetworkMembership($router);
 
@@ -532,8 +616,8 @@ class RouterOsConnectionService
         ];
 
         $result = $this->runSteps($router, $steps);
-        $result['steps'] = array_merge($apiRestrictionResult['steps'], $radiusResult['steps'], $zeroTierResult['steps'], $result['steps']);
-        $result['success'] = $apiRestrictionResult['success'] && $radiusResult['success'] && $zeroTierResult['success'] && $result['success'];
+        $result['steps'] = array_merge($apiRestrictionResult['steps'], $managementRestrictionResult['steps'], $radiusResult['steps'], $zeroTierResult['steps'], $result['steps']);
+        $result['success'] = $apiRestrictionResult['success'] && $managementRestrictionResult['success'] && $radiusResult['success'] && $zeroTierResult['success'] && $result['success'];
 
         $walledGardenResult = $this->syncWalledGarden($router);
         // $router->hotspot_login_directory is null for a router freshly onboarded through
@@ -1632,6 +1716,7 @@ class RouterOsConnectionService
 
         $infraResult = $this->ensurePppoeInfrastructure($router, $pppoeInterface);
         $apiRestrictionResult = $this->syncApiServiceRestriction($router);
+        $managementRestrictionResult = $this->syncManagementServiceRestriction($router);
         $radiusResult = $this->syncRadiusClients($router, 'ppp');
         $zeroTierResult = $this->syncZeroTierNetworkMembership($router);
 
@@ -1645,11 +1730,12 @@ class RouterOsConnectionService
         $profileServerStep = $this->applyPppoeProfileAndServer($router, $pppoeInterface);
 
         return [
-            'success' => $infraResult['success'] && $apiRestrictionResult['success'] && $radiusResult['success']
+            'success' => $infraResult['success'] && $apiRestrictionResult['success'] && $managementRestrictionResult['success'] && $radiusResult['success']
                 && $zeroTierResult['success'] && $aaaResult['success'] && $profileServerStep['success'],
             'steps' => array_merge(
                 $infraResult['steps'],
                 $apiRestrictionResult['steps'],
+                $managementRestrictionResult['steps'],
                 $radiusResult['steps'],
                 $zeroTierResult['steps'],
                 $aaaResult['steps'],
@@ -2139,6 +2225,80 @@ class RouterOsConnectionService
                 ->equal('numbers', (string) ($apiServiceRow['.id'] ?? ''))
                 ->equal('address', $desired),
         ];
+
+        return $this->runSteps($router, $steps);
+    }
+
+    /**
+     * Keeps this router's admin-facing services (Winbox, WebFig on
+     * 80/443, SSH) restricted to trusted sources only -- confirmed live
+     * 2026-09-28, from a direct report of a phone on the open customer
+     * hotspot Wi-Fi being able to discover and log into the router via
+     * mobile Winbox using its IP: the hotspot VLAN's own captive-portal
+     * firewall accept rule (ports 80/443) doubles as an open door to
+     * RouterOS's own WebFig admin interface on those same ports unless
+     * www/www-ssl are restricted at the /ip service level. Mirrors
+     * syncApiServiceRestriction() exactly, just across four service names
+     * sharing one desired address list (MikroTikProvisioningService::
+     * managementServiceAddressRestriction(), reused directly rather than
+     * duplicated) instead of one -- a router that had its mgmt_network
+     * changed, or ZeroTier added, after this was last set otherwise keeps
+     * trusting a stale range forever, the same staleness problem
+     * syncApiServiceRestriction() already exists to fix for the api service.
+     *
+     * @return array{success: bool, steps: list<array{label: string, success: bool, error: ?string}>}
+     */
+    public function syncManagementServiceRestriction(Router $router): array
+    {
+        if (! $this->isConfigured($router)) {
+            return [
+                'success' => false,
+                'steps' => [['label' => 'Management service address restriction', 'success' => false, 'error' => 'No RouterOS API credentials generated for this router yet.']],
+            ];
+        }
+
+        $settings = $this->provisioning->provisioningSettings($router, (string) (((array) $router->provisioning_settings)['profile'] ?? 'starlink_plaza'));
+        $desired = $this->provisioning->managementServiceAddressRestriction($router, $settings);
+        $serviceNames = ['winbox', 'www', 'www-ssl', 'ssh'];
+
+        try {
+            $rows = collect($this->client($router, 8)->query(new Query('/ip/service/print'))->read())
+                ->filter(fn ($row) => is_array($row))
+                ->keyBy(fn ($row) => $row['name'] ?? null);
+        } catch (\Throwable $e) {
+            return ['success' => false, 'steps' => [['label' => 'Management service address restriction', 'success' => false, 'error' => $e->getMessage()]]];
+        }
+
+        $steps = [];
+        $alreadyCorrect = [];
+        $notFound = [];
+
+        foreach ($serviceNames as $name) {
+            $row = $rows->get($name);
+
+            if ($row === null) {
+                $notFound[] = $name;
+
+                continue;
+            }
+
+            if (self::normalizeAddressList((string) ($row['address'] ?? '')) === self::normalizeAddressList($desired)) {
+                $alreadyCorrect[] = $name;
+
+                continue;
+            }
+
+            $steps['Restrict '.$name.' service to trusted sources'] = (new Query('/ip/service/set'))
+                ->equal('numbers', (string) ($row['.id'] ?? ''))
+                ->equal('address', $desired);
+        }
+
+        if ($steps === []) {
+            return [
+                'success' => true,
+                'steps' => [['label' => 'Management service address restriction', 'success' => true, 'error' => $notFound === [] ? 'Already correct on the router, skipped.' : 'Already correct; no "'.implode('", "', $notFound).'" entry found under /ip/service.']],
+            ];
+        }
 
         return $this->runSteps($router, $steps);
     }

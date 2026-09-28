@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Package;
+use App\Models\Router;
 use App\Models\Shop;
 use App\Models\Subscription;
 use App\Models\Tenant;
@@ -40,7 +41,7 @@ class HotspotExpiryCommandTest extends TestCase
         $this->grantRadiusRows($activeOnly, $package);
 
         $this->artisan('hotspot:sync-expired-hotspot')
-            ->expectsOutput('Revoked 1 expired hotspot device(s) from RADIUS.')
+            ->expectsOutput('Revoked 1 expired hotspot device(s) from RADIUS; disconnected 0 active router session/lease check(s).')
             ->assertExitCode(0);
 
         $this->assertDatabaseMissing('radcheck', ['username' => 'AA:BB:CC:DD:EE:01']);
@@ -49,6 +50,36 @@ class HotspotExpiryCommandTest extends TestCase
         $this->assertDatabaseHas('radusergroup', ['username' => $renewedActive->mac_address]);
         $this->assertDatabaseHas('radcheck', ['username' => $activeOnly->mac_address]);
         $this->assertDatabaseHas('radusergroup', ['username' => $activeOnly->mac_address]);
+    }
+
+    /**
+     * 2026-09-28, direct live report: revoking RADIUS access alone leaves an
+     * already-connected phone's hotspot session/DHCP lease untouched, so its
+     * traffic just silently stops working with no indication why. This
+     * doesn't (and can't, without a real router) verify the actual RouterOS
+     * disconnect succeeds -- it verifies the orchestration around it: an
+     * unreachable router is a soft failure the command tolerates and reports
+     * honestly, never something that stops RADIUS revocation from happening
+     * or crashes the whole scheduled sync.
+     */
+    public function test_expired_hotspot_sync_attempts_to_disconnect_from_the_shops_router_and_tolerates_it_being_unreachable(): void
+    {
+        [$shop, $package] = $this->fixture();
+        Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'Unreachable Expiry Router',
+            'nas_identifier' => 'unreachable-expiry-router',
+            'wireguard_internal_ip' => '192.0.2.55',
+            'shared_secret' => 'radius-secret',
+        ]);
+        $subscription = $this->subscription($shop, $package, 'AA:BB:CC:DD:EE:09', now()->subMinute());
+        $this->grantRadiusRows($subscription, $package);
+
+        $this->artisan('hotspot:sync-expired-hotspot')
+            ->expectsOutput('Revoked 1 expired hotspot device(s) from RADIUS; disconnected 0 active router session/lease check(s).')
+            ->assertExitCode(0);
+
+        $this->assertDatabaseMissing('radcheck', ['username' => 'AA:BB:CC:DD:EE:09']);
     }
 
     private function fixture(): array

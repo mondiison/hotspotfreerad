@@ -750,6 +750,61 @@ class MikroTikProvisioningServiceTest extends TestCase
         $this->assertStringContainsString('/tool mac-server mac-winbox set allowed-interface-list=MGMT-ACCESS', $script);
     }
 
+    /**
+     * Confirmed live 2026-09-28: a phone connected to the open customer
+     * hotspot Wi-Fi could discover and log into the router via mobile
+     * Winbox using its IP -- the hotspot VLAN's own captive-portal firewall
+     * accept rule (ports 80/443) doubles as an open door to RouterOS's own
+     * WebFig admin interface on those same ports unless www/www-ssl are
+     * separately restricted at the /ip service level. This is a different,
+     * IP-level gap from the MAC-Telnet/Winbox-"Neighbors" Layer 2 bypass
+     * the test above covers -- that fix never touched /ip service at all.
+     */
+    public function test_management_services_are_locked_to_trusted_sources_not_wide_open(): void
+    {
+        config([
+            'app.url' => 'https://mmsradius.com',
+            'services.radius.server_ip' => '10.8.0.1',
+            'services.wireguard.endpoint_host' => 'vpn.example.com',
+            'services.wireguard.endpoint_port' => 13231,
+            'services.wireguard.public_key' => 'server-public-key',
+            'services.mikrotik.hotspot_dns_name' => 'hotspot.local',
+        ]);
+
+        $router = new Router([
+            'nas_identifier' => 'management-service-router',
+            'wireguard_internal_ip' => '10.8.0.34',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        $script = app(MikroTikProvisioningService::class)->generateFreshInfrastructureScript($router);
+
+        $this->assertStringContainsString('/ip service set winbox disabled=no address=10.8.0.0/24,192.168.10.0/24', $script);
+        $this->assertStringContainsString('/ip service set www disabled=no address=10.8.0.0/24,192.168.10.0/24', $script);
+        $this->assertStringContainsString('/ip service set www-ssl disabled=no address=10.8.0.0/24,192.168.10.0/24', $script);
+        $this->assertStringContainsString('/ip service set ssh disabled=no address=10.8.0.0/24,192.168.10.0/24', $script);
+    }
+
+    public function test_management_service_address_restriction_includes_mgmt_network_and_both_tunnels_in_dual_mode(): void
+    {
+        config(['services.zerotier.ip_prefix' => '10.9.0']);
+
+        $router = new Router([
+            'nas_identifier' => 'dual-tunnel-mgmt-router',
+            'wireguard_internal_ip' => '10.8.0.44',
+            'shared_secret' => 'radius-secret',
+            'tunnel_mode' => 'wireguard_zerotier',
+            'zerotier_ip' => '10.9.0.44',
+            'provisioning_settings' => [
+                'mgmt_network' => '192.168.20.0/24',
+            ],
+        ]);
+
+        $script = app(MikroTikProvisioningService::class)->generateFreshInfrastructureScript($router);
+
+        $this->assertStringContainsString('/ip service set winbox disabled=no address=10.8.0.0/24,10.9.0.0/24,192.168.20.0/24', $script);
+    }
+
     public function test_extra_ports_merge_into_the_builtin_wifi_branchs_untagged_clauses(): void
     {
         config([

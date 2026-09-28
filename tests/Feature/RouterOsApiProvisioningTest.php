@@ -275,7 +275,8 @@ class RouterOsApiProvisioningTest extends TestCase
 
         $result = app(RouterOsConnectionService::class)->provisionHotspot($router);
 
-        // API service address restriction sync, RADIUS client, hotspot profile,
+        // API service address restriction sync, management service (winbox/www/
+        // www-ssl/ssh) address restriction sync, RADIUS client, hotspot profile,
         // portal walled-garden entry, one walled-garden entry per host in the
         // shop's active gateway's PaymentGatewayCatalog list (flutterwave by
         // default: *.flutterwave.com, *.ravepay.co, *.dev-flutterwave.com), the
@@ -285,7 +286,7 @@ class RouterOsApiProvisioningTest extends TestCase
         // Script" tab/button) rather than bundled in here, so it contributes no
         // steps to this result.
         $this->assertFalse($result['success']);
-        $this->assertCount(12, $result['steps']);
+        $this->assertCount(13, $result['steps']);
         $this->assertFalse($result['steps'][0]['success']);
         $this->assertNotEmpty($result['steps'][0]['error']);
         $labels = array_column($result['steps'], 'label');
@@ -309,7 +310,7 @@ class RouterOsApiProvisioningTest extends TestCase
         $result = app(RouterOsConnectionService::class)->provisionHotspot($router);
 
         $this->assertFalse($result['success']);
-        $this->assertCount(12, $result['steps']);
+        $this->assertCount(13, $result['steps']);
         $labels = array_column($result['steps'], 'label');
         $this->assertContains('Push hotspot login page', $labels);
     }
@@ -658,7 +659,7 @@ class RouterOsApiProvisioningTest extends TestCase
         $result = app(RouterOsConnectionService::class)->provisionPppoe($router);
 
         $this->assertFalse($result['success']);
-        $this->assertCount(5, $result['steps']);
+        $this->assertCount(6, $result['steps']);
         $this->assertFalse($result['steps'][0]['success']);
     }
 
@@ -871,5 +872,48 @@ class RouterOsApiProvisioningTest extends TestCase
             ->assertRedirect(route('admin.routers.show', $router));
 
         $this->assertNotNull(session('status'));
+    }
+
+    /**
+     * 2026-09-28, direct live report: a phone connected to the hotspot keeps
+     * its session and DHCP lease untouched once RADIUS access is revoked, so
+     * traffic just silently stops with no indication the plan expired.
+     * disconnectHotspotUser() is what hotspot:sync-expired-hotspot now calls
+     * per router to force the device back to the login page.
+     */
+    public function test_disconnect_hotspot_user_reports_a_clear_error_when_router_is_unreachable(): void
+    {
+        $router = Router::create([
+            'shop_id' => $this->makeShop()->id,
+            'name' => 'Unreachable Disconnect Router',
+            'nas_identifier' => 'unreachable-disconnect-router',
+            'wireguard_internal_ip' => '192.0.2.60',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        $result = app(RouterOsConnectionService::class)->disconnectHotspotUser($router, 'AA:BB:CC:DD:EE:FF');
+
+        $this->assertFalse($result['success']);
+        $this->assertCount(1, $result['steps']);
+        $this->assertSame('Disconnect hotspot user', $result['steps'][0]['label']);
+        $this->assertFalse($result['steps'][0]['success']);
+        $this->assertNotEmpty($result['steps'][0]['error']);
+    }
+
+    public function test_disconnect_hotspot_user_without_api_credentials_reports_a_clear_error(): void
+    {
+        $router = Router::create([
+            'shop_id' => $this->makeShop()->id,
+            'name' => 'No Credentials Router',
+            'nas_identifier' => 'no-credentials-disconnect-router',
+            'wireguard_internal_ip' => '192.0.2.61',
+            'shared_secret' => 'radius-secret',
+        ]);
+        $router->forceFill(['api_username' => null, 'api_password' => null])->save();
+
+        $result = app(RouterOsConnectionService::class)->disconnectHotspotUser($router, 'AA:BB:CC:DD:EE:FF');
+
+        $this->assertFalse($result['success']);
+        $this->assertSame('No RouterOS API credentials generated for this router yet.', $result['steps'][0]['error']);
     }
 }

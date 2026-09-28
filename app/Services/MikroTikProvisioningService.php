@@ -787,6 +787,16 @@ SCRIPT;
             '/tool mac-server set allowed-interface-list=MGMT-ACCESS',
             '/tool mac-server mac-winbox set allowed-interface-list=MGMT-ACCESS',
             '',
+            '# Confirmed live 2026-09-28: the hotspot captive-portal accept rule below',
+            '# (ports 80/443) doubles as an open door to this router\'s own WebFig admin',
+            '# interface on those same ports unless www/www-ssl are separately restricted --',
+            '# a hotspot customer could reach and log into the router itself, not just the',
+            '# captive portal. Winbox and SSH get the same treatment as a backstop.',
+            '/ip service set winbox disabled=no address='.$this->managementServiceAddressRestriction($router, $settings),
+            '/ip service set www disabled=no address='.$this->managementServiceAddressRestriction($router, $settings),
+            '/ip service set www-ssl disabled=no address='.$this->managementServiceAddressRestriction($router, $settings),
+            '/ip service set ssh disabled=no address='.$this->managementServiceAddressRestriction($router, $settings),
+            '',
             '/ip firewall address-list add list=mms-hotspot-subnets address=$hotspotNetwork',
             $settings['enable_pos'] ? '/ip firewall address-list add list=mms-pos-subnets address=$posNetwork' : '# POS firewall list disabled',
             // Confirmed live 2026-09-21: this always accepted "wg-saas" but never had a
@@ -1353,6 +1363,48 @@ HTML;
         ]);
 
         return implode(',', $ranges) ?: '10.8.0.0/24';
+    }
+
+    /**
+     * Trusted sources for the router's own admin-facing services (Winbox,
+     * WebFig on 80/443, SSH) -- unlike the API service above (only ever
+     * reached over the WireGuard/ZeroTier tunnel by this app's own
+     * automated calls), a human admin needs to reach these directly,
+     * either remotely over the same tunnel or locally from the management
+     * VLAN/Wi-Fi, so the router's own configured mgmt_network is trusted
+     * here too.
+     *
+     * Confirmed live 2026-09-28, from a direct report of a phone connected
+     * to the open customer hotspot Wi-Fi being able to discover and log
+     * into the router via mobile Winbox using its IP: the hotspot VLAN's
+     * own captive-portal firewall accept rule (chain=input, ports 80/443,
+     * needed so hotspot clients can reach the login page RouterOS itself
+     * serves) doubles as an open door to RouterOS's *own* WebFig admin
+     * interface on those same ports, unless /ip service www/www-ssl are
+     * separately restricted -- a hotspot customer could reach and log into
+     * the router itself, not just the captive portal. This is a different,
+     * IP-level gap from the earlier MAC-Telnet/Winbox-"Neighbors" Layer 2
+     * bypass (see the MGMT-ACCESS interface list above) -- that fix left
+     * `/ip service` entirely untouched. Winbox and SSH get the identical
+     * restriction as a defense-in-depth backstop, even though the firewall
+     * rules below don't explicitly open 8291/22 to client VLANs today.
+     *
+     * RouterOsConnectionService::syncManagementServiceRestriction() reuses
+     * this exact logic to keep an already-provisioned router's live
+     * restriction in sync too, the same reason apiServiceAddressRestriction()
+     * above is public.
+     *
+     * @param  array<string, mixed>  $settings
+     */
+    public function managementServiceAddressRestriction(Router $router, array $settings): string
+    {
+        $ranges = array_filter(array_unique([
+            $this->includesWireguard($router) ? '10.8.0.0/24' : null,
+            $this->includesZeroTier($router) ? config('services.zerotier.ip_prefix').'.0/24' : null,
+            $settings['mgmt_network'] ?? null,
+        ]));
+
+        return implode(',', $ranges) ?: (string) ($settings['mgmt_network'] ?? '192.168.10.0/24');
     }
 
     /**
