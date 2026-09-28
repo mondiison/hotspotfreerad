@@ -13,21 +13,29 @@
         </flux:button>
     </div>
 
-    <section class="mb-4 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4 shadow-sm">
-        <div class="grid min-w-0 gap-3 [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))] [&>*]:min-w-0">
-            <div class="sm:col-span-2 xl:col-span-3">
-                <flux:input wire:model.live.debounce.350ms="search" icon="magnifying-glass" placeholder="Search router, NAS ID, WireGuard IP, or shop" />
-            </div>
-            <flux:select wire:model.live="status">
-                <flux:select.option value="">All statuses</flux:select.option>
-                <flux:select.option value="online">Active/recent</flux:select.option>
-                <flux:select.option value="offline">No recent accounting</flux:select.option>
-            </flux:select>
-            <flux:button type="button" variant="outline" icon="x-mark" class="w-full" wire:click="clearFilters" wire:loading.attr="disabled" wire:target="clearFilters,search,status">
-                Reset
-            </flux:button>
+    @php
+        $routersActiveFilters = [];
+        if (filled($search)) {
+            $routersActiveFilters[] = ['label' => 'Search: "'.$search.'"', 'clear' => "\$set('search', '')"];
+        }
+        if (filled($status)) {
+            $routersActiveFilters[] = ['label' => 'Status: '.($status === 'online' ? 'Active/recent' : 'No recent accounting'), 'clear' => "\$set('status', '')"];
+        }
+    @endphp
+
+    <x-admin.filter-bar modal-name="filters-routers" :active="$routersActiveFilters">
+        <div class="sm:col-span-2">
+            <flux:input wire:model.live.debounce.350ms="search" icon="magnifying-glass" placeholder="Search router, NAS ID, WireGuard IP, or shop" />
         </div>
-    </section>
+        <flux:select wire:model.live="status">
+            <flux:select.option value="">All statuses</flux:select.option>
+            <flux:select.option value="online">Active/recent</flux:select.option>
+            <flux:select.option value="offline">No recent accounting</flux:select.option>
+        </flux:select>
+        <flux:button type="button" variant="outline" icon="x-mark" class="w-full sm:col-span-2" wire:click="clearFilters" x-on:click="$flux.modal('filters-routers').close()" wire:loading.attr="disabled" wire:target="clearFilters,search,status">
+            Reset
+        </flux:button>
+    </x-admin.filter-bar>
 
     <div class="overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm">
         <table class="min-w-[780px] w-full text-left text-sm">

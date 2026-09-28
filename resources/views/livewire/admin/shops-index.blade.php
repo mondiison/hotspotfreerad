@@ -13,26 +13,37 @@
         </flux:button>
     </div>
 
-    <section class="mb-4 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4 shadow-sm">
-        <div class="grid min-w-0 gap-3 [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))] [&>*]:min-w-0">
-            <div class="sm:col-span-2 xl:col-span-3">
-                <flux:input wire:model.live.debounce.350ms="search" icon="magnifying-glass" placeholder="Search shop, city, or tenant" />
-            </div>
-            <flux:select wire:model.live="status">
-                <flux:select.option value="">All statuses</flux:select.option>
-                <flux:select.option value="active">Active</flux:select.option>
-                <flux:select.option value="inactive">Inactive</flux:select.option>
-            </flux:select>
-            <flux:select wire:model.live="payments">
-                <flux:select.option value="">All payment states</flux:select.option>
-                <flux:select.option value="configured">Payments configured</flux:select.option>
-                <flux:select.option value="unconfigured">Payments not configured</flux:select.option>
-            </flux:select>
-            <flux:button type="button" variant="outline" icon="x-mark" class="w-full" wire:click="clearFilters" wire:loading.attr="disabled" wire:target="clearFilters,search,status,payments">
-                Reset
-            </flux:button>
+    @php
+        $shopsActiveFilters = [];
+        if (filled($search)) {
+            $shopsActiveFilters[] = ['label' => 'Search: "'.$search.'"', 'clear' => "\$set('search', '')"];
+        }
+        if (filled($status)) {
+            $shopsActiveFilters[] = ['label' => 'Status: '.($status === 'active' ? 'Active' : 'Inactive'), 'clear' => "\$set('status', '')"];
+        }
+        if (filled($payments)) {
+            $shopsActiveFilters[] = ['label' => 'Payments: '.($payments === 'configured' ? 'Configured' : 'Not configured'), 'clear' => "\$set('payments', '')"];
+        }
+    @endphp
+
+    <x-admin.filter-bar modal-name="filters-shops" :active="$shopsActiveFilters">
+        <div class="sm:col-span-2">
+            <flux:input wire:model.live.debounce.350ms="search" icon="magnifying-glass" placeholder="Search shop, city, or tenant" />
         </div>
-    </section>
+        <flux:select wire:model.live="status">
+            <flux:select.option value="">All statuses</flux:select.option>
+            <flux:select.option value="active">Active</flux:select.option>
+            <flux:select.option value="inactive">Inactive</flux:select.option>
+        </flux:select>
+        <flux:select wire:model.live="payments">
+            <flux:select.option value="">All payment states</flux:select.option>
+            <flux:select.option value="configured">Payments configured</flux:select.option>
+            <flux:select.option value="unconfigured">Payments not configured</flux:select.option>
+        </flux:select>
+        <flux:button type="button" variant="outline" icon="x-mark" class="w-full sm:col-span-2" wire:click="clearFilters" x-on:click="$flux.modal('filters-shops').close()" wire:loading.attr="disabled" wire:target="clearFilters,search,status,payments">
+            Reset
+        </flux:button>
+    </x-admin.filter-bar>
 
     <div class="overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm">
         <table class="min-w-[760px] w-full text-left text-sm">

@@ -44,56 +44,91 @@
         @endforeach
     </section>
 
-    <section class="mb-4 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
-        <div class="grid min-w-0 gap-3 [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))] [&>*]:min-w-0">
-            <div class="sm:col-span-2 xl:col-span-3">
-                <flux:input wire:model.live.debounce.350ms="search" icon="magnifying-glass" placeholder="Search batch, shop, package, prefix" />
-            </div>
+    {{-- Deliberately raw PHP tags, not Blade's inline-PHP directive: the stat-card
+         loop above already has a single-line inline-PHP directive with deeply
+         nested parens ($isActiveStat), and pairing it with a real multi-line
+         inline-PHP block anywhere later in this same file makes Blade's
+         directive matcher swallow everything between the two as unprocessed
+         literal text. Raw tags sidestep that directive matching entirely. --}}
+    <?php
+        $voucherStatusLabels = [
+            'active' => 'Active batches',
+            'exhausted' => 'Fully used',
+            'unused' => 'Has unused codes',
+            'sold' => 'Sold not redeemed',
+            'used' => 'Has used codes',
+            'void' => 'Voided batches',
+        ];
+        $vouchersActiveFilters = [];
+        if (filled($search)) {
+            $vouchersActiveFilters[] = ['label' => 'Search: "'.$search.'"', 'clear' => "\$set('search', '')"];
+        }
+        if (filled($shop)) {
+            $vouchersActiveFilters[] = ['label' => 'Shop: '.($shops->firstWhere('id', (int) $shop)->name ?? $shop), 'clear' => "\$set('shop', '')"];
+        }
+        if (filled($status)) {
+            $vouchersActiveFilters[] = ['label' => 'Batch: '.($voucherStatusLabels[$status] ?? $status), 'clear' => "\$set('status', '')"];
+        }
+        if (filled($sold_from)) {
+            $vouchersActiveFilters[] = ['label' => 'Sold from: '.$sold_from, 'clear' => "\$set('sold_from', '')"];
+        }
+        if (filled($sold_to)) {
+            $vouchersActiveFilters[] = ['label' => 'Sold to: '.$sold_to, 'clear' => "\$set('sold_to', '')"];
+        }
+        if (filled($used_from)) {
+            $vouchersActiveFilters[] = ['label' => 'Used from: '.$used_from, 'clear' => "\$set('used_from', '')"];
+        }
+        if (filled($used_to)) {
+            $vouchersActiveFilters[] = ['label' => 'Used to: '.$used_to, 'clear' => "\$set('used_to', '')"];
+        }
+    ?>
 
-            <flux:select wire:model.live="shop">
-                <flux:select.option value="">All shops</flux:select.option>
-                @foreach ($shops as $shopOption)
-                    <flux:select.option value="{{ $shopOption->id }}">{{ $shopOption->name }}</flux:select.option>
-                @endforeach
-            </flux:select>
-
-            <flux:select wire:model.live="status">
-                <flux:select.option value="">All batches</flux:select.option>
-                <flux:select.option value="active">Active batches</flux:select.option>
-                <flux:select.option value="exhausted">Fully used</flux:select.option>
-                <flux:select.option value="unused">Has unused codes</flux:select.option>
-                <flux:select.option value="sold">Sold not redeemed</flux:select.option>
-                <flux:select.option value="used">Has used codes</flux:select.option>
-                <flux:select.option value="void">Voided batches</flux:select.option>
-            </flux:select>
-
-            <flux:field>
-                <flux:label>Sold from</flux:label>
-                <flux:input type="date" wire:model.live="sold_from" />
-            </flux:field>
-
-            <flux:field>
-                <flux:label>Sold to</flux:label>
-                <flux:input type="date" wire:model.live="sold_to" />
-            </flux:field>
-
-            <flux:field>
-                <flux:label>Used from</flux:label>
-                <flux:input type="date" wire:model.live="used_from" />
-            </flux:field>
-
-            <flux:field>
-                <flux:label>Used to</flux:label>
-                <flux:input type="date" wire:model.live="used_to" />
-            </flux:field>
-
-            <div class="flex items-end">
-                <flux:button type="button" variant="outline" icon="x-mark" class="w-full" wire:click="clearFilters" wire:loading.attr="disabled" wire:target="clearFilters,search,status,shop,used_from,used_to,sold_from,sold_to">
-                    Reset
-                </flux:button>
-            </div>
+    <x-admin.filter-bar modal-name="filters-vouchers" :active="$vouchersActiveFilters">
+        <div class="sm:col-span-2">
+            <flux:input wire:model.live.debounce.350ms="search" icon="magnifying-glass" placeholder="Search batch, shop, package, prefix" />
         </div>
-    </section>
+
+        <flux:select wire:model.live="shop">
+            <flux:select.option value="">All shops</flux:select.option>
+            @foreach ($shops as $shopOption)
+                <flux:select.option value="{{ $shopOption->id }}">{{ $shopOption->name }}</flux:select.option>
+            @endforeach
+        </flux:select>
+
+        <flux:select wire:model.live="status">
+            <flux:select.option value="">All batches</flux:select.option>
+            <flux:select.option value="active">Active batches</flux:select.option>
+            <flux:select.option value="exhausted">Fully used</flux:select.option>
+            <flux:select.option value="unused">Has unused codes</flux:select.option>
+            <flux:select.option value="sold">Sold not redeemed</flux:select.option>
+            <flux:select.option value="used">Has used codes</flux:select.option>
+            <flux:select.option value="void">Voided batches</flux:select.option>
+        </flux:select>
+
+        <flux:field>
+            <flux:label>Sold from</flux:label>
+            <flux:input type="date" wire:model.live="sold_from" />
+        </flux:field>
+
+        <flux:field>
+            <flux:label>Sold to</flux:label>
+            <flux:input type="date" wire:model.live="sold_to" />
+        </flux:field>
+
+        <flux:field>
+            <flux:label>Used from</flux:label>
+            <flux:input type="date" wire:model.live="used_from" />
+        </flux:field>
+
+        <flux:field>
+            <flux:label>Used to</flux:label>
+            <flux:input type="date" wire:model.live="used_to" />
+        </flux:field>
+
+        <flux:button type="button" variant="outline" icon="x-mark" class="w-full sm:col-span-2" wire:click="clearFilters" x-on:click="$flux.modal('filters-vouchers').close()" wire:loading.attr="disabled" wire:target="clearFilters,search,status,shop,used_from,used_to,sold_from,sold_to">
+            Reset
+        </flux:button>
+    </x-admin.filter-bar>
 
     <div wire:loading.flex wire:target="search,status,shop,used_from,used_to,sold_from,sold_to,clearFilters,filterBy,save" class="mb-4 hidden rounded-md border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
         Updating vouchers...

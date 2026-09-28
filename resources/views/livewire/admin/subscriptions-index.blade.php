@@ -60,10 +60,32 @@
         </flux:button>
     </section>
 
-    <section class="mt-4 grid min-w-0 gap-3 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4 [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))] [&>*]:min-w-0">
-        <flux:input type="date" wire:model.live="from" />
-        <flux:input type="date" wire:model.live="to" />
-        <div class="sm:col-span-2 xl:col-span-3">
+    @php
+        $subscriptionsActiveFilters = [];
+        if (filled($search)) {
+            $subscriptionsActiveFilters[] = ['label' => 'Search: "'.$search.'"', 'clear' => "\$set('search', '')"];
+        }
+        if (filled($status)) {
+            $subscriptionsActiveFilters[] = ['label' => 'Status: '.($status === 'active' ? 'Active now' : 'Expired'), 'clear' => "\$set('status', '')"];
+        }
+        if (filled($source)) {
+            $subscriptionsActiveFilters[] = ['label' => 'Source: '.($source === 'paid' ? 'Paid access' : 'Test access'), 'clear' => "\$set('source', '')"];
+        }
+        if (filled($throttled)) {
+            $subscriptionsActiveFilters[] = ['label' => 'Throttled only', 'clear' => "\$set('throttled', '')"];
+        }
+    @endphp
+
+    <x-admin.filter-bar modal-name="filters-subscriptions" :active="$subscriptionsActiveFilters" class="mt-4">
+        <flux:field>
+            <flux:label>From</flux:label>
+            <flux:input type="date" wire:model.live="from" />
+        </flux:field>
+        <flux:field>
+            <flux:label>To</flux:label>
+            <flux:input type="date" wire:model.live="to" />
+        </flux:field>
+        <div class="sm:col-span-2">
             <flux:input wire:model.live.debounce.350ms="search" icon="magnifying-glass" placeholder="Search MAC, shop, package, payment ref" />
         </div>
         <flux:select wire:model.live="status">
@@ -80,10 +102,10 @@
             <flux:select.option value="">Any speed state</flux:select.option>
             <flux:select.option value="1">Throttled only</flux:select.option>
         </flux:select>
-        <flux:button type="button" variant="outline" icon="x-mark" class="w-full" wire:click="clearFilters" wire:loading.attr="disabled" wire:target="clearFilters,from,to,search,status,source,throttled">
+        <flux:button type="button" variant="outline" icon="x-mark" class="w-full sm:col-span-2" wire:click="clearFilters" x-on:click="$flux.modal('filters-subscriptions').close()" wire:loading.attr="disabled" wire:target="clearFilters,from,to,search,status,source,throttled">
             Reset
         </flux:button>
-    </section>
+    </x-admin.filter-bar>
 
     <div wire:loading.flex wire:target="from,to,search,status,source,throttled,setPreset,showAllDates,clearFilters" class="mt-4 hidden rounded-md border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
         Updating access report...

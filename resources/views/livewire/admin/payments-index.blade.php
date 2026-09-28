@@ -45,10 +45,29 @@
         </flux:button>
     </section>
 
-    <section class="mt-4 grid min-w-0 gap-3 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4 [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))] [&>*]:min-w-0">
-        <flux:input type="date" wire:model.live="from" />
-        <flux:input type="date" wire:model.live="to" />
-        <div class="sm:col-span-2 xl:col-span-3">
+    @php
+        $paymentsActiveFilters = [];
+        if (filled($search)) {
+            $paymentsActiveFilters[] = ['label' => 'Search: "'.$search.'"', 'clear' => "\$set('search', '')"];
+        }
+        if (filled($status)) {
+            $paymentsActiveFilters[] = ['label' => 'Status: '.($status === 'attention' ? 'Needs attention' : str_replace('_', ' ', ucfirst($status))), 'clear' => "\$set('status', '')"];
+        }
+        if (filled($provider)) {
+            $paymentsActiveFilters[] = ['label' => 'Method: '.($paymentMethods[$provider] ?? $provider), 'clear' => "\$set('provider', '')"];
+        }
+    @endphp
+
+    <x-admin.filter-bar modal-name="filters-payments" :active="$paymentsActiveFilters" class="mt-4">
+        <flux:field>
+            <flux:label>From</flux:label>
+            <flux:input type="date" wire:model.live="from" />
+        </flux:field>
+        <flux:field>
+            <flux:label>To</flux:label>
+            <flux:input type="date" wire:model.live="to" />
+        </flux:field>
+        <div class="sm:col-span-2">
             <flux:input wire:model.live.debounce.350ms="search" icon="magnifying-glass" placeholder="Search ref, customer, shop, package" />
         </div>
         <flux:select wire:model.live="status">
@@ -64,10 +83,10 @@
                 <flux:select.option value="{{ $methodKey }}">{{ $methodLabel }}</flux:select.option>
             @endforeach
         </flux:select>
-        <flux:button type="button" variant="outline" icon="x-mark" class="w-full" wire:click="clearFilters" wire:loading.attr="disabled" wire:target="clearFilters,from,to,search,status,provider">
+        <flux:button type="button" variant="outline" icon="x-mark" class="w-full sm:col-span-2" wire:click="clearFilters" x-on:click="$flux.modal('filters-payments').close()" wire:loading.attr="disabled" wire:target="clearFilters,from,to,search,status,provider">
             Reset
         </flux:button>
-    </section>
+    </x-admin.filter-bar>
 
     <div wire:loading.flex wire:target="from,to,search,status,provider,setPreset,useCustomRange,clearFilters" class="mt-4 hidden rounded-md border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
         Updating report...

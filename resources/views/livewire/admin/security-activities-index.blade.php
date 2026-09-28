@@ -25,53 +25,68 @@
         </div>
     </section>
 
-    <section class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4 shadow-sm">
-        <div class="grid min-w-0 gap-3 [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))] [&>*]:min-w-0">
-            <div class="sm:col-span-2 xl:col-span-3">
-                <flux:input wire:model.live.debounce.350ms="search" icon="magnifying-glass" placeholder="Search user, action, IP, tenant" />
-            </div>
+    @php
+        $securityActiveFilters = [];
+        if (filled($search)) {
+            $securityActiveFilters[] = ['label' => 'Search: "'.$search.'"', 'clear' => "\$set('search', '')"];
+        }
+        if (filled($action_group)) {
+            $securityActiveFilters[] = ['label' => 'Event: '.($actionGroups[$action_group] ?? $action_group), 'clear' => "\$set('action_group', '')"];
+        }
+        if (filled($action)) {
+            $securityActiveFilters[] = ['label' => 'Reason: '.($actionOptions[$action] ?? $action), 'clear' => "\$set('action', '')"];
+        }
+        if (filled($attention)) {
+            $securityActiveFilters[] = ['label' => 'Attention only', 'clear' => "\$set('attention', '')"];
+        }
+        if (auth()->user()->isSuperAdmin() && filled($tenant_id)) {
+            $securityActiveFilters[] = ['label' => 'Tenant: '.($tenants->firstWhere('id', (int) $tenant_id)->company_name ?? $tenant_id), 'clear' => "\$set('tenant_id', '')"];
+        }
+    @endphp
 
-            <flux:select wire:model.live="action_group">
-                <flux:select.option value="">All events</flux:select.option>
-                @foreach ($actionGroups as $value => $label)
-                    <flux:select.option value="{{ $value }}">{{ $label }}</flux:select.option>
-                @endforeach
-            </flux:select>
-
-            <flux:select wire:model.live="action">
-                <flux:select.option value="">All reasons</flux:select.option>
-                @foreach ($actionOptions as $value => $label)
-                    <flux:select.option value="{{ $value }}">{{ $label }}</flux:select.option>
-                @endforeach
-            </flux:select>
-
-            <flux:select wire:model.live="attention">
-                <flux:select.option value="">All priorities</flux:select.option>
-                <flux:select.option value="1">Attention only</flux:select.option>
-            </flux:select>
-
-            @if (auth()->user()->isSuperAdmin())
-                <flux:select wire:model.live="tenant_id">
-                    <flux:select.option value="">All tenants</flux:select.option>
-                    @foreach ($tenants as $tenant)
-                        <flux:select.option value="{{ $tenant->id }}">{{ $tenant->company_name }}</flux:select.option>
-                    @endforeach
-                </flux:select>
-            @else
-                <div></div>
-            @endif
-
-            <flux:select wire:model.live="date_preset">
-                @foreach ($datePresets as $value => $label)
-                    <flux:select.option value="{{ $value }}">{{ $label }}</flux:select.option>
-                @endforeach
-            </flux:select>
-
-            <flux:button type="button" variant="outline" icon="x-mark" class="w-full" wire:click="clearFilters" wire:loading.attr="disabled" wire:target="clearFilters,search,action_group,action,attention,tenant_id,date_preset">
-                Reset
-            </flux:button>
+    <x-admin.filter-bar modal-name="filters-security-activity" :active="$securityActiveFilters">
+        <div class="sm:col-span-2">
+            <flux:input wire:model.live.debounce.350ms="search" icon="magnifying-glass" placeholder="Search user, action, IP, tenant" />
         </div>
-    </section>
+
+        <flux:select wire:model.live="action_group">
+            <flux:select.option value="">All events</flux:select.option>
+            @foreach ($actionGroups as $value => $label)
+                <flux:select.option value="{{ $value }}">{{ $label }}</flux:select.option>
+            @endforeach
+        </flux:select>
+
+        <flux:select wire:model.live="action">
+            <flux:select.option value="">All reasons</flux:select.option>
+            @foreach ($actionOptions as $value => $label)
+                <flux:select.option value="{{ $value }}">{{ $label }}</flux:select.option>
+            @endforeach
+        </flux:select>
+
+        <flux:select wire:model.live="attention">
+            <flux:select.option value="">All priorities</flux:select.option>
+            <flux:select.option value="1">Attention only</flux:select.option>
+        </flux:select>
+
+        @if (auth()->user()->isSuperAdmin())
+            <flux:select wire:model.live="tenant_id">
+                <flux:select.option value="">All tenants</flux:select.option>
+                @foreach ($tenants as $tenant)
+                    <flux:select.option value="{{ $tenant->id }}">{{ $tenant->company_name }}</flux:select.option>
+                @endforeach
+            </flux:select>
+        @endif
+
+        <flux:select wire:model.live="date_preset">
+            @foreach ($datePresets as $value => $label)
+                <flux:select.option value="{{ $value }}">{{ $label }}</flux:select.option>
+            @endforeach
+        </flux:select>
+
+        <flux:button type="button" variant="outline" icon="x-mark" class="w-full sm:col-span-2" wire:click="clearFilters" x-on:click="$flux.modal('filters-security-activity').close()" wire:loading.attr="disabled" wire:target="clearFilters,search,action_group,action,attention,tenant_id,date_preset">
+            Reset
+        </flux:button>
+    </x-admin.filter-bar>
 
     <section class="overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm">
         <div class="overflow-x-auto overflow-y-hidden">

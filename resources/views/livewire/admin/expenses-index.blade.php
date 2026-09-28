@@ -61,28 +61,46 @@
             </flux:button>
         </section>
 
-        <section class="mt-6 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4 shadow-sm">
-            <div class="grid min-w-0 gap-3 [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))] [&>*]:min-w-0">
+        @php
+            $scheduleLabels = ['recurring' => 'Recurring', 'due_soon' => 'Due soon', 'overdue' => 'Overdue'];
+            $expensesActiveFilters = [];
+            if (filled($search)) {
+                $expensesActiveFilters[] = ['label' => 'Search: "'.$search.'"', 'clear' => "\$set('search', '')"];
+            }
+            if (filled($category)) {
+                $expensesActiveFilters[] = ['label' => 'Category: '.($categories->firstWhere('id', (int) $category)->name ?? $category), 'clear' => "\$set('category', '')"];
+            }
+            if (filled($schedule)) {
+                $expensesActiveFilters[] = ['label' => 'Schedule: '.($scheduleLabels[$schedule] ?? $schedule), 'clear' => "\$set('schedule', '')"];
+            }
+        @endphp
+
+        <x-admin.filter-bar modal-name="filters-expenses" :active="$expensesActiveFilters" class="mt-6">
+            <flux:field>
+                <flux:label>From</flux:label>
                 <flux:input type="date" wire:model.live="from" />
+            </flux:field>
+            <flux:field>
+                <flux:label>To</flux:label>
                 <flux:input type="date" wire:model.live="to" />
-                <flux:select wire:model.live="category">
-                    <flux:select.option value="">All categories</flux:select.option>
-                    @foreach ($categories as $filterCategory)
-                        <flux:select.option value="{{ $filterCategory->id }}">{{ $filterCategory->name }}</flux:select.option>
-                    @endforeach
-                </flux:select>
-                <flux:select wire:model.live="schedule">
-                    <flux:select.option value="">All schedules</flux:select.option>
-                    <flux:select.option value="recurring">Recurring</flux:select.option>
-                    <flux:select.option value="due_soon">Due soon</flux:select.option>
-                    <flux:select.option value="overdue">Overdue</flux:select.option>
-                </flux:select>
-                <div class="sm:col-span-2 xl:col-span-3">
-                    <flux:input wire:model.live.debounce.350ms="search" placeholder="Search title, vendor, note" />
-                </div>
-                <flux:button type="button" variant="outline" icon="x-mark" class="w-full" wire:click="clearFilters" wire:loading.attr="disabled" wire:target="clearFilters,from,to,category,schedule,search">Reset</flux:button>
+            </flux:field>
+            <flux:select wire:model.live="category">
+                <flux:select.option value="">All categories</flux:select.option>
+                @foreach ($categories as $filterCategory)
+                    <flux:select.option value="{{ $filterCategory->id }}">{{ $filterCategory->name }}</flux:select.option>
+                @endforeach
+            </flux:select>
+            <flux:select wire:model.live="schedule">
+                <flux:select.option value="">All schedules</flux:select.option>
+                <flux:select.option value="recurring">Recurring</flux:select.option>
+                <flux:select.option value="due_soon">Due soon</flux:select.option>
+                <flux:select.option value="overdue">Overdue</flux:select.option>
+            </flux:select>
+            <div class="sm:col-span-2">
+                <flux:input wire:model.live.debounce.350ms="search" placeholder="Search title, vendor, note" />
             </div>
-        </section>
+            <flux:button type="button" variant="outline" icon="x-mark" class="w-full sm:col-span-2" wire:click="clearFilters" x-on:click="$flux.modal('filters-expenses').close()" wire:loading.attr="disabled" wire:target="clearFilters,from,to,category,schedule,search">Reset</flux:button>
+        </x-admin.filter-bar>
 
         <section class="mt-6 grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
             <div class="overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm">

@@ -41,29 +41,47 @@
         @endforeach
     </section>
 
-    <section class="mb-4 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4 shadow-sm">
-        <div class="grid min-w-0 gap-3 [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))] [&>*]:min-w-0">
-            <div class="sm:col-span-2 xl:col-span-3">
-                <flux:input wire:model.live.debounce.350ms="search" icon="magnifying-glass" placeholder="Search package, shop, group, or speed" />
-            </div>
-            <flux:select wire:model.live="status">
-                <flux:select.option value="">All statuses</flux:select.option>
-                <flux:select.option value="active">Active</flux:select.option>
-                <flux:select.option value="inactive">Inactive</flux:select.option>
-            </flux:select>
-            <flux:select wire:model.live="service">
-                <flux:select.option value="">All services</flux:select.option>
-                <flux:select.option value="hotspot_capable">Hotspot-capable</flux:select.option>
-                <flux:select.option value="pppoe_capable">PPPoE-capable</flux:select.option>
-                <flux:select.option value="hotspot">Hotspot only</flux:select.option>
-                <flux:select.option value="pppoe">PPPoE only</flux:select.option>
-                <flux:select.option value="both">Both only</flux:select.option>
-            </flux:select>
-            <flux:button type="button" variant="outline" icon="x-mark" class="w-full" wire:click="clearFilters" wire:loading.attr="disabled" wire:target="clearFilters,search,status,service">
-                Reset
-            </flux:button>
+    @php
+        $serviceLabels = [
+            'hotspot_capable' => 'Hotspot-capable',
+            'pppoe_capable' => 'PPPoE-capable',
+            'hotspot' => 'Hotspot only',
+            'pppoe' => 'PPPoE only',
+            'both' => 'Both only',
+        ];
+        $packagesActiveFilters = [];
+        if (filled($search)) {
+            $packagesActiveFilters[] = ['label' => 'Search: "'.$search.'"', 'clear' => "\$set('search', '')"];
+        }
+        if (filled($status)) {
+            $packagesActiveFilters[] = ['label' => 'Status: '.ucfirst($status), 'clear' => "\$set('status', '')"];
+        }
+        if (filled($service)) {
+            $packagesActiveFilters[] = ['label' => 'Service: '.($serviceLabels[$service] ?? $service), 'clear' => "\$set('service', '')"];
+        }
+    @endphp
+
+    <x-admin.filter-bar modal-name="filters-packages" :active="$packagesActiveFilters">
+        <div class="sm:col-span-2">
+            <flux:input wire:model.live.debounce.350ms="search" icon="magnifying-glass" placeholder="Search package, shop, group, or speed" />
         </div>
-    </section>
+        <flux:select wire:model.live="status">
+            <flux:select.option value="">All statuses</flux:select.option>
+            <flux:select.option value="active">Active</flux:select.option>
+            <flux:select.option value="inactive">Inactive</flux:select.option>
+        </flux:select>
+        <flux:select wire:model.live="service">
+            <flux:select.option value="">All services</flux:select.option>
+            <flux:select.option value="hotspot_capable">Hotspot-capable</flux:select.option>
+            <flux:select.option value="pppoe_capable">PPPoE-capable</flux:select.option>
+            <flux:select.option value="hotspot">Hotspot only</flux:select.option>
+            <flux:select.option value="pppoe">PPPoE only</flux:select.option>
+            <flux:select.option value="both">Both only</flux:select.option>
+        </flux:select>
+        <flux:button type="button" variant="outline" icon="x-mark" class="w-full sm:col-span-2" wire:click="clearFilters" x-on:click="$flux.modal('filters-packages').close()" wire:loading.attr="disabled" wire:target="clearFilters,search,status,service">
+            Reset
+        </flux:button>
+    </x-admin.filter-bar>
 
     <div class="overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm">
         <table class="min-w-[860px] w-full text-left text-sm">

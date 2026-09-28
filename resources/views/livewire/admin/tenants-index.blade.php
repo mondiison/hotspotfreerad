@@ -19,32 +19,46 @@
         </flux:button>
     </div>
 
-    <section class="mb-4 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4 shadow-sm">
-        <div class="grid min-w-0 gap-3 [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))] [&>*]:min-w-0">
-            <div class="sm:col-span-2 xl:col-span-3">
-                <flux:input wire:model.live.debounce.350ms="search" icon="magnifying-glass" placeholder="Search company, slug, or owner email" />
-            </div>
-            <flux:select wire:model.live="status">
-                <flux:select.option value="">All statuses</flux:select.option>
-                <flux:select.option value="active">Active</flux:select.option>
-                <flux:select.option value="inactive">Inactive</flux:select.option>
-            </flux:select>
-            <flux:select wire:model.live="billing_model">
-                <flux:select.option value="">All billing models</flux:select.option>
-                <flux:select.option value="subscription">Subscription</flux:select.option>
-                <flux:select.option value="commission">Commission on sales</flux:select.option>
-            </flux:select>
-            <flux:select wire:model.live="two_factor_status">
-                <flux:select.option value="">All 2FA states</flux:select.option>
-                <flux:select.option value="required">2FA required</flux:select.option>
-                <flux:select.option value="ready">2FA ready</flux:select.option>
-                <flux:select.option value="missing">2FA missing</flux:select.option>
-            </flux:select>
-            <flux:button type="button" variant="outline" icon="x-mark" class="w-full" wire:click="clearFilters" wire:loading.attr="disabled" wire:target="clearFilters,search,status,billing_model,two_factor_status">
-                Reset
-            </flux:button>
+    @php
+        $tenantsActiveFilters = [];
+        if (filled($search)) {
+            $tenantsActiveFilters[] = ['label' => 'Search: "'.$search.'"', 'clear' => "\$set('search', '')"];
+        }
+        if (filled($status)) {
+            $tenantsActiveFilters[] = ['label' => 'Status: '.ucfirst($status), 'clear' => "\$set('status', '')"];
+        }
+        if (filled($billing_model)) {
+            $tenantsActiveFilters[] = ['label' => 'Billing: '.($billing_model === 'subscription' ? 'Subscription' : 'Commission on sales'), 'clear' => "\$set('billing_model', '')"];
+        }
+        if (filled($two_factor_status)) {
+            $tenantsActiveFilters[] = ['label' => '2FA: '.ucfirst($two_factor_status), 'clear' => "\$set('two_factor_status', '')"];
+        }
+    @endphp
+
+    <x-admin.filter-bar modal-name="filters-tenants" :active="$tenantsActiveFilters">
+        <div class="sm:col-span-2">
+            <flux:input wire:model.live.debounce.350ms="search" icon="magnifying-glass" placeholder="Search company, slug, or owner email" />
         </div>
-    </section>
+        <flux:select wire:model.live="status">
+            <flux:select.option value="">All statuses</flux:select.option>
+            <flux:select.option value="active">Active</flux:select.option>
+            <flux:select.option value="inactive">Inactive</flux:select.option>
+        </flux:select>
+        <flux:select wire:model.live="billing_model">
+            <flux:select.option value="">All billing models</flux:select.option>
+            <flux:select.option value="subscription">Subscription</flux:select.option>
+            <flux:select.option value="commission">Commission on sales</flux:select.option>
+        </flux:select>
+        <flux:select wire:model.live="two_factor_status">
+            <flux:select.option value="">All 2FA states</flux:select.option>
+            <flux:select.option value="required">2FA required</flux:select.option>
+            <flux:select.option value="ready">2FA ready</flux:select.option>
+            <flux:select.option value="missing">2FA missing</flux:select.option>
+        </flux:select>
+        <flux:button type="button" variant="outline" icon="x-mark" class="w-full sm:col-span-2" wire:click="clearFilters" x-on:click="$flux.modal('filters-tenants').close()" wire:loading.attr="disabled" wire:target="clearFilters,search,status,billing_model,two_factor_status">
+            Reset
+        </flux:button>
+    </x-admin.filter-bar>
 
     <section class="mb-4 grid gap-4 md:grid-cols-3">
         <button type="button" wire:click="$set('two_factor_status', 'required')" class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4 text-left shadow-sm transition hover:border-zinc-300 dark:hover:border-zinc-600 hover:bg-zinc-50 dark:hover:bg-zinc-800">

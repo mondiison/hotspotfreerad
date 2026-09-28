@@ -65,8 +65,25 @@
         @endforeach
     </section>
 
-    <section class="grid min-w-0 gap-3 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4 [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))] [&>*]:min-w-0">
-        <div class="sm:col-span-2 xl:col-span-3">
+    @php
+        $pppoeStatusLabels = [
+            'active' => 'Active',
+            'expiring_soon' => 'Expiring within 7 days',
+            'expired' => 'Expired',
+            'disabled' => 'Disabled',
+            'unsynced' => 'Unsynced to RADIUS',
+        ];
+        $pppoeActiveFilters = [];
+        if (filled($search)) {
+            $pppoeActiveFilters[] = ['label' => 'Search: "'.$search.'"', 'clear' => "\$set('search', '')"];
+        }
+        if (filled($status)) {
+            $pppoeActiveFilters[] = ['label' => 'Status: '.($pppoeStatusLabels[$status] ?? $status), 'clear' => "\$set('status', '')"];
+        }
+    @endphp
+
+    <x-admin.filter-bar modal-name="filters-pppoe-subscribers" :active="$pppoeActiveFilters">
+        <div class="sm:col-span-2">
             <flux:input wire:model.live.debounce.350ms="search" icon="magnifying-glass" placeholder="Search username, name, phone, email, shop" />
         </div>
         <flux:select wire:model.live="status">
@@ -77,10 +94,10 @@
             <flux:select.option value="disabled">Disabled</flux:select.option>
             <flux:select.option value="unsynced">Unsynced to RADIUS</flux:select.option>
         </flux:select>
-        <flux:button type="button" variant="outline" icon="x-mark" class="w-full" wire:click="clearFilters" wire:loading.attr="disabled" wire:target="clearFilters,search,status">
+        <flux:button type="button" variant="outline" icon="x-mark" class="w-full sm:col-span-2" wire:click="clearFilters" x-on:click="$flux.modal('filters-pppoe-subscribers').close()" wire:loading.attr="disabled" wire:target="clearFilters,search,status">
             Reset
         </flux:button>
-    </section>
+    </x-admin.filter-bar>
 
     <div wire:loading.flex wire:target="search,status,clearFilters,save,delete,renew,sync,syncUnsynced" class="mt-4 hidden rounded-md border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
         Updating PPPoE customers...

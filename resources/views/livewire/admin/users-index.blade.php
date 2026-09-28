@@ -19,32 +19,47 @@
         </flux:button>
     </div>
 
-    <section class="mb-4 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4 shadow-sm">
-        <div class="grid min-w-0 gap-3 [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))] [&>*]:min-w-0">
-            <div class="sm:col-span-2 xl:col-span-3">
-                <flux:input wire:model.live.debounce.350ms="search" icon="magnifying-glass" placeholder="Search name, email, or tenant" />
-            </div>
-            <flux:select wire:model.live="role">
-                <flux:select.option value="">All roles</flux:select.option>
-                <flux:select.option value="super_admin">Super admin</flux:select.option>
-                <flux:select.option value="tenant_admin">Tenant admin</flux:select.option>
-                <flux:select.option value="tenant_staff">Staff</flux:select.option>
-            </flux:select>
-            <flux:select wire:model.live="status">
-                <flux:select.option value="">All statuses</flux:select.option>
-                <flux:select.option value="active">Active</flux:select.option>
-                <flux:select.option value="inactive">Inactive</flux:select.option>
-            </flux:select>
-            <flux:select wire:model.live="passkey_status">
-                <flux:select.option value="">All passkeys</flux:select.option>
-                <flux:select.option value="registered">Has passkey</flux:select.option>
-                <flux:select.option value="missing">No passkey</flux:select.option>
-            </flux:select>
-            <flux:button type="button" variant="outline" icon="x-mark" class="w-full" wire:click="clearFilters" wire:loading.attr="disabled" wire:target="clearFilters,search,role,status,passkey_status">
-                Reset
-            </flux:button>
+    @php
+        $roleLabels = ['super_admin' => 'Super admin', 'tenant_admin' => 'Tenant admin', 'tenant_staff' => 'Staff'];
+        $usersActiveFilters = [];
+        if (filled($search)) {
+            $usersActiveFilters[] = ['label' => 'Search: "'.$search.'"', 'clear' => "\$set('search', '')"];
+        }
+        if (filled($role)) {
+            $usersActiveFilters[] = ['label' => 'Role: '.($roleLabels[$role] ?? $role), 'clear' => "\$set('role', '')"];
+        }
+        if (filled($status)) {
+            $usersActiveFilters[] = ['label' => 'Status: '.ucfirst($status), 'clear' => "\$set('status', '')"];
+        }
+        if (filled($passkey_status)) {
+            $usersActiveFilters[] = ['label' => 'Passkey: '.($passkey_status === 'registered' ? 'Has passkey' : 'No passkey'), 'clear' => "\$set('passkey_status', '')"];
+        }
+    @endphp
+
+    <x-admin.filter-bar modal-name="filters-users" :active="$usersActiveFilters">
+        <div class="sm:col-span-2">
+            <flux:input wire:model.live.debounce.350ms="search" icon="magnifying-glass" placeholder="Search name, email, or tenant" />
         </div>
-    </section>
+        <flux:select wire:model.live="role">
+            <flux:select.option value="">All roles</flux:select.option>
+            <flux:select.option value="super_admin">Super admin</flux:select.option>
+            <flux:select.option value="tenant_admin">Tenant admin</flux:select.option>
+            <flux:select.option value="tenant_staff">Staff</flux:select.option>
+        </flux:select>
+        <flux:select wire:model.live="status">
+            <flux:select.option value="">All statuses</flux:select.option>
+            <flux:select.option value="active">Active</flux:select.option>
+            <flux:select.option value="inactive">Inactive</flux:select.option>
+        </flux:select>
+        <flux:select wire:model.live="passkey_status">
+            <flux:select.option value="">All passkeys</flux:select.option>
+            <flux:select.option value="registered">Has passkey</flux:select.option>
+            <flux:select.option value="missing">No passkey</flux:select.option>
+        </flux:select>
+        <flux:button type="button" variant="outline" icon="x-mark" class="w-full sm:col-span-2" wire:click="clearFilters" x-on:click="$flux.modal('filters-users').close()" wire:loading.attr="disabled" wire:target="clearFilters,search,role,status,passkey_status">
+            Reset
+        </flux:button>
+    </x-admin.filter-bar>
 
     <div class="overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm">
         <table class="min-w-[820px] w-full text-left text-sm">

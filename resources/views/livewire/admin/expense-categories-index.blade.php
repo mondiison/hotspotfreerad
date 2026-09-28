@@ -13,31 +13,45 @@
         </flux:button>
     </div>
 
-    <section class="mb-4 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4 shadow-sm">
-        <div class="grid min-w-0 gap-3 [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))] [&>*]:min-w-0">
-            <div class="sm:col-span-2 xl:col-span-3">
-                <flux:input wire:model.live.debounce.350ms="search" icon="magnifying-glass" placeholder="Search category or description" />
-            </div>
-            <flux:select wire:model.live="scope">
-                <flux:select.option value="">All scopes</flux:select.option>
-                <flux:select.option value="platform">Platform</flux:select.option>
-                <flux:select.option value="tenant">Tenant custom</flux:select.option>
-            </flux:select>
-            <flux:select wire:model.live="status">
-                <flux:select.option value="">All statuses</flux:select.option>
-                <flux:select.option value="active">Active</flux:select.option>
-                <flux:select.option value="inactive">Inactive</flux:select.option>
-            </flux:select>
-            <flux:select wire:model.live="budget">
-                <flux:select.option value="">All budgets</flux:select.option>
-                <flux:select.option value="budgeted">Budgeted</flux:select.option>
-                <flux:select.option value="unbudgeted">No budget</flux:select.option>
-            </flux:select>
-            <flux:button type="button" variant="outline" icon="x-mark" class="w-full" wire:click="clearFilters" wire:loading.attr="disabled" wire:target="clearFilters,search,scope,status,budget">
-                Reset
-            </flux:button>
+    @php
+        $categoriesActiveFilters = [];
+        if (filled($search)) {
+            $categoriesActiveFilters[] = ['label' => 'Search: "'.$search.'"', 'clear' => "\$set('search', '')"];
+        }
+        if (filled($scope)) {
+            $categoriesActiveFilters[] = ['label' => 'Scope: '.($scope === 'platform' ? 'Platform' : 'Tenant custom'), 'clear' => "\$set('scope', '')"];
+        }
+        if (filled($status)) {
+            $categoriesActiveFilters[] = ['label' => 'Status: '.ucfirst($status), 'clear' => "\$set('status', '')"];
+        }
+        if (filled($budget)) {
+            $categoriesActiveFilters[] = ['label' => 'Budget: '.($budget === 'budgeted' ? 'Budgeted' : 'No budget'), 'clear' => "\$set('budget', '')"];
+        }
+    @endphp
+
+    <x-admin.filter-bar modal-name="filters-expense-categories" :active="$categoriesActiveFilters">
+        <div class="sm:col-span-2">
+            <flux:input wire:model.live.debounce.350ms="search" icon="magnifying-glass" placeholder="Search category or description" />
         </div>
-    </section>
+        <flux:select wire:model.live="scope">
+            <flux:select.option value="">All scopes</flux:select.option>
+            <flux:select.option value="platform">Platform</flux:select.option>
+            <flux:select.option value="tenant">Tenant custom</flux:select.option>
+        </flux:select>
+        <flux:select wire:model.live="status">
+            <flux:select.option value="">All statuses</flux:select.option>
+            <flux:select.option value="active">Active</flux:select.option>
+            <flux:select.option value="inactive">Inactive</flux:select.option>
+        </flux:select>
+        <flux:select wire:model.live="budget">
+            <flux:select.option value="">All budgets</flux:select.option>
+            <flux:select.option value="budgeted">Budgeted</flux:select.option>
+            <flux:select.option value="unbudgeted">No budget</flux:select.option>
+        </flux:select>
+        <flux:button type="button" variant="outline" icon="x-mark" class="w-full sm:col-span-2" wire:click="clearFilters" x-on:click="$flux.modal('filters-expense-categories').close()" wire:loading.attr="disabled" wire:target="clearFilters,search,scope,status,budget">
+            Reset
+        </flux:button>
+    </x-admin.filter-bar>
 
     <div class="overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm">
         <table class="min-w-[920px] w-full text-left text-sm">

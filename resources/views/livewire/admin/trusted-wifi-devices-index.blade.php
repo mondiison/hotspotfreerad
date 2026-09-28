@@ -14,8 +14,18 @@
         </div>
     @endif
 
-    <section class="grid min-w-0 gap-3 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4 [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))] [&>*]:min-w-0">
-        <div class="sm:col-span-2 xl:col-span-3">
+    @php
+        $trustedWifiActiveFilters = [];
+        if (filled($search)) {
+            $trustedWifiActiveFilters[] = ['label' => 'Search: "'.$search.'"', 'clear' => "\$set('search', '')"];
+        }
+        if (filled($networkFilter)) {
+            $trustedWifiActiveFilters[] = ['label' => 'Network: '.($networkFilter === 'staff' ? 'Staff only' : 'Management only'), 'clear' => "\$set('networkFilter', '')"];
+        }
+    @endphp
+
+    <x-admin.filter-bar modal-name="filters-trusted-wifi" :active="$trustedWifiActiveFilters">
+        <div class="sm:col-span-2">
             <flux:input wire:model.live.debounce.350ms="search" icon="magnifying-glass" placeholder="Search device, MAC, owner, shop" />
         </div>
         <flux:select wire:model.live="networkFilter">
@@ -23,10 +33,10 @@
             <flux:select.option value="staff">Staff only</flux:select.option>
             <flux:select.option value="mgmt">Management only</flux:select.option>
         </flux:select>
-        <flux:button type="button" variant="outline" icon="x-mark" class="w-full" wire:click="clearFilters" wire:loading.attr="disabled" wire:target="clearFilters,search,networkFilter">
+        <flux:button type="button" variant="outline" icon="x-mark" class="w-full sm:col-span-2" wire:click="clearFilters" x-on:click="$flux.modal('filters-trusted-wifi').close()" wire:loading.attr="disabled" wire:target="clearFilters,search,networkFilter">
             Reset
         </flux:button>
-    </section>
+    </x-admin.filter-bar>
 
     <div wire:loading.flex wire:target="search,networkFilter,clearFilters,save,delete,sync" class="mt-4 hidden rounded-md border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
         Updating trusted devices...
