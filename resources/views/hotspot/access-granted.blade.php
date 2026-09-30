@@ -78,6 +78,25 @@
                         Access has been added in RADIUS. Reopen a website from this phone to let MikroTik authenticate the device.
                     </div>
                 @endif
+
+                {{--
+                    2026-09-30, direct follow-up: the auto-redirect above already
+                    sends a trial grant back to the portal once, but a customer who
+                    navigates away before coming back to buy a package had no way
+                    to find it again -- the portal URL needs mac+nasid query params
+                    they have no way to know or type themselves. $originalUrl is
+                    already the portal's own return URL for the trial flow
+                    specifically (see PortalController::startTrial()), so this
+                    reuses it rather than building a second link -- shown only for
+                    the trial's own hidden package, since a real paid/voucher grant
+                    has nothing to upsell and $originalUrl there is genuinely the
+                    customer's own destination, not the portal.
+                --}}
+                @if ($package->is_system && $originalUrl)
+                    <a href="{{ $originalUrl }}" class="mt-4 block text-center text-sm font-medium underline decoration-zinc-300 underline-offset-4" style="color: var(--brand)">
+                        View packages
+                    </a>
+                @endif
             </div>
         </section>
     </main>

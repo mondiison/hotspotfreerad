@@ -485,7 +485,8 @@ class HotspotPortalTest extends TestCase
             ->assertSee('name="username" value="AA:BB:CC:DD:EE:FF"', false)
             ->assertSee('name="password" value="authenticated_device_pass"', false)
             ->assertSee('name="dst" value="http://example.com"', false)
-            ->assertSee('.submit()', false);
+            ->assertSee('.submit()', false)
+            ->assertDontSee('View packages');
     }
 
     public function test_portal_prefers_mikrotik_login_only_url_for_auto_connect(): void
@@ -754,6 +755,11 @@ class HotspotPortalTest extends TestCase
 
         $response->assertSee(config('app.url').'/hotspot/portal', false);
         $response->assertDontSee('neverssl.com');
+
+        // A persistent "View packages" link reuses the same return-to-portal
+        // URL, so a customer who navigates away can still find their way back
+        // during the rest of the trial window.
+        $response->assertSee('View packages');
     }
 
     public function test_start_trial_is_blocked_when_shop_disables_free_trial(): void
