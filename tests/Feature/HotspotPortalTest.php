@@ -737,11 +737,11 @@ class HotspotPortalTest extends TestCase
      * ordinary grant sends the post-login `dst` to wherever the customer was
      * originally headed (right for a real purchase), but for the trial that
      * whisked the browser straight off the package page the instant access
-     * was granted. The trial's own auto-login must instead return the
-     * browser to our own portal (mac+nasid preserved) so the customer lands
-     * on the package grid with real internet already working underneath.
+     * was granted. The "View packages" link below reuses the portal's own
+     * return URL so a customer who navigates away can still find their way
+     * back during the rest of the trial window.
      */
-    public function test_start_trial_sends_the_post_login_redirect_back_to_the_portal_not_the_original_site(): void
+    public function test_start_trial_shows_a_view_packages_link_back_to_the_portal(): void
     {
         [$router, $package] = $this->routerWithPackage();
         $router->shop->update(['trial_enabled' => true]);
@@ -754,12 +754,39 @@ class HotspotPortalTest extends TestCase
         ])->assertOk();
 
         $response->assertSee(config('app.url').'/hotspot/portal', false);
-        $response->assertDontSee('neverssl.com');
-
-        // A persistent "View packages" link reuses the same return-to-portal
-        // URL, so a customer who navigates away can still find their way back
-        // during the rest of the trial window.
         $response->assertSee('View packages');
+    }
+
+    /**
+     * 2026-09-30, direct live report: submitting the trial's login form in
+     * the main browser window (the shape every other grant still uses)
+     * let RouterOS's own popup=true handling intercept the flow on mobile
+     * with its stock "you are connected" status page instead of following
+     * dst back to our portal -- so a trialing customer landed on the
+     * package grid once, at best, and never again for the rest of the
+     * trial. Submitting into a hidden iframe instead means the browser
+     * never leaves this page at all, so there's nothing for RouterOS's own
+     * page to interrupt -- the customer just sees "Connecting..." flip to
+     * "You're connected" in place, with the View packages link already on
+     * screen the whole time.
+     */
+    public function test_start_trial_submits_login_into_a_hidden_iframe_instead_of_navigating_away(): void
+    {
+        [$router, $package] = $this->routerWithPackage();
+        $router->shop->update(['trial_enabled' => true]);
+
+        $response = $this->post('/hotspot/trial/start', [
+            'mac' => 'AA:BB:CC:DD:EE:FF',
+            'nasid' => $router->nas_identifier,
+            'link-login-only' => 'http://10.5.50.1/login',
+        ])->assertOk();
+
+        $response
+            ->assertSee('id="mikrotik-login"', false)
+            ->assertSee('target="mikrotik-login-frame"', false)
+            ->assertSee('<iframe name="mikrotik-login-frame"', false)
+            ->assertDontSee('name="dst"', false)
+            ->assertDontSee('name="popup"', false);
     }
 
     public function test_start_trial_is_blocked_when_shop_disables_free_trial(): void
