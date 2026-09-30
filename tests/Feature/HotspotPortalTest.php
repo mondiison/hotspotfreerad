@@ -795,6 +795,36 @@ class HotspotPortalTest extends TestCase
     }
 
     /**
+     * 2026-09-30, direct report: once a free trial was granted, reloading the
+     * portal (e.g. a re-triggered captive-portal check, or the customer
+     * manually navigating back) showed the access-granted screen for the
+     * entire trial window with no way back to the package grid -- the trial
+     * is meant to let a customer browse and buy a real package *during* it.
+     * A real (non-trial) subscription must still short-circuit to
+     * access-granted, since there's nothing to upsell there.
+     */
+    public function test_portal_shows_packages_during_an_active_free_trial_instead_of_access_granted(): void
+    {
+        [$router, $package] = $this->routerWithPackage();
+        $router->shop->update([
+            'trial_enabled' => true,
+            'trial_duration_minutes' => 20,
+        ]);
+
+        $this->post('/hotspot/trial/start', [
+            'mac' => 'AA:BB:CC:DD:EE:FF',
+            'nasid' => $router->nas_identifier,
+        ])->assertOk();
+
+        $this->get('/hotspot/portal?mac=AA:BB:CC:DD:EE:FF&nasid='.$router->nas_identifier)
+            ->assertOk()
+            ->assertSee('Choose internet access')
+            ->assertSee($package->name)
+            ->assertSee('Free trial active')
+            ->assertDontSee('Access provisioned');
+    }
+
+    /**
      * The two features must coexist independently -- enabling one must never
      * imply or require the other.
      */

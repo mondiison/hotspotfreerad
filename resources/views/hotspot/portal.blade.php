@@ -99,6 +99,13 @@
             </section>
         @endif
 
+        @if ($activeTrialSubscription)
+            <section class="mt-4 rounded-lg border border-white/10 bg-white/[0.04] px-4 py-3 sm:mt-6">
+                <p class="text-sm font-medium" style="color: var(--brand)">Free trial active — ends {{ $activeTrialSubscription->expires_at->diffForHumans() }}</p>
+                <p class="mt-1 text-xs text-zinc-300 sm:text-sm">Pick a package below any time to continue seamlessly once your trial ends — no need to disconnect or wait.</p>
+            </section>
+        @endif
+
         <section class="py-4 sm:py-8">
             <h2 class="text-lg font-semibold">Choose internet access</h2>
 

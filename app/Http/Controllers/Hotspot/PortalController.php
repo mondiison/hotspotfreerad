@@ -156,7 +156,21 @@ class PortalController extends Controller
             ->latest('expires_at')
             ->first();
 
-        if ($activeSubscription) {
+        // 2026-09-30, direct report: a customer on the free trial was stuck
+        // on this access-granted screen for the entire trial window with no
+        // way back to the package grid, since this check couldn't tell a
+        // real paid subscription apart from the trial's own hidden
+        // is_system package. The whole point of the trial is to let someone
+        // browse and buy a real package *during* it -- Subscription is keyed
+        // on shop_id+mac_address, so a real purchase mid-trial already
+        // overwrites this row seamlessly once they can actually reach the
+        // portal to make it. A real (non-trial) active subscription still
+        // shows access-granted as before -- there's nothing to upsell there.
+        $activeTrialSubscription = $activeSubscription && $activeSubscription->package?->is_system
+            ? $activeSubscription
+            : null;
+
+        if ($activeSubscription && ! $activeTrialSubscription) {
             return view('hotspot.access-granted', [
                 'router' => $router,
                 'package' => $activeSubscription->package,
@@ -225,6 +239,7 @@ class PortalController extends Controller
             'trialUsesRemaining' => $router->shop->trial_enabled
                 ? $router->shop->trialUsesRemainingToday($validated['mac'])
                 : null,
+            'activeTrialSubscription' => $activeTrialSubscription,
             'poweredByText' => config('app.name'),
         ]);
     }
