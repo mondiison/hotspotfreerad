@@ -327,7 +327,7 @@ class PortalController extends Controller
      * that purpose -- they're upserted per shop+mac, so a same-day repeat
      * grant would silently overwrite rather than leave a countable history).
      */
-    public function startTrial(Request $request, RadiusProvisioningService $radius): RedirectResponse|View
+    public function startTrial(Request $request, RadiusProvisioningService $radius, MikroTikProvisioningService $provisioning): RedirectResponse|View
     {
         $validated = $request->validate([
             'mac' => ['required', 'string', 'max:64'],
@@ -406,7 +406,23 @@ class PortalController extends Controller
             'username' => $validated['mac'],
             'password' => self::TEST_ACCESS_PASSWORD,
             'loginUrl' => $this->mikrotikLoginUrl($validated),
-            'originalUrl' => $validated['link-orig'] ?? null,
+            // 2026-09-30, direct follow-up to the trial-browsing fix above: an
+            // ordinary grant sends `dst` back to wherever the customer
+            // originally wanted to browse, which is right for a real
+            // purchase -- but for a trial, that's exactly what made it feel
+            // like the page "closed" the moment access was granted, since
+            // MikroTik whisked the browser straight off to Google/whatever
+            // site they'd been trying to reach before they ever saw a
+            // package. Sending them back to our own portal instead lands
+            // them on the now-fixed package grid (show()'s active-subscription
+            // check already renders it, not access-granted, for a trial
+            // package) with real internet access already working underneath.
+            'originalUrl' => $provisioning->portalUrl().'?'.http_build_query(array_filter([
+                'mac' => $validated['mac'],
+                'nasid' => $validated['nasid'],
+                'link-login' => $validated['link-login'] ?? null,
+                'link-login-only' => $validated['link-login-only'] ?? null,
+            ])),
         ]);
     }
 

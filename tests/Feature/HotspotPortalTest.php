@@ -731,6 +731,31 @@ class HotspotPortalTest extends TestCase
         ]);
     }
 
+    /**
+     * 2026-09-30, direct follow-up to the trial-browsing fix above: an
+     * ordinary grant sends the post-login `dst` to wherever the customer was
+     * originally headed (right for a real purchase), but for the trial that
+     * whisked the browser straight off the package page the instant access
+     * was granted. The trial's own auto-login must instead return the
+     * browser to our own portal (mac+nasid preserved) so the customer lands
+     * on the package grid with real internet already working underneath.
+     */
+    public function test_start_trial_sends_the_post_login_redirect_back_to_the_portal_not_the_original_site(): void
+    {
+        [$router, $package] = $this->routerWithPackage();
+        $router->shop->update(['trial_enabled' => true]);
+
+        $response = $this->post('/hotspot/trial/start', [
+            'mac' => 'AA:BB:CC:DD:EE:FF',
+            'nasid' => $router->nas_identifier,
+            'link-login' => 'http://hotspot.local/login',
+            'link-orig' => 'http://neverssl.com',
+        ])->assertOk();
+
+        $response->assertSee(config('app.url').'/hotspot/portal', false);
+        $response->assertDontSee('neverssl.com');
+    }
+
     public function test_start_trial_is_blocked_when_shop_disables_free_trial(): void
     {
         [$router, $package] = $this->routerWithPackage();
