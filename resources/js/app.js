@@ -47,6 +47,63 @@ window.downloadTextFile = (filename, text) => {
     return true;
 };
 
+/**
+ * 2026-10-02: backs the router/customer-facing "Download QR" buttons --
+ * the QR itself is only ever rendered server-side as an SVG string
+ * (BaconQrCode), which isn't a file format most printers/photo apps
+ * handle as gracefully as a plain PNG. Rasterizes it client-side via a
+ * throwaway <canvas> rather than adding a server-side PNG rendering
+ * dependency just for this.
+ */
+window.downloadSvgAsPng = (svgMarkup, filename, scale = 6) => {
+    if (! svgMarkup || ! filename) {
+        return Promise.resolve(false);
+    }
+
+    return new Promise((resolve) => {
+        const svgBlob = new Blob([svgMarkup], { type: 'image/svg+xml' });
+        const svgUrl = URL.createObjectURL(svgBlob);
+        const image = new Image();
+
+        image.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = (image.width || 200) * scale;
+            canvas.height = (image.height || 200) * scale;
+
+            const context = canvas.getContext('2d');
+            context.fillStyle = '#ffffff';
+            context.fillRect(0, 0, canvas.width, canvas.height);
+            context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+            URL.revokeObjectURL(svgUrl);
+
+            canvas.toBlob((pngBlob) => {
+                if (! pngBlob) {
+                    resolve(false);
+
+                    return;
+                }
+
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(pngBlob);
+                link.download = filename;
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                URL.revokeObjectURL(link.href);
+                resolve(true);
+            }, 'image/png');
+        };
+
+        image.onerror = () => {
+            URL.revokeObjectURL(svgUrl);
+            resolve(false);
+        };
+
+        image.src = svgUrl;
+    });
+};
+
 function passkeyMessage(error) {
     if (! error) {
         return 'Passkey action could not be completed.';

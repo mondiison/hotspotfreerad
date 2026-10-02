@@ -100,29 +100,74 @@
                         <div class="border-b border-zinc-200 dark:border-zinc-700 px-5 py-4">
                             <h2 class="text-base font-semibold">Customer Self-Service Link</h2>
                             <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                                A free trial's internet access only lasts as long as the device's captive-portal sign-in browser stays open -- both iOS and Android close it automatically the instant real internet is confirmed, before a customer can browse back to packages. Print or post this QR code at the location, and the trial's own confirmation screen links to it too, so a customer can scan it from their own browser anytime to view packages or buy a voucher -- no mac/nasid parameters needed, it recognizes the device from a cookie set on its first captive-portal visit.
+                                A free trial's internet access only lasts as long as the device's captive-portal sign-in browser stays open -- both iOS and Android close it automatically the instant real internet is confirmed, before a customer can browse back to packages. Print or post this QR code at the location, and the trial's own confirmation screen links to it too, so a customer can scan it from their own browser anytime to view packages, check their balance, or buy a voucher -- no mac/nasid parameters needed, it recognizes the device from a cookie set on its first captive-portal visit.
                             </p>
                         </div>
-                        <div class="flex flex-col items-center gap-4 p-5 sm:flex-row sm:items-start" x-data="{ copied: false }">
-                            <div class="[&_svg]:h-36 [&_svg]:w-36 shrink-0 rounded-md border border-zinc-200 dark:border-zinc-700 bg-white p-2">
+                        @php
+                            $connectQrFilename = str($router->shop->name.'-'.$router->name)->slug().'-qr.png';
+                        @endphp
+                        <div
+                            id="router-connect-link-print-area"
+                            class="flex flex-col items-center gap-4 p-5 sm:flex-row sm:items-start"
+                            x-data="{ copied: false, downloading: false }"
+                            data-connect-url="{{ $connectUrl }}"
+                            data-qr-filename="{{ $connectQrFilename }}"
+                        >
+                            {{-- 2026-10-02: the download button reads this rendered SVG straight
+                                 back out of the DOM ($refs.qrSvgHolder.innerHTML) rather than
+                                 piping the (very long) SVG markup through a Blade @js() call --
+                                 a @js() call embedded inside a long/multi-line Alpine attribute
+                                 on a component tag tripped Livewire's morph-aware Blade compiler
+                                 ("regular expression is too large"), confirmed by reproducing it
+                                 with this exact combination and resolving it by never putting the
+                                 SVG string through that path at all. --}}
+                            <div class="[&_svg]:h-36 [&_svg]:w-36 shrink-0 rounded-md border border-zinc-200 dark:border-zinc-700 bg-white p-2" x-ref="qrSvgHolder">
                                 {!! $connectQrSvg !!}
                             </div>
                             <div class="min-w-0 flex-1">
-                                <p class="break-all font-mono text-sm text-zinc-700 dark:text-zinc-300">{{ $connectUrl }}</p>
-                                <flux:button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    icon="clipboard"
-                                    class="mt-3"
-                                    @click="copied = await window.copyText(@js($connectUrl)); setTimeout(() => copied = false, 1800)"
+                                <p class="router-connect-link-print-label hidden text-sm font-medium text-zinc-900">{{ $router->shop->name }} -- {{ $router->name }}</p>
+                                <input
+                                    type="text"
+                                    readonly
+                                    value="{{ $connectUrl }}"
+                                    x-ref="connectUrlInput"
+                                    onclick="this.select()"
+                                    class="w-full rounded-md border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 px-3 py-2 font-mono text-sm text-zinc-700 dark:text-zinc-300"
                                 >
-                                    <span x-show="! copied">Copy link</span>
-                                    <span x-cloak x-show="copied">Copied</span>
-                                </flux:button>
+                                <p class="mt-1 text-xs text-zinc-400 dark:text-zinc-500 print:hidden">Tap the link to select it if the copy button doesn't work in this browser.</p>
+                                <div class="mt-3 flex flex-wrap gap-2 print:hidden">
+                                    <flux:button type="button" variant="outline" size="sm" icon="clipboard" @click="try { copied = await window.copyText($root.dataset.connectUrl) } catch (e) { copied = false }; if (! copied) { $refs.connectUrlInput.select() }; setTimeout(() => copied = false, 1800)">
+                                        <span x-show="! copied">Copy link</span>
+                                        <span x-cloak x-show="copied">Copied</span>
+                                    </flux:button>
+                                    <flux:button type="button" variant="outline" size="sm" icon="printer" @click="window.print()">
+                                        Print
+                                    </flux:button>
+                                    <flux:button type="button" variant="outline" size="sm" icon="arrow-down-tray" x-bind:disabled="downloading" @click="downloading = true; await window.downloadSvgAsPng($refs.qrSvgHolder.innerHTML, $root.dataset.qrFilename); downloading = false">
+                                        <span x-show="! downloading">Download QR</span>
+                                        <span x-cloak x-show="downloading">Downloading...</span>
+                                    </flux:button>
+                                </div>
                             </div>
                         </div>
                     </section>
+
+                    {{--
+                        2026-10-02: scoped so "Print" above only ever prints this
+                        one card, not the whole admin page (sidebar, tabs, every
+                        other section) -- the standard "hide everything, then
+                        re-reveal one subtree and pull it to the page origin"
+                        trick, since the target is nested deep inside layout
+                        wrappers rather than a direct child of <body>.
+                    --}}
+                    <style>
+                        @media print {
+                            body * { visibility: hidden; }
+                            #router-connect-link-print-area, #router-connect-link-print-area * { visibility: visible; }
+                            #router-connect-link-print-area { position: absolute; left: 0; top: 0; width: 100%; padding: 2rem; }
+                            #router-connect-link-print-area .router-connect-link-print-label { display: block !important; margin-bottom: 1rem; font-size: 1.25rem; }
+                        }
+                    </style>
 
                     <section class="min-w-0 overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm">
                         <div class="border-b border-zinc-200 dark:border-zinc-700 px-5 py-4">

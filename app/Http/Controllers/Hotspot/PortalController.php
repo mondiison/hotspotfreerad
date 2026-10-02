@@ -22,6 +22,7 @@ use App\Services\VoucherManagementService;
 use App\Support\PaymentCommission;
 use App\Support\PaymentGatewayCatalog;
 use App\Support\QrCodeSvg;
+use App\Support\SubscriptionBalance;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -263,6 +264,12 @@ class PortalController extends Controller
                 'password' => self::TEST_ACCESS_PASSWORD,
                 'loginUrl' => $loginUrl,
                 'originalUrl' => $originalUrl,
+                // 2026-10-02, direct request: a customer who's already
+                // connected (the common case via connect(), where there's
+                // no login left to perform at all) should be able to use
+                // this same screen to check their remaining time/data, not
+                // just see it once right after a fresh grant.
+                'balance' => SubscriptionBalance::compute($activeSubscription),
             ]);
         }
 

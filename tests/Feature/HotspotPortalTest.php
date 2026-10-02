@@ -18,6 +18,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Schema;
@@ -858,6 +859,50 @@ class HotspotPortalTest extends TestCase
             ->assertOk()
             ->assertSee('Choose internet access')
             ->assertSee($package->name);
+    }
+
+    /**
+     * 2026-10-02, direct request: a customer who's already connected (the
+     * common case reaching this via connect(), with nothing left to log
+     * in to) should be able to use the same self-service link to check
+     * their actual remaining time/data, not just see a static expiry date.
+     */
+    public function test_connect_shows_a_real_balance_for_an_active_subscription(): void
+    {
+        [$router, $package] = $this->routerWithPackage();
+        $package->update(['data_limit_bytes' => 2 * 1073741824]); // 2 GB cap
+
+        Subscription::create([
+            'shop_id' => $router->shop_id,
+            'package_id' => $package->id,
+            'mac_address' => 'AA:BB:CC:DD:EE:FF',
+            'starts_at' => now()->subMinutes(10),
+            'expires_at' => now()->addMinutes(50),
+            'is_throttled' => false,
+        ]);
+
+        DB::table('radacct')->insert([
+            'acctsessionid' => 'balance-session-1',
+            'acctuniqueid' => 'balance-unique-1',
+            'username' => 'AA:BB:CC:DD:EE:FF',
+            'nasipaddress' => $router->wireguard_internal_ip,
+            'acctstarttime' => now()->subMinutes(9),
+            'acctinputoctets' => 536870912, // 0.5 GB
+            'acctoutputoctets' => 536870912, // 0.5 GB
+        ]);
+
+        $portalVisit = $this->get('/hotspot/portal?mac=AA:BB:CC:DD:EE:FF&nasid='.$router->nas_identifier)
+            ->assertOk();
+
+        $cookieValue = $portalVisit->getCookie('hotspot_device')->getValue();
+
+        $this->withCookie('hotspot_device', $cookieValue)
+            ->get('/hotspot/go/'.$router->public_token)
+            ->assertOk()
+            ->assertSee('Your balance')
+            ->assertSee('1 GB') // 2 GB cap minus 1 GB used
+            ->assertSee("You're already connected on this plan", false)
+            ->assertDontSee('Reopen a website');
     }
 
     public function test_connect_shows_connect_first_when_device_is_not_recognized(): void

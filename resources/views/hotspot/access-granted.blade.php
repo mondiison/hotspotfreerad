@@ -11,6 +11,37 @@
     $tenant = $router?->shop?->tenant;
     $brandColor = $tenant?->brand_color ?? '#10b981';
     $flyerImageUrl = $tenant?->flyer_image_path ? \Illuminate\Support\Facades\Storage::disk('public')->url($tenant->flyer_image_path) : null;
+
+    $formatDuration = function (?int $seconds): string {
+        if (! $seconds) {
+            return '0 minutes';
+        }
+
+        if ($seconds >= 86400) {
+            $days = (int) round($seconds / 86400);
+
+            return $days.' '.\Illuminate\Support\Str::plural('day', $days);
+        }
+
+        if ($seconds >= 3600) {
+            $hours = intdiv($seconds, 3600);
+            $minutes = intdiv($seconds % 3600, 60);
+
+            return $hours.'h '.$minutes.'m';
+        }
+
+        $minutes = (int) max(1, round($seconds / 60));
+
+        return $minutes.' '.\Illuminate\Support\Str::plural('minute', $minutes);
+    };
+
+    $formatData = function (?int $bytes): string {
+        if ($bytes === null) {
+            return 'Unlimited';
+        }
+
+        return number_format($bytes / 1073741824, $bytes % 1073741824 === 0 ? 0 : 1).' GB';
+    };
 @endphp
 <body class="min-h-screen bg-zinc-950 text-white antialiased" style="--brand: {{ $brandColor }}">
     <main class="mx-auto flex min-h-screen w-full max-w-2xl flex-col justify-center px-5 py-8">
@@ -35,6 +66,29 @@
                         <dd class="font-medium">{{ $subscription->expires_at->toDayDateTimeString() }}</dd>
                     </div>
                 </dl>
+
+                {{--
+                    2026-10-02, direct request: this same screen is now also
+                    reached via connect() with nothing left to log in to --
+                    showing a real balance (not just a static expiry
+                    timestamp) is what makes "scan this to check your
+                    balance" actually true, not just "see your plan name."
+                --}}
+                @if ($balance ?? null)
+                    <div class="mt-5 rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+                        <p class="text-sm font-medium text-zinc-900">Your balance</p>
+                        <dl class="mt-3 grid grid-cols-2 gap-3 text-sm">
+                            <div class="rounded-md bg-white p-3">
+                                <dt class="text-xs text-zinc-500">Time left</dt>
+                                <dd class="mt-1 font-semibold text-zinc-950">{{ $formatDuration($balance['seconds_remaining']) }}</dd>
+                            </div>
+                            <div class="rounded-md bg-white p-3">
+                                <dt class="text-xs text-zinc-500">Data left</dt>
+                                <dd class="mt-1 font-semibold text-zinc-950">{{ $formatData($balance['data_remaining_bytes']) }}</dd>
+                            </div>
+                        </dl>
+                    </div>
+                @endif
 
                 @if ($loginUrl)
                     @if ($package->is_system)
@@ -127,6 +181,18 @@
                             window.setTimeout(() => document.getElementById('mikrotik-login')?.submit(), 1800);
                         </script>
                     @endif
+                @elseif ($balance ?? null)
+                    {{--
+                        2026-10-02: reached via connect() (the self-service
+                        link/QR) with an already-active subscription --
+                        there's genuinely nothing left to log in to, unlike
+                        the generic "reopen a website" copy below, which
+                        only ever made sense for the original captive-portal
+                        re-grant case.
+                    --}}
+                    <div class="mt-6 rounded-md bg-zinc-100 p-4 text-sm text-zinc-700">
+                        You're already connected on this plan -- your balance is above.
+                    </div>
                 @else
                     <div class="mt-6 rounded-md bg-zinc-100 p-4 text-sm text-zinc-700">
                         Access has been added in RADIUS. Reopen a website from this phone to let MikroTik authenticate the device.
