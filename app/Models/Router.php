@@ -3,8 +3,8 @@
 namespace App\Models;
 
 use App\Support\WireGuardKeyPair;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Str;
 
 class Router extends Model
@@ -67,6 +67,16 @@ class Router extends Model
                 $router->api_username = self::API_USERNAME;
                 $router->api_password = Str::random(32);
                 $router->api_port = self::API_PORT;
+            }
+
+            // Backs the "scan this QR at the shop" self-service link
+            // (MikroTikProvisioningService::connectUrl()) -- a short, random,
+            // unguessable token rather than exposing nas_identifier (already
+            // semi-public via the captive-portal redirect, but not something
+            // worth making trivially enumerable in a printed/bookmarkable URL)
+            // or the numeric id directly.
+            if (blank($router->public_token)) {
+                $router->public_token = Str::random(22);
             }
 
             // The `tunnel_mode` column defaults to 'wireguard' at the DB level too, but

@@ -929,6 +929,36 @@ HTML;
     }
 
     /**
+     * 2026-10-02: the customer-facing self-service link (and its QR code) for
+     * one router -- lets someone who already has real internet (post-trial,
+     * or a returning customer on their own data) reach the package/voucher
+     * page again without the mac/nasid query params only a captive-portal
+     * redirect provides (see PortalController::connect()). Deliberately a
+     * plain string replace rather than parse_url()-ing portalUrl() apart
+     * into scheme+host and reassembling -- a first version did exactly that
+     * and silently dropped a non-default port (parse_url(..., PHP_URL_HOST)
+     * never includes one), which only ever showed up against a local/dev
+     * APP_URL like http://127.0.0.1:8000; production's real domain over
+     * standard https masked it. This also sidesteps loginPageUrl()'s
+     * hotspot_dns_name fallback on purpose -- that name only ever resolves
+     * via MikroTik's own local DNS interception for a still-unauthenticated
+     * device on this one router's network, never via real public DNS, so
+     * it would be the wrong host for a link meant to be scanned or
+     * bookmarked and opened from anywhere.
+     */
+    public function connectUrl(Router $router): string
+    {
+        $portalUrl = $this->portalUrl();
+        $suffix = '/hotspot/portal';
+
+        $base = str_ends_with($portalUrl, $suffix)
+            ? substr($portalUrl, 0, -strlen($suffix))
+            : $portalUrl;
+
+        return rtrim($base, '/').'/hotspot/go/'.$router->public_token;
+    }
+
+    /**
      * The router's local flash/hotspot login.html is otherwise MikroTik's
      * stock form, which would let customers "log in" against RouterOS's own
      * hotspot server directly -- never reaching this app's portal, payment

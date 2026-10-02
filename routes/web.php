@@ -61,6 +61,7 @@ Route::middleware('auth')->group(function () {
 });
 
 Route::get('/hotspot/portal', [PortalController::class, 'show'])->name('hotspot.portal');
+Route::get('/hotspot/go/{token}', [PortalController::class, 'connect'])->name('hotspot.connect');
 Route::get('/hotspot/login-page', [PortalController::class, 'loginPage'])->name('hotspot.login-page');
 Route::post('/hotspot/pay', [PortalController::class, 'pay'])->name('hotspot.pay');
 Route::post('/hotspot/payment/bank-transfer/check', [PortalController::class, 'checkBankTransfer'])->name('hotspot.payment.bank-transfer.check');

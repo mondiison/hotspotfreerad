@@ -793,6 +793,117 @@ class HotspotPortalTest extends TestCase
             ->assertDontSee("You're connected");
     }
 
+    /**
+     * 2026-10-02, direct request: the dst/View-packages fallbacks above only
+     * ever work while the OS's own captive-portal browser is still open --
+     * both iOS and Android auto-close it the instant real internet is
+     * confirmed, regardless of what's showing, which is standard behavior
+     * no redirect can out-race. The trial grant now also shows a QR code
+     * and a plain link (PortalController::connect(), MikroTikProvisioningService::connectUrl())
+     * that works from the customer's *own* browser, any time during (or
+     * after) the trial.
+     */
+    public function test_start_trial_access_granted_page_shows_a_connect_qr_and_link(): void
+    {
+        [$router, $package] = $this->routerWithPackage();
+        $router->shop->update(['trial_enabled' => true]);
+
+        $response = $this->post('/hotspot/trial/start', [
+            'mac' => 'AA:BB:CC:DD:EE:FF',
+            'nasid' => $router->nas_identifier,
+        ])->assertOk();
+
+        $connectUrl = config('app.url').'/hotspot/go/'.$router->fresh()->public_token;
+
+        $response
+            ->assertSee($connectUrl, false)
+            ->assertSee('<svg', false)
+            ->assertSee('Save this for later');
+    }
+
+    public function test_captive_portal_visit_sets_a_device_recognition_cookie(): void
+    {
+        [$router, $package] = $this->routerWithPackage();
+
+        $response = $this->get('/hotspot/portal?mac=AA:BB:CC:DD:EE:FF&nasid='.$router->nas_identifier)
+            ->assertOk();
+
+        $cookie = $response->getCookie('hotspot_device');
+        $this->assertNotNull($cookie);
+
+        $payload = json_decode((string) $cookie->getValue(), true);
+        $this->assertSame($router->shop_id, $payload['shop_id']);
+        $this->assertSame('AA:BB:CC:DD:EE:FF', $payload['mac']);
+    }
+
+    /**
+     * The actual payoff of the whole self-service link: once a device has
+     * been through the normal captive-portal flow at least once (setting
+     * the recognition cookie), visiting the QR/bookmark link later -- with
+     * no mac/nasid query params at all, exactly how a customer's own
+     * browser would reach it -- still shows their real packages/trial
+     * status, reusing the same rendering show() uses.
+     */
+    public function test_connect_shows_the_portal_for_a_device_recognized_by_cookie(): void
+    {
+        [$router, $package] = $this->routerWithPackage();
+
+        $portalVisit = $this->get('/hotspot/portal?mac=AA:BB:CC:DD:EE:FF&nasid='.$router->nas_identifier)
+            ->assertOk();
+
+        $rawCookie = $portalVisit->getCookie('hotspot_device')->getValue();
+
+        $this->withCookie('hotspot_device', $rawCookie)
+            ->get('/hotspot/go/'.$router->public_token)
+            ->assertOk()
+            ->assertSee('Choose internet access')
+            ->assertSee($package->name);
+    }
+
+    public function test_connect_shows_connect_first_when_device_is_not_recognized(): void
+    {
+        [$router, $package] = $this->routerWithPackage();
+
+        $this->get('/hotspot/go/'.$router->public_token)
+            ->assertOk()
+            ->assertSee('Connect to Wi-Fi first');
+    }
+
+    public function test_connect_shows_connect_first_for_a_cookie_set_at_a_different_shop(): void
+    {
+        [$router, $package] = $this->routerWithPackage();
+
+        $otherTenant = Tenant::create([
+            'company_name' => 'Other ISP',
+            'owner_email' => 'other-owner@example.com',
+        ]);
+        $otherShop = Shop::create(['tenant_id' => $otherTenant->id, 'name' => 'Other Shop']);
+        $otherRouter = Router::create([
+            'shop_id' => $otherShop->id,
+            'name' => 'Other Router',
+            'nas_identifier' => 'other-router',
+            'wireguard_internal_ip' => '10.8.0.11',
+            'shared_secret' => 'radius-secret-2',
+        ]);
+
+        $portalVisit = $this->get('/hotspot/portal?mac=AA:BB:CC:DD:EE:FF&nasid='.$otherRouter->nas_identifier)
+            ->assertOk();
+
+        $rawCookie = $portalVisit->getCookie('hotspot_device')->getValue();
+
+        $this->withCookie('hotspot_device', $rawCookie)
+            ->get('/hotspot/go/'.$router->public_token)
+            ->assertOk()
+            ->assertSee('Connect to Wi-Fi first');
+    }
+
+    public function test_connect_shows_unknown_router_for_an_invalid_token(): void
+    {
+        $this->get('/hotspot/go/not-a-real-token')
+            ->assertOk()
+            ->assertSee('Router not registered');
+    }
+
     public function test_start_trial_is_blocked_when_shop_disables_free_trial(): void
     {
         [$router, $package] = $this->routerWithPackage();

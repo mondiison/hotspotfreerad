@@ -3,10 +3,7 @@
 namespace App\Services;
 
 use App\Models\User;
-use BaconQrCode\Renderer\Image\SvgImageBackEnd;
-use BaconQrCode\Renderer\ImageRenderer;
-use BaconQrCode\Renderer\RendererStyle\RendererStyle;
-use BaconQrCode\Writer;
+use App\Support\QrCodeSvg;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
@@ -35,12 +32,7 @@ class TwoFactorService
 
     public function qrCodeSvg(string $provisioningUri): string
     {
-        $renderer = new ImageRenderer(
-            new RendererStyle(184),
-            new SvgImageBackEnd
-        );
-
-        return (new Writer($renderer))->writeString($provisioningUri);
+        return QrCodeSvg::render($provisioningUri);
     }
 
     public function verifyCode(string $secret, string $code): bool

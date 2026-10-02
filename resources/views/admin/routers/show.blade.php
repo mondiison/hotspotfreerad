@@ -98,6 +98,34 @@
 
                     <section class="min-w-0 overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm">
                         <div class="border-b border-zinc-200 dark:border-zinc-700 px-5 py-4">
+                            <h2 class="text-base font-semibold">Customer Self-Service Link</h2>
+                            <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                                A free trial's internet access only lasts as long as the device's captive-portal sign-in browser stays open -- both iOS and Android close it automatically the instant real internet is confirmed, before a customer can browse back to packages. Print or post this QR code at the location, and the trial's own confirmation screen links to it too, so a customer can scan it from their own browser anytime to view packages or buy a voucher -- no mac/nasid parameters needed, it recognizes the device from a cookie set on its first captive-portal visit.
+                            </p>
+                        </div>
+                        <div class="flex flex-col items-center gap-4 p-5 sm:flex-row sm:items-start" x-data="{ copied: false }">
+                            <div class="[&_svg]:h-36 [&_svg]:w-36 shrink-0 rounded-md border border-zinc-200 dark:border-zinc-700 bg-white p-2">
+                                {!! $connectQrSvg !!}
+                            </div>
+                            <div class="min-w-0 flex-1">
+                                <p class="break-all font-mono text-sm text-zinc-700 dark:text-zinc-300">{{ $connectUrl }}</p>
+                                <flux:button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    icon="clipboard"
+                                    class="mt-3"
+                                    @click="copied = await window.copyText(@js($connectUrl)); setTimeout(() => copied = false, 1800)"
+                                >
+                                    <span x-show="! copied">Copy link</span>
+                                    <span x-cloak x-show="copied">Copied</span>
+                                </flux:button>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="min-w-0 overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm">
+                        <div class="border-b border-zinc-200 dark:border-zinc-700 px-5 py-4">
                             <h2 class="text-base font-semibold">Usage History</h2>
                             <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Daily download/upload from FreeRADIUS accounting, last 30 days. A session's data is counted on the day it started.</p>
                         </div>

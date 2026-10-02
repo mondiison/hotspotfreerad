@@ -7,6 +7,7 @@ use App\Models\Router;
 use App\Services\MikroTikProvisioningService;
 use App\Services\RouterManagementService;
 use App\Services\RouterOsConnectionService;
+use App\Support\QrCodeSvg;
 use App\Support\RadiusAccountingStats;
 use App\Support\RouterUsageHistory;
 use App\Support\TenantAccess;
@@ -67,6 +68,11 @@ class RouterController extends Controller
             'accessPointGuide' => $mikroTik->generateAccessPointGuide(),
             'infrastructureProfiles' => $mikroTik->infrastructureProfiles(),
             'loginTemplate' => $mikroTik->generateLoginTemplate(),
+            // 2026-10-02: the customer-facing self-service "scan to view
+            // packages/buy a voucher" QR code/link for this router -- see
+            // PortalController::connect() and MikroTikProvisioningService::connectUrl().
+            'connectUrl' => $connectUrl = $mikroTik->connectUrl($router),
+            'connectQrSvg' => QrCodeSvg::render($connectUrl, 180),
             'provisioningConfig' => [
                 'portal_url' => $mikroTik->portalUrl(),
                 'radius_server_ip' => config('services.radius.server_ip'),

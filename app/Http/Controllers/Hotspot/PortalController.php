@@ -21,10 +21,12 @@ use App\Services\RadiusProvisioningService;
 use App\Services\VoucherManagementService;
 use App\Support\PaymentCommission;
 use App\Support\PaymentGatewayCatalog;
+use App\Support\QrCodeSvg;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Cookie;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -48,6 +50,18 @@ class PortalController extends Controller
      * split into a per-flow constant.
      */
     private const TEST_ACCESS_PASSWORD = 'authenticated_device_pass';
+
+    /**
+     * 2026-10-02: backs the customer self-service "scan this QR"/bookmark
+     * link (see connect() below) -- set on every normal captive-portal visit
+     * so a device that later revisits via connect() (from its own regular
+     * browser, with real internet and no mac/nasid query params to go on)
+     * can still be recognized. Laravel encrypts/signs every cookie by
+     * default (nothing excludes this name), so its contents can't be
+     * tampered with client-side; it's not treated as a secret either way --
+     * just a MAC address and a shop id, neither sensitive on their own.
+     */
+    private const DEVICE_COOKIE = 'hotspot_device';
 
     /**
      * Fetched directly by a router's own `/tool fetch` command (see
@@ -106,8 +120,77 @@ class PortalController extends Controller
             ]);
         }
 
-        $network = $validated['network'] ?? null;
+        // 2026-10-02: lets a later visit to connect() (the QR/bookmark
+        // self-service link) recognize this same device once it has real
+        // internet and no mac/nasid query params to go on. Queued here
+        // rather than on a specific response, so it rides along with
+        // whichever view below actually renders.
+        Cookie::queue(
+            self::DEVICE_COOKIE,
+            json_encode(['shop_id' => $router->shop_id, 'mac' => $validated['mac']]),
+            60 * 24 * 90
+        );
 
+        return $this->renderForMac(
+            $router,
+            $validated['mac'],
+            $validated['network'] ?? null,
+            $this->mikrotikLoginUrl($validated),
+            $validated['link-orig'] ?? null
+        );
+    }
+
+    /**
+     * 2026-10-02, direct request: a customer on the free trial (or any
+     * returning customer) can only reach the captive-portal page while
+     * their device is still unauthenticated -- the instant real internet
+     * works, both iOS's Captive Network Assistant and Android's equivalent
+     * auto-close their own locked-down sign-in browser, no matter what
+     * dst/redirect this app sends them to. That's standard OS behavior on
+     * every captive portal, not something fixable server-side. This route
+     * (surfaced as a QR code/link on the router's own page and on the
+     * trial's access-granted screen) gives a way back in from the
+     * customer's *normal* browser once they're online: no mac/nasid query
+     * params available here, so the device is identified from the cookie
+     * show() already sets on every normal captive-portal visit instead.
+     */
+    public function connect(Request $request, string $token): View
+    {
+        $router = Router::query()
+            ->with(['shop.tenant', 'shop.packages' => fn ($query) => $query
+                ->where('is_active', true)
+                ->whereIn('service_type', ['hotspot', 'both'])
+                ->orderBy('price')])
+            ->where('public_token', $token)
+            ->first();
+
+        if (! $router) {
+            return view('hotspot.unknown-router', [
+                'macAddress' => null,
+                'nasIdentifier' => null,
+            ]);
+        }
+
+        $mac = $this->deviceMacFromCookie($request, $router->shop_id);
+
+        if (! $mac) {
+            return view('hotspot.connect-first', [
+                'router' => $router,
+                'shop' => $router->shop,
+            ]);
+        }
+
+        return $this->renderForMac($router, $mac, null, null, null);
+    }
+
+    /**
+     * Shared by show() (query-param identified, mid captive-portal redirect)
+     * and connect() (cookie identified, a customer's own regular browser) --
+     * everything past "which router, which mac" is identical regardless of
+     * how the device was identified.
+     */
+    private function renderForMac(Router $router, string $mac, ?string $network, ?string $loginUrl, ?string $originalUrl): View
+    {
         // A request carrying &network=pos|staff|mgmt came through that
         // network's own MAC-auth hotspot login page (2026-09-27), pushed by
         // RouterOsConnectionService::pushNetworkLoginPage() -- unlike the
@@ -122,21 +205,21 @@ class PortalController extends Controller
             $posDevice = PosDevice::query()
                 ->with('package')
                 ->where('shop_id', $router->shop_id)
-                ->where('mac_address', strtoupper($validated['mac']))
+                ->where('mac_address', strtoupper($mac))
                 ->first();
 
             return view('hotspot.pos-status', [
                 'router' => $router,
                 'shop' => $router->shop,
                 'device' => $posDevice,
-                'macAddress' => $validated['mac'],
+                'macAddress' => $mac,
             ]);
         }
 
         if (in_array($network, ['staff', 'mgmt'], true)) {
             $trustedDevice = TrustedWifiDevice::query()
                 ->where('shop_id', $router->shop_id)
-                ->where('mac_address', strtoupper($validated['mac']))
+                ->where('mac_address', strtoupper($mac))
                 ->first();
 
             return view('hotspot.staff-wifi-status', [
@@ -144,14 +227,14 @@ class PortalController extends Controller
                 'shop' => $router->shop,
                 'device' => $trustedDevice,
                 'networkLabel' => $network === 'mgmt' ? 'Management' : 'Staff',
-                'macAddress' => $validated['mac'],
+                'macAddress' => $mac,
             ]);
         }
 
         $activeSubscription = Subscription::query()
             ->with('package')
             ->where('shop_id', $router->shop_id)
-            ->where('mac_address', $validated['mac'])
+            ->where('mac_address', $mac)
             ->where('expires_at', '>', now())
             ->latest('expires_at')
             ->first();
@@ -175,11 +258,11 @@ class PortalController extends Controller
                 'router' => $router,
                 'package' => $activeSubscription->package,
                 'subscription' => $activeSubscription,
-                'macAddress' => $validated['mac'],
-                'username' => $validated['mac'],
+                'macAddress' => $mac,
+                'username' => $mac,
                 'password' => self::TEST_ACCESS_PASSWORD,
-                'loginUrl' => $this->mikrotikLoginUrl($validated),
-                'originalUrl' => $validated['link-orig'] ?? null,
+                'loginUrl' => $loginUrl,
+                'originalUrl' => $originalUrl,
             ]);
         }
 
@@ -198,7 +281,7 @@ class PortalController extends Controller
         $posDevice = PosDevice::query()
             ->with('package')
             ->where('shop_id', $router->shop_id)
-            ->where('mac_address', strtoupper($validated['mac']))
+            ->where('mac_address', strtoupper($mac))
             ->first();
 
         if ($posDevice) {
@@ -206,7 +289,7 @@ class PortalController extends Controller
                 'router' => $router,
                 'shop' => $router->shop,
                 'device' => $posDevice,
-                'macAddress' => $validated['mac'],
+                'macAddress' => $mac,
             ]);
         }
 
@@ -216,7 +299,7 @@ class PortalController extends Controller
         // directories.
         $trustedDevice = TrustedWifiDevice::query()
             ->where('shop_id', $router->shop_id)
-            ->where('mac_address', strtoupper($validated['mac']))
+            ->where('mac_address', strtoupper($mac))
             ->first();
 
         if ($trustedDevice) {
@@ -225,7 +308,7 @@ class PortalController extends Controller
                 'shop' => $router->shop,
                 'device' => $trustedDevice,
                 'networkLabel' => $trustedDevice->network === TrustedWifiDevice::NETWORK_MGMT ? 'Management' : 'Staff',
-                'macAddress' => $validated['mac'],
+                'macAddress' => $mac,
             ]);
         }
 
@@ -233,15 +316,39 @@ class PortalController extends Controller
             'router' => $router,
             'shop' => $router->shop,
             'packages' => $router->shop->packages,
-            'macAddress' => $validated['mac'],
-            'loginUrl' => $this->mikrotikLoginUrl($validated),
-            'originalUrl' => $validated['link-orig'] ?? null,
+            'macAddress' => $mac,
+            'loginUrl' => $loginUrl,
+            'originalUrl' => $originalUrl,
             'trialUsesRemaining' => $router->shop->trial_enabled
-                ? $router->shop->trialUsesRemainingToday($validated['mac'])
+                ? $router->shop->trialUsesRemainingToday($mac)
                 : null,
             'activeTrialSubscription' => $activeTrialSubscription,
             'poweredByText' => config('app.name'),
         ]);
+    }
+
+    /**
+     * Reads the device-recognition cookie show() queues on every normal
+     * captive-portal visit. $shopId must match -- a cookie set for a
+     * different shop's hotspot (e.g. the same phone used at a different
+     * tenant's location) is treated the same as no cookie at all, rather
+     * than showing a MAC that was never actually a customer of *this* shop.
+     */
+    private function deviceMacFromCookie(Request $request, int $shopId): ?string
+    {
+        $raw = $request->cookie(self::DEVICE_COOKIE);
+
+        if (blank($raw)) {
+            return null;
+        }
+
+        $data = json_decode((string) $raw, true);
+
+        if (! is_array($data) || (int) ($data['shop_id'] ?? 0) !== $shopId || blank($data['mac'] ?? null)) {
+            return null;
+        }
+
+        return (string) $data['mac'];
     }
 
     public function grant(Request $request, RadiusProvisioningService $radius): RedirectResponse|View
@@ -423,6 +530,16 @@ class PortalController extends Controller
                 'link-login' => $validated['link-login'] ?? null,
                 'link-login-only' => $validated['link-login-only'] ?? null,
             ])),
+            // 2026-10-02, direct follow-up: the dst redirect above only ever
+            // gets one shot, since the OS's own captive-portal browser
+            // auto-closes the instant it detects real internet, regardless of
+            // what page is showing -- standard iOS/Android behavior, not
+            // something a redirect can out-race. connectUrl() is the durable
+            // fallback: a bookmarkable/QR-scannable link that works from the
+            // customer's *own* browser once they're online, reusing the
+            // device-recognition cookie show() already sets.
+            'connectUrl' => $connectUrl = $provisioning->connectUrl($router),
+            'connectQrSvg' => QrCodeSvg::render($connectUrl, 160),
         ]);
     }
 

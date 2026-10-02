@@ -151,6 +151,31 @@
                         View packages
                     </a>
                 @endif
+
+                {{--
+                    2026-10-02, direct follow-up: the link above only survives
+                    for as long as this captive-portal browser stays open --
+                    both iOS and Android auto-close it the moment real internet
+                    is confirmed, regardless of what's showing. connectUrl()
+                    (PortalController::connectUrl()/connect()) is the durable
+                    fallback -- scan the QR or save the link now, and it still
+                    works later from a normal browser, for the rest of the
+                    trial window and beyond (packages, vouchers, both).
+                --}}
+                @if (($connectUrl ?? null) && ($connectQrSvg ?? null))
+                    <div class="mt-5 rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-center">
+                        <p class="text-sm font-medium text-zinc-900">Save this for later</p>
+                        <p class="mt-1 text-xs leading-5 text-zinc-500">Scan with another device, or bookmark the link below, to view packages or buy a voucher anytime -- even after this trial ends.</p>
+                        <div class="mt-3 flex justify-center">
+                            <div class="[&_svg]:h-32 [&_svg]:w-32 rounded-md border border-zinc-200 bg-white p-2">
+                                {!! $connectQrSvg !!}
+                            </div>
+                        </div>
+                        <a href="{{ $connectUrl }}" class="mt-3 block break-all font-mono text-xs font-medium underline decoration-zinc-300 underline-offset-4" style="color: var(--brand)">
+                            {{ $connectUrl }}
+                        </a>
+                    </div>
+                @endif
             </div>
         </section>
     </main>
