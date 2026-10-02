@@ -758,19 +758,22 @@ class HotspotPortalTest extends TestCase
     }
 
     /**
-     * 2026-09-30, direct live report: submitting the trial's login form in
-     * the main browser window (the shape every other grant still uses)
-     * let RouterOS's own popup=true handling intercept the flow on mobile
-     * with its stock "you are connected" status page instead of following
-     * dst back to our portal -- so a trialing customer landed on the
-     * package grid once, at best, and never again for the rest of the
-     * trial. Submitting into a hidden iframe instead means the browser
-     * never leaves this page at all, so there's nothing for RouterOS's own
-     * page to interrupt -- the customer just sees "Connecting..." flip to
-     * "You're connected" in place, with the View packages link already on
-     * screen the whole time.
+     * 2026-10-02, direct live report: the hidden-iframe submission tried
+     * 2026-09-30 showed "You're connected" (a fixed 2s timer, not a real
+     * confirmation) while the device genuinely had no internet -- a
+     * captive-portal mini-browser (iOS's CNA, Android's equivalent) is
+     * known to silently refuse an iframe's mixed-content form POST (HTTPS
+     * portal -> MikroTik's own plain-HTTP login endpoint) with no visible
+     * error. Reverted to the exact same main-window POST the paid/voucher
+     * flow already uses in production (proven to actually authenticate),
+     * just pointed at the portal instead of the customer's original
+     * destination, and with popup=true dropped (never confirmed as the
+     * real cause of the original interception, only suspected -- removing
+     * it is the smaller, safer change). No fake "connected" text: the
+     * browser only reaches the portal once MikroTik has actually processed
+     * the login and redirected it there.
      */
-    public function test_start_trial_submits_login_into_a_hidden_iframe_instead_of_navigating_away(): void
+    public function test_start_trial_submits_login_in_the_main_window_without_popup(): void
     {
         [$router, $package] = $this->routerWithPackage();
         $router->shop->update(['trial_enabled' => true]);
@@ -783,10 +786,11 @@ class HotspotPortalTest extends TestCase
 
         $response
             ->assertSee('id="mikrotik-login"', false)
-            ->assertSee('target="mikrotik-login-frame"', false)
-            ->assertSee('<iframe name="mikrotik-login-frame"', false)
-            ->assertDontSee('name="dst"', false)
-            ->assertDontSee('name="popup"', false);
+            ->assertSee('action="http://10.5.50.1/login"', false)
+            ->assertSee('name="dst" value="'.config('app.url').'/hotspot/portal', false)
+            ->assertDontSee('name="popup"', false)
+            ->assertDontSee('<iframe', false)
+            ->assertDontSee("You're connected");
     }
 
     public function test_start_trial_is_blocked_when_shop_disables_free_trial(): void

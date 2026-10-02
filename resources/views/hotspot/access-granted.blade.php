@@ -39,42 +39,55 @@
                 @if ($loginUrl)
                     @if ($package->is_system)
                         {{--
-                            2026-09-30, direct live report: the plain form below
-                            (still used for paid/voucher/debug grants) navigates
-                            the whole browser window to MikroTik's login endpoint,
-                            with popup=true telling RouterOS to open its own
-                            post-login status window ("You are connected") --
-                            on mobile that intercepted the flow instead of
-                            following dst back to our portal, so a trialing
-                            customer never saw the package grid, only RouterOS's
-                            own stock status page, on every reconnect. Fixed by
-                            submitting the login into a hidden iframe instead of
-                            the main window -- the browser never leaves this
-                            page, so there's nothing for RouterOS's own status
-                            page to interrupt, and the already-present "View
-                            packages" link below is what the customer sees the
-                            moment it's done. No dst/popup needed here at all,
-                            since nothing ever displays MikroTik's response.
+                            2026-10-02, direct live report: the hidden-iframe
+                            submission below (shipped 2026-09-30 to avoid
+                            RouterOS's own popup=true status page intercepting
+                            the flow) showed "You're connected" but the device
+                            genuinely had no internet -- that text was only ever
+                            a fixed 2s timer, never a real confirmation, and a
+                            captive-portal mini-browser (iOS's Captive Network
+                            Assistant, Android's equivalent) is known to run a
+                            heavily locked-down WebView that can silently refuse
+                            an iframe's mixed-content form POST (our HTTPS
+                            portal page submitting to MikroTik's own plain-HTTP
+                            local login endpoint) without any visible error --
+                            exactly "looks connected, isn't." Reverted to the
+                            same main-window POST the paid/voucher flow already
+                            uses in production (proven to actually authenticate
+                            the device), just pointed at the portal instead of
+                            the customer's original destination, and with
+                            popup=true dropped -- that field was never confirmed
+                            as the actual cause of the original interception,
+                            only suspected, and removing it is a smaller, safer
+                            change than an unproven iframe. No fake "connected"
+                            text either: the browser only ever reaches the
+                            portal (showing real packages) once MikroTik has
+                            actually processed the login and redirected it
+                            there, so landing on it IS the confirmation.
                         --}}
-                        <div class="mt-6 rounded-md bg-zinc-100 p-4 text-sm text-zinc-700" x-data="{ connected: false }" x-init="setTimeout(() => connected = true, 2000)">
-                            <div class="flex items-center gap-3" x-show="! connected">
+                        <div class="mt-6 rounded-md bg-zinc-100 p-4 text-sm text-zinc-700">
+                            <div class="flex items-center gap-3">
                                 <span class="h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-900"></span>
-                                <p class="font-medium text-zinc-950">Connecting this device...</p>
-                            </div>
-                            <div class="flex items-center gap-3" x-show="connected" x-cloak>
-                                <span class="grid h-5 w-5 shrink-0 place-items-center rounded-full text-xs font-bold text-white" style="background-color: var(--brand)">&check;</span>
-                                <p class="font-medium text-zinc-950">You're connected.</p>
+                                <div>
+                                    <p class="font-medium text-zinc-950">Connecting this device...</p>
+                                    <p class="mt-1 text-xs text-zinc-500">You will be returned to the hotspot gateway automatically.</p>
+                                </div>
                             </div>
                         </div>
 
-                        <form id="mikrotik-login" method="POST" action="{{ $loginUrl }}" target="mikrotik-login-frame" class="hidden" aria-hidden="true">
+                        <form id="mikrotik-login" method="POST" action="{{ $loginUrl }}" class="mt-4">
                             <input type="hidden" name="username" value="{{ $username }}">
                             <input type="hidden" name="password" value="{{ $password }}">
+                            @if ($originalUrl)
+                                <input type="hidden" name="dst" value="{{ $originalUrl }}">
+                            @endif
+                            <button class="w-full rounded-md px-4 py-2 text-sm font-medium text-white" style="background-color: var(--brand)">
+                                Connect now
+                            </button>
                         </form>
-                        <iframe name="mikrotik-login-frame" class="hidden" aria-hidden="true" tabindex="-1"></iframe>
 
                         <script>
-                            window.setTimeout(() => document.getElementById('mikrotik-login')?.submit(), 500);
+                            window.setTimeout(() => document.getElementById('mikrotik-login')?.submit(), 1800);
                         </script>
                     @else
                         <div class="mt-6 rounded-md bg-zinc-100 p-4 text-sm text-zinc-700">
