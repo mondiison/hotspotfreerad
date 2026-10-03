@@ -565,7 +565,7 @@ class MikroTikProvisioningServiceTest extends TestCase
         $this->assertStringContainsString('/tool mac-server set allowed-interface-list=MGMT-ACCESS', $script);
         $this->assertStringContainsString('/tool mac-server mac-winbox set allowed-interface-list=MGMT-ACCESS', $script);
         $this->assertStringContainsString('/ip dhcp-server add name=dhcp-mgmt interface=vlan-mgmt', $script);
-        $this->assertStringContainsString('/ip dhcp-client add interface=$wan1 add-default-route=yes use-peer-dns=no disabled=no', $script);
+        $this->assertStringContainsString('/ip dhcp-client add interface=$wan1 add-default-route=yes check-gateway=ping use-peer-dns=no disabled=no', $script);
         $this->assertStringContainsString('/ip dhcp-server add name=dhcp-hotspot interface=vlan-hotspot', $script);
         $this->assertStringContainsString('/ip hotspot add name=mms-hotspot interface=vlan-hotspot', $script);
         $this->assertStringContainsString('login-by=http-pap,http-chap,cookie,mac-cookie', $script);
@@ -944,6 +944,59 @@ class MikroTikProvisioningServiceTest extends TestCase
             '/interface bridge port add bridge=$lanBridge interface=$trunkPort frame-types=admit-only-vlan-tagged',
             $script
         );
+    }
+
+    /**
+     * 2026-10-03, confirmed live: a second WAN link, once enabled and wired
+     * up, got added to the WAN interface list and gained a NAT masquerade
+     * rule, but never actually got a DHCP client of its own -- "I can only
+     * see 1 DHCP client" after physically connecting it. Both DHCP clients
+     * add their default route at the same (default) distance deliberately,
+     * per a direct follow-up ("hope it would still distribute load when
+     * the 2 WAN is up at same time") -- that's RouterOS's standard ECMP
+     * shape (two equal-distance routes to different gateways load-balance
+     * new connections automatically), with check-gateway=ping on both
+     * providing the failover half: a dead gateway's route gets withdrawn,
+     * leaving only the surviving link active.
+     */
+    public function test_second_wan_gets_an_equal_distance_dhcp_client_for_ecmp_load_balancing(): void
+    {
+        $router = new Router([
+            'nas_identifier' => 'dual-wan-router',
+            'wireguard_internal_ip' => '10.8.0.22',
+            'shared_secret' => 'radius-secret',
+            'provisioning_settings' => [
+                'wan2' => 'ether8',
+                'enable_second_wan' => true,
+            ],
+        ]);
+
+        $script = app(MikroTikProvisioningService::class)->generateFreshInfrastructureScript($router);
+
+        $this->assertStringContainsString('/interface list member add list=WAN interface=$wan2', $script);
+        $this->assertStringContainsString('/ip firewall nat add chain=srcnat out-interface=$wan2 action=masquerade', $script);
+        $this->assertStringContainsString('/ip dhcp-client remove [find interface=$wan2]', $script);
+        $this->assertStringContainsString('/ip dhcp-client add interface=$wan2 add-default-route=yes check-gateway=ping', $script);
+        $this->assertStringContainsString('/ip dhcp-client add interface=$wan1 add-default-route=yes check-gateway=ping', $script);
+        // Neither client sets an explicit default-route-distance -- both stay
+        // at RouterOS's implicit distance (1), which is what makes this ECMP
+        // rather than wan2 being a never-used backup.
+        $this->assertStringNotContainsString('default-route-distance', $script);
+    }
+
+    public function test_second_wan_dhcp_client_is_only_a_comment_when_disabled(): void
+    {
+        $router = new Router([
+            'nas_identifier' => 'single-wan-router',
+            'wireguard_internal_ip' => '10.8.0.23',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        $script = app(MikroTikProvisioningService::class)->generateFreshInfrastructureScript($router);
+
+        $this->assertStringContainsString('# Add this when second Starlink is connected: /ip dhcp-client add interface=$wan2', $script);
+        $this->assertStringNotContainsString('disabled=no comment="Second WAN uplink', $script);
+        $this->assertStringNotContainsString('/ip dhcp-client remove [find interface=$wan2]', $script);
     }
 
     public function test_it_generates_builtin_wifi_hotspot_script(): void

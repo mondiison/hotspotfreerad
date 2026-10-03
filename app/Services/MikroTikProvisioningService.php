@@ -583,6 +583,31 @@ SCRIPT;
             ? '/interface list member add list=WAN interface=$wan2'
             : '# Add this when second Starlink is connected: /interface list member add list=WAN interface=$wan2';
 
+        // 2026-10-03, confirmed live: enable_second_wan added $wan2 to the WAN
+        // interface list and gave it a NAT masquerade rule, but never actually
+        // created a DHCP client for it -- so a genuinely connected second WAN
+        // link could never obtain an IP address on its own ("I can only see 1
+        // DHCP client" after wiring up WAN2).
+        //
+        // Both DHCP clients add their default route at the SAME (default)
+        // distance, deliberately -- this is RouterOS's standard ECMP (Equal
+        // Cost Multi-Path) load-balancing shape: two 0.0.0.0/0 routes at
+        // equal distance but different gateways/interfaces makes RouterOS
+        // distribute new connections across both links automatically, no
+        // PCC/mangle rules needed, closing a direct follow-up request ("hope
+        // it would still distribute load when the 2 WAN is up at same
+        // time"). check-gateway=ping on both is what turns this into
+        // failover too, not just balancing -- when one gateway stops
+        // answering pings, RouterOS withdraws *that one* route from the
+        // table, leaving only the surviving link's route active until the
+        // dead one comes back. An earlier version of this gave wan2
+        // default-route-distance=2 (pure backup, never used while wan1 was
+        // alive) -- reverted the same day once the actual requirement
+        // (load distribution, not just failover) was clarified.
+        $secondWanDhcp = $settings['enable_second_wan']
+            ? "/ip dhcp-client remove [find interface=\$wan2]\n/ip dhcp-client add interface=\$wan2 add-default-route=yes check-gateway=ping use-peer-dns=no disabled=no comment=\"Second WAN uplink -- equal-distance route with wan1 for ECMP load balancing + check-gateway failover\""
+            : '# Add this when second Starlink is connected: /ip dhcp-client add interface=$wan2 add-default-route=yes check-gateway=ping use-peer-dns=no disabled=no';
+
         $secondWanNat = $settings['enable_second_wan']
             ? '/ip firewall nat add chain=srcnat out-interface=$wan2 action=masquerade'
             : '# Add this when second Starlink is connected: /ip firewall nat add chain=srcnat out-interface=$wan2 action=masquerade';
@@ -733,7 +758,8 @@ SCRIPT;
             '/interface list member add list=WAN interface=$wan1',
             $secondWanMember,
             '/ip dhcp-client remove [find interface=$wan1]',
-            '/ip dhcp-client add interface=$wan1 add-default-route=yes use-peer-dns=no disabled=no comment="Get WAN IP/default route from Starlink or ISP router"',
+            '/ip dhcp-client add interface=$wan1 add-default-route=yes check-gateway=ping use-peer-dns=no disabled=no comment="Get WAN IP/default route from Starlink or ISP router"',
+            $secondWanDhcp,
             '/interface bridge add name=$lanBridge protocol-mode=rstp vlan-filtering=no comment="MMS Radius LAN bridge"',
             '/interface bridge port add bridge=$lanBridge interface=$trunkPort frame-types=admit-only-vlan-tagged comment="AP/switch trunk carrying MMS Radius VLANs -- tagged only, untagged frames dropped"',
             '/interface bridge port add bridge=$lanBridge interface=$piPort pvid=$mgmtVlan comment="Pi/management access port, untagged VLAN 10 by default"',
