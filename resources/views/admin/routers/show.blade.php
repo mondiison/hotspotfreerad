@@ -100,32 +100,77 @@
                         <div class="border-b border-zinc-200 dark:border-zinc-700 px-5 py-4">
                             <h2 class="text-base font-semibold">Customer Self-Service Link</h2>
                             <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                                A free trial's internet access only lasts as long as the device's captive-portal sign-in browser stays open -- both iOS and Android close it automatically the instant real internet is confirmed, before a customer can browse back to packages. Print or post this QR code at the location, and the trial's own confirmation screen links to it too, so a customer can scan it from their own browser anytime to view packages, check their balance, or buy a voucher -- no mac/nasid parameters needed, it recognizes the device from a cookie set on its first captive-portal visit.
+                                A free trial's internet access only lasts as long as the device's captive-portal sign-in browser stays open -- both iOS and Android close it automatically the instant real internet is confirmed, before a customer can browse back to packages. Print or post this flyer at the location, and the trial's own confirmation screen links to it too, so a customer can scan it from their own browser anytime to view packages, check their balance, or buy a voucher -- no mac/nasid parameters needed, it recognizes the device from a cookie set on its first captive-portal visit.
                             </p>
                         </div>
                         @php
                             $connectQrFilename = str($router->shop->name.'-'.$router->name)->slug().'-qr.png';
+                            $hotspotSsid = $router->provisioning_settings['hotspot_ssid'] ?? 'MMS Hotspot';
                         @endphp
                         <div
                             id="router-connect-link-print-area"
-                            class="flex flex-col items-center gap-4 p-5 sm:flex-row sm:items-start"
+                            class="p-5"
                             x-data="{ copied: false, downloading: false }"
                             data-connect-url="{{ $connectUrl }}"
                             data-qr-filename="{{ $connectQrFilename }}"
                         >
-                            {{-- 2026-10-02: the download button reads this rendered SVG straight
-                                 back out of the DOM ($refs.qrSvgHolder.innerHTML) rather than
-                                 piping the (very long) SVG markup through a Blade @js() call --
-                                 a @js() call embedded inside a long/multi-line Alpine attribute
-                                 on a component tag tripped Livewire's morph-aware Blade compiler
-                                 ("regular expression is too large"), confirmed by reproducing it
-                                 with this exact combination and resolving it by never putting the
-                                 SVG string through that path at all. --}}
-                            <div class="[&_svg]:h-36 [&_svg]:w-36 shrink-0 rounded-md border border-zinc-200 dark:border-zinc-700 bg-white p-2" x-ref="qrSvgHolder">
-                                {!! $connectQrSvg !!}
+                            {{--
+                                2026-10-05, direct request: printed/posted at the
+                                shop as a flyer, not just an admin-facing QR card --
+                                the same box is what's shown on screen (so an admin
+                                can preview exactly what will print before printing
+                                it) and what prints, sized for A4 via the @page rule
+                                below. Portrait is the sensible default for a
+                                flyer-shaped poster (logo/steps stacked above a
+                                centered QR) -- landscape is left to the browser's
+                                own print dialog, which every browser already offers
+                                as a one-click override, rather than building a
+                                second custom layout/toggle for it.
+                            --}}
+                            <div class="mx-auto max-w-md rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white p-6 text-center text-zinc-950 print:max-w-none print:rounded-none print:border-0 print:p-0">
+                                <p class="text-sm font-medium" style="color: {{ $router->shop->tenant->brand_color ?? '#0f766e' }}">{{ $router->shop->tenant->company_name }}</p>
+                                <h1 class="mt-1 text-2xl font-bold">{{ $router->shop->name }} Wi-Fi</h1>
+
+                                <ol class="mx-auto mt-5 max-w-sm space-y-3 text-left text-sm leading-6">
+                                    <li class="flex gap-3">
+                                        <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-zinc-950 text-xs font-bold text-white">1</span>
+                                        <span>Connect your phone's Wi-Fi to <span class="font-semibold">&ldquo;{{ $hotspotSsid }}&rdquo;</span>.</span>
+                                    </li>
+                                    <li class="flex gap-3">
+                                        <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-zinc-950 text-xs font-bold text-white">2</span>
+                                        <span>Open your browser -- a sign-in page opens automatically.</span>
+                                    </li>
+                                    <li class="flex gap-3">
+                                        <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-zinc-950 text-xs font-bold text-white">3</span>
+                                        <span>Pick a package (or start the free trial) and follow the payment steps.</span>
+                                    </li>
+                                    <li class="flex gap-3">
+                                        <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-zinc-950 text-xs font-bold text-white">4</span>
+                                        <span>Scan the code below anytime afterward to check your balance, buy more, or get a voucher.</span>
+                                    </li>
+                                </ol>
+
+                                {{-- 2026-10-02: the download button reads this rendered SVG straight
+                                     back out of the DOM ($refs.qrSvgHolder.innerHTML) rather than
+                                     piping the (very long) SVG markup through a Blade @js() call --
+                                     a @js() call embedded inside a long/multi-line Alpine attribute
+                                     on a component tag tripped Livewire's morph-aware Blade compiler
+                                     ("regular expression is too large"), confirmed by reproducing it
+                                     with this exact combination and resolving it by never putting the
+                                     SVG string through that path at all. --}}
+                                <div class="[&_svg]:h-48 [&_svg]:w-48 mx-auto mt-5 w-fit rounded-md border border-zinc-200 bg-white p-2" x-ref="qrSvgHolder">
+                                    {!! $connectQrSvg !!}
+                                </div>
+
+                                <p class="mt-3 text-xs text-zinc-500">Or visit:</p>
+                                <p class="break-all font-mono text-xs font-medium text-zinc-700">{{ $connectUrl }}</p>
+
+                                @if ($router->shop->contactPhone())
+                                    <p class="mt-3 text-xs text-zinc-500">Need help? Call {{ $router->shop->contactPhone() }}</p>
+                                @endif
                             </div>
-                            <div class="min-w-0 flex-1">
-                                <p class="router-connect-link-print-label hidden text-sm font-medium text-zinc-900">{{ $router->shop->name }} -- {{ $router->name }}</p>
+
+                            <div class="mx-auto mt-4 max-w-md print:hidden">
                                 <input
                                     type="text"
                                     readonly
@@ -134,14 +179,14 @@
                                     onclick="this.select()"
                                     class="w-full rounded-md border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 px-3 py-2 font-mono text-sm text-zinc-700 dark:text-zinc-300"
                                 >
-                                <p class="mt-1 text-xs text-zinc-400 dark:text-zinc-500 print:hidden">Tap the link to select it if the copy button doesn't work in this browser.</p>
-                                <div class="mt-3 flex flex-wrap gap-2 print:hidden">
+                                <p class="mt-1 text-xs text-zinc-400 dark:text-zinc-500">Tap the link to select it if the copy button doesn't work in this browser. Need landscape instead of portrait? Pick it in the print dialog that opens -- every browser offers that as a built-in option.</p>
+                                <div class="mt-3 flex flex-wrap justify-center gap-2">
                                     <flux:button type="button" variant="outline" size="sm" icon="clipboard" @click="try { copied = await window.copyText($root.dataset.connectUrl) } catch (e) { copied = false }; if (! copied) { $refs.connectUrlInput.select() }; setTimeout(() => copied = false, 1800)">
                                         <span x-show="! copied">Copy link</span>
                                         <span x-cloak x-show="copied">Copied</span>
                                     </flux:button>
                                     <flux:button type="button" variant="outline" size="sm" icon="printer" @click="window.print()">
-                                        Print
+                                        Print flyer
                                     </flux:button>
                                     <flux:button type="button" variant="outline" size="sm" icon="arrow-down-tray" x-bind:disabled="downloading" @click="downloading = true; await window.downloadSvgAsPng($refs.qrSvgHolder.innerHTML, $root.dataset.qrFilename); downloading = false">
                                         <span x-show="! downloading">Download QR</span>
@@ -158,14 +203,18 @@
                         other section) -- the standard "hide everything, then
                         re-reveal one subtree and pull it to the page origin"
                         trick, since the target is nested deep inside layout
-                        wrappers rather than a direct child of <body>.
+                        wrappers rather than a direct child of <body>. A4 sizing
+                        (2026-10-05, direct request) is a hint most browsers honor
+                        but still let the user override in their own print
+                        dialog -- orientation is deliberately left to that same
+                        dialog rather than a second custom layout.
                     --}}
                     <style>
                         @media print {
+                            @page { size: A4 portrait; margin: 1.5cm; }
                             body * { visibility: hidden; }
                             #router-connect-link-print-area, #router-connect-link-print-area * { visibility: visible; }
-                            #router-connect-link-print-area { position: absolute; left: 0; top: 0; width: 100%; padding: 2rem; }
-                            #router-connect-link-print-area .router-connect-link-print-label { display: block !important; margin-bottom: 1rem; font-size: 1.25rem; }
+                            #router-connect-link-print-area { position: absolute; left: 0; top: 0; width: 100%; padding: 0; }
                         }
                     </style>
 
