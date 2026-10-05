@@ -190,4 +190,87 @@ class RadiusAccountingStatsTest extends TestCase
         $this->assertFalse($refreshed->is_online);
         $this->assertNotSame('Online', $refreshed->detected_status);
     }
+
+    /**
+     * Regression coverage for a live 2026-10-05 report: a router offline
+     * for two full days still showed "Recently seen ... 3 minutes ago".
+     * sample() writes a row every 5 minutes regardless of whether the ping
+     * actually succeeded -- a dead router being faithfully re-checked (and
+     * failing) on schedule produced a steady stream of recent, but
+     * unreachable (latency_ms=null), samples. sampled_at on those rows
+     * means "last time we checked," not "last time it actually
+     * responded," and must not be used as a last-seen signal on its own.
+     */
+    public function test_a_steady_stream_of_unreachable_samples_does_not_look_recently_seen(): void
+    {
+        $router = Router::create([
+            'shop_id' => $this->shop()->id,
+            'name' => 'Dead For Days Router',
+            'nas_identifier' => 'dead-router',
+            'wireguard_internal_ip' => '10.8.0.26',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        // The router actually went dark two days ago, right after this last
+        // genuinely successful ping.
+        RouterMetricSample::create([
+            'router_id' => $router->id,
+            'latency_ms' => 15,
+            'sampled_at' => now()->subDays(2),
+        ]);
+
+        // The scheduler has kept trying every 5 minutes since, each attempt
+        // correctly recording "unreachable" -- but still a fresh row.
+        RouterMetricSample::create([
+            'router_id' => $router->id,
+            'latency_ms' => null,
+            'sampled_at' => now()->subMinutes(8),
+        ]);
+        RouterMetricSample::create([
+            'router_id' => $router->id,
+            'latency_ms' => null,
+            'sampled_at' => now()->subMinutes(3),
+        ]);
+
+        $refreshed = app(RadiusAccountingStats::class)->refreshRouterHealth(
+            Router::query()->whereKey($router->id)->get()
+        )->first();
+
+        $this->assertFalse($refreshed->is_online);
+        $this->assertNotSame('Recently seen', $refreshed->detected_status);
+        $this->assertSame('Idle / no recent sessions', $refreshed->detected_status);
+        // last_seen_at must reflect the last genuinely reachable sample
+        // (two days ago), not the latest unreachable check-in attempt.
+        $this->assertTrue($refreshed->last_seen_at->diffInHours(now()) >= 47);
+    }
+
+    /**
+     * No reachable sample has ever existed at all (and no accounting
+     * activity either) -- last_seen_at must stay null/unset, not pick up
+     * an unreachable sample's own check-in timestamp.
+     */
+    public function test_only_unreachable_samples_never_sets_a_last_seen_timestamp(): void
+    {
+        $router = Router::create([
+            'shop_id' => $this->shop()->id,
+            'name' => 'Never Reachable Router',
+            'nas_identifier' => 'never-reachable-router',
+            'wireguard_internal_ip' => '10.8.0.27',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        RouterMetricSample::create([
+            'router_id' => $router->id,
+            'latency_ms' => null,
+            'sampled_at' => now()->subMinutes(3),
+        ]);
+
+        $refreshed = app(RadiusAccountingStats::class)->refreshRouterHealth(
+            Router::query()->whereKey($router->id)->get()
+        )->first();
+
+        $this->assertFalse($refreshed->is_online);
+        $this->assertNotSame('Recently seen', $refreshed->detected_status);
+        $this->assertNull($refreshed->last_seen_at);
+    }
 }

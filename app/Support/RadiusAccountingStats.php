@@ -78,17 +78,30 @@ class RadiusAccountingStats
         }
 
         $accountingReady = $this->hasAccounting();
-        $latestSamples = RouterMetricSample::query()
+        $sampleGroups = RouterMetricSample::query()
             ->whereIn('router_id', $routers->pluck('id'))
             ->orderByDesc('sampled_at')
             ->get()
-            ->groupBy('router_id')
-            ->map(fn (Collection $samples) => $samples->first());
+            ->groupBy('router_id');
 
-        $routers->each(function (Router $router) use ($accountingReady, $latestSamples): void {
-            $sample = $latestSamples->get($router->id);
+        $routers->each(function (Router $router) use ($accountingReady, $sampleGroups): void {
+            $samples = $sampleGroups->get($router->id);
+            $sample = $samples?->first();
             $heartbeatIsFresh = $sample && $sample->sampled_at->greaterThan(now()->subMinutes(self::HEARTBEAT_FRESHNESS_MINUTES));
             $heartbeatIsReachable = $heartbeatIsFresh && $sample->latency_ms !== null;
+
+            // 2026-10-05, confirmed live: a router offline for two full days
+            // still showed "Recently seen ... 3 minutes ago" -- $sample's own
+            // sampled_at was being used as a last-seen signal unconditionally,
+            // but sample() writes a row every 5 minutes regardless of whether
+            // the ping actually succeeded (latency_ms is just null on
+            // failure). sampled_at means "last time we checked," not "last
+            // time it actually responded," so a dead router being faithfully
+            // re-checked on schedule looked perpetually "recently seen." The
+            // real last-seen-via-heartbeat timestamp is the most recent
+            // sample that was actually reachable, which can be an older row
+            // than $sample itself once a router's gone dark.
+            $lastReachableSample = $samples?->first(fn (RouterMetricSample $candidate): bool => $candidate->latency_ms !== null);
 
             $hasActiveSession = false;
             $accountingLastSeenAt = null;
@@ -109,7 +122,7 @@ class RadiusAccountingStats
 
             $lastSeenCandidates = array_filter([
                 $accountingLastSeenAt ? now()->parse($accountingLastSeenAt) : null,
-                $sample?->sampled_at,
+                $lastReachableSample?->sampled_at,
             ]);
             $lastSeenAt = $lastSeenCandidates === [] ? null : max($lastSeenCandidates);
 
