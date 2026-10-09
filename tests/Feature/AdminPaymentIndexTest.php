@@ -6,10 +6,13 @@ use App\Livewire\Admin\PaymentsIndex;
 use App\Models\Customer;
 use App\Models\Package;
 use App\Models\Payment;
+use App\Models\Router;
 use App\Models\Shop;
 use App\Models\Subscription;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Models\Voucher;
+use App\Services\RadiusProvisioningService;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -479,6 +482,178 @@ class AdminPaymentIndexTest extends TestCase
             'id' => $payment->id,
             'status' => 'pending',
         ]);
+    }
+
+    /**
+     * 2026-10-09, direct request after a live report: a successful payment
+     * whose MAC never shows an actual login/radacct record (almost always
+     * a randomized-MAC mismatch between what paid and what the device
+     * later presents). Admin generates a recovery voucher linked back to
+     * the same payment, the old MAC's RADIUS rows are revoked, and nothing
+     * creates a second payment row.
+     */
+    public function test_tenant_admin_can_generate_a_recovery_voucher_for_a_stuck_payment(): void
+    {
+        $this->createRadiusTables();
+        [$payment, $tenant] = $this->paymentFixture('Recovery Tenant', 'recovery@example.com', 'Recovery Shop', 'HSF-RECOVERY', 'successful');
+        $subscription = $payment->subscription;
+        app(RadiusProvisioningService::class)->grantSubscriptionAccess($subscription);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(PaymentsIndex::class)
+            ->assertSee('Recover access')
+            ->call('generateRecoveryVoucher', $payment->id)
+            ->assertSet('showRecoveryVoucherModal', true);
+
+        $payment->refresh();
+        $this->assertNotNull($payment->voucher_id);
+
+        $voucher = Voucher::findOrFail($payment->voucher_id);
+        $this->assertSame('unused', $voucher->status);
+        $this->assertSame($payment->shop_id, $voucher->shop_id);
+        $this->assertSame($payment->package_id, $voucher->package_id);
+
+        $this->assertDatabaseHas('subscriptions', [
+            'id' => $subscription->id,
+        ]);
+        $subscription->refresh();
+        $this->assertTrue($subscription->expires_at->isPast());
+
+        $this->assertDatabaseMissing('radcheck', [
+            'username' => $subscription->mac_address,
+        ]);
+    }
+
+    public function test_recovery_voucher_cannot_be_generated_twice_for_the_same_payment(): void
+    {
+        $this->createRadiusTables();
+        [$payment, $tenant] = $this->paymentFixture('Recovery Twice Tenant', 'recovery-twice@example.com', 'Recovery Twice Shop', 'HSF-RECOVERY-TWICE', 'successful');
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(PaymentsIndex::class)
+            ->call('generateRecoveryVoucher', $payment->id)
+            ->assertSet('showRecoveryVoucherModal', true);
+
+        $payment->refresh();
+        $firstVoucherId = $payment->voucher_id;
+
+        Livewire::actingAs($user)
+            ->test(PaymentsIndex::class)
+            ->set('showRecoveryVoucherModal', false)
+            ->call('generateRecoveryVoucher', $payment->id)
+            ->assertSet('showRecoveryVoucherModal', false)
+            ->assertDispatched('notify');
+
+        $payment->refresh();
+        $this->assertSame($firstVoucherId, $payment->voucher_id);
+    }
+
+    public function test_recovery_voucher_is_not_offered_once_the_subscription_already_expired(): void
+    {
+        [$payment, $tenant] = $this->paymentFixture('Recovery Expired Tenant', 'recovery-expired@example.com', 'Recovery Expired Shop', 'HSF-RECOVERY-EXPIRED', 'successful');
+        $payment->subscription->update(['expires_at' => now()->subMinute()]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(PaymentsIndex::class)
+            ->assertDontSee('Recover access')
+            ->call('generateRecoveryVoucher', $payment->id)
+            ->assertSet('showRecoveryVoucherModal', false)
+            ->assertDispatched('notify');
+
+        $payment->refresh();
+        $this->assertNull($payment->voucher_id);
+    }
+
+    public function test_tenant_admin_cannot_generate_a_recovery_voucher_for_another_tenants_payment(): void
+    {
+        [$payment] = $this->paymentFixture('Recovery Other Tenant', 'recovery-other@example.com', 'Recovery Other Shop', 'HSF-RECOVERY-OTHER', 'successful');
+        $actorTenant = Tenant::create([
+            'company_name' => 'Recovery Actor Tenant',
+            'owner_email' => 'recovery-actor@example.com',
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $actorTenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        try {
+            Livewire::actingAs($user)
+                ->test(PaymentsIndex::class)
+                ->call('generateRecoveryVoucher', $payment->id);
+
+            $this->fail('Expected tenant-scoped recovery voucher generation to hide other tenant payment.');
+        } catch (ModelNotFoundException) {
+            $this->assertTrue(true);
+        }
+
+        $payment->refresh();
+        $this->assertNull($payment->voucher_id);
+    }
+
+    public function test_recovery_voucher_can_be_redeemed_under_a_new_mac_without_a_duplicate_payment(): void
+    {
+        $this->createRadiusTables();
+        [$payment, $tenant, $shop] = $this->paymentFixture('Recovery Redeem Tenant', 'recovery-redeem@example.com', 'Recovery Redeem Shop', 'HSF-RECOVERY-REDEEM', 'successful');
+        $oldMac = $payment->subscription->mac_address;
+        app(RadiusProvisioningService::class)->grantSubscriptionAccess($payment->subscription);
+        $router = Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'Recovery Router',
+            'nas_identifier' => 'recovery-router',
+            'wireguard_internal_ip' => '10.8.0.20',
+            'shared_secret' => 'radius-secret',
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(PaymentsIndex::class)
+            ->call('generateRecoveryVoucher', $payment->id);
+
+        $payment->refresh();
+        $voucher = Voucher::findOrFail($payment->voucher_id);
+        $newMac = 'FF:EE:DD:CC:BB:AA';
+
+        $this->post(route('hotspot.voucher.redeem'), [
+            'mac' => $newMac,
+            'nasid' => $router->nas_identifier,
+            'voucher_code' => $voucher->code,
+            'link-login' => 'http://hotspot.local/login',
+        ])->assertOk()->assertSee('Access provisioned');
+
+        $voucher->refresh();
+        $this->assertSame('used', $voucher->status);
+        $this->assertSame($newMac, $voucher->used_mac_address);
+
+        // Same payment, not a duplicate -- only ever one Voucher per Payment (unique constraint).
+        $this->assertSame(1, Payment::where('voucher_id', $voucher->id)->count());
+        $this->assertSame($payment->id, $voucher->payment->id);
+
+        $this->assertDatabaseHas('subscriptions', [
+            'payment_id' => $payment->id,
+            'mac_address' => $newMac,
+        ]);
+        $this->assertDatabaseHas('radcheck', ['username' => $newMac]);
+        $this->assertDatabaseMissing('radcheck', ['username' => $oldMac]);
     }
 
     private function paymentFixture(string $tenantName, string $ownerEmail, string $shopName, string $txRef, string $status, array $tenantOverrides = []): array

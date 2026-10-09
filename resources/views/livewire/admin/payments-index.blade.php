@@ -184,6 +184,20 @@
                                 @else
                                     <span class="text-xs text-zinc-400 dark:text-zinc-500" title="No provider reference yet">No reference</span>
                                 @endif
+                            @elseif ($payment->status === 'successful' && $payment->subscription && $payment->subscription->expires_at->isFuture() && blank($payment->voucher_id))
+                                <flux:button
+                                    type="button"
+                                    size="xs"
+                                    variant="outline"
+                                    icon="lifebuoy"
+                                    wire:click="generateRecoveryVoucher({{ $payment->id }})"
+                                    wire:confirm="Generate a one-time voucher linked to this payment, and end access for the current MAC ({{ $payment->subscription->mac_address }})? Give the resulting code to the customer to redeem on the portal's voucher box."
+                                    wire:loading.attr="disabled"
+                                    wire:target="generateRecoveryVoucher({{ $payment->id }})"
+                                >
+                                    <span wire:loading.remove wire:target="generateRecoveryVoucher({{ $payment->id }})">Recover access</span>
+                                    <span wire:loading wire:target="generateRecoveryVoucher({{ $payment->id }})">Generating...</span>
+                                </flux:button>
                             @else
                                 <span class="text-xs text-zinc-400 dark:text-zinc-500">-</span>
                             @endif
@@ -197,4 +211,33 @@
     </div>
 
     <div class="mt-4">{{ $payments->links() }}</div>
+
+    <flux:modal wire:model.self="showRecoveryVoucherModal" class="max-w-md" :dismissible="true">
+        <div class="space-y-4" x-data="{ copied: false }">
+            <div>
+                <flux:heading size="lg">Recovery voucher generated</flux:heading>
+                <flux:subheading>
+                    For payment {{ $recoveryVoucherTxRef }}. Read this code out to the customer -- they enter it in the "Have a voucher?" box on the hotspot portal to get access under their current device, with nothing charged again.
+                </flux:subheading>
+            </div>
+
+            <div class="flex items-center justify-between gap-3 rounded-md border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-4 py-3">
+                <span class="font-mono text-lg font-semibold tracking-wide">{{ $recoveryVoucherCode }}</span>
+                <flux:button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    icon="clipboard"
+                    @click="copied = await window.copyText(@js($recoveryVoucherCode)); setTimeout(() => copied = false, 1800)"
+                >
+                    <span x-show="! copied">Copy</span>
+                    <span x-cloak x-show="copied">Copied</span>
+                </flux:button>
+            </div>
+
+            <div class="flex justify-end">
+                <flux:button type="button" variant="ghost" wire:click="closeRecoveryVoucherModal">Close</flux:button>
+            </div>
+        </div>
+    </flux:modal>
 </div>

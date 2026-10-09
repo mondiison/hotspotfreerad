@@ -5,8 +5,10 @@ namespace App\Livewire\Admin;
 use App\Models\Payment;
 use App\Services\HotspotPaymentConfirmationService;
 use App\Services\PaymentReportService;
+use App\Services\VoucherManagementService;
 use App\Support\PaymentGatewayCatalog;
 use App\Support\TenantAccess;
+use Illuminate\Validation\ValidationException;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -25,6 +27,12 @@ class PaymentsIndex extends Component
     public string $status = '';
 
     public string $provider = '';
+
+    public bool $showRecoveryVoucherModal = false;
+
+    public ?string $recoveryVoucherCode = null;
+
+    public ?string $recoveryVoucherTxRef = null;
 
     protected $queryString = [
         'preset' => ['except' => ''],
@@ -170,6 +178,46 @@ class PaymentsIndex extends Component
         }
 
         $this->dispatch('notify', type: 'success', message: 'Payment verified and hotspot access provisioned.');
+    }
+
+    /**
+     * 2026-10-09, direct request after a live report: a customer's payment
+     * was confirmed successful and the subscription showed "Provisioned",
+     * but their device stayed stuck on the login screen -- almost
+     * certainly a MAC mismatch (the same randomization story
+     * SubscriptionsIndex::changeMacAddress() exists for), except here
+     * there's no known new MAC to retarget directly since this is a remote
+     * support call. Generates a one-off voucher linked back to this exact
+     * payment (see VoucherManagementService::generateRecoveryVoucher() for
+     * why this never creates a second payment row) and shows the resulting
+     * code in a copyable modal so it can be read out to the customer to
+     * redeem themselves from the portal's own voucher box.
+     */
+    public function generateRecoveryVoucher(int $paymentId, VoucherManagementService $vouchers): void
+    {
+        $payment = TenantAccess::scopePayments(
+            Payment::query()->with(['shop.tenant', 'package', 'subscription']),
+            auth()->user()
+        )->findOrFail($paymentId);
+
+        try {
+            $voucher = $vouchers->generateRecoveryVoucher($payment, auth()->user());
+        } catch (ValidationException $exception) {
+            $this->dispatch('notify', type: 'warning', message: collect($exception->errors())->flatten()->first());
+
+            return;
+        }
+
+        $this->recoveryVoucherCode = $voucher->code;
+        $this->recoveryVoucherTxRef = $payment->tx_ref;
+        $this->showRecoveryVoucherModal = true;
+    }
+
+    public function closeRecoveryVoucherModal(): void
+    {
+        $this->showRecoveryVoucherModal = false;
+        $this->recoveryVoucherCode = null;
+        $this->recoveryVoucherTxRef = null;
     }
 
     /**
