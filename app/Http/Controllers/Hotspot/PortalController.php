@@ -407,6 +407,17 @@ class PortalController extends Controller
 
         $radius->changeSubscriptionMacAddress($previousSubscription, $currentMac);
 
+        // 2026-10-09: changeSubscriptionMacAddress() already moved
+        // mac_address itself -- this is purely an audit trail, so staff
+        // investigating a customer's access (the same "Access Activity"
+        // panel the manual "Change device" action lives on) can see that
+        // it happened automatically and what MAC it moved from, rather
+        // than this only ever being visible in the server's log file.
+        $previousSubscription->forceFill([
+            'mac_recovered_from' => $previousMac,
+            'mac_auto_recovered_at' => now(),
+        ])->save();
+
         Log::info('Automatically recovered hotspot access after a device MAC change', [
             'shop_id' => $router->shop_id,
             'subscription_id' => $previousSubscription->id,

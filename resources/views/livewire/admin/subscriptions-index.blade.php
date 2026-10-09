@@ -213,6 +213,19 @@
                                     Change device
                                 </button>
                             </flux:text>
+
+                            {{--
+                                2026-10-09: audit trail for the automated MAC-change
+                                recovery (shops.auto_recover_mac_changes) -- so staff
+                                investigating a customer's access can see this moved
+                                on its own, and from what MAC, without needing to read
+                                the server's log file.
+                            --}}
+                            @if ($selectedSubscription->mac_auto_recovered_at)
+                                <p class="mt-1 text-xs text-amber-700 dark:text-amber-500">
+                                    Auto-recovered from {{ $selectedSubscription->mac_recovered_from }} {{ $selectedSubscription->mac_auto_recovered_at->diffForHumans() }}
+                                </p>
+                            @endif
                         @else
                             {{--
                                 2026-10-09, direct request: a phone's privacy-randomized

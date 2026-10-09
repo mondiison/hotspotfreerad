@@ -2,8 +2,8 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Subscription extends Model
 {
@@ -15,6 +15,7 @@ class Subscription extends Model
             'starts_at' => 'datetime',
             'expires_at' => 'datetime',
             'is_throttled' => 'boolean',
+            'mac_auto_recovered_at' => 'datetime',
         ];
     }
 

@@ -983,6 +983,7 @@ class HotspotPortalTest extends TestCase
         $this->assertDatabaseHas('subscriptions', [
             'shop_id' => $router->shop_id,
             'mac_address' => 'AA:BB:CC:DD:EE:02',
+            'mac_recovered_from' => 'AA:BB:CC:DD:EE:01',
         ]);
         $this->assertDatabaseMissing('subscriptions', [
             'shop_id' => $router->shop_id,
@@ -990,6 +991,8 @@ class HotspotPortalTest extends TestCase
         ]);
         $this->assertDatabaseHas('radcheck', ['username' => 'AA:BB:CC:DD:EE:02']);
         $this->assertDatabaseMissing('radcheck', ['username' => 'AA:BB:CC:DD:EE:01']);
+
+        $this->assertNotNull(Subscription::where('mac_address', 'AA:BB:CC:DD:EE:02')->first()->mac_auto_recovered_at);
     }
 
     public function test_auto_recover_mac_changes_does_nothing_when_shop_has_not_enabled_it(): void

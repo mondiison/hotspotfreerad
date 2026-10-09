@@ -189,6 +189,16 @@ class RadiusProvisioningService
      * old MAC's rows via the existing revokeMacAccess() guard, so a MAC
      * still legitimately shared with a PosDevice/TrustedWifiDevice is left
      * alone rather than wiped as a side effect.
+     *
+     * This one method backs both the admin-facing "Change device" action
+     * and PortalController's automated recovery, so any change here --
+     * whichever path it came from -- clears a stale mac_recovered_from/
+     * mac_auto_recovered_at note from an EARLIER automated recovery, since
+     * that note describes a state this call is about to replace. The
+     * automated caller re-sets both fields itself right after this
+     * returns if that's what triggered the move; a manual "Change device"
+     * never does, so this is also what makes a stale note disappear once
+     * staff has since intervened by hand.
      */
     public function changeSubscriptionMacAddress(Subscription $subscription, string $newMacAddress): void
     {
@@ -199,7 +209,11 @@ class RadiusProvisioningService
             return;
         }
 
-        $subscription->forceFill(['mac_address' => $newMacAddress])->save();
+        $subscription->forceFill([
+            'mac_address' => $newMacAddress,
+            'mac_recovered_from' => null,
+            'mac_auto_recovered_at' => null,
+        ])->save();
 
         if ($subscription->expires_at->isFuture()) {
             $this->grantSubscriptionAccess($subscription);

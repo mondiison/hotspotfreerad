@@ -431,6 +431,40 @@ class AdminSubscriptionIndexTest extends TestCase
         $this->assertDatabaseMissing('radusergroup', ['username' => 'AA:BB:CC:DD:EE:50']);
     }
 
+    /**
+     * 2026-10-09: a subsequent manual "Change device" should clear a
+     * stale mac_recovered_from/mac_auto_recovered_at note left by an
+     * EARLIER automated recovery -- otherwise staff would see an old,
+     * no-longer-current "Auto-recovered from ..." line after they've
+     * since intervened by hand.
+     */
+    public function test_manually_changing_mac_clears_a_stale_auto_recovery_note(): void
+    {
+        [$subscription, $tenant] = $this->subscriptionFixture('MAC Note Tenant', 'mac-note@example.com', 'MAC Note Shop', 'AA:BB:CC:DD:EE:55', true);
+        $subscription->forceFill([
+            'mac_recovered_from' => 'AA:BB:CC:DD:EE:00',
+            'mac_auto_recovered_at' => now()->subHour(),
+        ])->save();
+
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(SubscriptionsIndex::class)
+            ->call('inspect', $subscription->id)
+            ->call('startEditingMacAddress')
+            ->set('newMacAddress', 'FF:EE:DD:CC:BB:99')
+            ->call('changeMacAddress')
+            ->assertHasNoErrors('newMacAddress');
+
+        $subscription->refresh();
+        $this->assertNull($subscription->mac_recovered_from);
+        $this->assertNull($subscription->mac_auto_recovered_at);
+    }
+
     public function test_change_mac_address_rejects_an_invalid_mac(): void
     {
         [$subscription, $tenant] = $this->subscriptionFixture('MAC Invalid Tenant', 'mac-invalid@example.com', 'MAC Invalid Shop', 'AA:BB:CC:DD:EE:51', true);
