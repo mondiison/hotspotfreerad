@@ -35,6 +35,10 @@ class SubscriptionsIndex extends Component
 
     public string $newMacAddress = '';
 
+    public string $sortBy = 'created_at';
+
+    public string $sortDirection = 'desc';
+
     protected $queryString = [
         'preset' => ['except' => ''],
         'from' => ['except' => ''],
@@ -43,6 +47,8 @@ class SubscriptionsIndex extends Component
         'status' => ['except' => ''],
         'source' => ['except' => ''],
         'throttled' => ['except' => ''],
+        'sortBy' => ['except' => 'created_at'],
+        'sortDirection' => ['except' => 'desc'],
     ];
 
     public function mount(array $filters = []): void
@@ -98,6 +104,29 @@ class SubscriptionsIndex extends Component
     public function clearFilters(): void
     {
         $this->reset(['preset', 'from', 'to', 'search', 'status', 'source', 'throttled']);
+        $this->resetPage();
+    }
+
+    /**
+     * 2026-10-09, direct request: "sort by date ASC or DEC for Access
+     * window, Created" -- these are the only two date columns on this
+     * table (expires_at behind "Access window", created_at behind the
+     * "Created ..." sub-line on "Device"), so the allow-list below is
+     * exhaustive by design, not a placeholder for more columns later.
+     */
+    public function sortByColumn(string $column): void
+    {
+        if (! in_array($column, ['created_at', 'expires_at'], true)) {
+            return;
+        }
+
+        if ($this->sortBy === $column) {
+            $this->sortDirection = $this->sortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+            $this->sortBy = $column;
+            $this->sortDirection = 'desc';
+        }
+
         $this->resetPage();
     }
 
@@ -188,7 +217,7 @@ class SubscriptionsIndex extends Component
 
         $query = $reports->query(auth()->user(), $filters);
 
-        $subscriptions = $query->latest()->paginate(20);
+        $subscriptions = $query->orderBy($this->sortBy, $this->sortDirection)->paginate(20);
         $reports->attachUsage($subscriptions->getCollection());
 
         return view('livewire.admin.subscriptions-index', [

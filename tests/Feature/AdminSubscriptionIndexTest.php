@@ -494,6 +494,71 @@ class AdminSubscriptionIndexTest extends TestCase
             ->assertForbidden();
     }
 
+    /**
+     * 2026-10-09, direct request: "sort by date ASC or DEC for Access
+     * window, Created". Clicking a date column header toggles that
+     * column's direction; clicking a different column always starts
+     * descending (newest / furthest-expiring first).
+     */
+    public function test_subscriptions_can_be_sorted_by_created_at_and_expires_at(): void
+    {
+        [$older, $tenant] = $this->subscriptionFixture('Sort Tenant', 'sort@example.com', 'Sort Shop One', 'AA:BB:CC:DD:EE:61', true);
+        [$newer] = $this->subscriptionFixture('Sort Tenant', 'sort@example.com', 'Sort Shop Two', 'AA:BB:CC:DD:EE:62', true, 'One Hour Ultra', $tenant);
+
+        $older->forceFill(['created_at' => now()->subDays(2), 'expires_at' => now()->addDays(5)])->save();
+        $newer->forceFill(['created_at' => now()->subDay(), 'expires_at' => now()->addDay()])->save();
+
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        // Default: created_at desc -- newest first.
+        Livewire::actingAs($user)
+            ->test(SubscriptionsIndex::class)
+            ->assertSeeHtmlInOrder([$newer->mac_address, $older->mac_address]);
+
+        // First click on created_at (already the active column) toggles to asc -- oldest first.
+        Livewire::actingAs($user)
+            ->test(SubscriptionsIndex::class)
+            ->call('sortByColumn', 'created_at')
+            ->assertSet('sortDirection', 'asc')
+            ->assertSeeHtmlInOrder([$older->mac_address, $newer->mac_address]);
+
+        // Switching to expires_at always starts desc -- furthest-expiring first.
+        Livewire::actingAs($user)
+            ->test(SubscriptionsIndex::class)
+            ->call('sortByColumn', 'expires_at')
+            ->assertSet('sortBy', 'expires_at')
+            ->assertSet('sortDirection', 'desc')
+            ->assertSeeHtmlInOrder([$older->mac_address, $newer->mac_address]);
+
+        // Clicking expires_at again toggles to asc -- soonest-expiring first.
+        Livewire::actingAs($user)
+            ->test(SubscriptionsIndex::class)
+            ->call('sortByColumn', 'expires_at')
+            ->call('sortByColumn', 'expires_at')
+            ->assertSet('sortDirection', 'asc')
+            ->assertSeeHtmlInOrder([$newer->mac_address, $older->mac_address]);
+    }
+
+    public function test_sort_by_column_ignores_an_unknown_column(): void
+    {
+        [, $tenant] = $this->subscriptionFixture('Sort Guard Tenant', 'sort-guard@example.com', 'Sort Guard Shop', 'AA:BB:CC:DD:EE:63', true);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(SubscriptionsIndex::class)
+            ->call('sortByColumn', 'payment_id')
+            ->assertSet('sortBy', 'created_at')
+            ->assertSet('sortDirection', 'desc');
+    }
+
     private function subscriptionFixture(
         string $tenantName,
         string $ownerEmail,
