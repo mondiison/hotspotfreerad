@@ -188,7 +188,7 @@ class SubscriptionsIndex extends Component
 
         $query = $reports->query(auth()->user(), $filters);
 
-        $subscriptions = $query->latest('expires_at')->paginate(20);
+        $subscriptions = $query->latest()->paginate(20);
         $reports->attachUsage($subscriptions->getCollection());
 
         return view('livewire.admin.subscriptions-index', [
