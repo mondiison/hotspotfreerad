@@ -203,11 +203,40 @@
 
             <div class="space-y-6">
                 <div class="flex flex-col justify-between gap-3 md:flex-row md:items-start">
-                    <div>
+                    <div class="min-w-0">
                         <flux:heading level="2" size="lg">Access Activity</flux:heading>
-                        <flux:text class="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
-                            {{ $selectedSubscription->mac_address }} on {{ $selectedSubscription->shop?->name ?? 'Deleted shop' }}
-                        </flux:text>
+
+                        @if (! $editingMacAddress)
+                            <flux:text class="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
+                                {{ $selectedSubscription->mac_address }} on {{ $selectedSubscription->shop?->name ?? 'Deleted shop' }}
+                                <button type="button" class="ml-2 text-xs font-medium underline decoration-zinc-300 underline-offset-4 text-blue-600 dark:text-blue-400" wire:click="startEditingMacAddress">
+                                    Change device
+                                </button>
+                            </flux:text>
+                        @else
+                            {{--
+                                2026-10-09, direct request: a phone's privacy-randomized
+                                MAC can change on reconnect, leaving an already-paid
+                                customer stuck on the payment page again under their
+                                device's new MAC. This retargets the same paid
+                                subscription at the new MAC instead of a second charge.
+                            --}}
+                            <div class="mt-2">
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <flux:input wire:model="newMacAddress" placeholder="AA:BB:CC:DD:EE:FF" size="sm" class="w-48" />
+                                    <flux:button type="button" size="sm" variant="primary" wire:click="changeMacAddress" wire:loading.attr="disabled" wire:target="changeMacAddress">
+                                        Save
+                                    </flux:button>
+                                    <flux:button type="button" size="sm" variant="ghost" wire:click="$set('editingMacAddress', false)">
+                                        Cancel
+                                    </flux:button>
+                                </div>
+                                <flux:error name="newMacAddress" />
+                                <p class="mt-1 text-xs text-zinc-400 dark:text-zinc-500">
+                                    Use this if the customer's phone presented a new (randomized) MAC and they're being asked to pay again for access they already own.
+                                </p>
+                            </div>
+                        @endif
                     </div>
 
                     <flux:badge :color="$selectedSubscription->expires_at->isFuture() ? 'green' : 'zinc'">

@@ -9,6 +9,7 @@ use App\Models\Shop;
 use App\Models\Subscription;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\RadiusProvisioningService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -390,6 +391,107 @@ class AdminSubscriptionIndexTest extends TestCase
             ->assertDontSee($otherSubscription->mac_address)
             ->assertSee('Own Live Shop')
             ->assertDontSee('Other Live Shop');
+    }
+
+    /**
+     * 2026-10-09, direct request: iOS/Android's per-network MAC
+     * randomization can present a genuinely different MAC on reconnect,
+     * leaving an already-paid customer stuck on the payment page again.
+     * Staff can retarget the same paid subscription at the device's new
+     * MAC instead of a second charge -- RADIUS access must follow it.
+     */
+    public function test_staff_can_change_a_subscriptions_mac_address_and_radius_access_follows(): void
+    {
+        [$subscription, $tenant] = $this->subscriptionFixture('MAC Change Tenant', 'mac-change@example.com', 'MAC Change Shop', 'AA:BB:CC:DD:EE:50', true);
+        app(RadiusProvisioningService::class)->grantSubscriptionAccess($subscription);
+
+        $this->assertDatabaseHas('radcheck', ['username' => 'AA:BB:CC:DD:EE:50']);
+        $this->assertDatabaseHas('radusergroup', ['username' => 'AA:BB:CC:DD:EE:50']);
+
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(SubscriptionsIndex::class)
+            ->call('inspect', $subscription->id)
+            ->call('startEditingMacAddress')
+            ->assertSet('editingMacAddress', true)
+            ->set('newMacAddress', 'ff-ee-dd-cc-bb-aa')
+            ->call('changeMacAddress')
+            ->assertSet('editingMacAddress', false)
+            ->assertHasNoErrors('newMacAddress');
+
+        $this->assertSame('FF:EE:DD:CC:BB:AA', $subscription->fresh()->mac_address);
+        $this->assertDatabaseHas('radcheck', ['username' => 'FF:EE:DD:CC:BB:AA']);
+        $this->assertDatabaseHas('radusergroup', ['username' => 'FF:EE:DD:CC:BB:AA']);
+        $this->assertDatabaseMissing('radcheck', ['username' => 'AA:BB:CC:DD:EE:50']);
+        $this->assertDatabaseMissing('radusergroup', ['username' => 'AA:BB:CC:DD:EE:50']);
+    }
+
+    public function test_change_mac_address_rejects_an_invalid_mac(): void
+    {
+        [$subscription, $tenant] = $this->subscriptionFixture('MAC Invalid Tenant', 'mac-invalid@example.com', 'MAC Invalid Shop', 'AA:BB:CC:DD:EE:51', true);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(SubscriptionsIndex::class)
+            ->call('inspect', $subscription->id)
+            ->set('newMacAddress', 'not-a-mac')
+            ->call('changeMacAddress')
+            ->assertHasErrors('newMacAddress');
+
+        $this->assertSame('AA:BB:CC:DD:EE:51', $subscription->fresh()->mac_address);
+    }
+
+    public function test_change_mac_address_rejects_a_mac_already_active_for_another_subscription_at_the_same_shop(): void
+    {
+        [$subscriptionOne, $tenant, $shop] = $this->subscriptionFixture('MAC Collision Tenant', 'mac-collision@example.com', 'MAC Collision Shop', 'AA:BB:CC:DD:EE:52', true);
+        $subscriptionTwo = Subscription::create([
+            'shop_id' => $shop->id,
+            'package_id' => $subscriptionOne->package_id,
+            'mac_address' => 'AA:BB:CC:DD:EE:53',
+            'starts_at' => now()->subMinutes(10),
+            'expires_at' => now()->addHour(),
+            'is_throttled' => false,
+        ]);
+
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(SubscriptionsIndex::class)
+            ->call('inspect', $subscriptionOne->id)
+            ->set('newMacAddress', 'AA:BB:CC:DD:EE:53')
+            ->call('changeMacAddress')
+            ->assertHasErrors('newMacAddress');
+
+        $this->assertSame('AA:BB:CC:DD:EE:52', $subscriptionOne->fresh()->mac_address);
+        $this->assertSame('AA:BB:CC:DD:EE:53', $subscriptionTwo->fresh()->mac_address);
+    }
+
+    public function test_change_mac_address_is_blocked_across_tenants(): void
+    {
+        [$subscription] = $this->subscriptionFixture('MAC Cross Tenant', 'mac-cross@example.com', 'MAC Cross Shop', 'AA:BB:CC:DD:EE:54', true);
+        $otherUser = User::factory()->create([
+            'tenant_id' => Tenant::create(['company_name' => 'Other MAC Tenant', 'owner_email' => 'other-mac@example.com'])->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs($otherUser)
+            ->test(SubscriptionsIndex::class)
+            ->call('inspect', $subscription->id)
+            ->assertForbidden();
     }
 
     private function subscriptionFixture(

@@ -3,6 +3,7 @@
 namespace App\Livewire\Admin;
 
 use App\Models\Subscription;
+use App\Services\RadiusProvisioningService;
 use App\Services\SubscriptionReportService;
 use App\Support\TenantAccess;
 use Livewire\Component;
@@ -29,6 +30,10 @@ class SubscriptionsIndex extends Component
     public bool $showInspectModal = false;
 
     public ?int $selectedSubscriptionId = null;
+
+    public bool $editingMacAddress = false;
+
+    public string $newMacAddress = '';
 
     protected $queryString = [
         'preset' => ['except' => ''],
@@ -102,6 +107,9 @@ class SubscriptionsIndex extends Component
         TenantAccess::assertSubscription($subscription, auth()->user());
 
         $this->selectedSubscriptionId = $subscription->id;
+        $this->editingMacAddress = false;
+        $this->newMacAddress = '';
+        $this->resetErrorBag('newMacAddress');
         $this->showInspectModal = true;
     }
 
@@ -109,6 +117,57 @@ class SubscriptionsIndex extends Component
     {
         $this->showInspectModal = false;
         $this->selectedSubscriptionId = null;
+        $this->editingMacAddress = false;
+        $this->newMacAddress = '';
+    }
+
+    public function startEditingMacAddress(): void
+    {
+        $this->newMacAddress = '';
+        $this->resetErrorBag('newMacAddress');
+        $this->editingMacAddress = true;
+    }
+
+    /**
+     * 2026-10-09, direct request: a customer's phone presenting a new
+     * (privacy-randomized) MAC on reconnect has no active subscription
+     * under that MAC and gets sent back to the payment page for access
+     * they already paid for. Lets staff retarget the subscription at the
+     * device's new MAC instead.
+     */
+    public function changeMacAddress(RadiusProvisioningService $radius): void
+    {
+        $subscription = Subscription::findOrFail($this->selectedSubscriptionId);
+        TenantAccess::assertSubscription($subscription, auth()->user());
+
+        $this->validate(['newMacAddress' => ['required', 'string', 'max:64']]);
+
+        $normalized = $radius->normalizeMacAddress($this->newMacAddress);
+
+        if (strlen(str_replace(':', '', $normalized)) !== 12) {
+            $this->addError('newMacAddress', 'Enter a valid MAC address (6 pairs of hex digits, e.g. AA:BB:CC:DD:EE:FF).');
+
+            return;
+        }
+
+        $collision = Subscription::query()
+            ->where('shop_id', $subscription->shop_id)
+            ->where('mac_address', $normalized)
+            ->where('id', '!=', $subscription->id)
+            ->where('expires_at', '>', now())
+            ->exists();
+
+        if ($collision) {
+            $this->addError('newMacAddress', 'Another active subscription at this shop already uses that MAC address.');
+
+            return;
+        }
+
+        $radius->changeSubscriptionMacAddress($subscription, $normalized);
+
+        $this->editingMacAddress = false;
+        $this->newMacAddress = '';
+        $this->dispatch('notify', message: 'Device MAC address updated -- access has moved to the new device.');
     }
 
     public function render(SubscriptionReportService $reports)

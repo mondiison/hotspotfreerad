@@ -177,6 +177,38 @@ class RadiusProvisioningService
     }
 
     /**
+     * 2026-10-09, direct request: iOS/Android's per-network MAC
+     * randomization can present a genuinely different MAC address on a
+     * later reconnect than the one a customer originally paid under,
+     * leaving them staring at a payment page again for access they
+     * already own. Retargets an already-saved subscription at the
+     * device's new MAC instead of the customer paying twice -- grants
+     * RADIUS access to the new MAC via the same syncPackageProfile() path
+     * a fresh purchase already uses (skipped for an already-expired
+     * subscription, since there's nothing live to grant), then revokes the
+     * old MAC's rows via the existing revokeMacAccess() guard, so a MAC
+     * still legitimately shared with a PosDevice/TrustedWifiDevice is left
+     * alone rather than wiped as a side effect.
+     */
+    public function changeSubscriptionMacAddress(Subscription $subscription, string $newMacAddress): void
+    {
+        $oldMacAddress = $subscription->mac_address;
+        $newMacAddress = $this->normalizeMacAddress($newMacAddress);
+
+        if ($newMacAddress === $oldMacAddress) {
+            return;
+        }
+
+        $subscription->forceFill(['mac_address' => $newMacAddress])->save();
+
+        if ($subscription->expires_at->isFuture()) {
+            $this->grantSubscriptionAccess($subscription);
+        }
+
+        $this->revokeMacAccess($oldMacAddress);
+    }
+
+    /**
      * Confirmed live 2026-09-23: radcheck/radreply/radusergroup are keyed
      * purely by username (a MAC address string), with no feature/type
      * discriminator -- a single MAC can simultaneously back a hotspot
@@ -386,7 +418,7 @@ class RadiusProvisioningService
         ];
     }
 
-    private function normalizeMacAddress(string $macAddress): string
+    public function normalizeMacAddress(string $macAddress): string
     {
         $hex = Str::of($macAddress)
             ->upper()
