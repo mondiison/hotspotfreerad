@@ -19,6 +19,7 @@ class ShopManagementService
             'contact_phone' => ['nullable', 'string', 'max:255'],
             'is_active' => ['nullable', 'boolean'],
             'allow_test_access' => ['nullable', 'boolean'],
+            'auto_recover_mac_changes' => ['nullable', 'boolean'],
             'trial_enabled' => ['nullable', 'boolean'],
             'trial_duration_minutes' => ['nullable', 'integer', 'min:1', 'max:1440'],
             'trial_max_uses_per_day' => ['nullable', 'integer', 'min:1', 'max:255'],
@@ -67,6 +68,7 @@ class ShopManagementService
         $data['contact_phone'] = filled($data['contact_phone'] ?? null) ? $data['contact_phone'] : null;
         $data['is_active'] = (bool) ($data['is_active'] ?? false);
         $data['allow_test_access'] = (bool) ($data['allow_test_access'] ?? false);
+        $data['auto_recover_mac_changes'] = (bool) ($data['auto_recover_mac_changes'] ?? false);
         $data['trial_enabled'] = (bool) ($data['trial_enabled'] ?? false);
         $data['trial_duration_minutes'] = (int) ($data['trial_duration_minutes'] ?? 15);
         $data['trial_max_uses_per_day'] = (int) ($data['trial_max_uses_per_day'] ?? 1);

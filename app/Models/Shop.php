@@ -28,6 +28,7 @@ class Shop extends Model
             'flutterwave_webhook_secret' => 'encrypted',
             'is_active' => 'boolean',
             'allow_test_access' => 'boolean',
+            'auto_recover_mac_changes' => 'boolean',
             'trial_enabled' => 'boolean',
             'trial_duration_minutes' => 'integer',
             'trial_max_uses_per_day' => 'integer',

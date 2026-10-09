@@ -47,6 +47,8 @@ class ShopsIndex extends Component
 
     public bool $allow_test_access = false;
 
+    public bool $auto_recover_mac_changes = false;
+
     public bool $trial_enabled = false;
 
     public int $trial_duration_minutes = 15;
@@ -98,6 +100,7 @@ class ShopsIndex extends Component
         $this->contact_phone = (string) $shop->contact_phone;
         $this->is_active = (bool) $shop->is_active;
         $this->allow_test_access = (bool) $shop->allow_test_access;
+        $this->auto_recover_mac_changes = (bool) $shop->auto_recover_mac_changes;
         $this->trial_enabled = (bool) $shop->trial_enabled;
         $this->trial_duration_minutes = (int) $shop->trial_duration_minutes;
         $this->trial_max_uses_per_day = (int) $shop->trial_max_uses_per_day;
@@ -215,6 +218,7 @@ class ShopsIndex extends Component
         ]);
         $this->is_active = true;
         $this->allow_test_access = false;
+        $this->auto_recover_mac_changes = false;
         $this->trial_enabled = false;
         $this->trial_duration_minutes = 15;
         $this->trial_max_uses_per_day = 1;

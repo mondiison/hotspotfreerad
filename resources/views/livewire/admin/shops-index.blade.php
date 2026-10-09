@@ -148,6 +148,11 @@
                         <flux:description>Shows a "Start test access" button inside every package's details on this shop's captive portal, granting that package's full duration and bandwidth with no payment. Intended for staff to verify a router/package is working -- not a customer-facing promotion. Off by default.</flux:description>
                     </flux:field>
 
+                    <flux:field class="md:col-span-2">
+                        <flux:checkbox wire:model.live="auto_recover_mac_changes" label="Automatically recover access when a device's MAC address changes" />
+                        <flux:description>iOS/Android can present a different (privacy-randomized) MAC address on reconnect, leaving an already-paid customer stuck on the login screen for access they already own. When on, a device recognized by its recognition cookie as one that still has an active subscription under a different MAC is moved to its current MAC automatically, with no support contact needed -- skipped entirely if the new MAC already has its own active subscription. Off by default.</flux:description>
+                    </flux:field>
+
                     <div class="md:col-span-2 rounded-lg border border-zinc-200 dark:border-zinc-700 p-4">
                         <flux:field>
                             <flux:checkbox wire:model.live="trial_enabled" label="Enable free trial (customer-facing promotion)" />

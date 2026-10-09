@@ -949,6 +949,141 @@ class HotspotPortalTest extends TestCase
             ->assertSee('Router not registered');
     }
 
+    /**
+     * 2026-10-09, direct request: purely a customer-experience
+     * improvement so a customer whose phone presents a new (randomized)
+     * MAC never has to contact support at all. The recognition cookie
+     * (set on the earlier visit, under the OLD mac) survives the MAC
+     * change since it lives in browser storage, not the Wi-Fi radio --
+     * reused here to auto-heal the exact "paid but stuck on login" case.
+     */
+    public function test_auto_recover_mac_changes_moves_access_to_the_new_mac_when_enabled(): void
+    {
+        [$router, $package] = $this->routerWithPackage();
+        $router->shop->update(['auto_recover_mac_changes' => true]);
+
+        Subscription::create([
+            'shop_id' => $router->shop_id,
+            'package_id' => $package->id,
+            'mac_address' => 'AA:BB:CC:DD:EE:01',
+            'starts_at' => now()->subMinutes(5),
+            'expires_at' => now()->addHour(),
+            'is_throttled' => false,
+        ]);
+
+        $firstVisit = $this->get('/hotspot/portal?mac=AA:BB:CC:DD:EE:01&nasid='.$router->nas_identifier)
+            ->assertOk();
+        $rawCookie = $firstVisit->getCookie('hotspot_device')->getValue();
+
+        $this->withCookie('hotspot_device', $rawCookie)
+            ->get('/hotspot/portal?mac=AA:BB:CC:DD:EE:02&nasid='.$router->nas_identifier)
+            ->assertOk()
+            ->assertSee('Access provisioned');
+
+        $this->assertDatabaseHas('subscriptions', [
+            'shop_id' => $router->shop_id,
+            'mac_address' => 'AA:BB:CC:DD:EE:02',
+        ]);
+        $this->assertDatabaseMissing('subscriptions', [
+            'shop_id' => $router->shop_id,
+            'mac_address' => 'AA:BB:CC:DD:EE:01',
+        ]);
+        $this->assertDatabaseHas('radcheck', ['username' => 'AA:BB:CC:DD:EE:02']);
+        $this->assertDatabaseMissing('radcheck', ['username' => 'AA:BB:CC:DD:EE:01']);
+    }
+
+    public function test_auto_recover_mac_changes_does_nothing_when_shop_has_not_enabled_it(): void
+    {
+        [$router, $package] = $this->routerWithPackage();
+        $this->assertFalse($router->shop->fresh()->auto_recover_mac_changes);
+
+        Subscription::create([
+            'shop_id' => $router->shop_id,
+            'package_id' => $package->id,
+            'mac_address' => 'AA:BB:CC:DD:EE:01',
+            'starts_at' => now()->subMinutes(5),
+            'expires_at' => now()->addHour(),
+            'is_throttled' => false,
+        ]);
+
+        $firstVisit = $this->get('/hotspot/portal?mac=AA:BB:CC:DD:EE:01&nasid='.$router->nas_identifier)
+            ->assertOk();
+        $rawCookie = $firstVisit->getCookie('hotspot_device')->getValue();
+
+        $this->withCookie('hotspot_device', $rawCookie)
+            ->get('/hotspot/portal?mac=AA:BB:CC:DD:EE:02&nasid='.$router->nas_identifier)
+            ->assertOk()
+            ->assertSee('Choose internet access')
+            ->assertDontSee('Access provisioned');
+
+        $this->assertDatabaseHas('subscriptions', [
+            'shop_id' => $router->shop_id,
+            'mac_address' => 'AA:BB:CC:DD:EE:01',
+            'expires_at' => now()->addHour(),
+        ]);
+    }
+
+    public function test_auto_recover_mac_changes_does_not_clobber_a_devices_own_active_subscription(): void
+    {
+        [$router, $package] = $this->routerWithPackage();
+        $router->shop->update(['auto_recover_mac_changes' => true]);
+
+        Subscription::create([
+            'shop_id' => $router->shop_id,
+            'package_id' => $package->id,
+            'mac_address' => 'AA:BB:CC:DD:EE:01',
+            'starts_at' => now()->subMinutes(5),
+            'expires_at' => now()->addHour(),
+            'is_throttled' => false,
+        ]);
+        Subscription::create([
+            'shop_id' => $router->shop_id,
+            'package_id' => $package->id,
+            'mac_address' => 'AA:BB:CC:DD:EE:02',
+            'starts_at' => now()->subMinutes(5),
+            'expires_at' => now()->addMinutes(30),
+            'is_throttled' => false,
+        ]);
+
+        $firstVisit = $this->get('/hotspot/portal?mac=AA:BB:CC:DD:EE:01&nasid='.$router->nas_identifier)
+            ->assertOk();
+        $rawCookie = $firstVisit->getCookie('hotspot_device')->getValue();
+
+        $this->withCookie('hotspot_device', $rawCookie)
+            ->get('/hotspot/portal?mac=AA:BB:CC:DD:EE:02&nasid='.$router->nas_identifier)
+            ->assertOk()
+            ->assertSee('Access provisioned');
+
+        // Both rows survive untouched -- the device's own active subscription
+        // was never at risk of being overwritten by someone else's cookie.
+        $this->assertDatabaseHas('subscriptions', [
+            'shop_id' => $router->shop_id,
+            'mac_address' => 'AA:BB:CC:DD:EE:01',
+        ]);
+        $this->assertDatabaseHas('subscriptions', [
+            'shop_id' => $router->shop_id,
+            'mac_address' => 'AA:BB:CC:DD:EE:02',
+        ]);
+    }
+
+    public function test_auto_recover_mac_changes_does_nothing_when_previous_mac_has_no_active_subscription(): void
+    {
+        [$router, $package] = $this->routerWithPackage();
+        $router->shop->update(['auto_recover_mac_changes' => true]);
+
+        $firstVisit = $this->get('/hotspot/portal?mac=AA:BB:CC:DD:EE:01&nasid='.$router->nas_identifier)
+            ->assertOk();
+        $rawCookie = $firstVisit->getCookie('hotspot_device')->getValue();
+
+        $this->withCookie('hotspot_device', $rawCookie)
+            ->get('/hotspot/portal?mac=AA:BB:CC:DD:EE:02&nasid='.$router->nas_identifier)
+            ->assertOk()
+            ->assertSee('Choose internet access')
+            ->assertDontSee('Access provisioned');
+
+        $this->assertDatabaseMissing('subscriptions', ['shop_id' => $router->shop_id]);
+    }
+
     public function test_start_trial_is_blocked_when_shop_disables_free_trial(): void
     {
         [$router, $package] = $this->routerWithPackage();

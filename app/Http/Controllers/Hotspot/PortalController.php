@@ -88,7 +88,7 @@ class PortalController extends Controller
             ->header('Content-Type', 'text/html');
     }
 
-    public function show(Request $request): View
+    public function show(Request $request, RadiusProvisioningService $radius): View
     {
         $validated = $request->validate([
             'mac' => ['nullable', 'string', 'max:64'],
@@ -121,6 +121,16 @@ class PortalController extends Controller
             ]);
         }
 
+        // 2026-10-09: read BEFORE the cookie is re-queued below, so this
+        // still holds whatever MAC this same browser was last recognized
+        // under -- the one signal that survives an iOS/Android
+        // per-network MAC randomization event, since the cookie lives in
+        // browser storage, untouched by the Wi-Fi radio changing its
+        // address. renderForMac() uses it to auto-heal a stuck "paid but
+        // no active subscription under this MAC" case when the shop has
+        // opted into it.
+        $previousMac = $this->deviceMacFromCookie($request, $router->shop_id);
+
         // 2026-10-02: lets a later visit to connect() (the QR/bookmark
         // self-service link) recognize this same device once it has real
         // internet and no mac/nasid query params to go on. Queued here
@@ -137,7 +147,9 @@ class PortalController extends Controller
             $validated['mac'],
             $validated['network'] ?? null,
             $this->mikrotikLoginUrl($validated),
-            $validated['link-orig'] ?? null
+            $validated['link-orig'] ?? null,
+            $previousMac,
+            $radius
         );
     }
 
@@ -188,10 +200,17 @@ class PortalController extends Controller
      * Shared by show() (query-param identified, mid captive-portal redirect)
      * and connect() (cookie identified, a customer's own regular browser) --
      * everything past "which router, which mac" is identical regardless of
-     * how the device was identified.
+     * how the device was identified. $previousMac/$radius are only ever
+     * passed by show() -- connect() has no distinct "what the router says
+     * right now" signal separate from the cookie's own mac, so there's
+     * nothing for it to reconcile.
      */
-    private function renderForMac(Router $router, string $mac, ?string $network, ?string $loginUrl, ?string $originalUrl): View
+    private function renderForMac(Router $router, string $mac, ?string $network, ?string $loginUrl, ?string $originalUrl, ?string $previousMac = null, ?RadiusProvisioningService $radius = null): View
     {
+        if ($radius && $previousMac && $previousMac !== $mac && $router->shop?->auto_recover_mac_changes) {
+            $this->attemptAutomaticMacRecovery($router, $previousMac, $mac, $radius);
+        }
+
         // A request carrying &network=pos|staff|mgmt came through that
         // network's own MAC-auth hotspot login page (2026-09-27), pushed by
         // RouterOsConnectionService::pushNetworkLoginPage() -- unlike the
@@ -331,6 +350,68 @@ class PortalController extends Controller
                 : null,
             'activeTrialSubscription' => $activeTrialSubscription,
             'poweredByText' => config('app.name'),
+        ]);
+    }
+
+    /**
+     * 2026-10-09, direct request: purely a customer-experience
+     * improvement -- a customer whose phone presented a new (randomized)
+     * MAC no longer needs to contact support at all. Opt-in per shop
+     * (shops.auto_recover_mac_changes, off by default -- the same
+     * "capability toggle, not forced on" pattern allow_test_access/
+     * trial_enabled already use for anything that changes the hotspot's
+     * access posture), since this is a real trust-model decision a tenant
+     * should consciously make, not a silent global behavior change.
+     *
+     * Reuses RadiusProvisioningService::changeSubscriptionMacAddress() --
+     * the exact same method the admin-facing "Change device" action
+     * calls -- so the RADIUS grant/revoke semantics are identical to the
+     * manual path, just triggered automatically. Two guards keep this
+     * bounded to "the same device, new MAC" rather than letting a stale
+     * or shared cookie clobber someone else's access: the OLD mac must
+     * still have a currently-active subscription (nothing to move
+     * otherwise), and the NEW mac must NOT already have one of its own
+     * (a device that already has real paid access under its current MAC
+     * is left completely alone). Laravel signs/encrypts every cookie by
+     * default, so a client can't forge an arbitrary {shop_id, mac} pair
+     * without the app key -- at most, a leaked cookie could move the
+     * single active subscription slot to whoever holds it next, the same
+     * bounded risk the manual "Change device"/recovery-voucher admin
+     * actions already carry, not something this automates into a new
+     * class of risk. Not yet confirmed against a real device's MAC
+     * rotation in production, matching this codebase's honesty pattern
+     * for other freshly-added behavior.
+     */
+    private function attemptAutomaticMacRecovery(Router $router, string $previousMac, string $currentMac, RadiusProvisioningService $radius): void
+    {
+        $currentMacAlreadyActive = Subscription::query()
+            ->where('shop_id', $router->shop_id)
+            ->where('mac_address', $currentMac)
+            ->where('expires_at', '>', now())
+            ->exists();
+
+        if ($currentMacAlreadyActive) {
+            return;
+        }
+
+        $previousSubscription = Subscription::query()
+            ->where('shop_id', $router->shop_id)
+            ->where('mac_address', $previousMac)
+            ->where('expires_at', '>', now())
+            ->latest('expires_at')
+            ->first();
+
+        if (! $previousSubscription) {
+            return;
+        }
+
+        $radius->changeSubscriptionMacAddress($previousSubscription, $currentMac);
+
+        Log::info('Automatically recovered hotspot access after a device MAC change', [
+            'shop_id' => $router->shop_id,
+            'subscription_id' => $previousSubscription->id,
+            'previous_mac' => $previousMac,
+            'current_mac' => $currentMac,
         ]);
     }
 
