@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Admin;
 
+use App\Livewire\Concerns\SortsTable;
 use App\Models\Shop;
 use App\Models\TrustedWifiDevice;
 use App\Services\TrustedWifiDeviceManagementService;
@@ -13,11 +14,15 @@ use Livewire\WithPagination;
 
 class TrustedWifiDevicesIndex extends Component
 {
-    use WithPagination;
+    use SortsTable, WithPagination;
 
     public string $search = '';
 
     public string $networkFilter = '';
+
+    public string $sortBy = 'created_at';
+
+    public string $sortDirection = 'desc';
 
     public bool $showFormModal = false;
 
@@ -48,6 +53,8 @@ class TrustedWifiDevicesIndex extends Component
     protected $queryString = [
         'search' => ['except' => ''],
         'networkFilter' => ['as' => 'network', 'except' => ''],
+        'sortBy' => ['except' => 'created_at'],
+        'sortDirection' => ['except' => 'desc'],
     ];
 
     public function mount(array $filters = []): void
@@ -143,6 +150,11 @@ class TrustedWifiDevicesIndex extends Component
         $this->resetPage();
     }
 
+    protected function sortableColumns(): array
+    {
+        return ['created_at', 'expires_at'];
+    }
+
     public function render()
     {
         $this->validateOnlyFilters();
@@ -160,7 +172,7 @@ class TrustedWifiDevicesIndex extends Component
             ->when($this->networkFilter, fn ($query) => $query->where('network', $this->networkFilter));
 
         return view('livewire.admin.trusted-wifi-devices-index', [
-            'devices' => $query->latest()->paginate(15),
+            'devices' => $query->orderBy($this->sortBy, $this->sortDirection)->paginate(15),
             'shops' => $this->shops(),
             'deletingDevice' => $this->deletingDeviceId ? TrustedWifiDevice::find($this->deletingDeviceId) : null,
         ]);

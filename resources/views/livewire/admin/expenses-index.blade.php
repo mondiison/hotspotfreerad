@@ -107,10 +107,10 @@
                 <table class="min-w-[820px] w-full text-left text-sm">
                     <thead class="border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
                         <tr>
-                            <th class="px-4 py-3 font-medium">Expense</th>
+                            <x-admin.sortable-th column="incurred_on" :sort-by="$sortBy" :sort-direction="$sortDirection">Expense</x-admin.sortable-th>
                             <th class="px-4 py-3 font-medium">Category</th>
                             <th class="px-4 py-3 font-medium">Tenant</th>
-                            <th class="px-4 py-3 text-right font-medium">Amount</th>
+                            <x-admin.sortable-th column="amount" :sort-by="$sortBy" :sort-direction="$sortDirection" align="right">Amount</x-admin.sortable-th>
                             <th class="px-4 py-3 text-right font-medium">Actions</th>
                         </tr>
                     </thead>

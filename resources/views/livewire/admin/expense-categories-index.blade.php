@@ -57,12 +57,12 @@
         <table class="min-w-[920px] w-full text-left text-sm">
             <thead class="border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
                 <tr>
-                    <th class="px-4 py-3 font-medium">Category</th>
+                    <x-admin.sortable-th column="name" :sort-by="$sortBy" :sort-direction="$sortDirection">Category</x-admin.sortable-th>
                     <th class="px-4 py-3 font-medium">Scope</th>
-                    <th class="px-4 py-3 text-right font-medium">Monthly Budget</th>
-                    <th class="px-4 py-3 text-right font-medium">This Month</th>
+                    <x-admin.sortable-th column="monthly_budget" :sort-by="$sortBy" :sort-direction="$sortDirection" align="right">Monthly Budget</x-admin.sortable-th>
+                    <x-admin.sortable-th column="current_month_spent" :sort-by="$sortBy" :sort-direction="$sortDirection" align="right">This Month</x-admin.sortable-th>
                     <th class="px-4 py-3 text-right font-medium">Usage</th>
-                    <th class="px-4 py-3 text-right font-medium">Expenses</th>
+                    <x-admin.sortable-th column="expenses_count" :sort-by="$sortBy" :sort-direction="$sortDirection" align="right">Expenses</x-admin.sortable-th>
                     <th class="px-4 py-3 font-medium">Status</th>
                     <th class="px-4 py-3 text-right font-medium">Actions</th>
                 </tr>

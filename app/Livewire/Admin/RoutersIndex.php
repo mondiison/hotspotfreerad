@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Admin;
 
+use App\Livewire\Concerns\SortsTable;
 use App\Models\Router;
 use App\Models\Shop;
 use App\Services\MikroTikProvisioningService;
@@ -20,11 +21,15 @@ use Livewire\WithPagination;
 
 class RoutersIndex extends Component
 {
-    use WithPagination;
+    use SortsTable, WithPagination;
 
     public string $search = '';
 
     public string $status = '';
+
+    public string $sortBy = 'created_at';
+
+    public string $sortDirection = 'desc';
 
     public int $step = 1;
 
@@ -67,6 +72,8 @@ class RoutersIndex extends Component
     protected $queryString = [
         'search' => ['except' => ''],
         'status' => ['except' => ''],
+        'sortBy' => ['except' => 'created_at'],
+        'sortDirection' => ['except' => 'desc'],
     ];
 
     public function mount(array $filters = []): void
@@ -358,6 +365,11 @@ class RoutersIndex extends Component
         $this->resetPage();
     }
 
+    protected function sortableColumns(): array
+    {
+        return ['created_at', 'name', 'is_online'];
+    }
+
     public function render(RadiusAccountingStats $radiusStats, MikroTikProvisioningService $mikroTik)
     {
         $this->validateOnlyFilters();
@@ -377,7 +389,7 @@ class RoutersIndex extends Component
             })
             ->when($this->status === 'online', fn ($query) => $query->where('is_online', true))
             ->when($this->status === 'offline', fn ($query) => $query->where('is_online', false))
-            ->latest()
+            ->orderBy($this->sortBy, $this->sortDirection)
             ->paginate(15);
 
         return view('livewire.admin.routers-index', [

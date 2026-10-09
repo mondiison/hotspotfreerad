@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Admin;
 
+use App\Livewire\Concerns\SortsTable;
 use App\Models\Subscription;
 use App\Services\RadiusProvisioningService;
 use App\Services\SubscriptionReportService;
@@ -11,7 +12,7 @@ use Livewire\WithPagination;
 
 class SubscriptionsIndex extends Component
 {
-    use WithPagination;
+    use SortsTable, WithPagination;
 
     public string $preset = '';
 
@@ -108,26 +109,13 @@ class SubscriptionsIndex extends Component
     }
 
     /**
-     * 2026-10-09, direct request: "sort by date ASC or DEC for Access
-     * window, Created" -- these are the only two date columns on this
-     * table (expires_at behind "Access window", created_at behind the
-     * "Created ..." sub-line on "Device"), so the allow-list below is
-     * exhaustive by design, not a placeholder for more columns later.
+     * 2026-10-09: the only two date columns on this table (expires_at
+     * behind "Access window", created_at behind the "Created ..."
+     * sub-line on "Device") -- exhaustive by design, not a placeholder.
      */
-    public function sortByColumn(string $column): void
+    protected function sortableColumns(): array
     {
-        if (! in_array($column, ['created_at', 'expires_at'], true)) {
-            return;
-        }
-
-        if ($this->sortBy === $column) {
-            $this->sortDirection = $this->sortDirection === 'asc' ? 'desc' : 'asc';
-        } else {
-            $this->sortBy = $column;
-            $this->sortDirection = 'desc';
-        }
-
-        $this->resetPage();
+        return ['created_at', 'expires_at'];
     }
 
     public function inspect(int $subscriptionId): void

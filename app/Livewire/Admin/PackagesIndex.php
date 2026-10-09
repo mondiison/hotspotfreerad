@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Admin;
 
+use App\Livewire\Concerns\SortsTable;
 use App\Models\Package as InternetPackage;
 use App\Models\Shop;
 use App\Services\PackageManagementService;
@@ -15,13 +16,17 @@ use Livewire\WithPagination;
 
 class PackagesIndex extends Component
 {
-    use WithPagination;
+    use SortsTable, WithPagination;
 
     public string $search = '';
 
     public string $status = '';
 
     public string $service = '';
+
+    public string $sortBy = 'created_at';
+
+    public string $sortDirection = 'desc';
 
     public bool $showFormModal = false;
 
@@ -61,6 +66,8 @@ class PackagesIndex extends Component
         'search' => ['except' => ''],
         'status' => ['except' => ''],
         'service' => ['except' => ''],
+        'sortBy' => ['except' => 'created_at'],
+        'sortDirection' => ['except' => 'desc'],
     ];
 
     public function mount(array $filters = []): void
@@ -181,6 +188,11 @@ class PackagesIndex extends Component
         $this->resetPage();
     }
 
+    protected function sortableColumns(): array
+    {
+        return ['created_at', 'name', 'price', 'limit_uptime_seconds', 'data_limit_bytes'];
+    }
+
     public function render()
     {
         $this->validateOnlyFilters();
@@ -205,7 +217,7 @@ class PackagesIndex extends Component
             ->when($this->service === 'both', fn ($query) => $query->where('service_type', 'both'))
             ->when($this->service === 'pppoe_capable', fn ($query) => $query->whereIn('service_type', ['pppoe', 'both']))
             ->when($this->service === 'hotspot_capable', fn ($query) => $query->whereIn('service_type', ['hotspot', 'both']))
-            ->latest()
+            ->orderBy($this->sortBy, $this->sortDirection)
             ->paginate(15);
 
         return view('livewire.admin.packages-index', [

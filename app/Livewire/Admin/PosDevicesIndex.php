@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Admin;
 
+use App\Livewire\Concerns\SortsTable;
 use App\Models\Package;
 use App\Models\PosDevice;
 use App\Models\Shop;
@@ -15,11 +16,15 @@ use Livewire\WithPagination;
 
 class PosDevicesIndex extends Component
 {
-    use WithPagination;
+    use SortsTable, WithPagination;
 
     public string $search = '';
 
     public string $status = '';
+
+    public string $sortBy = 'created_at';
+
+    public string $sortDirection = 'desc';
 
     public bool $showFormModal = false;
 
@@ -54,6 +59,8 @@ class PosDevicesIndex extends Component
     protected $queryString = [
         'search' => ['except' => ''],
         'status' => ['except' => ''],
+        'sortBy' => ['except' => 'created_at'],
+        'sortDirection' => ['except' => 'desc'],
     ];
 
     public function mount(array $filters = []): void
@@ -202,6 +209,11 @@ class PosDevicesIndex extends Component
         $this->resetPage();
     }
 
+    protected function sortableColumns(): array
+    {
+        return ['created_at', 'expires_at'];
+    }
+
     public function render()
     {
         $this->validateOnlyFilters();
@@ -228,7 +240,7 @@ class PosDevicesIndex extends Component
             ->when($this->status === 'unsynced', fn ($query) => $query->whereNull('last_provisioned_at'));
 
         return view('livewire.admin.pos-devices-index', [
-            'devices' => $query->latest()->paginate(15),
+            'devices' => $query->orderBy($this->sortBy, $this->sortDirection)->paginate(15),
             'summary' => $summary,
             'shops' => $this->shops(),
             'packages' => $this->packages(),

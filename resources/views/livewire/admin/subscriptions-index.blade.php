@@ -119,31 +119,13 @@
         <table class="min-w-[1040px] w-full text-left text-sm">
             <thead class="border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
                 <tr>
-                    <th class="px-4 py-3 font-medium">
-                        <button type="button" wire:click="sortByColumn('created_at')" class="inline-flex items-center gap-1 hover:text-zinc-900 dark:hover:text-zinc-100">
-                            Device
-                            @if ($sortBy === 'created_at')
-                                <flux:icon name="{{ $sortDirection === 'asc' ? 'chevron-up' : 'chevron-down' }}" class="size-3" />
-                            @else
-                                <flux:icon name="chevron-up-down" class="size-3 text-zinc-300 dark:text-zinc-600" />
-                            @endif
-                        </button>
-                    </th>
+                    <x-admin.sortable-th column="created_at" :sort-by="$sortBy" :sort-direction="$sortDirection">Device</x-admin.sortable-th>
                     <th class="px-4 py-3 font-medium">Package</th>
                     <th class="px-4 py-3 font-medium">Shop</th>
                     <th class="px-4 py-3 font-medium">Source</th>
                     <th class="px-4 py-3 font-medium">Status</th>
                     <th class="px-4 py-3 text-right font-medium">Transfer</th>
-                    <th class="px-4 py-3 text-right font-medium">
-                        <button type="button" wire:click="sortByColumn('expires_at')" class="inline-flex items-center gap-1 hover:text-zinc-900 dark:hover:text-zinc-100">
-                            Access window
-                            @if ($sortBy === 'expires_at')
-                                <flux:icon name="{{ $sortDirection === 'asc' ? 'chevron-up' : 'chevron-down' }}" class="size-3" />
-                            @else
-                                <flux:icon name="chevron-up-down" class="size-3 text-zinc-300 dark:text-zinc-600" />
-                            @endif
-                        </button>
-                    </th>
+                    <x-admin.sortable-th column="expires_at" :sort-by="$sortBy" :sort-direction="$sortDirection" align="right">Access window</x-admin.sortable-th>
                     <th class="px-4 py-3 text-right font-medium">Inspect</th>
                 </tr>
             </thead>

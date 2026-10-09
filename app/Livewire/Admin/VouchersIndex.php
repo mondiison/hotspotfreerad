@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Admin;
 
+use App\Livewire\Concerns\SortsTable;
 use App\Models\Package;
 use App\Models\Shop;
 use App\Models\Voucher;
@@ -16,13 +17,17 @@ use Livewire\WithPagination;
 
 class VouchersIndex extends Component
 {
-    use WithPagination;
+    use SortsTable, WithPagination;
 
     public string $search = '';
 
     public string $status = '';
 
     public string $shop = '';
+
+    public string $sortBy = 'created_at';
+
+    public string $sortDirection = 'desc';
 
     public string $used_from = '';
 
@@ -80,6 +85,8 @@ class VouchersIndex extends Component
         'used_to' => ['except' => ''],
         'sold_from' => ['except' => ''],
         'sold_to' => ['except' => ''],
+        'sortBy' => ['except' => 'created_at'],
+        'sortDirection' => ['except' => 'desc'],
     ];
 
     public function mount(array $filters = []): void
@@ -147,6 +154,11 @@ class VouchersIndex extends Component
         $this->resetPage();
     }
 
+    protected function sortableColumns(): array
+    {
+        return ['created_at', 'name', 'vouchers_count', 'sold_vouchers_count', 'used_vouchers_count', 'unused_vouchers_count', 'void_vouchers_count'];
+    }
+
     public function inspect(int $batchId): void
     {
         $batch = VoucherBatch::with('shop')->findOrFail($batchId);
@@ -193,6 +205,7 @@ class VouchersIndex extends Component
 
         if ($voucher->status !== 'unused') {
             $this->addError('sale_voucher_id', 'Only unused vouchers can be marked as sold.');
+
             return;
         }
 
@@ -233,6 +246,7 @@ class VouchersIndex extends Component
 
         if ($voucher->status !== 'sold') {
             $this->addError('reverse_sale_voucher_id', 'Only sold and unredeemed vouchers can have their sale reversed.');
+
             return;
         }
 
@@ -288,7 +302,7 @@ class VouchersIndex extends Component
             ->when($this->sold_from || $this->sold_to, fn ($query) => $query->whereHas('vouchers', fn ($voucher) => $this->applySoldDateFilters($voucher)));
 
         return view('livewire.admin.vouchers-index', [
-            'batches' => $query->latest()->paginate(12),
+            'batches' => $query->orderBy($this->sortBy, $this->sortDirection)->paginate(12),
             'selectedBatch' => $this->selectedBatch(),
             'summary' => $this->summary(),
             'salesBreakdown' => $this->salesBreakdown(),

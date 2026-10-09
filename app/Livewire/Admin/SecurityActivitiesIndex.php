@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Admin;
 
+use App\Livewire\Concerns\SortsTable;
 use App\Models\SecurityActivity;
 use App\Models\Tenant;
 use App\Services\SecurityActivityReportService;
@@ -11,9 +12,13 @@ use Livewire\WithPagination;
 
 class SecurityActivitiesIndex extends Component
 {
-    use WithPagination;
+    use SortsTable, WithPagination;
 
     public string $search = '';
+
+    public string $sortBy = 'created_at';
+
+    public string $sortDirection = 'desc';
 
     public string $action_group = '';
 
@@ -36,6 +41,8 @@ class SecurityActivitiesIndex extends Component
         'attention' => ['except' => ''],
         'tenant_id' => ['except' => ''],
         'date_preset' => ['except' => '30'],
+        'sortBy' => ['except' => 'created_at'],
+        'sortDirection' => ['except' => 'desc'],
     ];
 
     public function updated($property): void
@@ -68,6 +75,11 @@ class SecurityActivitiesIndex extends Component
         $this->selectedActivityId = null;
     }
 
+    protected function sortableColumns(): array
+    {
+        return ['created_at'];
+    }
+
     public function render(SecurityActivityReportService $reports)
     {
         $filters = $reports->filters([
@@ -80,7 +92,7 @@ class SecurityActivitiesIndex extends Component
         ]);
 
         return view('livewire.admin.security-activities-index', [
-            'activities' => $reports->query(auth()->user(), $filters)->latest()->paginate(20),
+            'activities' => $reports->query(auth()->user(), $filters)->orderBy($this->sortBy, $this->sortDirection)->paginate(20),
             'tenants' => $this->tenants(),
             'summary' => $reports->summary(auth()->user()),
             'actionGroups' => $reports->actionGroups(),

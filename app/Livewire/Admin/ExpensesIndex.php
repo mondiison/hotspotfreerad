@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Admin;
 
+use App\Livewire\Concerns\SortsTable;
 use App\Models\Expense;
 use App\Models\ExpenseCategory;
 use App\Models\Tenant;
@@ -18,10 +19,15 @@ use Livewire\WithPagination;
 
 class ExpensesIndex extends Component
 {
+    use SortsTable;
     use WithFileUploads;
     use WithPagination;
 
     public string $tab = 'expenses';
+
+    public string $sortBy = 'incurred_on';
+
+    public string $sortDirection = 'desc';
 
     public string $preset = '';
 
@@ -79,6 +85,8 @@ class ExpensesIndex extends Component
         'category' => ['except' => ''],
         'schedule' => ['except' => ''],
         'search' => ['except' => ''],
+        'sortBy' => ['except' => 'incurred_on'],
+        'sortDirection' => ['except' => 'desc'],
     ];
 
     public function mount(array $filters = []): void
@@ -253,7 +261,7 @@ class ExpensesIndex extends Component
 
         [$from, $to, $query] = $this->filteredQuery();
         $summaryQuery = clone $query;
-        $expenses = $query->latest('incurred_on')->latest()->paginate(20);
+        $expenses = $query->orderBy($this->sortBy, $this->sortDirection)->latest()->paginate(20);
         ['summary' => $summary, 'categoryRows' => $categoryRows] = $this->expenseSummary(
             (clone $summaryQuery)->get(),
             $from,
@@ -271,6 +279,11 @@ class ExpensesIndex extends Component
             'deletingExpense' => $this->deletingExpenseId ? Expense::find($this->deletingExpenseId) : null,
             'editingExpense' => $this->editingExpenseId ? Expense::find($this->editingExpenseId) : null,
         ]);
+    }
+
+    protected function sortableColumns(): array
+    {
+        return ['incurred_on', 'amount'];
     }
 
     public function exportUrl(): string

@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Admin;
 
+use App\Livewire\Concerns\SortsTable;
 use App\Models\ExpenseCategory;
 use App\Services\ExpenseCategoryManagementService;
 use App\Support\TenantAccess;
@@ -11,7 +12,7 @@ use Livewire\WithPagination;
 
 class ExpenseCategoriesIndex extends Component
 {
-    use WithPagination;
+    use SortsTable, WithPagination;
 
     public string $search = '';
 
@@ -20,6 +21,10 @@ class ExpenseCategoriesIndex extends Component
     public string $status = '';
 
     public string $budget = '';
+
+    public string $sortBy = 'name';
+
+    public string $sortDirection = 'asc';
 
     public bool $showFormModal = false;
 
@@ -46,6 +51,8 @@ class ExpenseCategoriesIndex extends Component
         'scope' => ['except' => ''],
         'status' => ['except' => ''],
         'budget' => ['except' => ''],
+        'sortBy' => ['except' => 'name'],
+        'sortDirection' => ['except' => 'asc'],
     ];
 
     public function mount(array $filters = []): void
@@ -142,6 +149,11 @@ class ExpenseCategoriesIndex extends Component
         $this->resetPage();
     }
 
+    protected function sortableColumns(): array
+    {
+        return ['name', 'monthly_budget', 'current_month_spent', 'expenses_count'];
+    }
+
     public function render()
     {
         $this->validateOnlyFilters();
@@ -179,7 +191,7 @@ class ExpenseCategoriesIndex extends Component
                     ->whereDate('incurred_on', '<=', $monthEnd);
             }], 'amount')
             ->orderByRaw('tenant_id is not null')
-            ->orderBy('name')
+            ->orderBy($this->sortBy, $this->sortDirection)
             ->paginate(20);
 
         return view('livewire.admin.expense-categories-index', [

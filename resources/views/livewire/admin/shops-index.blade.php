@@ -49,9 +49,9 @@
         <table class="min-w-[760px] w-full text-left text-sm">
             <thead class="border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
                 <tr>
-                    <th class="px-4 py-3 font-medium">Shop</th>
+                    <x-admin.sortable-th column="name" :sort-by="$sortBy" :sort-direction="$sortDirection">Shop</x-admin.sortable-th>
                     <th class="px-4 py-3 font-medium">Tenant</th>
-                    <th class="px-4 py-3 font-medium">City</th>
+                    <x-admin.sortable-th column="location_city" :sort-by="$sortBy" :sort-direction="$sortDirection">City</x-admin.sortable-th>
                     <th class="px-4 py-3 font-medium">Payments</th>
                     <th class="px-4 py-3 font-medium">Status</th>
                     <th class="px-4 py-3 text-right font-medium">Actions</th>

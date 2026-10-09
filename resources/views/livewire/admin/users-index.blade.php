@@ -65,7 +65,7 @@
         <table class="min-w-[820px] w-full text-left text-sm">
             <thead class="border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
                 <tr>
-                    <th class="px-4 py-3 font-medium">User</th>
+                    <x-admin.sortable-th column="name" :sort-by="$sortBy" :sort-direction="$sortDirection">User</x-admin.sortable-th>
                     <th class="px-4 py-3 font-medium">Tenant</th>
                     <th class="px-4 py-3 font-medium">Role</th>
                     <th class="px-4 py-3 font-medium">Security</th>

@@ -142,14 +142,14 @@
         <table class="min-w-[1120px] w-full text-left text-sm">
             <thead class="border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
                 <tr>
-                    <th class="px-4 py-3 font-medium">Batch</th>
+                    <x-admin.sortable-th column="name" :sort-by="$sortBy" :sort-direction="$sortDirection">Batch</x-admin.sortable-th>
                     <th class="px-4 py-3 font-medium">Shop</th>
                     <th class="px-4 py-3 font-medium">Package</th>
-                    <th class="px-4 py-3 text-right font-medium">Codes</th>
-                    <th class="px-4 py-3 text-right font-medium">Sold</th>
-                    <th class="px-4 py-3 text-right font-medium">Used</th>
-                    <th class="px-4 py-3 text-right font-medium">Unused</th>
-                    <th class="px-4 py-3 text-right font-medium">Voided</th>
+                    <x-admin.sortable-th column="vouchers_count" :sort-by="$sortBy" :sort-direction="$sortDirection" align="right">Codes</x-admin.sortable-th>
+                    <x-admin.sortable-th column="sold_vouchers_count" :sort-by="$sortBy" :sort-direction="$sortDirection" align="right">Sold</x-admin.sortable-th>
+                    <x-admin.sortable-th column="used_vouchers_count" :sort-by="$sortBy" :sort-direction="$sortDirection" align="right">Used</x-admin.sortable-th>
+                    <x-admin.sortable-th column="unused_vouchers_count" :sort-by="$sortBy" :sort-direction="$sortDirection" align="right">Unused</x-admin.sortable-th>
+                    <x-admin.sortable-th column="void_vouchers_count" :sort-by="$sortBy" :sort-direction="$sortDirection" align="right">Voided</x-admin.sortable-th>
                     <th class="px-4 py-3 text-right font-medium">Actions</th>
                 </tr>
             </thead>

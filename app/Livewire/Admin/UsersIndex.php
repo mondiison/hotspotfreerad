@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Admin;
 
+use App\Livewire\Concerns\SortsTable;
 use App\Models\User;
 use App\Services\SecurityActivityService;
 use App\Services\UserManagementService;
@@ -16,7 +17,7 @@ use Livewire\WithPagination;
 
 class UsersIndex extends Component
 {
-    use WithPagination;
+    use SortsTable, WithPagination;
 
     public string $search = '';
 
@@ -25,6 +26,10 @@ class UsersIndex extends Component
     public string $status = '';
 
     public string $passkey_status = '';
+
+    public string $sortBy = 'created_at';
+
+    public string $sortDirection = 'desc';
 
     public bool $showFormModal = false;
 
@@ -55,6 +60,8 @@ class UsersIndex extends Component
         'role' => ['except' => ''],
         'status' => ['except' => ''],
         'passkey_status' => ['except' => ''],
+        'sortBy' => ['except' => 'created_at'],
+        'sortDirection' => ['except' => 'desc'],
     ];
 
     public function mount(array $filters = []): void
@@ -184,6 +191,11 @@ class UsersIndex extends Component
         $this->resetPage();
     }
 
+    protected function sortableColumns(): array
+    {
+        return ['created_at', 'name', 'email'];
+    }
+
     public function render(UserManagementService $users)
     {
         $this->validateOnlyFilters();
@@ -207,7 +219,7 @@ class UsersIndex extends Component
             ->when($this->status === 'inactive', fn ($query) => $query->where('is_active', false))
             ->when($this->passkey_status === 'registered', fn ($query) => $query->has('passkeys'))
             ->when($this->passkey_status === 'missing', fn ($query) => $query->doesntHave('passkeys'))
-            ->latest()
+            ->orderBy($this->sortBy, $this->sortDirection)
             ->paginate(15);
 
         return view('livewire.admin.users-index', [

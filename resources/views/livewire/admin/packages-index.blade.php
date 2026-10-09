@@ -87,13 +87,13 @@
         <table class="min-w-[860px] w-full text-left text-sm">
             <thead class="border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
                 <tr>
-                    <th class="px-4 py-3 font-medium">Package</th>
+                    <x-admin.sortable-th column="name" :sort-by="$sortBy" :sort-direction="$sortDirection">Package</x-admin.sortable-th>
                     <th class="px-4 py-3 font-medium">Service</th>
                     <th class="px-4 py-3 font-medium">Shop</th>
                     <th class="px-4 py-3 font-medium">Group</th>
-                    <th class="px-4 py-3 font-medium">Price</th>
-                    <th class="px-4 py-3 font-medium">Time</th>
-                    <th class="px-4 py-3 font-medium">Data</th>
+                    <x-admin.sortable-th column="price" :sort-by="$sortBy" :sort-direction="$sortDirection">Price</x-admin.sortable-th>
+                    <x-admin.sortable-th column="limit_uptime_seconds" :sort-by="$sortBy" :sort-direction="$sortDirection">Time</x-admin.sortable-th>
+                    <x-admin.sortable-th column="data_limit_bytes" :sort-by="$sortBy" :sort-direction="$sortDirection">Data</x-admin.sortable-th>
                     <th class="px-4 py-3 font-medium">Speed</th>
                     <th class="px-4 py-3 text-right font-medium">Actions</th>
                 </tr>

@@ -111,11 +111,11 @@
         <table class="min-w-[1120px] w-full text-left text-sm">
             <thead class="border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
                 <tr>
-                    <th class="px-4 py-3 font-medium">Customer</th>
+                    <x-admin.sortable-th column="created_at" :sort-by="$sortBy" :sort-direction="$sortDirection">Customer</x-admin.sortable-th>
                     <th class="px-4 py-3 font-medium">Credentials</th>
                     <th class="px-4 py-3 font-medium">Package</th>
                     <th class="px-4 py-3 font-medium">Shop</th>
-                    <th class="px-4 py-3 font-medium">Status</th>
+                    <x-admin.sortable-th column="expires_at" :sort-by="$sortBy" :sort-direction="$sortDirection">Status</x-admin.sortable-th>
                     <th class="px-4 py-3 text-right font-medium">Usage</th>
                     <th class="px-4 py-3 text-right font-medium">Actions</th>
                 </tr>

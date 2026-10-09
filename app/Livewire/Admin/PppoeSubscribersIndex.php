@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Admin;
 
+use App\Livewire\Concerns\SortsTable;
 use App\Models\Package;
 use App\Models\PppoeSubscriber;
 use App\Models\Shop;
@@ -15,11 +16,15 @@ use Livewire\WithPagination;
 
 class PppoeSubscribersIndex extends Component
 {
-    use WithPagination;
+    use SortsTable, WithPagination;
 
     public string $search = '';
 
     public string $status = '';
+
+    public string $sortBy = 'created_at';
+
+    public string $sortDirection = 'desc';
 
     public bool $showFormModal = false;
 
@@ -62,6 +67,8 @@ class PppoeSubscribersIndex extends Component
     protected $queryString = [
         'search' => ['except' => ''],
         'status' => ['except' => ''],
+        'sortBy' => ['except' => 'created_at'],
+        'sortDirection' => ['except' => 'desc'],
     ];
 
     public function mount(array $filters = []): void
@@ -221,6 +228,11 @@ class PppoeSubscribersIndex extends Component
         $this->resetPage();
     }
 
+    protected function sortableColumns(): array
+    {
+        return ['created_at', 'expires_at'];
+    }
+
     public function render(PppoeSubscriberReportService $reports)
     {
         $this->validateOnlyFilters();
@@ -246,7 +258,7 @@ class PppoeSubscribersIndex extends Component
             ->when($this->status === 'disabled', fn ($query) => $query->where('is_active', false))
             ->when($this->status === 'unsynced', fn ($query) => $query->whereNull('last_provisioned_at'));
 
-        $subscribers = $query->latest()->paginate(15);
+        $subscribers = $query->orderBy($this->sortBy, $this->sortDirection)->paginate(15);
         $reports->attachUsage($subscribers->getCollection());
 
         return view('livewire.admin.pppoe-subscribers-index', [

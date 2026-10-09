@@ -98,7 +98,7 @@
                         <th class="px-4 py-3 font-medium">Admin</th>
                         <th class="px-4 py-3 font-medium">Tenant</th>
                         <th class="px-4 py-3 font-medium">IP</th>
-                        <th class="px-4 py-3 font-medium">When</th>
+                        <x-admin.sortable-th column="created_at" :sort-by="$sortBy" :sort-direction="$sortDirection">When</x-admin.sortable-th>
                         <th class="px-4 py-3 text-right font-medium">Details</th>
                     </tr>
                 </thead>

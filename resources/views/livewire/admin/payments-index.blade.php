@@ -96,15 +96,15 @@
         <table class="min-w-[1100px] w-full text-left text-sm">
             <thead class="border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
                 <tr>
-                    <th class="px-4 py-3 font-medium">Transaction</th>
+                    <x-admin.sortable-th column="created_at" :sort-by="$sortBy" :sort-direction="$sortDirection">Transaction</x-admin.sortable-th>
                     <th class="px-4 py-3 font-medium">Customer</th>
                     <th class="px-4 py-3 font-medium">Plan</th>
                     <th class="px-4 py-3 font-medium">Shop</th>
                     <th class="px-4 py-3 font-medium">Method</th>
                     <th class="px-4 py-3 font-medium">Status</th>
-                    <th class="px-4 py-3 text-right font-medium">Gross</th>
-                    <th class="px-4 py-3 text-right font-medium">Commission</th>
-                    <th class="px-4 py-3 text-right font-medium">Tenant Net</th>
+                    <x-admin.sortable-th column="gross_amount" :sort-by="$sortBy" :sort-direction="$sortDirection" align="right">Gross</x-admin.sortable-th>
+                    <x-admin.sortable-th column="platform_fee_amount" :sort-by="$sortBy" :sort-direction="$sortDirection" align="right">Commission</x-admin.sortable-th>
+                    <x-admin.sortable-th column="tenant_net_amount" :sort-by="$sortBy" :sort-direction="$sortDirection" align="right">Tenant Net</x-admin.sortable-th>
                     <th class="px-4 py-3 text-right font-medium">Action</th>
                 </tr>
             </thead>

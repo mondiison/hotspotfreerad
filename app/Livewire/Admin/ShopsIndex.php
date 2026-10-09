@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Admin;
 
+use App\Livewire\Concerns\SortsTable;
 use App\Models\Shop;
 use App\Models\Tenant;
 use App\Services\ShopManagementService;
@@ -14,13 +15,17 @@ use Livewire\WithPagination;
 
 class ShopsIndex extends Component
 {
-    use WithPagination;
+    use SortsTable, WithPagination;
 
     public string $search = '';
 
     public string $status = '';
 
     public string $payments = '';
+
+    public string $sortBy = 'created_at';
+
+    public string $sortDirection = 'desc';
 
     public bool $showFormModal = false;
 
@@ -56,6 +61,8 @@ class ShopsIndex extends Component
         'search' => ['except' => ''],
         'status' => ['except' => ''],
         'payments' => ['except' => ''],
+        'sortBy' => ['except' => 'created_at'],
+        'sortDirection' => ['except' => 'desc'],
     ];
 
     public function mount(array $filters = []): void
@@ -145,6 +152,11 @@ class ShopsIndex extends Component
         $this->resetPage();
     }
 
+    protected function sortableColumns(): array
+    {
+        return ['created_at', 'name', 'location_city'];
+    }
+
     public function render()
     {
         $this->validateOnlyFilters();
@@ -169,7 +181,7 @@ class ShopsIndex extends Component
                 ->where(fn ($query) => $query
                     ->whereNull('flutterwave_client_id')
                     ->orWhereNull('flutterwave_client_secret')))
-            ->latest()
+            ->orderBy($this->sortBy, $this->sortDirection)
             ->paginate(15);
 
         return view('livewire.admin.shops-index', [

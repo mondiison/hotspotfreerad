@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Admin;
 
+use App\Livewire\Concerns\SortsTable;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\TenantManagementService;
@@ -14,7 +15,7 @@ use Livewire\WithPagination;
 
 class TenantsIndex extends Component
 {
-    use WithPagination;
+    use SortsTable, WithPagination;
 
     public string $search = '';
 
@@ -23,6 +24,10 @@ class TenantsIndex extends Component
     public string $billing_model = '';
 
     public string $two_factor_status = '';
+
+    public string $sortBy = 'created_at';
+
+    public string $sortDirection = 'desc';
 
     public bool $showFormModal = false;
 
@@ -71,6 +76,8 @@ class TenantsIndex extends Component
         'status' => ['except' => ''],
         'billing_model' => ['except' => ''],
         'two_factor_status' => ['except' => ''],
+        'sortBy' => ['except' => 'created_at'],
+        'sortDirection' => ['except' => 'desc'],
     ];
 
     public function mount(TenantManagementService $tenants, array $filters = []): void
@@ -182,6 +189,11 @@ class TenantsIndex extends Component
         $this->resetPage();
     }
 
+    protected function sortableColumns(): array
+    {
+        return ['created_at', 'company_name', 'owner_email'];
+    }
+
     public function render()
     {
         $this->validateOnlyFilters();
@@ -205,7 +217,7 @@ class TenantsIndex extends Component
             ->when($this->two_factor_status === 'missing', fn ($query) => $query
                 ->where('require_two_factor', true)
                 ->whereNotExists($this->twoFactorOwnerExistsQuery()))
-            ->latest()
+            ->orderBy($this->sortBy, $this->sortDirection)
             ->paginate(15);
 
         return view('livewire.admin.tenants-index', [

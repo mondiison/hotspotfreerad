@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Admin;
 
+use App\Livewire\Concerns\SortsTable;
 use App\Models\Payment;
 use App\Services\HotspotPaymentConfirmationService;
 use App\Services\PaymentReportService;
@@ -14,7 +15,7 @@ use Livewire\WithPagination;
 
 class PaymentsIndex extends Component
 {
-    use WithPagination;
+    use SortsTable, WithPagination;
 
     public string $preset = '';
 
@@ -27,6 +28,10 @@ class PaymentsIndex extends Component
     public string $status = '';
 
     public string $provider = '';
+
+    public string $sortBy = 'created_at';
+
+    public string $sortDirection = 'desc';
 
     public bool $showRecoveryVoucherModal = false;
 
@@ -41,6 +46,8 @@ class PaymentsIndex extends Component
         'search' => ['except' => ''],
         'status' => ['except' => ''],
         'provider' => ['except' => ''],
+        'sortBy' => ['except' => 'created_at'],
+        'sortDirection' => ['except' => 'desc'],
     ];
 
     public function mount(array $filters = []): void
@@ -98,6 +105,11 @@ class PaymentsIndex extends Component
         $this->status = '';
         $this->provider = '';
         $this->resetPage();
+    }
+
+    protected function sortableColumns(): array
+    {
+        return ['created_at', 'gross_amount', 'platform_fee_amount', 'tenant_net_amount'];
     }
 
     public function confirmManualTransfer(int $paymentId, HotspotPaymentConfirmationService $payments): void
@@ -248,7 +260,7 @@ class PaymentsIndex extends Component
         $query = $reports->query(auth()->user(), $filters);
 
         return view('livewire.admin.payments-index', [
-            'payments' => $query->latest()->paginate(20),
+            'payments' => $query->orderBy($this->sortBy, $this->sortDirection)->paginate(20),
             'summary' => $reports->summary(clone $query),
             'filters' => $filters,
             'presets' => $reports->presets(),
