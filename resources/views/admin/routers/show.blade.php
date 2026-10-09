@@ -146,7 +146,7 @@
                                     </li>
                                     <li class="flex gap-3">
                                         <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-zinc-950 text-xs font-bold text-white">4</span>
-                                        <span>Scan the code below anytime afterward to check your balance, buy more, or get a voucher.</span>
+                                        <span>Stuck, or asked to pay again? Scan the code below anytime to check your balance, buy more, or get a voucher.</span>
                                     </li>
                                 </ol>
 
