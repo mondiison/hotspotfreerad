@@ -1000,7 +1000,7 @@ class HotspotPortalTest extends TestCase
         [$router, $package] = $this->routerWithPackage();
         $this->assertFalse($router->shop->fresh()->auto_recover_mac_changes);
 
-        Subscription::create([
+        $subscription = Subscription::create([
             'shop_id' => $router->shop_id,
             'package_id' => $package->id,
             'mac_address' => 'AA:BB:CC:DD:EE:01',
@@ -1019,10 +1019,15 @@ class HotspotPortalTest extends TestCase
             ->assertSee('Choose internet access')
             ->assertDontSee('Access provisioned');
 
+        // Compared against the fixture's own stored value rather than a
+        // freshly recomputed now()->addHour() -- a few elapsed milliseconds
+        // between fixture creation and this assertion can cross a second
+        // boundary and make two independently-computed "now" values
+        // genuinely differ, unrelated to whether recovery actually ran.
         $this->assertDatabaseHas('subscriptions', [
             'shop_id' => $router->shop_id,
             'mac_address' => 'AA:BB:CC:DD:EE:01',
-            'expires_at' => now()->addHour(),
+            'expires_at' => $subscription->expires_at,
         ]);
     }
 
