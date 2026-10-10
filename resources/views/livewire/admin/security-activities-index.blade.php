@@ -4,25 +4,25 @@
     </div>
 
     <section class="grid gap-4 md:grid-cols-4">
-        <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
+        <button type="button" wire:click="clearEventTypeFilters" wire:loading.attr="disabled" class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 text-left shadow-sm transition hover:border-zinc-400 dark:hover:border-zinc-500">
             <p class="text-sm text-zinc-500 dark:text-zinc-400">Total events</p>
             <p class="mt-2 text-3xl font-semibold">{{ number_format($summary['total']) }}</p>
-        </div>
+        </button>
 
-        <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
+        <button type="button" wire:click="$set('action_group', 'sign_in')" wire:loading.attr="disabled" class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 text-left shadow-sm transition hover:border-zinc-400 dark:hover:border-zinc-500">
             <p class="text-sm text-zinc-500 dark:text-zinc-400">Sign-ins</p>
             <p class="mt-2 text-3xl font-semibold">{{ number_format($summary['sign_ins']) }}</p>
-        </div>
+        </button>
 
-        <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
+        <button type="button" wire:click="$set('attention', '1')" wire:loading.attr="disabled" class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 text-left shadow-sm transition hover:border-zinc-400 dark:hover:border-zinc-500">
             <p class="text-sm text-zinc-500 dark:text-zinc-400">Needs attention</p>
             <p class="mt-2 text-3xl font-semibold text-rose-700">{{ number_format($summary['attention']) }}</p>
-        </div>
+        </button>
 
-        <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
+        <button type="button" wire:click="$set('action_group', 'passkey')" wire:loading.attr="disabled" class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 text-left shadow-sm transition hover:border-zinc-400 dark:hover:border-zinc-500">
             <p class="text-sm text-zinc-500 dark:text-zinc-400">Passkey events</p>
             <p class="mt-2 text-3xl font-semibold text-emerald-700">{{ number_format($summary['passkeys']) }}</p>
-        </div>
+        </button>
     </section>
 
     @php

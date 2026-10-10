@@ -32,20 +32,28 @@
     @else
         <section class="grid gap-4 md:grid-cols-4">
             @foreach ([
-                ['label' => 'Expenses', 'value' => number_format($summary['count']), 'hint' => 'Matching current filters'],
-                ['label' => 'Total Spent', 'value' => 'NGN '.number_format($summary['total'], 2), 'hint' => 'All recorded expenses'],
-                ['label' => 'Budget', 'value' => $summary['budget'] > 0 ? 'NGN '.number_format($summary['budget'], 2) : 'No budget', 'hint' => 'Prorated budget for used categories'],
-                ['label' => 'Remaining', 'value' => is_null($summary['budget_variance']) ? 'No budget' : 'NGN '.number_format($summary['budget_variance'], 2), 'hint' => 'Budget minus filtered spend'],
-                ['label' => 'Budget Usage', 'value' => is_null($summary['budget_usage']) ? 'No budget' : $summary['budget_usage'].'%', 'hint' => 'Filtered spend against budget'],
-                ['label' => 'Recurring', 'value' => 'NGN '.number_format($summary['recurring'], 2), 'hint' => 'Marked as recurring'],
-                ['label' => 'Overdue', 'value' => number_format($summary['overdue_count']), 'hint' => 'Recurring schedules past due'],
-                ['label' => 'Categories', 'value' => number_format($summary['category_count']), 'hint' => 'Expense groups used'],
+                ['label' => 'Expenses', 'value' => number_format($summary['count']), 'hint' => 'Matching current filters', 'action' => "\$set('schedule', '')"],
+                ['label' => 'Total Spent', 'value' => 'NGN '.number_format($summary['total'], 2), 'hint' => 'All recorded expenses', 'action' => "\$set('schedule', '')"],
+                ['label' => 'Budget', 'value' => $summary['budget'] > 0 ? 'NGN '.number_format($summary['budget'], 2) : 'No budget', 'hint' => 'Prorated budget for used categories', 'action' => null],
+                ['label' => 'Remaining', 'value' => is_null($summary['budget_variance']) ? 'No budget' : 'NGN '.number_format($summary['budget_variance'], 2), 'hint' => 'Budget minus filtered spend', 'action' => null],
+                ['label' => 'Budget Usage', 'value' => is_null($summary['budget_usage']) ? 'No budget' : $summary['budget_usage'].'%', 'hint' => 'Filtered spend against budget', 'action' => null],
+                ['label' => 'Recurring', 'value' => 'NGN '.number_format($summary['recurring'], 2), 'hint' => 'Marked as recurring', 'action' => "\$set('schedule', 'recurring')"],
+                ['label' => 'Overdue', 'value' => number_format($summary['overdue_count']), 'hint' => 'Recurring schedules past due', 'action' => "\$set('schedule', 'overdue')"],
+                ['label' => 'Categories', 'value' => number_format($summary['category_count']), 'hint' => 'Expense groups used', 'action' => 'showCategories'],
             ] as $stat)
-                <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
-                    <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">{{ $stat['label'] }}</p>
-                    <p class="mt-3 text-2xl font-semibold">{{ $stat['value'] }}</p>
-                    <p class="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{{ $stat['hint'] }}</p>
-                </div>
+                @if ($stat['action'])
+                    <button type="button" wire:click="{{ $stat['action'] }}" wire:loading.attr="disabled" class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 text-left shadow-sm transition hover:border-zinc-400 dark:hover:border-zinc-500">
+                        <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">{{ $stat['label'] }}</p>
+                        <p class="mt-3 text-2xl font-semibold">{{ $stat['value'] }}</p>
+                        <p class="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{{ $stat['hint'] }}</p>
+                    </button>
+                @else
+                    <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
+                        <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">{{ $stat['label'] }}</p>
+                        <p class="mt-3 text-2xl font-semibold">{{ $stat['value'] }}</p>
+                        <p class="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{{ $stat['hint'] }}</p>
+                    </div>
+                @endif
             @endforeach
         </section>
 

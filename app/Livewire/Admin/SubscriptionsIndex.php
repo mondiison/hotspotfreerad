@@ -109,6 +109,20 @@ class SubscriptionsIndex extends Component
     }
 
     /**
+     * 2026-10-10, direct request to make summary stat tiles clickable --
+     * mirrors PackagesIndex::filterBy()'s exact shape (replace the relevant
+     * filters wholesale rather than toggle, so clicking a different tile
+     * never leaves a stale filter combination from a previous click).
+     */
+    public function filterBySummary(string $status = '', string $source = '', string $throttled = ''): void
+    {
+        $this->status = $status;
+        $this->source = $source;
+        $this->throttled = $throttled;
+        $this->resetPage();
+    }
+
+    /**
      * 2026-10-09: the only two date columns on this table (expires_at
      * behind "Access window", created_at behind the "Created ..."
      * sub-line on "Device") -- exhaustive by design, not a placeholder.

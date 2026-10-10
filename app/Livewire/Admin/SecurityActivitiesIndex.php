@@ -59,6 +59,19 @@ class SecurityActivitiesIndex extends Component
         $this->resetPage();
     }
 
+    /**
+     * 2026-10-10, direct request to make the summary stat tiles clickable --
+     * backs the "Total events" tile specifically: clears just the
+     * event-type dimension (action_group/attention), leaving search/tenant/
+     * date range untouched, unlike clearFilters() above which resets
+     * everything including the date preset.
+     */
+    public function clearEventTypeFilters(): void
+    {
+        $this->reset(['action_group', 'attention']);
+        $this->resetPage();
+    }
+
     public function viewActivity(int $activityId): void
     {
         $activity = SecurityActivity::query()

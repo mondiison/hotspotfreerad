@@ -91,18 +91,26 @@
     {{-- Trimmed to the 6 numbers that matter at a glance; the rest live in "More KPIs" below. --}}
     <section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
         @foreach ([
-            ['label' => 'Routers Online', 'value' => "{$onlineRouterCount}/{$routerCount}", 'hint' => 'Reachable on a 5-minute heartbeat ping, or with an active accounting session'],
-            ['label' => 'Active Plans', 'value' => "{$activePackageCount}/{$packageCount}", 'hint' => 'Published packages customers can select'],
-            ['label' => 'Active Access', 'value' => $activeSubscriptionCount, 'hint' => 'Unexpired app subscriptions'],
-            ['label' => 'Users Online', 'value' => is_null($onlineUserCount) ? 'Not ready' : $onlineUserCount, 'hint' => $radiusAccountingReady ? 'Unique active RADIUS usernames' : 'radacct table has not been created'],
-            ['label' => 'Gross Sales', 'value' => 'NGN '.number_format($paidRevenue, 2), 'hint' => 'Successful customer payments'],
-            ['label' => 'Estimated Profit', 'value' => 'NGN '.number_format($estimatedProfit, 2), 'hint' => 'Tenant net sales minus expenses'],
+            ['label' => 'Routers Online', 'value' => "{$onlineRouterCount}/{$routerCount}", 'hint' => 'Reachable on a 5-minute heartbeat ping, or with an active accounting session', 'href' => route('admin.routers.index', ['status' => 'online'])],
+            ['label' => 'Active Plans', 'value' => "{$activePackageCount}/{$packageCount}", 'hint' => 'Published packages customers can select', 'href' => route('admin.packages.index', ['status' => 'active'])],
+            ['label' => 'Active Access', 'value' => $activeSubscriptionCount, 'hint' => 'Unexpired app subscriptions', 'href' => route('admin.subscriptions.index', ['status' => 'active'])],
+            ['label' => 'Users Online', 'value' => is_null($onlineUserCount) ? 'Not ready' : $onlineUserCount, 'hint' => $radiusAccountingReady ? 'Unique active RADIUS usernames' : 'radacct table has not been created', 'href' => null],
+            ['label' => 'Gross Sales', 'value' => 'NGN '.number_format($paidRevenue, 2), 'hint' => 'Successful customer payments', 'href' => route('admin.reports.sales')],
+            ['label' => 'Estimated Profit', 'value' => 'NGN '.number_format($estimatedProfit, 2), 'hint' => 'Tenant net sales minus expenses', 'href' => route('admin.reports.sales')],
         ] as $stat)
-            <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
-                <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">{{ $stat['label'] }}</p>
-                <p class="mt-3 text-3xl font-semibold">{{ is_numeric($stat['value']) ? number_format($stat['value']) : $stat['value'] }}</p>
-                <p class="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{{ $stat['hint'] }}</p>
-            </div>
+            @if ($stat['href'])
+                <a href="{{ $stat['href'] }}" wire:navigate class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm transition hover:border-zinc-400 dark:hover:border-zinc-500">
+                    <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">{{ $stat['label'] }}</p>
+                    <p class="mt-3 text-3xl font-semibold">{{ is_numeric($stat['value']) ? number_format($stat['value']) : $stat['value'] }}</p>
+                    <p class="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{{ $stat['hint'] }}</p>
+                </a>
+            @else
+                <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
+                    <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">{{ $stat['label'] }}</p>
+                    <p class="mt-3 text-3xl font-semibold">{{ is_numeric($stat['value']) ? number_format($stat['value']) : $stat['value'] }}</p>
+                    <p class="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{{ $stat['hint'] }}</p>
+                </div>
+            @endif
         @endforeach
     </section>
 
@@ -186,20 +194,28 @@
         <flux:accordion.item heading="More KPIs">
             <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 @foreach ([
-                    ['label' => 'Tenants', 'value' => $tenantCount, 'hint' => auth()->user()->isSuperAdmin() ? 'Total platform customers' : 'Your assigned tenant'],
-                    ['label' => 'Locations', 'value' => $shopCount, 'hint' => 'Active hotspot shops/sites'],
-                    ['label' => 'RADIUS Sessions', 'value' => is_null($activeSessionCount) ? 'Not ready' : $activeSessionCount, 'hint' => $radiusAccountingReady ? 'Live accounting sessions' : 'radacct table has not been created'],
-                    ['label' => 'Usage Today', 'value' => $formatBytes($todayUsageBytes), 'hint' => 'Upload + download from sessions started today'],
-                    ['label' => 'Total Usage', 'value' => $formatBytes($totalUsageBytes), 'hint' => 'All accounting traffic for scoped routers'],
-                    ['label' => auth()->user()->isSuperAdmin() ? 'Platform Commission' : 'Platform Fees', 'value' => 'NGN '.number_format($platformCommission, 2), 'hint' => 'Commission deducted from sales'],
-                    ['label' => 'Tenant Net', 'value' => 'NGN '.number_format($tenantNetRevenue, 2), 'hint' => 'Successful sales after commission'],
-                    ['label' => 'Expenses', 'value' => 'NGN '.number_format($totalExpenses, 2), 'hint' => 'Recorded operating costs'],
+                    ['label' => 'Tenants', 'value' => $tenantCount, 'hint' => auth()->user()->isSuperAdmin() ? 'Total platform customers' : 'Your assigned tenant', 'href' => auth()->user()->isSuperAdmin() ? route('admin.tenants.index') : null],
+                    ['label' => 'Locations', 'value' => $shopCount, 'hint' => 'Active hotspot shops/sites', 'href' => route('admin.shops.index')],
+                    ['label' => 'RADIUS Sessions', 'value' => is_null($activeSessionCount) ? 'Not ready' : $activeSessionCount, 'hint' => $radiusAccountingReady ? 'Live accounting sessions' : 'radacct table has not been created', 'href' => null],
+                    ['label' => 'Usage Today', 'value' => $formatBytes($todayUsageBytes), 'hint' => 'Upload + download from sessions started today', 'href' => null],
+                    ['label' => 'Total Usage', 'value' => $formatBytes($totalUsageBytes), 'hint' => 'All accounting traffic for scoped routers', 'href' => null],
+                    ['label' => auth()->user()->isSuperAdmin() ? 'Platform Commission' : 'Platform Fees', 'value' => 'NGN '.number_format($platformCommission, 2), 'hint' => 'Commission deducted from sales', 'href' => route('admin.reports.sales')],
+                    ['label' => 'Tenant Net', 'value' => 'NGN '.number_format($tenantNetRevenue, 2), 'hint' => 'Successful sales after commission', 'href' => route('admin.reports.sales')],
+                    ['label' => 'Expenses', 'value' => 'NGN '.number_format($totalExpenses, 2), 'hint' => 'Recorded operating costs', 'href' => route('admin.expenses.index')],
                 ] as $stat)
-                    <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 p-4">
-                        <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">{{ $stat['label'] }}</p>
-                        <p class="mt-3 text-2xl font-semibold">{{ is_numeric($stat['value']) ? number_format($stat['value']) : $stat['value'] }}</p>
-                        <p class="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{{ $stat['hint'] }}</p>
-                    </div>
+                    @if ($stat['href'])
+                        <a href="{{ $stat['href'] }}" wire:navigate class="rounded-lg border border-zinc-200 dark:border-zinc-700 p-4 transition hover:border-zinc-400 dark:hover:border-zinc-500">
+                            <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">{{ $stat['label'] }}</p>
+                            <p class="mt-3 text-2xl font-semibold">{{ is_numeric($stat['value']) ? number_format($stat['value']) : $stat['value'] }}</p>
+                            <p class="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{{ $stat['hint'] }}</p>
+                        </a>
+                    @else
+                        <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 p-4">
+                            <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">{{ $stat['label'] }}</p>
+                            <p class="mt-3 text-2xl font-semibold">{{ is_numeric($stat['value']) ? number_format($stat['value']) : $stat['value'] }}</p>
+                            <p class="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{{ $stat['hint'] }}</p>
+                        </div>
+                    @endif
                 @endforeach
             </div>
         </flux:accordion.item>
@@ -452,18 +468,18 @@
 
             <div class="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
                 @foreach ([
-                    ['label' => 'Gross Sales', 'value' => 'NGN '.number_format($monthFinanceSummary['gross_sales'], 2), 'hint' => 'Customer payments received this month'],
-                    ['label' => auth()->user()->isSuperAdmin() ? 'Commission' : 'Platform Fees', 'value' => 'NGN '.number_format($monthFinanceSummary['platform_commission'], 2), 'hint' => 'Platform commission deducted this month'],
-                    ['label' => 'Tenant Net', 'value' => 'NGN '.number_format($monthFinanceSummary['tenant_net'], 2), 'hint' => 'Sales retained by the tenant'],
-                    ['label' => 'Expenses', 'value' => 'NGN '.number_format($monthFinanceSummary['expenses'], 2), 'hint' => 'Costs recorded this month'],
-                    ['label' => 'Profit', 'value' => 'NGN '.number_format($monthFinanceSummary['profit'], 2), 'hint' => 'Tenant net sales minus expenses'],
-                    ['label' => 'Margin', 'value' => is_null($monthFinanceSummary['margin']) ? 'No sales' : $monthFinanceSummary['margin'].'%', 'hint' => 'Profit as a share of tenant net sales'],
+                    ['label' => 'Gross Sales', 'value' => 'NGN '.number_format($monthFinanceSummary['gross_sales'], 2), 'hint' => 'Customer payments received this month', 'href' => route('admin.reports.sales', ['from' => $monthFinanceSummary['from'], 'to' => $monthFinanceSummary['to']])],
+                    ['label' => auth()->user()->isSuperAdmin() ? 'Commission' : 'Platform Fees', 'value' => 'NGN '.number_format($monthFinanceSummary['platform_commission'], 2), 'hint' => 'Platform commission deducted this month', 'href' => route('admin.reports.sales', ['from' => $monthFinanceSummary['from'], 'to' => $monthFinanceSummary['to']])],
+                    ['label' => 'Tenant Net', 'value' => 'NGN '.number_format($monthFinanceSummary['tenant_net'], 2), 'hint' => 'Sales retained by the tenant', 'href' => route('admin.reports.sales', ['from' => $monthFinanceSummary['from'], 'to' => $monthFinanceSummary['to']])],
+                    ['label' => 'Expenses', 'value' => 'NGN '.number_format($monthFinanceSummary['expenses'], 2), 'hint' => 'Costs recorded this month', 'href' => route('admin.expenses.index', ['from' => $monthFinanceSummary['from'], 'to' => $monthFinanceSummary['to']])],
+                    ['label' => 'Profit', 'value' => 'NGN '.number_format($monthFinanceSummary['profit'], 2), 'hint' => 'Tenant net sales minus expenses', 'href' => route('admin.reports.sales', ['from' => $monthFinanceSummary['from'], 'to' => $monthFinanceSummary['to']])],
+                    ['label' => 'Margin', 'value' => is_null($monthFinanceSummary['margin']) ? 'No sales' : $monthFinanceSummary['margin'].'%', 'hint' => 'Profit as a share of tenant net sales', 'href' => route('admin.reports.sales', ['from' => $monthFinanceSummary['from'], 'to' => $monthFinanceSummary['to']])],
                 ] as $monthlyStat)
-                    <article class="rounded-lg border border-zinc-200 dark:border-zinc-700 p-4">
+                    <a href="{{ $monthlyStat['href'] }}" wire:navigate class="block rounded-lg border border-zinc-200 dark:border-zinc-700 p-4 transition hover:border-zinc-400 dark:hover:border-zinc-500">
                         <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">{{ $monthlyStat['label'] }}</p>
                         <p class="mt-3 text-2xl font-semibold">{{ $monthlyStat['value'] }}</p>
                         <p class="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{{ $monthlyStat['hint'] }}</p>
-                    </article>
+                    </a>
                 @endforeach
             </div>
         </flux:accordion.item>
@@ -493,17 +509,25 @@
 
             <div class="mt-5 grid gap-4 md:grid-cols-5">
                 @foreach ([
-                    ['label' => 'Attempts', 'value' => number_format($paymentHealth['total_attempts']), 'hint' => 'All checkout attempts this month'],
-                    ['label' => 'Success Rate', 'value' => is_null($paymentHealth['success_rate']) ? 'No attempts' : $paymentHealth['success_rate'].'%', 'hint' => 'Successful payments divided by attempts'],
-                    ['label' => 'Successful', 'value' => number_format($paymentHealth['successful_count']), 'hint' => 'NGN '.number_format($paymentHealth['successful_value'], 2).' confirmed'],
-                    ['label' => 'Pending', 'value' => number_format($paymentHealth['pending_count']), 'hint' => 'NGN '.number_format($paymentHealth['pending_value'], 2).' awaiting callback/webhook'],
-                    ['label' => 'Needs Attention', 'value' => number_format($paymentHealth['attention_count']), 'hint' => 'NGN '.number_format($paymentHealth['attention_value'], 2).' pending or failed'],
+                    ['label' => 'Attempts', 'value' => number_format($paymentHealth['total_attempts']), 'hint' => 'All checkout attempts this month', 'href' => route('admin.payments.index')],
+                    ['label' => 'Success Rate', 'value' => is_null($paymentHealth['success_rate']) ? 'No attempts' : $paymentHealth['success_rate'].'%', 'hint' => 'Successful payments divided by attempts', 'href' => null],
+                    ['label' => 'Successful', 'value' => number_format($paymentHealth['successful_count']), 'hint' => 'NGN '.number_format($paymentHealth['successful_value'], 2).' confirmed', 'href' => route('admin.payments.index', ['status' => 'successful'])],
+                    ['label' => 'Pending', 'value' => number_format($paymentHealth['pending_count']), 'hint' => 'NGN '.number_format($paymentHealth['pending_value'], 2).' awaiting callback/webhook', 'href' => route('admin.payments.index', ['status' => 'pending'])],
+                    ['label' => 'Needs Attention', 'value' => number_format($paymentHealth['attention_count']), 'hint' => 'NGN '.number_format($paymentHealth['attention_value'], 2).' pending or failed', 'href' => route('admin.payments.index', ['status' => 'attention'])],
                 ] as $stat)
-                    <article class="rounded-lg border border-zinc-200 dark:border-zinc-700 p-4">
-                        <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">{{ $stat['label'] }}</p>
-                        <p class="mt-3 text-2xl font-semibold">{{ $stat['value'] }}</p>
-                        <p class="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{{ $stat['hint'] }}</p>
-                    </article>
+                    @if ($stat['href'])
+                        <a href="{{ $stat['href'] }}" wire:navigate class="block rounded-lg border border-zinc-200 dark:border-zinc-700 p-4 transition hover:border-zinc-400 dark:hover:border-zinc-500">
+                            <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">{{ $stat['label'] }}</p>
+                            <p class="mt-3 text-2xl font-semibold">{{ $stat['value'] }}</p>
+                            <p class="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{{ $stat['hint'] }}</p>
+                        </a>
+                    @else
+                        <article class="rounded-lg border border-zinc-200 dark:border-zinc-700 p-4">
+                            <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">{{ $stat['label'] }}</p>
+                            <p class="mt-3 text-2xl font-semibold">{{ $stat['value'] }}</p>
+                            <p class="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{{ $stat['hint'] }}</p>
+                        </article>
+                    @endif
                 @endforeach
             </div>
         </flux:accordion.item>
@@ -830,11 +854,11 @@
                         ['label' => 'Past Due', 'value' => $platformBillingSummary['past_due_subscription_count'], 'hint' => 'Tenants needing billing attention'],
                         ['label' => 'Platform MRR', 'value' => 'NGN '.number_format($platformBillingSummary['monthly_recurring_revenue'], 2), 'hint' => 'Active subscription amount per month'],
                     ] as $billingStat)
-                        <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 p-4">
+                        <a href="{{ route('admin.billing.index') }}" wire:navigate class="block rounded-lg border border-zinc-200 dark:border-zinc-700 p-4 transition hover:border-zinc-400 dark:hover:border-zinc-500">
                             <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">{{ $billingStat['label'] }}</p>
                             <p class="mt-3 text-2xl font-semibold">{{ is_numeric($billingStat['value']) ? number_format($billingStat['value']) : $billingStat['value'] }}</p>
                             <p class="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{{ $billingStat['hint'] }}</p>
-                        </div>
+                        </a>
                     @endforeach
                 </div>
             </flux:accordion.item>

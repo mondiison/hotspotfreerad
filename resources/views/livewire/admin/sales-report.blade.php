@@ -56,21 +56,29 @@
 
     <section class="mt-6 grid gap-4 md:grid-cols-3 xl:grid-cols-4">
         @foreach ([
-            ['label' => 'Sales', 'value' => number_format($summary['sales_count']), 'hint' => 'Successful payments in range'],
-            ['label' => 'Gross Sales', 'value' => 'NGN '.number_format($summary['revenue'], 2), 'hint' => 'Total customer payments'],
-            ['label' => 'Platform Commission', 'value' => 'NGN '.number_format($summary['platform_fee'], 2), 'hint' => 'Platform share from commission tenants'],
-            ['label' => 'Tenant Net', 'value' => 'NGN '.number_format($summary['tenant_net'], 2), 'hint' => 'Amount retained by tenants'],
-            ['label' => 'Expenses', 'value' => 'NGN '.number_format($summary['expenses'], 2), 'hint' => 'Operating costs in range'],
-            ['label' => 'Estimated Profit', 'value' => 'NGN '.number_format($summary['estimated_profit'], 2), 'hint' => 'Tenant net minus expenses'],
-            ['label' => 'Profit Margin', 'value' => is_null($summary['profit_margin']) ? 'No sales' : $summary['profit_margin'].'%', 'hint' => 'Profit divided by tenant net'],
-            ['label' => 'Average Sale', 'value' => 'NGN '.number_format($summary['average_sale'], 2), 'hint' => 'Gross sales divided by sales'],
-            ['label' => 'Periods', 'value' => number_format($summary['period_count']), 'hint' => 'Grouped rows below'],
+            ['label' => 'Sales', 'value' => number_format($summary['sales_count']), 'hint' => 'Successful payments in range', 'href' => route('admin.payments.index', ['status' => 'successful', 'from' => $from, 'to' => $to])],
+            ['label' => 'Gross Sales', 'value' => 'NGN '.number_format($summary['revenue'], 2), 'hint' => 'Total customer payments', 'href' => route('admin.payments.index', ['status' => 'successful', 'from' => $from, 'to' => $to])],
+            ['label' => 'Platform Commission', 'value' => 'NGN '.number_format($summary['platform_fee'], 2), 'hint' => 'Platform share from commission tenants', 'href' => route('admin.payments.index', ['status' => 'successful', 'from' => $from, 'to' => $to])],
+            ['label' => 'Tenant Net', 'value' => 'NGN '.number_format($summary['tenant_net'], 2), 'hint' => 'Amount retained by tenants', 'href' => route('admin.payments.index', ['status' => 'successful', 'from' => $from, 'to' => $to])],
+            ['label' => 'Expenses', 'value' => 'NGN '.number_format($summary['expenses'], 2), 'hint' => 'Operating costs in range', 'href' => route('admin.expenses.index', ['from' => $from, 'to' => $to])],
+            ['label' => 'Estimated Profit', 'value' => 'NGN '.number_format($summary['estimated_profit'], 2), 'hint' => 'Tenant net minus expenses', 'href' => null],
+            ['label' => 'Profit Margin', 'value' => is_null($summary['profit_margin']) ? 'No sales' : $summary['profit_margin'].'%', 'hint' => 'Profit divided by tenant net', 'href' => null],
+            ['label' => 'Average Sale', 'value' => 'NGN '.number_format($summary['average_sale'], 2), 'hint' => 'Gross sales divided by sales', 'href' => null],
+            ['label' => 'Periods', 'value' => number_format($summary['period_count']), 'hint' => 'Grouped rows below', 'href' => null],
         ] as $stat)
-            <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
-                <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">{{ $stat['label'] }}</p>
-                <p class="mt-3 text-2xl font-semibold">{{ $stat['value'] }}</p>
-                <p class="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{{ $stat['hint'] }}</p>
-            </div>
+            @if ($stat['href'])
+                <a href="{{ $stat['href'] }}" wire:navigate class="block rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm transition hover:border-zinc-400 dark:hover:border-zinc-500">
+                    <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">{{ $stat['label'] }}</p>
+                    <p class="mt-3 text-2xl font-semibold">{{ $stat['value'] }}</p>
+                    <p class="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{{ $stat['hint'] }}</p>
+                </a>
+            @else
+                <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
+                    <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">{{ $stat['label'] }}</p>
+                    <p class="mt-3 text-2xl font-semibold">{{ $stat['value'] }}</p>
+                    <p class="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{{ $stat['hint'] }}</p>
+                </div>
+            @endif
         @endforeach
     </section>
 

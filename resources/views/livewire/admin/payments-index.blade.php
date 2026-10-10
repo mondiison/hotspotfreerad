@@ -5,19 +5,24 @@
 
     <section class="grid gap-4 md:grid-cols-3 xl:grid-cols-7">
         @foreach ([
-            ['label' => 'Transactions', 'value' => number_format($summary['count']), 'hint' => 'Matching current filters'],
-            ['label' => 'Successful', 'value' => number_format($summary['successful_count']), 'hint' => 'Confirmed customer payments'],
-            ['label' => 'Pending', 'value' => number_format($summary['pending_count']), 'hint' => 'NGN '.number_format($summary['pending_value'], 2).' awaiting confirmation'],
-            ['label' => 'Failed', 'value' => number_format($summary['failed_count']), 'hint' => 'NGN '.number_format($summary['failed_value'], 2).' not confirmed'],
-            ['label' => 'Gross Sales', 'value' => 'NGN '.number_format($summary['successful_revenue'], 2), 'hint' => 'Successful customer payments'],
-            ['label' => 'Platform Commission', 'value' => 'NGN '.number_format($summary['platform_fee'], 2), 'hint' => 'Commission from successful sales'],
-            ['label' => 'Tenant Net', 'value' => 'NGN '.number_format($summary['tenant_net'], 2), 'hint' => 'Gross sales after commission'],
+            ['label' => 'Transactions', 'value' => number_format($summary['count']), 'hint' => 'Matching current filters', 'status' => ''],
+            ['label' => 'Successful', 'value' => number_format($summary['successful_count']), 'hint' => 'Confirmed customer payments', 'status' => 'successful'],
+            ['label' => 'Pending', 'value' => number_format($summary['pending_count']), 'hint' => 'NGN '.number_format($summary['pending_value'], 2).' awaiting confirmation', 'status' => 'pending'],
+            ['label' => 'Failed', 'value' => number_format($summary['failed_count']), 'hint' => 'NGN '.number_format($summary['failed_value'], 2).' not confirmed', 'status' => 'failed'],
+            ['label' => 'Gross Sales', 'value' => 'NGN '.number_format($summary['successful_revenue'], 2), 'hint' => 'Successful customer payments', 'status' => 'successful'],
+            ['label' => 'Platform Commission', 'value' => 'NGN '.number_format($summary['platform_fee'], 2), 'hint' => 'Commission from successful sales', 'status' => 'successful'],
+            ['label' => 'Tenant Net', 'value' => 'NGN '.number_format($summary['tenant_net'], 2), 'hint' => 'Gross sales after commission', 'status' => 'successful'],
         ] as $stat)
-            <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
-                <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400">{{ $stat['label'] }}</p>
+            <button
+                type="button"
+                wire:click="$set('status', '{{ $stat['status'] }}')"
+                wire:loading.attr="disabled"
+                class="rounded-lg border p-5 text-left shadow-sm transition hover:border-zinc-400 dark:hover:border-zinc-500 {{ $status === $stat['status'] ? 'border-zinc-950 bg-zinc-950 text-white dark:border-zinc-700 dark:bg-zinc-800' : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-950 dark:text-zinc-100' }}"
+            >
+                <p class="text-sm font-medium {{ $status === $stat['status'] ? 'text-zinc-300 dark:text-zinc-600' : 'text-zinc-500 dark:text-zinc-400' }}">{{ $stat['label'] }}</p>
                 <p class="mt-3 text-2xl font-semibold">{{ $stat['value'] }}</p>
-                <p class="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{{ $stat['hint'] }}</p>
-            </div>
+                <p class="mt-2 text-xs leading-5 {{ $status === $stat['status'] ? 'text-zinc-300 dark:text-zinc-600' : 'text-zinc-500 dark:text-zinc-400' }}">{{ $stat['hint'] }}</p>
+            </button>
         @endforeach
     </section>
 

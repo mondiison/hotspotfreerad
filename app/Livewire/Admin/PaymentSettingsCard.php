@@ -4,7 +4,9 @@ namespace App\Livewire\Admin;
 
 use App\Models\Shop;
 use App\Services\PaymentSettingsService;
+use App\Services\WalletService;
 use App\Support\PaymentGatewayCatalog;
+use Flux\Flux;
 use Livewire\Component;
 
 class PaymentSettingsCard extends Component
@@ -83,6 +85,42 @@ class PaymentSettingsCard extends Component
     private function rawPaymentGateway(Shop $shop): string
     {
         return $shop->payment_gateway ?: PaymentGatewayCatalog::FLUTTERWAVE;
+    }
+
+    /**
+     * 2026-10-10, direct request: the wallet-mode banner above used to just
+     * say checkout is overridden "until wallet mode is turned off" with no
+     * way to actually do that from here -- and WalletService::disable() had
+     * no caller anywhere in the UI at all (a tenant could self-service
+     * *enable* wallet mode from admin/wallet, but never disable it, and
+     * super admins had no wallet toggle anywhere either). Surfacing the
+     * action right here, where the confusion actually happens, needed no
+     * new route/page -- gated the same way admin/wallet itself is reachable
+     * (super admin, or the tenant's own tenant_admin; tenant_staff has no
+     * entry in StaffPermissions for that route either, so it's excluded
+     * here too for consistency).
+     */
+    public function canManageWalletMode(): bool
+    {
+        $user = auth()->user();
+
+        return $user->isSuperAdmin() || ($user->isTenantAdmin() && $user->tenant_id === $this->shop->tenant_id);
+    }
+
+    public function disableWallet(WalletService $wallets): void
+    {
+        abort_unless($this->canManageWalletMode(), 403);
+
+        $wallets->disable($this->shop->tenant);
+
+        $this->shop->refresh();
+        $this->shop->load('tenant');
+
+        Flux::toast(
+            heading: 'Wallet mode disabled',
+            text: 'Customer checkout for this tenant now uses whichever gateway is configured below.',
+            variant: 'success',
+        );
     }
 
     /**

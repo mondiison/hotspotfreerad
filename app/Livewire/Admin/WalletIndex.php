@@ -72,6 +72,26 @@ class WalletIndex extends Component
         );
     }
 
+    /**
+     * 2026-10-10, direct request: WalletService::disable() had no caller
+     * anywhere in the UI -- a tenant could self-service enable wallet mode
+     * from here but never turn it back off. Symmetric with enableWallet()
+     * above; the wallet balance/history are untouched either way, only the
+     * gateway Shop::paymentGateway() resolves to for this tenant changes.
+     */
+    public function disableWallet(WalletService $wallets): void
+    {
+        $tenant = Tenant::findOrFail($this->tenantId);
+
+        $wallets->disable($tenant);
+
+        Flux::toast(
+            heading: 'Wallet disabled',
+            text: 'Customer checkout now uses each shop\'s own configured gateway instead of the platform account.',
+            variant: 'success',
+        );
+    }
+
     public function saveCommissionBearer(): void
     {
         $this->validate(['commissionBearer' => 'required|in:tenant,customer']);

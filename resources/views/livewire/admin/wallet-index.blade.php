@@ -23,9 +23,29 @@
                     <p class="text-sm text-zinc-500 dark:text-zinc-400">Wallet balance</p>
                     <p class="mt-1 text-3xl font-semibold">{{ $tenant->wallet?->currency ?? 'NGN' }} {{ number_format($balance, 2) }}</p>
                 </div>
-                <flux:badge color="emerald">Wallet active</flux:badge>
+                <div class="flex flex-wrap items-center gap-2">
+                    <flux:badge color="emerald">Wallet active</flux:badge>
+                    <flux:modal.trigger name="disable-wallet-confirm">
+                        <flux:button type="button" variant="ghost" size="sm">Disable wallet mode</flux:button>
+                    </flux:modal.trigger>
+                </div>
             </div>
         </section>
+
+        <flux:modal name="disable-wallet-confirm" class="md:w-md" :dismissible="true">
+            <div class="space-y-5">
+                <div>
+                    <flux:heading size="lg">Disable wallet mode?</flux:heading>
+                    <flux:text class="mt-2">Customer checkout for every shop you own will immediately switch to that shop's own configured gateway instead of the platform account. Your current wallet balance and full transaction history are kept -- you can still request a withdrawal for any balance already accrued.</flux:text>
+                </div>
+                <div class="flex justify-end gap-3">
+                    <flux:modal.close>
+                        <flux:button type="button" variant="ghost">Cancel</flux:button>
+                    </flux:modal.close>
+                    <flux:button type="button" variant="danger" wire:click="disableWallet" x-on:click="$flux.modal('disable-wallet-confirm').close()">Disable wallet mode</flux:button>
+                </div>
+            </div>
+        </flux:modal>
 
         <section class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-6 shadow-sm">
             <h2 class="text-base font-semibold">Who pays the platform commission?</h2>

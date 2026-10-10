@@ -26,8 +26,33 @@
     </div>
 
     @if ($shop->tenant->wallet_enabled)
-        <div class="mt-4 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            This tenant has wallet mode on -- customer checkout actually uses the platform's own gateway regardless of what's saved below, until wallet mode is turned off for this tenant.
+        <div class="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            <p class="min-w-0 flex-1">
+                This tenant has wallet mode on -- customer checkout actually uses the platform's own gateway regardless of what's saved below, until wallet mode is turned off for this tenant.
+                @if (! $this->canManageWalletMode())
+                    Ask this tenant's admin to turn it off from <span class="font-medium">Wallet</span> in their sidebar.
+                @endif
+            </p>
+
+            @if ($this->canManageWalletMode())
+                <flux:modal.trigger name="disable-wallet-confirm">
+                    <flux:button type="button" variant="outline" size="sm">Disable wallet mode</flux:button>
+                </flux:modal.trigger>
+                <flux:modal name="disable-wallet-confirm" class="md:w-md" :dismissible="true">
+                    <div class="space-y-5">
+                        <div>
+                            <flux:heading size="lg">Disable wallet mode?</flux:heading>
+                            <flux:text class="mt-2">Customer checkout for every shop under {{ $shop->tenant->company_name }} will immediately switch to whichever gateway is configured for that shop (below, for this one) instead of the platform's own account. The tenant's existing wallet balance and transaction history are kept either way.</flux:text>
+                        </div>
+                        <div class="flex justify-end gap-3">
+                            <flux:modal.close>
+                                <flux:button type="button" variant="ghost">Cancel</flux:button>
+                            </flux:modal.close>
+                            <flux:button type="button" variant="danger" wire:click="disableWallet" x-on:click="$flux.modal('disable-wallet-confirm').close()">Disable wallet mode</flux:button>
+                        </div>
+                    </div>
+                </flux:modal>
+            @endif
         </div>
     @endif
 
