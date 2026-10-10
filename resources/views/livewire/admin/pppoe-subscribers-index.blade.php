@@ -180,7 +180,7 @@
                                     Inspect
                                 </flux:button>
                                 <flux:dropdown>
-                                    <flux:button type="button" variant="outline" size="sm" icon="ellipsis-horizontal" aria-label="More actions" />
+                                    <flux:button type="button" variant="outline" size="sm" icon="ellipsis-vertical" aria-label="More actions" />
                                     <flux:menu>
                                         <flux:menu.item wire:click="renew({{ $subscriber->id }})" icon="arrow-path">Renew</flux:menu.item>
                                         <flux:menu.item wire:click="sync({{ $subscriber->id }})" icon="cloud-arrow-up">Sync</flux:menu.item>

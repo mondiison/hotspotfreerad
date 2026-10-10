@@ -107,11 +107,17 @@
                         </td>
                         <td class="px-4 py-3">
                             <div class="flex flex-wrap justify-end gap-2">
-                                <flux:button type="button" variant="outline" size="sm" icon="envelope" wire:click="sendPasswordResetLink({{ $managedUser->id }})" wire:loading.attr="disabled" wire:target="sendPasswordResetLink({{ $managedUser->id }})">Reset link</flux:button>
                                 <flux:button type="button" variant="outline" size="sm" icon="pencil-square" wire:click="edit({{ $managedUser->id }})" wire:loading.attr="disabled" wire:target="edit({{ $managedUser->id }})">Edit</flux:button>
-                                @if (! auth()->user()->is($managedUser))
-                                    <flux:button type="button" variant="danger" size="sm" icon="trash" wire:click="confirmDelete({{ $managedUser->id }})" wire:loading.attr="disabled" wire:target="confirmDelete({{ $managedUser->id }})">Delete</flux:button>
-                                @endif
+                                <flux:dropdown>
+                                    <flux:button type="button" variant="outline" size="sm" icon="ellipsis-vertical" aria-label="More actions" />
+                                    <flux:menu>
+                                        <flux:menu.item wire:click="sendPasswordResetLink({{ $managedUser->id }})" icon="envelope">Reset link</flux:menu.item>
+                                        @if (! auth()->user()->is($managedUser))
+                                            <flux:menu.separator />
+                                            <flux:menu.item wire:click="confirmDelete({{ $managedUser->id }})" icon="trash" variant="danger">Delete</flux:menu.item>
+                                        @endif
+                                    </flux:menu>
+                                </flux:dropdown>
                             </div>
                         </td>
                     </tr>

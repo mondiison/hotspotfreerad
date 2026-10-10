@@ -142,7 +142,12 @@
                                             <flux:button type="button" variant="outline" size="sm" icon="check" wire:click="recordRecurring({{ $expense->id }})" wire:loading.attr="disabled" wire:target="recordRecurring({{ $expense->id }})">Record</flux:button>
                                         @endif
                                         <flux:button type="button" variant="outline" size="sm" icon="pencil-square" wire:click="edit({{ $expense->id }})" wire:loading.attr="disabled" wire:target="edit({{ $expense->id }})">Edit</flux:button>
-                                        <flux:button type="button" variant="danger" size="sm" icon="trash" wire:click="confirmDelete({{ $expense->id }})" wire:loading.attr="disabled" wire:target="confirmDelete({{ $expense->id }})">Delete</flux:button>
+                                        <flux:dropdown>
+                                            <flux:button type="button" variant="outline" size="sm" icon="ellipsis-vertical" aria-label="More actions" />
+                                            <flux:menu>
+                                                <flux:menu.item wire:click="confirmDelete({{ $expense->id }})" icon="trash" variant="danger">Delete</flux:menu.item>
+                                            </flux:menu>
+                                        </flux:dropdown>
                                     </div>
                                 </td>
                             </tr>

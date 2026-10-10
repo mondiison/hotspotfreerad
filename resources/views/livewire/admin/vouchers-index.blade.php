@@ -178,12 +178,13 @@
                                 <flux:button type="button" wire:click="inspect({{ $batch->id }})" wire:loading.attr="disabled" wire:target="inspect({{ $batch->id }})" variant="outline" size="sm" icon="magnifying-glass">
                                     Inspect
                                 </flux:button>
-                                <flux:button href="{{ route('admin.voucher-batches.print', $batch) }}" target="_blank" variant="outline" size="sm" icon="printer">
-                                    Print
-                                </flux:button>
-                                <flux:button href="{{ route('admin.voucher-batches.print', ['voucherBatch' => $batch, 'columns' => 5, 'status' => 'unused']) }}" target="_blank" variant="ghost" size="sm" icon="squares-2x2">
-                                    Compact
-                                </flux:button>
+                                <flux:dropdown>
+                                    <flux:button type="button" variant="outline" size="sm" icon="ellipsis-vertical" aria-label="More actions" />
+                                    <flux:menu>
+                                        <flux:menu.item href="{{ route('admin.voucher-batches.print', $batch) }}" target="_blank" icon="printer">Print</flux:menu.item>
+                                        <flux:menu.item href="{{ route('admin.voucher-batches.print', ['voucherBatch' => $batch, 'columns' => 5, 'status' => 'unused']) }}" target="_blank" icon="squares-2x2">Compact</flux:menu.item>
+                                    </flux:menu>
+                                </flux:dropdown>
                             </div>
                         </td>
                     </tr>

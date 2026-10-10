@@ -111,7 +111,12 @@
                             @if ($canManage)
                                 <div class="flex justify-end gap-2">
                                     <flux:button type="button" variant="outline" size="sm" icon="pencil-square" wire:click="edit({{ $category->id }})" wire:loading.attr="disabled" wire:target="edit({{ $category->id }})">Edit</flux:button>
-                                    <flux:button type="button" variant="danger" size="sm" icon="trash" wire:click="confirmDelete({{ $category->id }})" wire:loading.attr="disabled" wire:target="confirmDelete({{ $category->id }})">Delete</flux:button>
+                                    <flux:dropdown>
+                                        <flux:button type="button" variant="outline" size="sm" icon="ellipsis-vertical" aria-label="More actions" />
+                                        <flux:menu>
+                                            <flux:menu.item wire:click="confirmDelete({{ $category->id }})" icon="trash" variant="danger">Delete</flux:menu.item>
+                                        </flux:menu>
+                                    </flux:dropdown>
                                 </div>
                             @else
                                 <p class="text-right text-xs text-zinc-500 dark:text-zinc-400">Read only</p>

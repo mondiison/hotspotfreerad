@@ -134,7 +134,12 @@
                         <td class="px-4 py-3">
                             <div class="flex justify-end gap-2">
                                 <flux:button type="button" variant="outline" size="sm" icon="pencil-square" wire:click="edit({{ $package->id }})" wire:loading.attr="disabled" wire:target="edit({{ $package->id }})">Edit</flux:button>
-                                <flux:button type="button" variant="danger" size="sm" icon="trash" wire:click="confirmDelete({{ $package->id }})" wire:loading.attr="disabled" wire:target="confirmDelete({{ $package->id }})">Delete</flux:button>
+                                <flux:dropdown>
+                                    <flux:button type="button" variant="outline" size="sm" icon="ellipsis-vertical" aria-label="More actions" />
+                                    <flux:menu>
+                                        <flux:menu.item wire:click="confirmDelete({{ $package->id }})" icon="trash" variant="danger">Delete</flux:menu.item>
+                                    </flux:menu>
+                                </flux:dropdown>
                             </div>
                         </td>
                     </tr>

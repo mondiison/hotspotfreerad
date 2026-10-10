@@ -124,7 +124,7 @@
                             <div class="flex justify-end gap-2">
                                 <flux:button type="button" wire:click="edit({{ $device->id }})" wire:loading.attr="disabled" wire:target="edit({{ $device->id }})" variant="outline" size="sm" icon="pencil-square">Edit</flux:button>
                                 <flux:dropdown>
-                                    <flux:button type="button" variant="outline" size="sm" icon="ellipsis-horizontal" aria-label="More actions" />
+                                    <flux:button type="button" variant="outline" size="sm" icon="ellipsis-vertical" aria-label="More actions" />
                                     <flux:menu>
                                         <flux:menu.item wire:click="renew({{ $device->id }})" icon="arrow-path">Renew</flux:menu.item>
                                         <flux:menu.item wire:click="sync({{ $device->id }})" icon="cloud-arrow-up">Sync</flux:menu.item>

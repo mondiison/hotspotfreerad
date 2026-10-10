@@ -64,9 +64,15 @@
                         </td>
                         <td class="px-4 py-3">
                             <div class="flex justify-end gap-2">
-                                    <flux:button href="{{ route('admin.routers.show', $router) }}" wire:navigate variant="outline" size="sm" icon="command-line">Script</flux:button>
-                                <flux:button type="button" variant="outline" size="sm" icon="pencil-square" wire:click="edit({{ $router->id }})" wire:loading.attr="disabled" wire:target="edit({{ $router->id }})">Edit</flux:button>
-                                <flux:button type="button" variant="danger" size="sm" icon="trash" wire:click="confirmDelete({{ $router->id }})" wire:loading.attr="disabled" wire:target="confirmDelete({{ $router->id }})">Delete</flux:button>
+                                <flux:button href="{{ route('admin.routers.show', $router) }}" wire:navigate variant="outline" size="sm" icon="command-line">Script</flux:button>
+                                <flux:dropdown>
+                                    <flux:button type="button" variant="outline" size="sm" icon="ellipsis-vertical" aria-label="More actions" />
+                                    <flux:menu>
+                                        <flux:menu.item wire:click="edit({{ $router->id }})" icon="pencil-square">Edit</flux:menu.item>
+                                        <flux:menu.separator />
+                                        <flux:menu.item wire:click="confirmDelete({{ $router->id }})" icon="trash" variant="danger">Delete</flux:menu.item>
+                                    </flux:menu>
+                                </flux:dropdown>
                             </div>
                         </td>
                     </tr>
