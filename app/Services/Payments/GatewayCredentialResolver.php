@@ -23,7 +23,21 @@ class GatewayCredentialResolver
     public function forPayment(Payment $payment, string $gateway): GatewayCredentials
     {
         if ($payment->shop?->tenant?->wallet_enabled) {
-            return new GatewayCredentials($this->platformSettings->gatewaySettings($gateway));
+            $tenant = $payment->shop->tenant;
+            $fields = $this->platformSettings->gatewaySettings($gateway);
+
+            // 2026-10-10: a tenant piloting automated subaccount
+            // settlement (Shop::paymentGateway()'s per-tenant override)
+            // needs its subaccount code riding along with the platform's
+            // own credentials, so the gateway class can split the charge.
+            // Every other wallet tenant's subaccount_settlement_gateway
+            // is null, so this is a no-op for them -- confirmed no
+            // behavior change for anyone not explicitly opted in.
+            if ($tenant->subaccount_settlement_gateway === $gateway && filled($tenant->subaccount_code)) {
+                $fields['subaccount_code'] = $tenant->subaccount_code;
+            }
+
+            return new GatewayCredentials($fields);
         }
 
         // Flutterwave is the odd one out: its credentials live in four

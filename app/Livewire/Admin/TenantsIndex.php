@@ -71,6 +71,16 @@ class TenantsIndex extends Component
 
     public ?string $savedMessage = null;
 
+    // 2026-10-10: automated subaccount settlement pilot (Paystack only) --
+    // deliberately separate from the main tenant form's properties/save()
+    // above, since this is a super-admin-only "save vs. provision" pair
+    // of actions (see TenantManagementService::setSubaccountGateway()/
+    // createSubaccount()), not a field a tenant ever sees or that belongs
+    // in the general create/update data array.
+    public string $subaccount_settlement_gateway = '';
+
+    public ?string $subaccountError = null;
+
     protected $queryString = [
         'search' => ['except' => ''],
         'status' => ['except' => ''],
@@ -130,8 +140,48 @@ class TenantsIndex extends Component
         $this->contact_phone = (string) $tenant->contact_phone;
         $this->contact_email = (string) $tenant->contact_email;
         $this->contact_address = (string) $tenant->contact_address;
+        $this->subaccount_settlement_gateway = (string) ($tenant->subaccount_settlement_gateway ?? '');
+        $this->subaccountError = null;
         $this->savedMessage = null;
         $this->showFormModal = true;
+    }
+
+    public function saveSubaccountGateway(TenantManagementService $tenants): void
+    {
+        if (! $this->editingTenantId) {
+            return;
+        }
+
+        $this->subaccountError = null;
+
+        try {
+            $tenants->setSubaccountGateway(
+                Tenant::findOrFail($this->editingTenantId),
+                $this->subaccount_settlement_gateway ?: null,
+                auth()->user()
+            );
+            $this->savedMessage = 'Subaccount settlement gateway updated.';
+        } catch (ValidationException $exception) {
+            $this->subaccountError = $exception->errors()['subaccount_settlement_gateway'][0] ?? 'Unable to update.';
+        }
+    }
+
+    public function createSubaccount(TenantManagementService $tenants): void
+    {
+        if (! $this->editingTenantId) {
+            return;
+        }
+
+        $this->subaccountError = null;
+
+        try {
+            $tenants->createSubaccount(Tenant::findOrFail($this->editingTenantId), auth()->user());
+            $this->savedMessage = 'Subaccount created.';
+        } catch (ValidationException $exception) {
+            $this->subaccountError = $exception->errors()['subaccount_settlement_gateway'][0] ?? 'Unable to create subaccount.';
+        } catch (\Throwable $exception) {
+            $this->subaccountError = 'Paystack request failed: '.$exception->getMessage();
+        }
     }
 
     public function save(TenantManagementService $tenants): void
@@ -224,6 +274,7 @@ class TenantsIndex extends Component
             'tenants' => $tenants,
             'ownerUsers' => $this->ownerUsers($tenants->getCollection()->pluck('id'), $tenants->getCollection()->pluck('owner_email')),
             'editingOwnerUser' => $this->editingOwnerUser(),
+            'editingTenant' => $this->editingTenantId ? Tenant::find($this->editingTenantId) : null,
             'deletingTenant' => $this->deletingTenantId ? Tenant::find($this->deletingTenantId) : null,
             'securitySummary' => $this->securitySummary(),
         ]);
@@ -296,6 +347,8 @@ class TenantsIndex extends Component
         $this->require_two_factor = false;
         $this->public_site_enabled = true;
         $this->brand_color = '#0f766e';
+        $this->subaccount_settlement_gateway = '';
+        $this->subaccountError = null;
         $this->resetValidation();
     }
 

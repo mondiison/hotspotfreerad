@@ -25,16 +25,25 @@ class PaystackGateway implements HostedGateway
      */
     public function initializeCheckout(GatewayCredentials $credentials, ChargeRequest $request): ChargeResult
     {
+        $payload = [
+            'email' => $request->customerEmail,
+            'amount' => $this->amountInSubunit($request->amount),
+            'currency' => $request->currency,
+            'reference' => $request->reference,
+            'callback_url' => $request->redirectUrl,
+            'metadata' => $request->meta,
+        ];
+
+        // 2026-10-10: only present for a tenant piloting automated
+        // subaccount settlement (see GatewayCredentialResolver) -- every
+        // other charge omits this key entirely, unchanged from before.
+        if ($credentials->has('subaccount_code')) {
+            $payload['subaccount'] = $credentials->get('subaccount_code');
+        }
+
         $response = Http::withToken($this->secretKey($credentials))
             ->acceptJson()
-            ->post($this->baseUrl().'/transaction/initialize', [
-                'email' => $request->customerEmail,
-                'amount' => $this->amountInSubunit($request->amount),
-                'currency' => $request->currency,
-                'reference' => $request->reference,
-                'callback_url' => $request->redirectUrl,
-                'metadata' => $request->meta,
-            ])
+            ->post($this->baseUrl().'/transaction/initialize', $payload)
             ->throw()
             ->json();
 
@@ -76,6 +85,38 @@ class PaystackGateway implements HostedGateway
         $value = data_get($response, 'data.authorization_url');
 
         return filled($value) && is_string($value) ? $value : null;
+    }
+
+    /**
+     * 2026-10-10: creates a real Paystack subaccount for a tenant piloting
+     * automated settlement -- confirmed against Paystack's own published
+     * example request (`POST /subaccount`, `settlement_bank` for the bank
+     * code, not `bank_code` despite some docs mentioning that name).
+     * `percentage_charge` is the share the PLATFORM's main account keeps
+     * per charge, so callers pass the tenant's own commission_rate
+     * directly. Not yet exercised against Paystack's live API -- only
+     * their documented request/response shape, matching this codebase's
+     * honesty pattern for every other freshly-added gateway integration.
+     *
+     * @throws RequestException
+     */
+    public function createSubaccount(GatewayCredentials $credentials, string $businessName, string $bankCode, string $accountNumber, float $percentageCharge): array
+    {
+        $response = Http::withToken($this->secretKey($credentials))
+            ->acceptJson()
+            ->post($this->baseUrl().'/subaccount', [
+                'business_name' => $businessName,
+                'settlement_bank' => $bankCode,
+                'account_number' => $accountNumber,
+                'percentage_charge' => $percentageCharge,
+            ])
+            ->throw()
+            ->json();
+
+        return [
+            'subaccount_code' => data_get($response, 'data.subaccount_code'),
+            'response' => $response,
+        ];
     }
 
     private function secretKey(GatewayCredentials $credentials): string

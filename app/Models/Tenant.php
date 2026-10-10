@@ -42,6 +42,7 @@ class Tenant extends Model
             'payment_gateway_settings' => 'encrypted:array',
             'wallet_enabled' => 'boolean',
             'settlement_verified_at' => 'datetime',
+            'subaccount_created_at' => 'datetime',
         ];
     }
 
@@ -98,6 +99,20 @@ class Tenant extends Model
     public function hasVerifiedSettlementAccount(): bool
     {
         return filled($this->settlement_account_number) && filled($this->settlement_verified_at);
+    }
+
+    /**
+     * 2026-10-10: true once a super admin has both pointed this tenant's
+     * wallet checkout at a specific gateway (Shop::paymentGateway()'s
+     * override, independent of the platform's single global
+     * active_gateway) AND successfully created a real subaccount on that
+     * gateway -- the tenant's share of every future charge settles
+     * straight to their own bank from then on, see
+     * GatewayCredentialResolver::forPayment().
+     */
+    public function hasSubaccountSettlement(): bool
+    {
+        return filled($this->subaccount_settlement_gateway) && filled($this->subaccount_code);
     }
 
     private static function uniqueSlug(string $name, ?int $ignoreId = null): string

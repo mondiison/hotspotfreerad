@@ -344,6 +344,69 @@
                     </div>
                 </section>
 
+                @if ($editingTenantId)
+                    {{--
+                        2026-10-10: automated per-tenant gateway subaccount
+                        settlement pilot -- super-admin-only, deliberately
+                        separate from the main "Save Tenant" submit below
+                        (both buttons here are type="button" so they never
+                        trigger the big form's own save()). "Paystack" is
+                        the only real option since it's the only gateway
+                        with a subaccount integration today -- picking a
+                        gateway here overrides Shop::paymentGateway() for
+                        THIS tenant only, independent of the platform's
+                        global active gateway, so it's safe to pilot on one
+                        tenant without affecting any other wallet tenant.
+                    --}}
+                    <section class="rounded-lg border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 p-4">
+                        <h2 class="text-sm font-semibold text-zinc-950 dark:text-zinc-100">Automated subaccount settlement (pilot)</h2>
+                        <p class="mt-1 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
+                            Overrides which gateway THIS tenant's wallet checkout uses, independent of the platform's own active gateway -- lets one tenant pilot automated settlement without affecting any other wallet tenant. Once a subaccount is created, that tenant's share of every future charge settles straight to their verified bank account automatically.
+                        </p>
+
+                        @if ($subaccountError)
+                            <p class="mt-3 text-sm text-red-600 dark:text-red-400">{{ $subaccountError }}</p>
+                        @endif
+
+                        <div class="mt-4 flex flex-wrap items-end gap-3">
+                            <flux:field class="w-56">
+                                <flux:label>Settlement gateway</flux:label>
+                                <flux:select wire:model="subaccount_settlement_gateway">
+                                    <flux:select.option value="">None (use platform default)</flux:select.option>
+                                    <flux:select.option value="paystack">Paystack</flux:select.option>
+                                </flux:select>
+                            </flux:field>
+                            <flux:button type="button" variant="outline" wire:click="saveSubaccountGateway" wire:loading.attr="disabled" wire:target="saveSubaccountGateway">
+                                <span wire:loading.remove wire:target="saveSubaccountGateway">Save gateway</span>
+                                <span wire:loading wire:target="saveSubaccountGateway">Saving...</span>
+                            </flux:button>
+                        </div>
+
+                        @if ($editingTenant?->subaccount_settlement_gateway)
+                            <div class="mt-4 rounded-lg border border-white bg-white dark:bg-zinc-900 p-3 shadow-sm">
+                                @if ($editingTenant->hasSubaccountSettlement())
+                                    <p class="text-sm font-semibold text-zinc-950 dark:text-zinc-100">Subaccount active</p>
+                                    <p class="mt-1 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
+                                        Code <span class="font-mono">{{ $editingTenant->subaccount_code }}</span>, created {{ $editingTenant->subaccount_created_at?->diffForHumans() }}.
+                                    </p>
+                                @elseif (! $editingTenant->hasVerifiedSettlementAccount())
+                                    <p class="text-sm font-semibold text-amber-700 dark:text-amber-400">Verified settlement account required</p>
+                                    <p class="mt-1 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
+                                        Verify this tenant's settlement bank account from their Wallet page before a subaccount can be created.
+                                    </p>
+                                @else
+                                    <p class="text-sm font-semibold text-zinc-950 dark:text-zinc-100">No subaccount yet</p>
+                                    <p class="mt-1 text-sm leading-6 text-zinc-600 dark:text-zinc-400">Settlement account is verified -- ready to create the subaccount.</p>
+                                    <flux:button type="button" variant="primary" size="sm" class="mt-3" wire:click="createSubaccount" wire:loading.attr="disabled" wire:target="createSubaccount">
+                                        <span wire:loading.remove wire:target="createSubaccount">Create subaccount</span>
+                                        <span wire:loading wire:target="createSubaccount">Creating...</span>
+                                    </flux:button>
+                                @endif
+                            </div>
+                        @endif
+                    </section>
+                @endif
+
                 <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4">
                     <h2 class="text-sm font-semibold text-zinc-950 dark:text-zinc-100">Owner access guide</h2>
                     <p class="mt-1 text-sm leading-6 text-zinc-600 dark:text-zinc-400">

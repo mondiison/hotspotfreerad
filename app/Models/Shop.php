@@ -35,10 +35,22 @@ class Shop extends Model
         ];
     }
 
+    /**
+     * 2026-10-10: a wallet-enabled tenant normally follows the platform's
+     * one shared active gateway (walletGateway()) -- but
+     * subaccount_settlement_gateway lets a super admin pin a SPECIFIC
+     * tenant to a different gateway instead, independent of whatever the
+     * platform's global setting is. This is what makes it safe to pilot
+     * automated subaccount settlement on one test tenant (pointed at
+     * Paystack) while every other wallet tenant -- including a live one
+     * already running on the platform's actual active gateway -- keeps
+     * resolving exactly as before, since this override is null for them.
+     */
     public function paymentGateway(): string
     {
         if ($this->tenant?->wallet_enabled) {
-            return app(PlatformPaymentSettingsService::class)->walletGateway();
+            return $this->tenant->subaccount_settlement_gateway
+                ?: app(PlatformPaymentSettingsService::class)->walletGateway();
         }
 
         return $this->payment_gateway ?: PaymentGatewayCatalog::FLUTTERWAVE;
