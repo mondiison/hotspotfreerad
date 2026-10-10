@@ -131,6 +131,31 @@
                                 <p class="text-sm font-medium" style="color: {{ $router->shop->tenant->brand_color ?? '#0f766e' }}">{{ $router->shop->tenant->company_name }}</p>
                                 <h1 class="mt-1 text-2xl font-bold">{{ $router->shop->name }} Wi-Fi</h1>
 
+                                {{--
+                                    2026-10-10, confirmed live: a device's
+                                    OS-owned captive-portal login browser
+                                    (iOS Captive Network Assistant, Android
+                                    CaptivePortalLogin) does not reliably
+                                    carry cookies across separate portal
+                                    visits, so the automated MAC-recovery
+                                    feature (shops.auto_recover_mac_changes)
+                                    cannot be counted on for phones -- the
+                                    one device category a randomized MAC
+                                    actually affects. Prevention beats
+                                    recovery here: this note tells a
+                                    customer how to turn off per-network MAC
+                                    randomization BEFORE they ever pay, so
+                                    the problem never happens for them at
+                                    all, regardless of whether that setting
+                                    is on for this shop.
+                                --}}
+                                <div class="mx-auto mt-4 max-w-sm rounded-md border border-amber-200 bg-amber-50 p-3 text-left text-xs leading-5 text-amber-900">
+                                    <p class="font-semibold">Before you connect: turn off "Private Address"</p>
+                                    <p class="mt-1"><span class="font-medium">iPhone:</span> Settings &rarr; Wi-Fi &rarr; tap the (i) next to this network &rarr; turn off <span class="font-medium">Private Wi-Fi Address</span>.</p>
+                                    <p class="mt-1"><span class="font-medium">Android:</span> Wi-Fi settings &rarr; tap this network &rarr; Privacy &rarr; choose <span class="font-medium">Use device MAC</span>.</p>
+                                    <p class="mt-1">Skipping this can get you asked to pay again later for access you already own.</p>
+                                </div>
+
                                 <ol class="mx-auto mt-5 max-w-sm space-y-3 text-left text-sm leading-6">
                                     <li class="flex gap-3">
                                         <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-zinc-950 text-xs font-bold text-white">1</span>
