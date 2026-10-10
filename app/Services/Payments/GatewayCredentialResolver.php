@@ -54,6 +54,22 @@ class GatewayCredentialResolver
             ]);
         }
 
-        return new GatewayCredentials((array) ($payment->shop?->paymentGatewaySettings()[$gateway] ?? []));
+        $fields = (array) ($payment->shop?->paymentGatewaySettings()[$gateway] ?? []);
+        $tenant = $payment->shop?->tenant;
+
+        // 2026-10-10: the mirror image of the wallet-mode merge above --
+        // here the TENANT is their own main gateway account (these are
+        // their own credentials, just resolved above) and the PLATFORM is
+        // registered as a subaccount ON it, for a tenant who still pays a
+        // commission despite using their own gateway (see
+        // TenantManagementService::createCommissionSubaccount()). Every
+        // tenant without commission_subaccount_gateway set (every tenant
+        // today) hits this as a no-op -- confirmed no behavior change for
+        // anyone not explicitly opted in.
+        if ($tenant?->commission_subaccount_gateway === $gateway && filled($tenant->commission_subaccount_code)) {
+            $fields['subaccount_code'] = $tenant->commission_subaccount_code;
+        }
+
+        return new GatewayCredentials($fields);
     }
 }

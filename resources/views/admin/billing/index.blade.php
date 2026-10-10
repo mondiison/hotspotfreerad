@@ -82,6 +82,10 @@
             <livewire:admin.platform-payment-settings-card />
         </section>
 
+        <section class="mt-6">
+            <livewire:admin.platform-settlement-account-card />
+        </section>
+
         <section class="mt-6 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5">
             <h2 class="font-semibold">Assign Tenant Subscription</h2>
             <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Use this for manual billing status when a tenant is trialing, paid offline, or gateway checkout needs admin correction.</p>

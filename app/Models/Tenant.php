@@ -43,6 +43,7 @@ class Tenant extends Model
             'wallet_enabled' => 'boolean',
             'settlement_verified_at' => 'datetime',
             'subaccount_created_at' => 'datetime',
+            'commission_subaccount_created_at' => 'datetime',
         ];
     }
 
@@ -113,6 +114,20 @@ class Tenant extends Model
     public function hasSubaccountSettlement(): bool
     {
         return filled($this->subaccount_settlement_gateway) && filled($this->subaccount_code);
+    }
+
+    /**
+     * 2026-10-10: the MIRROR IMAGE of hasSubaccountSettlement() above --
+     * that one is "platform is the main gateway account, tenant is a
+     * subaccount on it" (wallet mode). This is "tenant is their own main
+     * gateway account, PLATFORM is registered as a subaccount on IT" --
+     * for a tenant using their own gateway credentials who still pays the
+     * platform a commission (billing_model='commission'). See
+     * TenantManagementService::createCommissionSubaccount().
+     */
+    public function hasCommissionSubaccount(): bool
+    {
+        return filled($this->commission_subaccount_gateway) && filled($this->commission_subaccount_code);
     }
 
     private static function uniqueSlug(string $name, ?int $ignoreId = null): string

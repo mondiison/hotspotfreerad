@@ -81,6 +81,12 @@ class TenantsIndex extends Component
 
     public ?string $subaccountError = null;
 
+    // 2026-10-10: automated commission collection on a tenant's OWN
+    // gateway (the mirror image of the wallet-pilot card above) --
+    // deliberately a separate error property so the two cards' errors
+    // can never land under the wrong one.
+    public ?string $commissionSubaccountError = null;
+
     protected $queryString = [
         'search' => ['except' => ''],
         'status' => ['except' => ''],
@@ -142,8 +148,27 @@ class TenantsIndex extends Component
         $this->contact_address = (string) $tenant->contact_address;
         $this->subaccount_settlement_gateway = (string) ($tenant->subaccount_settlement_gateway ?? '');
         $this->subaccountError = null;
+        $this->commissionSubaccountError = null;
         $this->savedMessage = null;
         $this->showFormModal = true;
+    }
+
+    public function createCommissionSubaccount(TenantManagementService $tenants): void
+    {
+        if (! $this->editingTenantId) {
+            return;
+        }
+
+        $this->commissionSubaccountError = null;
+
+        try {
+            $tenants->createCommissionSubaccount(Tenant::findOrFail($this->editingTenantId), auth()->user());
+            $this->savedMessage = 'Commission subaccount created.';
+        } catch (ValidationException $exception) {
+            $this->commissionSubaccountError = $exception->errors()['commission_subaccount_gateway'][0] ?? 'Unable to create commission subaccount.';
+        } catch (\Throwable $exception) {
+            $this->commissionSubaccountError = 'Paystack request failed: '.$exception->getMessage();
+        }
     }
 
     public function saveSubaccountGateway(TenantManagementService $tenants): void
@@ -349,6 +374,7 @@ class TenantsIndex extends Component
         $this->brand_color = '#0f766e';
         $this->subaccount_settlement_gateway = '';
         $this->subaccountError = null;
+        $this->commissionSubaccountError = null;
         $this->resetValidation();
     }
 

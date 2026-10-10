@@ -36,6 +36,20 @@ class PlatformPaymentSettingsService
 
     private const GATEWAY_KEY_PREFIX = 'payments.platform.gateway.';
 
+    /**
+     * 2026-10-10: the platform's OWN settlement bank account -- never
+     * needed before, since the platform has only ever been the one
+     * HOLDING funds (its own gateway credentials above), not one being
+     * paid OUT to via a split. Added for automated commission collection
+     * on a tenant's own gateway (see TenantManagementService::
+     * createCommissionSubaccount()): the platform gets registered as a
+     * subaccount on each tenant's own account, which needs these bank
+     * details once, platform-wide. Stored plain/unencrypted, same
+     * reasoning as GENERAL_KEY and Tenant.settlement_* -- a bank account
+     * number isn't an API secret.
+     */
+    private const SETTLEMENT_ACCOUNT_KEY = 'payments.platform.settlement_account';
+
     public function rules(): array
     {
         return [
@@ -228,6 +242,36 @@ class PlatformPaymentSettingsService
         return $this->storedGatewayRaw($gateway ?: $this->activeGateway()) !== [];
     }
 
+    /**
+     * @return array{bank_code?: string, bank_name?: string, account_number?: string, account_name?: string, verified_at?: string}
+     */
+    public function settlementAccount(): array
+    {
+        return $this->storedSettlementAccount();
+    }
+
+    public function hasVerifiedSettlementAccount(): bool
+    {
+        $account = $this->storedSettlementAccount();
+
+        return filled($account['account_number'] ?? null) && filled($account['verified_at'] ?? null);
+    }
+
+    public function updateSettlementAccount(array $data, User $actor): void
+    {
+        abort_unless($actor->isSuperAdmin(), 403);
+
+        PlatformSetting::query()->updateOrCreate(['key' => self::SETTLEMENT_ACCOUNT_KEY], ['value' => [
+            'bank_code' => $data['bank_code'],
+            'bank_name' => $data['bank_name'],
+            'account_number' => $data['account_number'],
+            'account_name' => $data['account_name'],
+            'verified_at' => now()->toDateTimeString(),
+        ]]);
+
+        Cache::forget($this->cacheKey(self::SETTLEMENT_ACCOUNT_KEY));
+    }
+
     private function cleanGatewaySettings(string $gateway, array $settings): array
     {
         $allowedFields = array_keys(PaymentGatewayCatalog::platformCredentialFields($gateway));
@@ -243,6 +287,15 @@ class PlatformPaymentSettingsService
     {
         return Cache::remember($this->cacheKey(self::GENERAL_KEY), now()->addMinutes(10), function (): array {
             $setting = PlatformSetting::query()->where('key', self::GENERAL_KEY)->first();
+
+            return is_array($setting?->value) ? $setting->value : [];
+        });
+    }
+
+    private function storedSettlementAccount(): array
+    {
+        return Cache::remember($this->cacheKey(self::SETTLEMENT_ACCOUNT_KEY), now()->addMinutes(10), function (): array {
+            $setting = PlatformSetting::query()->where('key', self::SETTLEMENT_ACCOUNT_KEY)->first();
 
             return is_array($setting?->value) ? $setting->value : [];
         });

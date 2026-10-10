@@ -407,6 +407,54 @@
                     </section>
                 @endif
 
+                @if ($editingTenantId && ! $editingTenant?->wallet_enabled)
+                    {{--
+                        2026-10-10: the mirror image of the wallet-pilot
+                        card above -- this tenant uses their OWN gateway
+                        credentials (not the platform's), but the platform
+                        can still automatically collect its commission_rate
+                        cut by registering as a subaccount on the tenant's
+                        OWN Paystack account. No gateway picker needed here
+                        (unlike the wallet pilot) since each tenant already
+                        owns their own gateway choice -- this just checks
+                        whether Paystack credentials are on file.
+                    --}}
+                    <section class="rounded-lg border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 p-4">
+                        <h2 class="text-sm font-semibold text-zinc-950 dark:text-zinc-100">Automated commission collection (own gateway, pilot)</h2>
+                        <p class="mt-1 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
+                            Lets the platform collect its commission cut automatically even though this tenant uses their own Paystack account -- the platform gets registered as a subaccount on THEIR account, so the platform's share settles straight to the platform's own bank, and the rest keeps landing in the tenant's account exactly as it does today.
+                        </p>
+
+                        @if ($commissionSubaccountError)
+                            <p class="mt-3 text-sm text-red-600 dark:text-red-400">{{ $commissionSubaccountError }}</p>
+                        @endif
+
+                        <?php $hasPaystackCredentials = filled($editingTenant?->paymentGatewaySettings()['paystack']['secret_key'] ?? null); ?>
+
+                        <div class="mt-4 rounded-lg border border-white bg-white dark:bg-zinc-900 p-3 shadow-sm">
+                            @if ($editingTenant?->hasCommissionSubaccount())
+                                <p class="text-sm font-semibold text-zinc-950 dark:text-zinc-100">Commission subaccount active</p>
+                                <p class="mt-1 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
+                                    Code <span class="font-mono">{{ $editingTenant->commission_subaccount_code }}</span>, created {{ $editingTenant->commission_subaccount_created_at?->diffForHumans() }}.
+                                </p>
+                            @elseif (! $hasPaystackCredentials)
+                                <p class="text-sm font-semibold text-amber-700 dark:text-amber-400">Only Paystack is supported right now</p>
+                                <p class="mt-1 text-sm leading-6 text-zinc-600 dark:text-zinc-400">This tenant has no saved Paystack secret key -- save one under this tenant's Payment Setup first.</p>
+                            @elseif ($form_billing_model !== 'commission' || (float) $commission_rate <= 0)
+                                <p class="text-sm font-semibold text-amber-700 dark:text-amber-400">Commission billing required</p>
+                                <p class="mt-1 text-sm leading-6 text-zinc-600 dark:text-zinc-400">Set billing model to Commission with a rate above zero above, save, then come back here.</p>
+                            @else
+                                <p class="text-sm font-semibold text-zinc-950 dark:text-zinc-100">Not enabled yet</p>
+                                <p class="mt-1 text-sm leading-6 text-zinc-600 dark:text-zinc-400">Paystack credentials and a commission rate are on file -- ready to create.</p>
+                                <flux:button type="button" variant="primary" size="sm" class="mt-3" wire:click="createCommissionSubaccount" wire:loading.attr="disabled" wire:target="createCommissionSubaccount">
+                                    <span wire:loading.remove wire:target="createCommissionSubaccount">Enable automated commission collection</span>
+                                    <span wire:loading wire:target="createCommissionSubaccount">Creating...</span>
+                                </flux:button>
+                            @endif
+                        </div>
+                    </section>
+                @endif
+
                 <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4">
                     <h2 class="text-sm font-semibold text-zinc-950 dark:text-zinc-100">Owner access guide</h2>
                     <p class="mt-1 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
