@@ -499,13 +499,41 @@ class PaymentGatewayCatalog
             ->all();
     }
 
+    /**
+     * 2026-10-10, confirmed live: used $shop->paymentGateway() throughout
+     * -- which silently returns the PLATFORM's wallet gateway for a
+     * wallet-enabled tenant, ignoring whatever this shop's own
+     * payment_gateway column actually says. PaymentSettingsCard (the UI
+     * for editing a shop's OWN gateway choice) renders this readiness
+     * block, so a wallet-enabled tenant picking Paystack for their own
+     * account saw readiness computed against the platform's gateway
+     * (Monnify) instead -- checking Monnify's fields against settings
+     * that were never meant to hold Monnify credentials at all, so
+     * everything showed "missing" regardless of what was actually saved.
+     * Reads the shop's own raw gateway now -- this answers "is this
+     * shop's own configured gateway ready," not "what does checkout
+     * actually use right now" (that's still Shop::paymentGateway()'s job,
+     * used correctly elsewhere e.g. the real checkout dispatch).
+     */
     public static function tenantReadiness(Shop $shop): array
     {
-        if ($shop->paymentGateway() !== self::FLUTTERWAVE) {
-            $settings = $shop->paymentGatewaySettings();
-            $selectFieldKeys = array_keys(self::selectFields($shop->paymentGateway()));
+        $gateway = $shop->payment_gateway ?: self::FLUTTERWAVE;
 
-            return collect(self::credentialFields($shop->paymentGateway()))
+        if ($gateway !== self::FLUTTERWAVE) {
+            // 2026-10-10, confirmed live alongside the fix above:
+            // paymentGatewaySettings() is the tenant's FULL multi-gateway
+            // map ({paystack: {...}, monnify: {...}}), not one gateway's
+            // sub-array -- the lookups below used to read $settings[$key]
+            // directly (e.g. $settings['secret_key']), which only exists
+            // one level deeper under the gateway's own key, so every
+            // readiness badge for every non-Flutterwave gateway has
+            // always shown "missing" regardless of what was actually
+            // saved. Pre-existing, unrelated to the wallet-gateway bug
+            // above -- caught by the new regression test for that fix.
+            $settings = (array) ($shop->paymentGatewaySettings()[$gateway] ?? []);
+            $selectFieldKeys = array_keys(self::selectFields($gateway));
+
+            return collect(self::credentialFields($gateway))
                 ->reject(fn (string $label, string $key): bool => in_array($key, $selectFieldKeys, true))
                 ->map(function (string $label, string $key) use ($settings): array {
                     return [

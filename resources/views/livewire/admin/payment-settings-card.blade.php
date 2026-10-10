@@ -25,6 +25,12 @@
         </div>
     </div>
 
+    @if ($shop->tenant->wallet_enabled)
+        <div class="mt-4 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            This tenant has wallet mode on -- customer checkout actually uses the platform's own gateway regardless of what's saved below, until wallet mode is turned off for this tenant.
+        </div>
+    @endif
+
     <flux:separator class="my-5" />
 
     @if ($savedMessage)

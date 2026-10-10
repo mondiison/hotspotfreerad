@@ -308,6 +308,46 @@ class AdminPaymentSettingsTest extends TestCase
         $this->assertSame('1234567890', $tenant->payment_gateway_settings['monnify']['contract_code']);
     }
 
+    /**
+     * 2026-10-10, confirmed live: picking Paystack and saving on a
+     * wallet-enabled tenant's shop used to snap the gateway dropdown
+     * straight back to whatever the platform's own wallet gateway
+     * happened to be (Monnify in production) the instant the form
+     * re-hydrated after save, and readiness showed everything "missing"
+     * -- both read $shop->paymentGateway() (wallet-aware) instead of the
+     * shop's own raw payment_gateway column this form actually edits.
+     * The save itself was never broken; only the post-save display was.
+     */
+    public function test_wallet_enabled_tenant_can_still_pick_their_own_gateway_for_this_shop(): void
+    {
+        [$tenant] = $this->tenants();
+        $tenant->forceFill(['wallet_enabled' => true])->save();
+        $shop = $this->shop($tenant, 'Wallet Tenant Shop', false)->load('tenant');
+        $shop->payments_count = 0;
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user);
+
+        Livewire::test(PaymentSettingsCard::class, ['shop' => $shop])
+            ->set('payment_gateway', 'paystack')
+            ->set('gateway_settings.public_key', 'PK_TEST_PUBLIC')
+            ->set('gateway_settings.secret_key', 'PK_TEST_SECRET')
+            ->call('save')
+            ->assertHasNoErrors()
+            // Previously failed here: reverted to 'monnify' after save.
+            ->assertSet('payment_gateway', 'paystack')
+            ->assertSee('Secret Key saved')
+            ->assertSee('wallet mode on');
+
+        $shop->refresh();
+        $this->assertSame('paystack', $shop->payment_gateway);
+        $this->assertTrue($shop->hasConfiguredPaymentGateway());
+    }
+
     public function test_leaving_a_gateway_field_blank_keeps_its_saved_value_instead_of_wiping_it(): void
     {
         [$tenant] = $this->tenants();

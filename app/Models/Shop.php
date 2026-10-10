@@ -210,6 +210,33 @@ class Shop extends Model
         return filled($this->flutterwave_client_id) && filled($this->flutterwave_client_secret);
     }
 
+    /**
+     * 2026-10-10, confirmed live: the Shops list's "Configured"/"Not
+     * configured" badge used to check ONLY hasCompleteFlutterwaveCredentials(),
+     * regardless of which gateway a shop actually had selected -- any shop
+     * on Paystack/Monnify/Squad/Stripe always showed "Not configured"/
+     * "Customer payments disabled" even with real, working credentials
+     * saved, since those credentials live under a completely different
+     * check. Deliberately reads the shop's own RAW payment_gateway column
+     * here, not paymentGateway() (which silently returns the platform's
+     * wallet gateway for a wallet-enabled tenant) -- this answers "has
+     * this shop configured ITS OWN chosen gateway," a different question
+     * from "what gateway does checkout actually use right now."
+     */
+    public function hasConfiguredPaymentGateway(): bool
+    {
+        $gateway = $this->payment_gateway ?: PaymentGatewayCatalog::FLUTTERWAVE;
+
+        if ($gateway === PaymentGatewayCatalog::FLUTTERWAVE) {
+            return $this->hasCompleteFlutterwaveCredentials() || $this->hasFlutterwaveHostedCheckoutKey();
+        }
+
+        $settings = (array) ($this->paymentGatewaySettings()[$gateway] ?? []);
+
+        return collect(PaymentGatewayCatalog::secretFieldKeys($gateway))
+            ->contains(fn (string $key): bool => filled($settings[$key] ?? null));
+    }
+
     public function hasFlutterwaveHostedCheckoutKey(): bool
     {
         return filled($this->flutterwave_secret_key);

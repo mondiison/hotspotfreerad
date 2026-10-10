@@ -64,7 +64,7 @@ class AdminIndexFilterTest extends TestCase
             ->assertOk()
             ->assertSee($configuredShop->name)
             ->assertSee('Configured')
-            ->assertSee('Webhook secret saved')
+            ->assertSee('Flutterwave')
             ->assertDontSee($unconfiguredShop->name);
 
         $this->actingAs($this->superAdmin())

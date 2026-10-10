@@ -67,9 +67,9 @@
                         <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $shop->tenant->company_name }}</td>
                         <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $shop->location_city ?: 'Not set' }}</td>
                         <td class="px-4 py-3">
-                            @if ($shop->hasCompleteFlutterwaveCredentials())
+                            @if ($shop->hasConfiguredPaymentGateway())
                                 <flux:badge color="emerald">Configured</flux:badge>
-                                <p class="mt-2 text-xs text-zinc-500 dark:text-zinc-400">{{ $shop->hasFlutterwaveWebhookSecret() ? 'Webhook secret saved' : 'Webhook secret missing' }}</p>
+                                <p class="mt-2 text-xs text-zinc-500 dark:text-zinc-400">{{ $shop->paymentGatewayName() }}</p>
                             @else
                                 <flux:badge color="amber">Not configured</flux:badge>
                                 <p class="mt-2 text-xs text-zinc-500 dark:text-zinc-400">Customer payments disabled</p>

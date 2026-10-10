@@ -34,7 +34,7 @@ class PaymentSettingsCard extends Component
     public function mount(Shop $shop): void
     {
         $this->shop = $shop;
-        $this->payment_gateway = $shop->paymentGateway();
+        $this->payment_gateway = $this->rawPaymentGateway($shop);
         $this->gateway_settings = $this->defaultGatewaySettings();
     }
 
@@ -60,12 +60,29 @@ class PaymentSettingsCard extends Component
             'clear_flutterwave_secret_key',
             'clear_flutterwave_webhook_secret',
         ]);
-        $this->payment_gateway = $this->shop->paymentGateway();
+        $this->payment_gateway = $this->rawPaymentGateway($this->shop);
         $this->gateway_settings = $this->defaultGatewaySettings();
 
         $this->savedMessage = 'Payment settings updated for '.$this->shop->name.'.';
 
         session()->flash('status', 'Payment settings updated for '.$this->shop->name.'.');
+    }
+
+    /**
+     * 2026-10-10, confirmed live: this form edits a shop's OWN
+     * payment_gateway column directly -- using $shop->paymentGateway()
+     * here instead (as this used to) silently returns the PLATFORM's
+     * wallet gateway for a wallet-enabled tenant, so picking "Paystack"
+     * and saving would immediately snap the dropdown back to "Monnify"
+     * (or whatever the platform's active gateway happens to be) the
+     * instant the form re-hydrated after save, even though the save
+     * itself correctly wrote 'paystack' to the raw column. The literal
+     * saved choice is always shown here now, regardless of whether
+     * wallet mode currently overrides it for actual checkout.
+     */
+    private function rawPaymentGateway(Shop $shop): string
+    {
+        return $shop->payment_gateway ?: PaymentGatewayCatalog::FLUTTERWAVE;
     }
 
     /**
