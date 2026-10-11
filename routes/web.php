@@ -35,12 +35,13 @@ use App\Http\Controllers\Auth\RedirectAfterLoginController;
 use App\Http\Controllers\Auth\ResetPasswordController;
 use App\Http\Controllers\Auth\TwoFactorChallengeController;
 use App\Http\Controllers\Hotspot\PortalController;
+use App\Http\Controllers\MarketingController;
 use App\Http\Controllers\TenantPublicSiteController;
 use App\Http\Middleware\AuthorizeTenantStaff;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Support\Facades\Route;
 
-Route::redirect('/', '/admin');
+Route::get('/', MarketingController::class)->name('home');
 
 Route::middleware('guest')->group(function () {
     Route::get('/login', [LoginController::class, 'create'])->name('login');
