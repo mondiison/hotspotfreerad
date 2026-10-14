@@ -64,6 +64,7 @@ class RouterManagementService
             'provisioning_settings.trunk_port' => ['nullable', 'string', 'max:40'],
             'provisioning_settings.pi_port' => ['nullable', 'string', 'max:40'],
             'provisioning_settings.extra_mgmt_port_numbers' => ['nullable', 'string', 'max:120', 'regex:/^\d+(,\s*\d+)*$/'],
+            'provisioning_settings.extra_trunk_port_numbers' => ['nullable', 'string', 'max:120', 'regex:/^\d+(,\s*\d+)*$/'],
             'provisioning_settings.extra_hotspot_port_numbers' => ['nullable', 'string', 'max:120', 'regex:/^\d+(,\s*\d+)*$/'],
             'provisioning_settings.extra_staff_port_numbers' => [
                 'nullable', 'string', 'max:120', 'regex:/^\d+(,\s*\d+)*$/',
@@ -78,6 +79,7 @@ class RouterManagementService
                 Rule::prohibitedIf(fn () => ! (bool) data_get($provisioningSettings, 'enable_pppoe')),
             ],
             'provisioning_settings.extra_mgmt_ports' => ['nullable', 'string', 'max:200'],
+            'provisioning_settings.extra_trunk_ports' => ['nullable', 'string', 'max:200'],
             'provisioning_settings.extra_hotspot_ports' => ['nullable', 'string', 'max:200'],
             'provisioning_settings.extra_staff_ports' => ['nullable', 'string', 'max:200'],
             'provisioning_settings.extra_pos_ports' => ['nullable', 'string', 'max:200'],
@@ -362,11 +364,13 @@ class RouterManagementService
             'trunk_port' => 'ether2',
             'pi_port' => 'ether3',
             'extra_mgmt_port_numbers' => '',
+            'extra_trunk_port_numbers' => '',
             'extra_hotspot_port_numbers' => '',
             'extra_staff_port_numbers' => '',
             'extra_pos_port_numbers' => '',
             'extra_pppoe_port_numbers' => '',
             'extra_mgmt_ports' => '',
+            'extra_trunk_ports' => '',
             'extra_hotspot_ports' => '',
             'extra_staff_ports' => '',
             'extra_pos_ports' => '',
@@ -471,6 +475,7 @@ class RouterManagementService
 
         foreach ([
             'extra_mgmt_ports' => 'extra_mgmt_port_numbers',
+            'extra_trunk_ports' => 'extra_trunk_port_numbers',
             'extra_hotspot_ports' => 'extra_hotspot_port_numbers',
             'extra_staff_ports' => 'extra_staff_port_numbers',
             'extra_pos_ports' => 'extra_pos_port_numbers',
@@ -519,6 +524,7 @@ class RouterManagementService
             // port number regardless of label.
             foreach ([
                 'Extra management port' => $provisioningSettings['extra_mgmt_port_numbers'] ?? null,
+                'Extra trunk port' => $provisioningSettings['extra_trunk_port_numbers'] ?? null,
                 'Extra hotspot port' => $provisioningSettings['extra_hotspot_port_numbers'] ?? null,
                 'Extra staff port' => ($provisioningSettings['enable_staff'] ?? false) ? ($provisioningSettings['extra_staff_port_numbers'] ?? null) : null,
                 'Extra POS port' => ($provisioningSettings['enable_pos'] ?? false) ? ($provisioningSettings['extra_pos_port_numbers'] ?? null) : null,

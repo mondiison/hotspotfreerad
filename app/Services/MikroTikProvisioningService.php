@@ -143,7 +143,7 @@ SCRIPT;
         $apiUserLines = implode("\n", $this->apiUserProvisioningLines($router));
         $settings = $this->provisioningSettings($router, $profile);
         $lanBridgeName = 'bridge-lan';
-        $taggedPorts = $lanBridgeName.','.$settings['trunk_port'];
+        $taggedPorts = $lanBridgeName.','.$this->trunkPortsCsv($settings);
         $enableBuiltinWifi = (bool) $settings['enable_builtin_wifi'];
         $extraPosPorts = $this->extraPortInterfaces($settings, 'extra_pos_ports');
 
@@ -270,7 +270,7 @@ SCRIPT;
         $nasIdentifier = $router->nas_identifier;
         $settings = $this->provisioningSettings($router, $profile);
         $lanBridgeName = 'bridge-lan';
-        $taggedPorts = $lanBridgeName.','.$settings['trunk_port'];
+        $taggedPorts = $lanBridgeName.','.$this->trunkPortsCsv($settings);
         $enableBuiltinWifi = (bool) $settings['enable_builtin_wifi'];
         $enableStaff = (bool) $settings['enable_staff'];
         $enableMgmtWifi = (bool) $settings['enable_mgmt_wifi'];
@@ -439,7 +439,7 @@ SCRIPT;
         $radiusLines = implode("\n", $this->radiusClientLines($router, 'ppp'));
         $settings = $this->provisioningSettings($router, $profile);
         $lanBridgeName = 'bridge-lan';
-        $taggedPorts = $lanBridgeName.','.$settings['trunk_port'];
+        $taggedPorts = $lanBridgeName.','.$this->trunkPortsCsv($settings);
         $extraPppoePorts = $this->extraPortInterfaces($settings, 'extra_pppoe_ports');
         $pppoeInterface = 'vlan-pppoe';
         $pppoeLocalAddress = (string) str($settings['pppoe_gateway'])->before('/');
@@ -533,9 +533,10 @@ SCRIPT;
         ]);
 
         $lanBridgeName = 'bridge-lan';
-        $taggedPorts = $lanBridgeName.','.$settings['trunk_port'];
+        $taggedPorts = $lanBridgeName.','.$this->trunkPortsCsv($settings);
 
         $extraMgmtPorts = $this->extraPortInterfaces($settings, 'extra_mgmt_ports');
+        $extraTrunkPorts = $this->extraPortInterfaces($settings, 'extra_trunk_ports');
         $extraHotspotPorts = $this->extraPortInterfaces($settings, 'extra_hotspot_ports');
         $extraStaffPorts = $settings['enable_staff'] ? $this->extraPortInterfaces($settings, 'extra_staff_ports') : [];
         $extraPosPorts = $settings['enable_pos'] ? $this->extraPortInterfaces($settings, 'extra_pos_ports') : [];
@@ -762,6 +763,7 @@ SCRIPT;
             $secondWanDhcp,
             '/interface bridge add name=$lanBridge protocol-mode=rstp vlan-filtering=no comment="MMS Radius LAN bridge"',
             '/interface bridge port add bridge=$lanBridge interface=$trunkPort frame-types=admit-only-vlan-tagged comment="AP/switch trunk carrying MMS Radius VLANs -- tagged only, untagged frames dropped"',
+            ...array_map(fn (string $p): string => '/interface bridge port add bridge=$lanBridge interface='.$p.' frame-types=admit-only-vlan-tagged comment="Extra AP/switch trunk carrying MMS Radius VLANs -- tagged only, untagged frames dropped"', $extraTrunkPorts),
             '/interface bridge port add bridge=$lanBridge interface=$piPort pvid=$mgmtVlan comment="Pi/management access port, untagged VLAN 10 by default"',
             ...array_map(fn (string $p): string => '/interface bridge port add bridge=$lanBridge interface='.$p.' pvid=$mgmtVlan comment="Extra management access port"', $extraMgmtPorts),
             ...array_map(fn (string $p): string => '/interface bridge port add bridge=$lanBridge interface='.$p.' pvid=$hotspotVlan comment="Extra hotspot access port"', $extraHotspotPorts),
@@ -1202,6 +1204,24 @@ HTML;
             ->filter(fn (string $piece): bool => $piece !== '')
             ->values()
             ->all();
+    }
+
+    /**
+     * 2026-10-14, direct request after a live incident needing a genuine
+     * second AP-facing trunk port: this app only ever modeled one
+     * (trunk_port/trunk_port_number). extra_trunk_port_numbers/
+     * extra_trunk_ports is the plural sibling, mirroring
+     * extra_mgmt_port_numbers' exact shape -- every trunk port (the
+     * singular required one plus any extras) gets tagged onto every VLAN
+     * identically, so every `tagged=` line this file builds needs the full
+     * combined list, not just the one singular trunk_port.
+     */
+    private function trunkPortsCsv(array $settings): string
+    {
+        return implode(',', array_merge(
+            [$settings['trunk_port']],
+            $this->extraPortInterfaces($settings, 'extra_trunk_ports')
+        ));
     }
 
     private function quote(?string $value): string

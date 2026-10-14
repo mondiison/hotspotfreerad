@@ -2,8 +2,10 @@ import './bootstrap';
 import { Passkeys } from '@laravel/passkeys';
 import Alpine from 'alpinejs';
 import collapse from '@alpinejs/collapse';
+import sort from '@alpinejs/sort';
 
 Alpine.plugin(collapse);
+Alpine.plugin(sort);
 
 window.copyText = async (text) => {
     if (! text) {

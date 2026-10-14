@@ -308,6 +308,128 @@ class RoutersIndex extends Component
         $this->provisioning_settings['port_count'] = $this->detectedHardware['port_count'];
     }
 
+    /**
+     * 2026-10-14, Phase 2 of the drag-and-drop port-mapping request: the
+     * fixed set of buckets the visual mapper renders, each backed by the
+     * exact same provisioning_settings fields the plain dropdown pickers
+     * already read/write -- this is an additive, alternative way to set
+     * those same fields, not a new data model of its own. "trunk" merges
+     * the singular trunk_port_number with the plural extra_trunk_port_numbers
+     * into one bucket for this UI -- there's no meaningful visual
+     * difference between "the one required trunk port" and "an additional
+     * one", that split only matters for the underlying saved fields and is
+     * reconciled back out in writePortBucketAssignments().
+     */
+    private const SINGLE_CAPACITY_PORT_BUCKETS = ['wan1', 'wan2', 'pi'];
+
+    /**
+     * @return array<string, list<int>>
+     */
+    public function portBucketAssignments(): array
+    {
+        $settings = $this->provisioning_settings;
+
+        $numbers = function (string $key) use ($settings): array {
+            return collect(explode(',', (string) ($settings[$key] ?? '')))
+                ->map(fn (string $piece): string => trim($piece))
+                ->filter(fn (string $piece): bool => $piece !== '')
+                ->map(fn (string $piece): int => (int) $piece)
+                ->values()
+                ->all();
+        };
+
+        return [
+            'wan1' => array_values(array_filter([$settings['wan1_port_number'] ?? null])),
+            'wan2' => array_values(array_filter([$settings['wan2_port_number'] ?? null])),
+            'trunk' => array_values(array_unique(array_merge(
+                array_filter([$settings['trunk_port_number'] ?? null]),
+                $numbers('extra_trunk_port_numbers')
+            ))),
+            'pi' => array_values(array_filter([$settings['pi_port_number'] ?? null])),
+            'extra_mgmt' => $numbers('extra_mgmt_port_numbers'),
+            'extra_hotspot' => $numbers('extra_hotspot_port_numbers'),
+            'extra_staff' => $numbers('extra_staff_port_numbers'),
+            'extra_pos' => $numbers('extra_pos_port_numbers'),
+            'extra_pppoe' => $numbers('extra_pppoe_port_numbers'),
+        ];
+    }
+
+    /**
+     * @return list<int>
+     */
+    public function unassignedPorts(): array
+    {
+        $portCount = max(1, (int) ($this->provisioning_settings['port_count'] ?? 8));
+        $assigned = array_merge(...array_values($this->portBucketAssignments()));
+
+        return array_values(array_diff(range(1, $portCount), $assigned));
+    }
+
+    /**
+     * Drag-and-drop entry point: moves a port number into the given bucket,
+     * removing it from wherever it previously sat first (including the
+     * target bucket itself, so re-dropping into the same spot is a no-op
+     * rather than a duplicate). Single-capacity buckets (wan1/wan2/pi) bump
+     * whatever was already there back to the unassigned pool rather than
+     * ever holding two ports at once -- SortableJS has no built-in concept
+     * of a drop-target's maximum capacity, so this is enforced server-side
+     * instead of relying on the drag library to prevent it.
+     */
+    public function assignPortToBucket(string $bucket, int $portNumber): void
+    {
+        $assignments = $this->portBucketAssignments();
+
+        if (! array_key_exists($bucket, $assignments)) {
+            return;
+        }
+
+        foreach ($assignments as $key => $ports) {
+            $assignments[$key] = array_values(array_diff($ports, [$portNumber]));
+        }
+
+        if (in_array($bucket, self::SINGLE_CAPACITY_PORT_BUCKETS, true)) {
+            $assignments[$bucket] = [];
+        }
+
+        $assignments[$bucket][] = $portNumber;
+
+        $this->writePortBucketAssignments($assignments);
+    }
+
+    /**
+     * Drops a port back into the unassigned pool -- removes it from
+     * whichever bucket currently holds it without assigning it anywhere
+     * new.
+     */
+    public function unassignPort(int $portNumber): void
+    {
+        $assignments = $this->portBucketAssignments();
+
+        foreach ($assignments as $key => $ports) {
+            $assignments[$key] = array_values(array_diff($ports, [$portNumber]));
+        }
+
+        $this->writePortBucketAssignments($assignments);
+    }
+
+    /**
+     * @param  array<string, list<int>>  $assignments
+     */
+    private function writePortBucketAssignments(array $assignments): void
+    {
+        $this->provisioning_settings['wan1_port_number'] = $assignments['wan1'][0] ?? null;
+        $this->provisioning_settings['wan2_port_number'] = $assignments['wan2'][0] ?? null;
+        $this->provisioning_settings['pi_port_number'] = $assignments['pi'][0] ?? null;
+
+        $trunk = $assignments['trunk'];
+        $this->provisioning_settings['trunk_port_number'] = $trunk[0] ?? null;
+        $this->provisioning_settings['extra_trunk_port_numbers'] = implode(',', array_slice($trunk, 1));
+
+        foreach (['extra_mgmt', 'extra_hotspot', 'extra_staff', 'extra_pos', 'extra_pppoe'] as $key) {
+            $this->provisioning_settings["{$key}_port_numbers"] = implode(',', $assignments[$key]);
+        }
+    }
+
     public function setPreset(string $field, string $value): void
     {
         if ($field !== 'wireguard_internal_ip') {
@@ -546,6 +668,7 @@ class RoutersIndex extends Component
 
         $extraRoleStringKeys = [
             'extra_mgmt_port_numbers' => 'extra_mgmt_ports',
+            'extra_trunk_port_numbers' => 'extra_trunk_ports',
             'extra_hotspot_port_numbers' => 'extra_hotspot_ports',
             'extra_staff_port_numbers' => 'extra_staff_ports',
             'extra_pos_port_numbers' => 'extra_pos_ports',
@@ -606,10 +729,12 @@ class RoutersIndex extends Component
                 'provisioning_settings.trunk_port_number', 'provisioning_settings.pi_port_number',
                 'provisioning_settings.wan1', 'provisioning_settings.wan2',
                 'provisioning_settings.trunk_port', 'provisioning_settings.pi_port',
-                'provisioning_settings.extra_mgmt_port_numbers', 'provisioning_settings.extra_hotspot_port_numbers',
+                'provisioning_settings.extra_mgmt_port_numbers', 'provisioning_settings.extra_trunk_port_numbers',
+                'provisioning_settings.extra_hotspot_port_numbers',
                 'provisioning_settings.extra_staff_port_numbers', 'provisioning_settings.extra_pos_port_numbers',
                 'provisioning_settings.extra_pppoe_port_numbers',
-                'provisioning_settings.extra_mgmt_ports', 'provisioning_settings.extra_hotspot_ports',
+                'provisioning_settings.extra_mgmt_ports', 'provisioning_settings.extra_trunk_ports',
+                'provisioning_settings.extra_hotspot_ports',
                 'provisioning_settings.extra_staff_ports', 'provisioning_settings.extra_pos_ports',
                 'provisioning_settings.extra_pppoe_ports',
             ],

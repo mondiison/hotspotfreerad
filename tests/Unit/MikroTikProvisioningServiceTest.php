@@ -947,6 +947,54 @@ class MikroTikProvisioningServiceTest extends TestCase
     }
 
     /**
+     * 2026-10-14, direct request after a live incident needing a genuine
+     * second AP-facing trunk port: this app only ever modeled one
+     * (trunk_port). A router with none of the new extra_trunk_ports keys
+     * set must keep generating the exact same trunk tagging as before this
+     * feature existed -- confirmed here rather than assumed.
+     */
+    public function test_a_router_with_no_extra_trunk_ports_generates_an_unchanged_trunk_setup(): void
+    {
+        $router = new Router([
+            'nas_identifier' => 'single-trunk-router',
+            'wireguard_internal_ip' => '10.8.0.24',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        $script = app(MikroTikProvisioningService::class)->generateFreshInfrastructureScript($router);
+
+        $this->assertStringContainsString('/interface bridge vlan add bridge=bridge-lan tagged=bridge-lan,ether2 untagged=ether3 vlan-ids=10', $script);
+        $this->assertStringNotContainsString('Extra AP/switch trunk', $script);
+    }
+
+    public function test_extra_trunk_ports_get_tagged_onto_every_vlan_and_their_own_locked_down_bridge_port(): void
+    {
+        $router = new Router([
+            'nas_identifier' => 'dual-trunk-router',
+            'wireguard_internal_ip' => '10.8.0.25',
+            'shared_secret' => 'radius-secret',
+            'provisioning_settings' => [
+                'extra_trunk_ports' => 'ether6',
+            ],
+        ]);
+
+        $script = app(MikroTikProvisioningService::class)->generateFreshInfrastructureScript($router);
+
+        // Every VLAN's tagged= list carries the extra trunk port right
+        // alongside the primary one -- this specific VLAN-10 (mgmt) line is
+        // the same one test_it_generates_a_fresh_infrastructure_script_for_
+        // starlink_plaza_networks() already asserts without the extra port.
+        $this->assertStringContainsString('/interface bridge vlan add bridge=bridge-lan tagged=bridge-lan,ether2,ether6 untagged=ether3 vlan-ids=10', $script);
+
+        // The extra trunk port gets its own bridge port object, with the
+        // identical tagged-only lockdown the primary trunk port has.
+        $this->assertStringContainsString(
+            '/interface bridge port add bridge=$lanBridge interface=ether6 frame-types=admit-only-vlan-tagged comment="Extra AP/switch trunk carrying MMS Radius VLANs -- tagged only, untagged frames dropped"',
+            $script
+        );
+    }
+
+    /**
      * 2026-10-03, confirmed live: a second WAN link, once enabled and wired
      * up, got added to the WAN interface list and gained a NAT masquerade
      * rule, but never actually got a DHCP client of its own -- "I can only

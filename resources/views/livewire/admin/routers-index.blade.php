@@ -342,6 +342,13 @@
                                 </flux:field>
 
                                 <flux:field>
+                                    <flux:label>Extra AP/switch trunk ports</flux:label>
+                                    <flux:input wire:model.blur="provisioning_settings.extra_trunk_ports" placeholder="e.g. ether6" />
+                                    <flux:description>Comma-separated interface names, for a second (or third) AP/switch -- each one carries every VLAN tagged, identically to the main trunk port above.</flux:description>
+                                    <flux:error name="provisioning_settings.extra_trunk_ports" />
+                                </flux:field>
+
+                                <flux:field>
                                     <flux:label>Extra hotspot ports</flux:label>
                                     <flux:input wire:model.blur="provisioning_settings.extra_hotspot_ports" placeholder="e.g. ether5,ether6,ether7" />
                                     <flux:description>Comma-separated interface names, for non-VLAN-capable APs or direct testing.</flux:description>
@@ -376,6 +383,7 @@
                             @php($portOptions = \App\Support\RouterPortLayout::portOptions((int) ($provisioning_settings['port_count'] ?? 8)))
                             @php($extraPortRoles = [
                                 'Extra management port' => $provisioning_settings['extra_mgmt_port_numbers'] ?? '',
+                                'Extra trunk port' => $provisioning_settings['extra_trunk_port_numbers'] ?? '',
                                 'Extra hotspot port' => $provisioning_settings['extra_hotspot_port_numbers'] ?? '',
                                 'Extra staff port' => ($provisioning_settings['enable_staff'] ?? false) ? ($provisioning_settings['extra_staff_port_numbers'] ?? '') : '',
                                 'Extra POS port' => ($provisioning_settings['enable_pos'] ?? false) ? ($provisioning_settings['extra_pos_port_numbers'] ?? '') : '',
@@ -402,6 +410,66 @@
                                     @endforeach
                                 </div>
                             @endif
+
+                            {{--
+                                2026-10-14, Phase 2 of the drag-and-drop port-mapping request:
+                                an additive, visual alternative to the dropdown pickers below --
+                                dragging a chip calls the exact same provisioning_settings fields
+                                those pickers already read/write (RoutersIndex::assignPortToBucket()/
+                                unassignPort()), so this never introduces a second source of truth.
+                                The dropdowns stay fully functional underneath as the
+                                keyboard/screen-reader-accessible fallback.
+                            --}}
+                            @php($portBuckets = $this->portBucketAssignments())
+                            @php($portBucketLabels = array_filter([
+                                'wan1' => 'WAN 1',
+                                'wan2' => ($provisioning_settings['enable_second_wan'] ?? false) ? 'WAN 2' : null,
+                                'trunk' => 'AP/switch trunk',
+                                'pi' => 'Pi/management',
+                                'extra_mgmt' => 'Extra management',
+                                'extra_hotspot' => 'Extra hotspot',
+                                'extra_staff' => ($provisioning_settings['enable_staff'] ?? false) ? 'Extra staff' : null,
+                                'extra_pos' => ($provisioning_settings['enable_pos'] ?? false) ? 'Extra POS' : null,
+                                'extra_pppoe' => ($provisioning_settings['enable_pppoe'] ?? false) ? 'Extra PPPoE' : null,
+                            ]))
+                            <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4">
+                                <p class="text-sm font-medium">Visual port mapping</p>
+                                <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Drag a port chip into a role below, or back here to unassign it. The dropdowns further down reflect the same settings and work just as well.</p>
+
+                                <div class="mt-3 rounded-md border border-dashed border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-900 p-3">
+                                    <p class="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">Unassigned ports</p>
+                                    <div
+                                        class="mt-2 flex min-h-10 flex-wrap gap-2"
+                                        x-sort="$wire.unassignPort($key)"
+                                        x-sort:group="router-ports"
+                                    >
+                                        @forelse ($this->unassignedPorts() as $portNumber)
+                                            <span x-sort:item="{{ $portNumber }}" class="cursor-move select-none rounded-md border border-zinc-300 dark:border-zinc-600 bg-zinc-50 dark:bg-zinc-800 px-2.5 py-1 text-xs font-medium">Port {{ $portNumber }}</span>
+                                        @empty
+                                            <span class="text-xs text-zinc-400 dark:text-zinc-500">All ports assigned.</span>
+                                        @endforelse
+                                    </div>
+                                </div>
+
+                                <div class="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                                    @foreach ($portBucketLabels as $bucket => $label)
+                                        <div class="rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-3">
+                                            <p class="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">{{ $label }}</p>
+                                            <div
+                                                class="mt-2 flex min-h-10 flex-wrap gap-2"
+                                                x-sort="$wire.assignPortToBucket('{{ $bucket }}', $key)"
+                                                x-sort:group="router-ports"
+                                            >
+                                                @forelse ($portBuckets[$bucket] as $portNumber)
+                                                    <span x-sort:item="{{ $portNumber }}" class="cursor-move select-none rounded-md bg-zinc-950 dark:bg-zinc-100 px-2.5 py-1 text-xs font-medium text-white dark:text-zinc-900">Port {{ $portNumber }}</span>
+                                                @empty
+                                                    <span class="text-xs text-zinc-400 dark:text-zinc-500">Drop a port here</span>
+                                                @endforelse
+                                            </div>
+                                        </div>
+                                    @endforeach
+                                </div>
+                            </div>
 
                             <div class="grid gap-4 md:grid-cols-2">
                                 <flux:field>
@@ -451,6 +519,13 @@
                                     <flux:input wire:model.blur="provisioning_settings.extra_mgmt_port_numbers" placeholder="e.g. 2" />
                                     <flux:description>Comma-separated port numbers, if this router needs more than one untagged management port.</flux:description>
                                     <flux:error name="provisioning_settings.extra_mgmt_port_numbers" />
+                                </flux:field>
+
+                                <flux:field>
+                                    <flux:label>Extra AP/switch trunk ports</flux:label>
+                                    <flux:input wire:model.blur="provisioning_settings.extra_trunk_port_numbers" placeholder="e.g. 6" />
+                                    <flux:description>Comma-separated port numbers, for a second (or third) AP/switch -- each one carries every VLAN tagged, identically to the main trunk port above.</flux:description>
+                                    <flux:error name="provisioning_settings.extra_trunk_port_numbers" />
                                 </flux:field>
 
                                 <flux:field>

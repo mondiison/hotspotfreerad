@@ -248,6 +248,33 @@ class RoutersWizardTest extends TestCase
             ->assertHasErrors('provisioning_settings.port_count');
     }
 
+    /**
+     * 2026-10-14, direct request after a live incident needing a genuine
+     * second trunk port: confirms extra_trunk_port_numbers goes through the
+     * exact same conflict detection every other extra-port role already
+     * gets, rather than being a new field nobody actually wired into
+     * conflictingRoles().
+     */
+    public function test_extra_trunk_port_conflicting_with_a_singular_role_fails_validation(): void
+    {
+        $shop = $this->shop();
+
+        Livewire::actingAs($this->superAdmin())
+            ->test(RoutersIndex::class)
+            ->call('create')
+            ->set('shop_id', (string) $shop->id)
+            ->set('name', 'Extra Trunk Port Collision Router')
+            ->set('nas_identifier', 'extra-trunk-port-collision-router')
+            ->set('wireguard_internal_ip', '10.8.0.91')
+            ->set('shared_secret', 'radius-secret')
+            ->call('nextStep')
+            ->set('provisioning_settings.port_count', 8)
+            ->set('provisioning_settings.pi_port_number', 3)
+            ->set('provisioning_settings.extra_trunk_port_numbers', '3')
+            ->call('nextStep')
+            ->assertHasErrors('provisioning_settings.port_count');
+    }
+
     public function test_extra_port_higher_than_port_count_fails_validation(): void
     {
         $shop = $this->shop();
