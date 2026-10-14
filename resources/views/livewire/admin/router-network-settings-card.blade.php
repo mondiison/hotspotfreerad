@@ -14,7 +14,7 @@
 
             @if ($this->supportsSsid() && ! $builtinWifiEnabled)
                 <div class="rounded-md border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
-                    This router doesn't use its own built-in Wi-Fi radio, so SSID has no effect here &mdash; the SSID is configured directly on the external access point instead (see the AP / SSID Guide tab). VLAN, addressing, and ports below still apply either way.
+                    This router doesn't use its own built-in Wi-Fi radio, so this setting doesn't affect the generated script &mdash; the SSID is actually configured directly on the external access point instead (see the AP / SSID Guide tab). Still worth setting it to match the external AP's real SSID below, since this is also what the router's self-service connect flyer shows customers to connect to. VLAN, addressing, and ports below apply either way.
                 </div>
             @endif
 
@@ -22,7 +22,7 @@
                 @if ($this->supportsSsid())
                     <flux:field>
                         <flux:label>SSID</flux:label>
-                        <flux:input wire:model="ssid" maxlength="32" :disabled="! $builtinWifiEnabled" />
+                        <flux:input wire:model="ssid" maxlength="32" />
                         <flux:error name="ssid" />
                     </flux:field>
                 @endif

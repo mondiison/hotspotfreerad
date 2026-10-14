@@ -221,6 +221,34 @@ class RouterNetworkSettingsCardTest extends TestCase
         $this->assertSame('OriginalPosPass1', $settings['pos_wifi_password']);
     }
 
+    /**
+     * 2026-10-14, direct report: a router using an external AP instead of
+     * built-in Wi-Fi had its router-show-page connect flyer stuck showing the
+     * default "MMS Hotspot" instead of the external AP's real SSID, because
+     * this card's SSID input was previously hard `disabled` whenever
+     * enable_builtin_wifi was off -- on the reasoning that SSID "has no
+     * effect" there, true for the generated script but not for the flyer,
+     * which reads this exact saved value regardless of which network the
+     * SSID actually lives on. Fixed by letting the field stay editable in
+     * this case too; this is the regression test proving a save now actually
+     * persists.
+     */
+    public function test_ssid_can_still_be_saved_when_builtin_wifi_is_disabled(): void
+    {
+        $router = $this->makeRouter([
+            'enable_builtin_wifi' => false,
+            'hotspot_ssid' => 'MMS Hotspot',
+            'hotspot_vlan' => 20,
+        ]);
+
+        Livewire::test(RouterNetworkSettingsCard::class, ['router' => $router, 'network' => 'hotspot'])
+            ->set('ssid', 'MMS Link')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $this->assertSame('MMS Link', $router->fresh()->provisioning_settings['hotspot_ssid']);
+    }
+
     public function test_blank_wifi_password_keeps_the_previously_saved_password(): void
     {
         $router = $this->makeRouter(['pos_wifi_password' => 'KeepMePlease1']);
