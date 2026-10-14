@@ -325,7 +325,15 @@
                                 <flux:field>
                                     <flux:label>AP/switch trunk</flux:label>
                                     <flux:input wire:model.blur="provisioning_settings.trunk_port" placeholder="ether2" />
+                                    <flux:description>The visual port mapper above treats this plus "Extra AP/switch trunk ports" below as one combined "Trunk" bucket.</flux:description>
                                     <flux:error name="provisioning_settings.trunk_port" />
+                                </flux:field>
+
+                                <flux:field>
+                                    <flux:label>Extra AP/switch trunk ports</flux:label>
+                                    <flux:input wire:model.blur="provisioning_settings.extra_trunk_ports" placeholder="e.g. ether6" />
+                                    <flux:description>Comma-separated interface names, for a second (or third) AP/switch -- each one carries every VLAN tagged, identically to the main trunk port above.</flux:description>
+                                    <flux:error name="provisioning_settings.extra_trunk_ports" />
                                 </flux:field>
 
                                 <flux:field>
@@ -339,13 +347,6 @@
                                     <flux:input wire:model.blur="provisioning_settings.extra_mgmt_ports" placeholder="e.g. ether2" />
                                     <flux:description>Comma-separated interface names, if this router needs more than one untagged management port.</flux:description>
                                     <flux:error name="provisioning_settings.extra_mgmt_ports" />
-                                </flux:field>
-
-                                <flux:field>
-                                    <flux:label>Extra AP/switch trunk ports</flux:label>
-                                    <flux:input wire:model.blur="provisioning_settings.extra_trunk_ports" placeholder="e.g. ether6" />
-                                    <flux:description>Comma-separated interface names, for a second (or third) AP/switch -- each one carries every VLAN tagged, identically to the main trunk port above.</flux:description>
-                                    <flux:error name="provisioning_settings.extra_trunk_ports" />
                                 </flux:field>
 
                                 <flux:field>
@@ -501,7 +502,15 @@
                                             <flux:select.option value="{{ $number }}">{{ $label }}</flux:select.option>
                                         @endforeach
                                     </flux:select>
+                                    <flux:description>The visual port mapper above treats this plus "Extra AP/switch trunk ports" below as one combined "Trunk" bucket.</flux:description>
                                     <flux:error name="provisioning_settings.trunk_port_number" />
+                                </flux:field>
+
+                                <flux:field>
+                                    <flux:label>Extra AP/switch trunk ports</flux:label>
+                                    <flux:input wire:model.blur="provisioning_settings.extra_trunk_port_numbers" placeholder="e.g. 6" />
+                                    <flux:description>Comma-separated port numbers, for a second (or third) AP/switch -- each one carries every VLAN tagged, identically to the main trunk port above.</flux:description>
+                                    <flux:error name="provisioning_settings.extra_trunk_port_numbers" />
                                 </flux:field>
 
                                 <flux:field>
@@ -519,13 +528,6 @@
                                     <flux:input wire:model.blur="provisioning_settings.extra_mgmt_port_numbers" placeholder="e.g. 2" />
                                     <flux:description>Comma-separated port numbers, if this router needs more than one untagged management port.</flux:description>
                                     <flux:error name="provisioning_settings.extra_mgmt_port_numbers" />
-                                </flux:field>
-
-                                <flux:field>
-                                    <flux:label>Extra AP/switch trunk ports</flux:label>
-                                    <flux:input wire:model.blur="provisioning_settings.extra_trunk_port_numbers" placeholder="e.g. 6" />
-                                    <flux:description>Comma-separated port numbers, for a second (or third) AP/switch -- each one carries every VLAN tagged, identically to the main trunk port above.</flux:description>
-                                    <flux:error name="provisioning_settings.extra_trunk_port_numbers" />
                                 </flux:field>
 
                                 <flux:field>
