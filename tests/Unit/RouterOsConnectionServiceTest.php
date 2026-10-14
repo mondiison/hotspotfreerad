@@ -195,6 +195,24 @@ class RouterOsConnectionServiceTest extends TestCase
         ], $leases);
     }
 
+    public function test_it_maps_ethernet_print_rows_and_flags_hardware_switch_ports(): void
+    {
+        $rows = [
+            ['name' => 'ether1', 'mac-address' => 'AA:BB:CC:DD:EE:01', 'switch' => 'switch1'],
+            ['name' => 'ether4', 'mac-address' => 'AA:BB:CC:DD:EE:04', 'switch' => 'switch1'],
+            ['name' => 'sfp-sfpplus1', 'mac-address' => 'AA:BB:CC:DD:EE:09', 'switch' => ''],
+            ['mac-address' => 'AA:BB:CC:DD:EE:FF'],
+        ];
+
+        $ports = RouterOsConnectionService::mapEthernetRows($rows);
+
+        $this->assertSame([
+            ['name' => 'ether1', 'has_switch' => true],
+            ['name' => 'ether4', 'has_switch' => true],
+            ['name' => 'sfp-sfpplus1', 'has_switch' => false],
+        ], $ports);
+    }
+
     public function test_it_maps_file_print_rows_down_to_directory_names(): void
     {
         $rows = [

@@ -506,6 +506,86 @@ class RouterOsConnectionService
     }
 
     /**
+     * 2026-10-14, direct request after a live incident: onboarding routers
+     * meant guessing port counts/wireless capability/switch-chip presence by
+     * hand, with no way to confirm any of it against the real hardware --
+     * which is exactly what led to a manual bridge-port remove/re-add
+     * silently corrupting a live bridge-vlan table on a board that turned
+     * out to have hardware switch offload, something nobody realized until
+     * after the fact. Backs the router wizard's "Detect from live router"
+     * action: board/RouterOS version (same fields systemResource() already
+     * reads, reused here via runReadOnlyCommand() rather than a second
+     * direct client()+Query() pair), the real physical Ethernet port list,
+     * whether any of those ports has a hardware switch chip behind it (the
+     * `switch` property RouterOS reports per interface -- non-empty means
+     * VLAN filtering on that port is chip-offloaded, which is the exact
+     * class of board where a bridge-port remove/re-add needs extra care),
+     * and whether built-in wireless exists at all. A board can legitimately
+     * have neither wireless driver installed (a pure switch/CCR model), so
+     * each wireless check tolerates its own command simply not existing on
+     * this RouterOS version/package rather than failing the whole
+     * detection -- only `/system resource print` failing is treated as "this
+     * router is unreachable."
+     *
+     * @return array{success: bool, board_name?: ?string, routeros_version?: ?string, port_count?: int, ports?: list<array{name: string, has_switch: bool}>, has_switch_chip?: bool, has_builtin_wireless?: bool, wireless_driver?: ?string, error?: string}
+     */
+    public function detectHardware(Router $router): array
+    {
+        if (! $this->isConfigured($router)) {
+            return ['success' => false, 'error' => 'RouterOS API credentials not generated yet.'];
+        }
+
+        $resource = $this->runReadOnlyCommand($router, '/system resource print');
+
+        if (! $resource['success']) {
+            return ['success' => false, 'error' => $resource['error'] ?? 'Could not reach this router.'];
+        }
+
+        $resourceRow = $resource['rows'][0] ?? [];
+
+        $ethernet = $this->runReadOnlyCommand($router, '/interface ethernet print');
+        $ports = $ethernet['success'] ? self::mapEthernetRows($ethernet['rows']) : [];
+
+        $hasLegacyWireless = self::readOnlyCommandHasRows($this->runReadOnlyCommand($router, '/interface wireless print'));
+        $hasNewWifi = self::readOnlyCommandHasRows($this->runReadOnlyCommand($router, '/interface wifi print'));
+
+        return [
+            'success' => true,
+            'board_name' => $resourceRow['board-name'] ?? null,
+            'routeros_version' => $resourceRow['version'] ?? null,
+            'port_count' => count($ports),
+            'ports' => $ports,
+            'has_switch_chip' => collect($ports)->contains('has_switch', true),
+            'has_builtin_wireless' => $hasLegacyWireless || $hasNewWifi,
+            'wireless_driver' => $hasNewWifi ? 'wifi' : ($hasLegacyWireless ? 'wireless' : null),
+        ];
+    }
+
+    /**
+     * Pure row-mapping logic pulled out of detectHardware() so it can be
+     * unit tested without a live RouterOS connection.
+     *
+     * @param  list<array<string,mixed>>  $rows
+     * @return list<array{name: string, has_switch: bool}>
+     */
+    public static function mapEthernetRows(array $rows): array
+    {
+        return collect($rows)
+            ->filter(fn ($row) => is_array($row) && filled($row['name'] ?? null))
+            ->map(fn (array $row): array => [
+                'name' => (string) $row['name'],
+                'has_switch' => filled($row['switch'] ?? null),
+            ])
+            ->values()
+            ->all();
+    }
+
+    private static function readOnlyCommandHasRows(array $result): bool
+    {
+        return ($result['success'] ?? false) && filled($result['rows'] ?? []);
+    }
+
+    /**
      * Raw hardware health fields from `/system/health/print` -- voltage,
      * temperature, fan speeds, PSU state, etc. What's actually present
      * varies a lot by hardware (many small routers report nothing useful

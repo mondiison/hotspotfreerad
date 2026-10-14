@@ -234,6 +234,55 @@
 
                 @if ($step === 2)
                     <div class="space-y-5">
+                        @if ($editingRouterId)
+                            <div class="rounded-md border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4">
+                                <div class="flex flex-wrap items-center justify-between gap-3">
+                                    <div>
+                                        <p class="text-sm font-medium">Detect from live router</p>
+                                        <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Reads the real model, RouterOS version, port list, and wireless/switch-chip capability over the API instead of guessing.</p>
+                                    </div>
+                                    <flux:button type="button" variant="outline" size="sm" wire:click="detectHardware" wire:loading.attr="disabled" wire:target="detectHardware">
+                                        <span wire:loading.remove wire:target="detectHardware">Detect now</span>
+                                        <span wire:loading wire:target="detectHardware">Detecting...</span>
+                                    </flux:button>
+                                </div>
+
+                                @if ($detectHardwareError)
+                                    <p class="mt-3 text-sm text-amber-700 dark:text-amber-400">{{ $detectHardwareError }}</p>
+                                @endif
+
+                                @if ($detectedHardware)
+                                    <div class="mt-4 grid gap-3 sm:grid-cols-2">
+                                        <div class="rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-3">
+                                            <p class="text-xs text-zinc-500 dark:text-zinc-400">Model / RouterOS</p>
+                                            <p class="mt-1 text-sm font-medium">{{ $detectedHardware['board_name'] ?? 'Unknown' }} &mdash; {{ $detectedHardware['routeros_version'] ?? 'Unknown' }}</p>
+                                        </div>
+                                        <div class="rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-3">
+                                            <p class="text-xs text-zinc-500 dark:text-zinc-400">Ethernet ports detected</p>
+                                            <div class="mt-1 flex items-center justify-between gap-2">
+                                                <p class="text-sm font-medium">{{ $detectedHardware['port_count'] }}</p>
+                                                <flux:button type="button" variant="ghost" size="xs" wire:click="applyDetectedPortCount">Use this count</flux:button>
+                                            </div>
+                                        </div>
+                                        <div class="rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-3">
+                                            <p class="text-xs text-zinc-500 dark:text-zinc-400">Built-in wireless</p>
+                                            <p class="mt-1 text-sm font-medium">{{ $detectedHardware['has_builtin_wireless'] ? 'Yes ('.$detectedHardware['wireless_driver'].' driver)' : 'No' }}</p>
+                                        </div>
+                                        <div class="rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-3">
+                                            <p class="text-xs text-zinc-500 dark:text-zinc-400">Hardware switch chip</p>
+                                            <p class="mt-1 text-sm font-medium">{{ $detectedHardware['has_switch_chip'] ? 'Yes' : 'No' }}</p>
+                                        </div>
+                                    </div>
+
+                                    @if ($detectedHardware['has_switch_chip'])
+                                        <div class="mt-3 rounded-md border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
+                                            This board offloads VLAN filtering to a hardware switch chip &mdash; removing and re-adding a bridge port live on this model can cause RouterOS to silently rebuild parts of the bridge-VLAN table. Prefer a fresh script paste over ad hoc bridge-port surgery when changing trunk ports on this router.
+                                        </div>
+                                    @endif
+                                @endif
+                            </div>
+                        @endif
+
                         <flux:field>
                             <flux:checkbox wire:model.live="provisioning_settings.enable_builtin_wifi" label="This router has built-in Wi-Fi" />
                             <flux:description>Turn on to generate an open hotspot SSID (plus optional staff/POS/management SSIDs) directly from the router's own radio. Leave off for wired-only routers relying on external access points.</flux:description>

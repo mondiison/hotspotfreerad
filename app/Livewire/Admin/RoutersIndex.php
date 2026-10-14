@@ -69,6 +69,10 @@ class RoutersIndex extends Component
 
     public ?string $savedMessage = null;
 
+    public ?array $detectedHardware = null;
+
+    public ?string $detectHardwareError = null;
+
     protected $queryString = [
         'search' => ['except' => ''],
         'status' => ['except' => ''],
@@ -114,6 +118,8 @@ class RoutersIndex extends Component
         $router = Router::findOrFail($routerId);
         TenantAccess::assertRouter($router, auth()->user());
 
+        $this->detectedHardware = null;
+        $this->detectHardwareError = null;
         $this->editingRouterId = $router->id;
         $this->shop_id = (string) $router->shop_id;
         $this->name = (string) $router->name;
@@ -245,6 +251,61 @@ class RoutersIndex extends Component
         }
 
         $this->zerotier_node_id = $nodeId;
+    }
+
+    /**
+     * 2026-10-14, direct request after a live incident: lets the Hardware
+     * step pull the router's real model/RouterOS version/port list/wireless
+     * capability/switch-chip presence from the live API instead of the
+     * admin guessing -- same "only works once a router already has working
+     * API connectivity" constraint fetchZeroTierNodeId() above has, since
+     * there's no live router to ask anything before that point. A brand-new
+     * router still falls back to manual entry.
+     */
+    public function detectHardware(RouterOsConnectionService $routerOs): void
+    {
+        $this->detectHardwareError = null;
+        $this->detectedHardware = null;
+
+        if (! $this->editingRouterId) {
+            $this->detectHardwareError = 'Save the router once with working API connectivity first, then detect its hardware.';
+
+            return;
+        }
+
+        $router = Router::find($this->editingRouterId);
+
+        if (! $router || ! $routerOs->isConfigured($router)) {
+            $this->detectHardwareError = 'RouterOS API credentials are not generated for this router yet.';
+
+            return;
+        }
+
+        $result = $routerOs->detectHardware($router);
+
+        if (! $result['success']) {
+            $this->detectHardwareError = 'Could not detect hardware: '.($result['error'] ?? 'unknown error.');
+
+            return;
+        }
+
+        $this->detectedHardware = $result;
+    }
+
+    /**
+     * Applies the detected physical port count to the wizard field -- a
+     * deliberate, explicit action rather than detectHardware() silently
+     * overwriting provisioning_settings.port_count itself, matching this
+     * wizard's existing habit of never auto-applying a detected/derived
+     * value without the admin confirming it first.
+     */
+    public function applyDetectedPortCount(): void
+    {
+        if (! $this->detectedHardware) {
+            return;
+        }
+
+        $this->provisioning_settings['port_count'] = $this->detectedHardware['port_count'];
     }
 
     public function setPreset(string $field, string $value): void
@@ -427,6 +488,8 @@ class RoutersIndex extends Component
             'zerotier_node_id',
             'zerotier_ip',
             'provisioning_settings',
+            'detectedHardware',
+            'detectHardwareError',
         ]);
         $this->tunnel_mode = 'wireguard';
         $this->is_online = false;
