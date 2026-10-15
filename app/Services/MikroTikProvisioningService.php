@@ -580,8 +580,14 @@ SCRIPT;
                 ($settings['enable_pppoe'] && $extraPppoePorts !== []) ? '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' untagged='.implode(',', $extraPppoePorts).' vlan-ids='.$settings['pppoe_vlan'] : null,
             ]);
 
+        // Confirmed live 2026-10-15, in the exact same diagnostic session as
+        // the WAN-list/bridge-port guards above: this line was missed when
+        // those were added -- wan1's WAN-list membership got guarded, wan2's
+        // own equivalent line didn't, so a router with enable_second_wan on
+        // that's had this script partially applied before hit the identical
+        // "failure: already have such entry" collision here too.
         $secondWanMember = $settings['enable_second_wan']
-            ? '/interface list member add list=WAN interface=$wan2'
+            ? $this->guardedAdd('/interface list member find list=WAN interface=$wan2', '/interface list member add list=WAN interface=$wan2')
             : '# Add this when second Starlink is connected: /interface list member add list=WAN interface=$wan2';
 
         // 2026-10-03, confirmed live: enable_second_wan added $wan2 to the WAN
@@ -671,7 +677,11 @@ SCRIPT;
             '# address or pool name, never an interface name (confirmed live 2026-09-26).',
             '/ppp profile add name=mms-pppoe-profile only-one=yes change-tcp-mss=yes local-address='.str($settings['pppoe_gateway'])->before('/').' remote-address=pool-pppoe',
             '/interface pppoe-server server add interface=vlan-pppoe service-name=mms-radius default-profile=mms-pppoe-profile authentication=pap,chap,mschap1,mschap2 disabled=no',
-            ...array_map(fn (string $p): string => '/interface bridge port add bridge=$lanBridge interface='.$p.' pvid=$pppoeVlan comment="Extra PPPoE access port"', $extraPppoePorts),
+            // Same guard as the main bridge-port block above, for the same
+            // confirmed-live 2026-10-15 reason -- this one was missed since
+            // it lives in this separate $pppoeLines array, not the main
+            // bridge-port block.
+            ...array_map(fn (string $p): string => $this->guardedAdd('/interface bridge port find interface='.$p, '/interface bridge port add bridge=$lanBridge interface='.$p.' pvid=$pppoeVlan comment="Extra PPPoE access port"'), $extraPppoePorts),
         ] : [
             '',
             '# PPPoE is disabled for this router profile. Enable it for CPE/subscriber deployments.',

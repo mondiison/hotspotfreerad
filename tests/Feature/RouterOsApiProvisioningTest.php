@@ -351,6 +351,37 @@ class RouterOsApiProvisioningTest extends TestCase
         $this->assertStringContainsString(':if ([:len [/interface bridge port find interface=ether5]] = 0) do={ /interface bridge port add bridge=$lanBridge interface=ether5', $script);
     }
 
+    /**
+     * 2026-10-15, confirmed live via a full manual paste of the whole script
+     * directly on the router's terminal (which, unlike /system script run,
+     * doesn't stop at the first error -- surfacing every remaining collision
+     * in one pass instead of one at a time): two bridge-port-add lines were
+     * missed when the main block and PPPoE's own section were guarded above
+     * -- wan2's own WAN interface list membership line, and PPPoE's extra
+     * access ports, which live in their own separate generated blocks, not
+     * the ones already covered.
+     */
+    public function test_second_wan_list_membership_and_pppoe_extra_ports_are_also_idempotent(): void
+    {
+        $router = Router::create([
+            'shop_id' => $this->makeShop()->id,
+            'name' => 'Idempotent Second Wan Pppoe Router',
+            'nas_identifier' => 'idempotent-second-wan-pppoe-router',
+            'wireguard_internal_ip' => '10.8.0.78',
+            'shared_secret' => 'radius-secret',
+            'provisioning_settings' => [
+                'enable_second_wan' => true,
+                'enable_pppoe' => true,
+                'extra_pppoe_ports' => 'ether9',
+            ],
+        ]);
+
+        $script = app(MikroTikProvisioningService::class)->generateFreshInfrastructureScript($router);
+
+        $this->assertStringContainsString(':if ([:len [/interface list member find list=WAN interface=$wan2]] = 0) do={ /interface list member add list=WAN interface=$wan2 }', $script);
+        $this->assertStringContainsString(':if ([:len [/interface bridge port find interface=ether9]] = 0) do={ /interface bridge port add bridge=$lanBridge interface=ether9', $script);
+    }
+
     public function test_provision_hotspot_reports_a_clear_error_when_router_is_unreachable(): void
     {
         $router = Router::create([
