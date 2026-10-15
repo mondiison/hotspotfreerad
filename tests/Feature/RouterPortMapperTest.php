@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Livewire\Admin\RoutersIndex;
+use App\Models\Router;
 use App\Models\Shop;
 use App\Models\Tenant;
 use App\Models\User;
@@ -153,6 +154,76 @@ class RouterPortMapperTest extends TestCase
             ->set('provisioning_settings.port_count', 8)
             ->call('unassignPort', 2)
             ->assertSet('provisioning_settings.trunk_port_number', null);
+    }
+
+    /**
+     * 2026-10-15, live report: "i removed extra port for pos, staff and
+     * mgmt but after saving it keeps preloading the old values."
+     * unassignPort() used to only ever clear the numeric
+     * extra_*_port_numbers field, never its raw-interface-name
+     * extra_*_ports sibling -- so the stale string field survived the
+     * save, and routerProvisioningSettings()'s reverse-derivation (which
+     * reads the string field, not the saved number) resurrected the
+     * "removed" port the very next time the edit wizard reopened. This
+     * exercises the full real-world cycle: save with extra ports, remove
+     * them via the mapper, save again, then reopen edit fresh and confirm
+     * they genuinely don't come back.
+     */
+    public function test_unassigning_extra_ports_and_saving_does_not_resurrect_them_on_the_next_edit(): void
+    {
+        $shop = $this->shop();
+        $admin = $this->superAdmin();
+
+        $router = Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'Extra Ports Router',
+            'nas_identifier' => 'extra-ports-router-2',
+            'wireguard_internal_ip' => '10.8.0.95',
+            'shared_secret' => 'radius-secret',
+            'provisioning_settings' => [
+                'wan1' => 'ether1',
+                'trunk_port' => 'ether2',
+                'pi_port' => 'ether3',
+                'enable_staff' => true,
+                'enable_pos' => true,
+                'extra_mgmt_port_numbers' => '9',
+                'extra_mgmt_ports' => 'ether9',
+                'extra_staff_port_numbers' => '7',
+                'extra_staff_ports' => 'ether7',
+                'extra_pos_port_numbers' => '6',
+                'extra_pos_ports' => 'ether6',
+            ],
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test(RoutersIndex::class)
+            ->call('edit', $router->id)
+            // Confirm it actually opened pre-filled before removing anything.
+            ->assertSet('provisioning_settings.extra_mgmt_port_numbers', '9')
+            ->assertSet('provisioning_settings.extra_staff_port_numbers', '7')
+            ->assertSet('provisioning_settings.extra_pos_port_numbers', '6')
+            ->call('unassignPort', 9)
+            ->call('unassignPort', 7)
+            ->call('unassignPort', 6)
+            ->call('save');
+
+        $router->refresh();
+
+        $this->assertSame('', (string) ($router->provisioning_settings['extra_mgmt_port_numbers'] ?? ''));
+        $this->assertSame('', (string) ($router->provisioning_settings['extra_mgmt_ports'] ?? ''));
+        $this->assertSame('', (string) ($router->provisioning_settings['extra_staff_port_numbers'] ?? ''));
+        $this->assertSame('', (string) ($router->provisioning_settings['extra_staff_ports'] ?? ''));
+        $this->assertSame('', (string) ($router->provisioning_settings['extra_pos_port_numbers'] ?? ''));
+        $this->assertSame('', (string) ($router->provisioning_settings['extra_pos_ports'] ?? ''));
+
+        // The actual regression: reopening the wizard fresh must not
+        // reverse-derive the removed ports back from a stale string field.
+        Livewire::actingAs($admin)
+            ->test(RoutersIndex::class)
+            ->call('edit', $router->id)
+            ->assertSet('provisioning_settings.extra_mgmt_port_numbers', '')
+            ->assertSet('provisioning_settings.extra_staff_port_numbers', '')
+            ->assertSet('provisioning_settings.extra_pos_port_numbers', '');
     }
 
     public function test_re_dropping_a_port_into_its_own_bucket_is_a_no_op(): void

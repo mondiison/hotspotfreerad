@@ -399,10 +399,37 @@ class RoutersIndex extends Component
 
         $trunk = $assignments['trunk'];
         $this->provisioning_settings['trunk_port_number'] = $trunk[0] ?? null;
+
+        // 2026-10-15, live report ("i removed extra port for pos, staff and
+        // mgmt but after saving it keeps preloading the old values"): this
+        // used to only ever write the numeric extra_*_port_numbers fields,
+        // never their raw-interface-name extra_*_ports siblings that
+        // MikroTikProvisioningService actually reads and that
+        // routerProvisioningSettings() reverse-derives the numeric fields
+        // FROM on every edit-open. Clearing a port here left its string
+        // sibling stale -- RouterManagementService::derivePortInterfaceNames()
+        // only ever SETS a string field when its numeric counterpart is
+        // non-empty, it never clears one back to blank when the number
+        // becomes blank -- so the very next time the wizard reopened, the
+        // stale string field resurrected the "removed" port right back.
+        // Writing both representations here, at the one point where "the
+        // admin explicitly cleared this" is unambiguous, closes that gap.
+        // Safe to blank unconditionally for these plural fields specifically
+        // (portNumbersFromInterfaceList('') returns [], not null) -- unlike
+        // the four singular roles above, blanking THEIR string siblings the
+        // same way would make portNumberFromInterfaceName() return null and
+        // force the router into advanced mode on next edit, a worse
+        // regression than the one being fixed here, so those are left as-is.
         $this->provisioning_settings['extra_trunk_port_numbers'] = implode(',', array_slice($trunk, 1));
+        $this->provisioning_settings['extra_trunk_ports'] = implode(',', array_map(
+            RouterPortLayout::interfaceName(...), array_slice($trunk, 1)
+        ));
 
         foreach (['extra_mgmt', 'extra_hotspot', 'extra_staff', 'extra_pos', 'extra_pppoe'] as $key) {
             $this->provisioning_settings["{$key}_port_numbers"] = implode(',', $assignments[$key]);
+            $this->provisioning_settings["{$key}_ports"] = implode(',', array_map(
+                RouterPortLayout::interfaceName(...), $assignments[$key]
+            ));
         }
     }
 
