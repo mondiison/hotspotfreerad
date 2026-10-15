@@ -565,7 +565,7 @@ class MikroTikProvisioningServiceTest extends TestCase
         $this->assertStringContainsString('/tool mac-server set allowed-interface-list=MGMT-ACCESS', $script);
         $this->assertStringContainsString('/tool mac-server mac-winbox set allowed-interface-list=MGMT-ACCESS', $script);
         $this->assertStringContainsString('/ip dhcp-server add name=dhcp-mgmt interface=vlan-mgmt', $script);
-        $this->assertStringContainsString('/ip dhcp-client add interface=$wan1 add-default-route=yes check-gateway=ping use-peer-dns=no disabled=no', $script);
+        $this->assertStringContainsString('/ip dhcp-client add interface=$wan1 add-default-route=yes use-peer-dns=no disabled=no', $script);
         $this->assertStringContainsString('/ip dhcp-server add name=dhcp-hotspot interface=vlan-hotspot', $script);
         $this->assertStringContainsString('/ip hotspot add name=mms-hotspot interface=vlan-hotspot', $script);
         $this->assertStringContainsString('login-by=http-pap,http-chap,cookie,mac-cookie', $script);
@@ -1003,9 +1003,18 @@ class MikroTikProvisioningServiceTest extends TestCase
      * per a direct follow-up ("hope it would still distribute load when
      * the 2 WAN is up at same time") -- that's RouterOS's standard ECMP
      * shape (two equal-distance routes to different gateways load-balance
-     * new connections automatically), with check-gateway=ping on both
-     * providing the failover half: a dead gateway's route gets withdrawn,
-     * leaving only the surviving link active.
+     * new connections automatically).
+     *
+     * This originally also carried check-gateway=ping on both lines for
+     * failover (a dead gateway's route withdrawn automatically) -- removed
+     * 2026-10-15, confirmed live that check-gateway was never actually a
+     * valid /ip dhcp-client property at all (RouterOS's own Tab-completion
+     * lists the full set, no check-gateway among them); it genuinely exists
+     * on /ip route, not a DHCP client. This was the first time this WAN
+     * section actually ran against real hardware, having only ever been
+     * added and documented without a live verification. Gateway-failover is
+     * deliberately deferred now rather than guessed at a second time -- what
+     * ships today is plain ECMP load-balancing with no health-check gate.
      */
     public function test_second_wan_gets_an_equal_distance_dhcp_client_for_ecmp_load_balancing(): void
     {
@@ -1024,8 +1033,9 @@ class MikroTikProvisioningServiceTest extends TestCase
         $this->assertStringContainsString('/interface list member add list=WAN interface=$wan2', $script);
         $this->assertStringContainsString('/ip firewall nat add chain=srcnat out-interface=$wan2 action=masquerade', $script);
         $this->assertStringContainsString('/ip dhcp-client remove [find interface=$wan2]', $script);
-        $this->assertStringContainsString('/ip dhcp-client add interface=$wan2 add-default-route=yes check-gateway=ping', $script);
-        $this->assertStringContainsString('/ip dhcp-client add interface=$wan1 add-default-route=yes check-gateway=ping', $script);
+        $this->assertStringContainsString('/ip dhcp-client add interface=$wan2 add-default-route=yes', $script);
+        $this->assertStringContainsString('/ip dhcp-client add interface=$wan1 add-default-route=yes', $script);
+        $this->assertStringNotContainsString('check-gateway', $script);
         // Neither client sets an explicit default-route-distance -- both stay
         // at RouterOS's implicit distance (1), which is what makes this ECMP
         // rather than wan2 being a never-used backup.

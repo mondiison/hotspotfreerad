@@ -597,17 +597,33 @@ SCRIPT;
         // distribute new connections across both links automatically, no
         // PCC/mangle rules needed, closing a direct follow-up request ("hope
         // it would still distribute load when the 2 WAN is up at same
-        // time"). check-gateway=ping on both is what turns this into
-        // failover too, not just balancing -- when one gateway stops
-        // answering pings, RouterOS withdraws *that one* route from the
-        // table, leaving only the surviving link's route active until the
-        // dead one comes back. An earlier version of this gave wan2
+        // time"). An earlier version of this gave wan2
         // default-route-distance=2 (pure backup, never used while wan1 was
         // alive) -- reverted the same day once the actual requirement
         // (load distribution, not just failover) was clarified.
+        //
+        // check-gateway=ping was removed 2026-10-15, confirmed live: this
+        // was never actually a valid /ip dhcp-client property at all
+        // ("expected end of command"/"input does not match any value of
+        // policy"-class trap) -- confirmed via the router's own Tab-
+        // completion that /ip dhcp-client add's full property list is just
+        // comment/default-route-tables/script/copy-from/dhcp-options/
+        // use-peer-dns/default-route-distance/disabled/use-peer-ntp.
+        // check-gateway genuinely exists in RouterOS, but only on /ip route,
+        // not a DHCP client -- this fix was added and documented without
+        // ever being verified live (see this file's own "No live-API
+        // equivalent needed here" note from when it was written), and this
+        // was the first time the Fresh Infrastructure Script's WAN section
+        // actually ran against real hardware. Gateway-based failover for
+        // dual-WAN ECMP (detecting a dead uplink and withdrawing its route)
+        // needs a different mechanism -- e.g. a separate /ip route per
+        // gateway with its own check-gateway=ping, added after each DHCP
+        // lease -- deliberately deferred rather than guessed at a second
+        // time; plain ECMP load-balancing (ungated by any health check)
+        // is what's actually shipped for now.
         $secondWanDhcp = $settings['enable_second_wan']
-            ? "/ip dhcp-client remove [find interface=\$wan2]\n/ip dhcp-client add interface=\$wan2 add-default-route=yes check-gateway=ping use-peer-dns=no disabled=no comment=\"Second WAN uplink -- equal-distance route with wan1 for ECMP load balancing + check-gateway failover\""
-            : '# Add this when second Starlink is connected: /ip dhcp-client add interface=$wan2 add-default-route=yes check-gateway=ping use-peer-dns=no disabled=no';
+            ? "/ip dhcp-client remove [find interface=\$wan2]\n/ip dhcp-client add interface=\$wan2 add-default-route=yes use-peer-dns=no disabled=no comment=\"Second WAN uplink -- equal-distance route with wan1 for ECMP load balancing\""
+            : '# Add this when second Starlink is connected: /ip dhcp-client add interface=$wan2 add-default-route=yes use-peer-dns=no disabled=no';
 
         $secondWanNat = $settings['enable_second_wan']
             ? '/ip firewall nat add chain=srcnat out-interface=$wan2 action=masquerade'
@@ -759,7 +775,7 @@ SCRIPT;
             '/interface list member add list=WAN interface=$wan1',
             $secondWanMember,
             '/ip dhcp-client remove [find interface=$wan1]',
-            '/ip dhcp-client add interface=$wan1 add-default-route=yes check-gateway=ping use-peer-dns=no disabled=no comment="Get WAN IP/default route from Starlink or ISP router"',
+            '/ip dhcp-client add interface=$wan1 add-default-route=yes use-peer-dns=no disabled=no comment="Get WAN IP/default route from Starlink or ISP router"',
             $secondWanDhcp,
             '/interface bridge add name=$lanBridge protocol-mode=rstp vlan-filtering=no comment="MMS Radius LAN bridge"',
             '/interface bridge port add bridge=$lanBridge interface=$trunkPort frame-types=admit-only-vlan-tagged comment="AP/switch trunk carrying MMS Radius VLANs -- tagged only, untagged frames dropped"',
