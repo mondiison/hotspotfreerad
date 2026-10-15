@@ -19,6 +19,17 @@ class RouterMetricSamplingTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // RouterInsight is #[Lazy] on the real page (2026-10-15, "this page
+        // is heavy") -- the component tests below mount it directly and
+        // assert on real mount()-driven content, so lazy loading's
+        // placeholder-only mount needs disabling here.
+        Livewire::withoutLazyLoading();
+    }
+
     private function makeRouter(string $ip = '192.0.2.20'): Router
     {
         $tenant = Tenant::create(['company_name' => 'Demo ISP', 'owner_email' => 'owner@example.com']);

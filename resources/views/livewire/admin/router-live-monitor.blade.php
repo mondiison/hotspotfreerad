@@ -1,4 +1,4 @@
-<div @if (! $pollingPaused) wire:poll.5s="poll" @endif>
+<div @if (! $pollingPaused) wire:poll.5s.visible="poll" @endif>
     <div class="mb-4 flex flex-col justify-between gap-3 md:flex-row md:items-center">
         <div class="flex items-center gap-2">
             <label class="text-sm text-zinc-500 dark:text-zinc-400">Interface</label>

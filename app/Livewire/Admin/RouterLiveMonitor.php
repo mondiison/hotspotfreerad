@@ -4,9 +4,25 @@ namespace App\Livewire\Admin;
 
 use App\Models\Router;
 use App\Services\RouterOsConnectionService;
+use Illuminate\Contracts\View\View;
+use Livewire\Attributes\Lazy;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
 
+/**
+ * 2026-10-15, direct report ("this page is heavy") -- mount() opens a live
+ * RouterOS connection (listInterfaces()) and, once mounted, polls the API
+ * every 5 seconds forever via wire:poll, regardless of which tab is actually
+ * open. #[Lazy] defers both the connection attempt and the first render
+ * until this component's placeholder actually scrolls into view (Livewire's
+ * default x-intersect behavior) -- since the Live tab's panel is
+ * display:none until selected (Flux's CSS-only tab visibility), that never
+ * happens until an admin actually opens the Live tab. wire:poll's own
+ * `.visible` modifier (see the view) is the other half: it stops polling
+ * again the moment the tab is switched away from, since the already-mounted
+ * component's underlying DOM node goes right back to display:none.
+ */
+#[Lazy]
 class RouterLiveMonitor extends Component
 {
     #[Locked]
@@ -105,6 +121,11 @@ class RouterLiveMonitor extends Component
         if (count($this->samples) > self::MAX_SAMPLES) {
             $this->samples = array_slice($this->samples, -self::MAX_SAMPLES);
         }
+    }
+
+    public function placeholder(): View
+    {
+        return view('livewire.admin.placeholders.router-tab-loading');
     }
 
     public function render()

@@ -18,6 +18,17 @@ class RouterLiveMonitoringTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // RouterLiveMonitor is #[Lazy] on the real page (2026-10-15, "this
+        // page is heavy") -- these tests mount it directly and assert on
+        // real mount()-driven state, so lazy loading's placeholder-only
+        // mount needs disabling here.
+        Livewire::withoutLazyLoading();
+    }
+
     private function makeRouter(): Router
     {
         $tenant = Tenant::create(['company_name' => 'Demo ISP', 'owner_email' => 'owner@example.com']);

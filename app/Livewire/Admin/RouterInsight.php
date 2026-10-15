@@ -5,10 +5,21 @@ namespace App\Livewire\Admin;
 use App\Models\Router;
 use App\Services\RouterOsConnectionService;
 use App\Support\RouterMetricHistory;
+use Illuminate\Contracts\View\View;
 use Illuminate\Support\Carbon;
+use Livewire\Attributes\Lazy;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
 
+/**
+ * 2026-10-15, direct report ("this page is heavy") -- mount() makes two live
+ * RouterOS API calls (refreshLive()'s systemResource()/systemHealth()) plus
+ * a RouterMetricSample query, on every router page load regardless of which
+ * tab is open. #[Lazy] defers all of it until this component's placeholder
+ * actually scrolls into view -- which, since the Insight tab's panel is
+ * display:none until selected, only happens once an admin opens that tab.
+ */
+#[Lazy]
 class RouterInsight extends Component
 {
     #[Locked]
@@ -76,6 +87,11 @@ class RouterInsight extends Component
         };
 
         $this->series = app(RouterMetricHistory::class)->series($router, Carbon::instance($from), Carbon::instance($to));
+    }
+
+    public function placeholder(): View
+    {
+        return view('livewire.admin.placeholders.router-tab-loading');
     }
 
     public function render()

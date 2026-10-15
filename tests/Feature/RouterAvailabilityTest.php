@@ -18,6 +18,17 @@ class RouterAvailabilityTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // RouterAvailability is #[Lazy] on the real page (2026-10-15, "this
+        // page is heavy") -- the component test below mounts it directly
+        // and asserts on real mount()-driven content, so lazy loading's
+        // placeholder-only mount needs disabling here.
+        Livewire::withoutLazyLoading();
+    }
+
     private function makeRouter(): Router
     {
         $tenant = Tenant::create(['company_name' => 'Demo ISP', 'owner_email' => 'owner@example.com']);
