@@ -267,11 +267,12 @@ class RouterOsApiProvisioningTest extends TestCase
 
     public function test_bootstrap_wan_interface_list_creation_is_idempotent(): void
     {
-        // The full Fresh Infrastructure Script also creates an "WAN" interface list
-        // unconditionally -- if a router gets the bootstrap script pasted first and the
-        // full script pasted afterward, re-running an unguarded "/interface list add"
-        // would hit a duplicate-name error. Bootstrap's own version is guarded so this
-        // stays paste-safe regardless of order.
+        // Fresh Infrastructure Script's own "WAN" interface list creation is
+        // guarded the identical way, in test_fresh_infrastructure_wan_interface_list_creation_is_idempotent()
+        // below -- both scripts can genuinely run against the same router
+        // (Bootstrap pasted by hand first since no tunnel exists yet to push
+        // anything via API, then Fresh Infrastructure Script pushed via API
+        // once it does), so each needs its own guard regardless of order.
         $router = Router::create([
             'shop_id' => $this->makeShop()->id,
             'name' => 'Idempotent Bootstrap Router',
@@ -281,6 +282,35 @@ class RouterOsApiProvisioningTest extends TestCase
         ]);
 
         $script = app(MikroTikProvisioningService::class)->generateBootstrapScript($router);
+
+        $this->assertStringContainsString(':if ([:len [/interface list find name=WAN]] = 0) do={ /interface list add name=WAN', $script);
+        $this->assertStringContainsString(':if ([:len [/interface list member find list=WAN interface=$wan1]] = 0) do={ /interface list member add list=WAN interface=$wan1 }', $script);
+    }
+
+    /**
+     * 2026-10-15, confirmed live: a router onboarded through this app's own
+     * normal flow (Bootstrap Script pasted by hand first, Fresh Infrastructure
+     * Script pushed via API afterward once a tunnel exists) already has the
+     * "WAN" interface list and $wan1's membership in it by the time this runs
+     * -- Fresh Infrastructure Script's own unguarded version of these two
+     * lines failed outright with "failure: already have interface list with
+     * such name" on the very first real "Push via API" click to actually
+     * reach this far. A narrow, low-risk guard on this one genuinely-shared
+     * object, mirroring Bootstrap Script's own already-proven pattern exactly
+     * -- not the broader "make the whole script idempotent" effort this file
+     * elsewhere documents as deliberately deferred.
+     */
+    public function test_fresh_infrastructure_wan_interface_list_creation_is_idempotent(): void
+    {
+        $router = Router::create([
+            'shop_id' => $this->makeShop()->id,
+            'name' => 'Idempotent Fresh Infra Router',
+            'nas_identifier' => 'idempotent-fresh-infra-router',
+            'wireguard_internal_ip' => '10.8.0.76',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        $script = app(MikroTikProvisioningService::class)->generateFreshInfrastructureScript($router);
 
         $this->assertStringContainsString(':if ([:len [/interface list find name=WAN]] = 0) do={ /interface list add name=WAN', $script);
         $this->assertStringContainsString(':if ([:len [/interface list member find list=WAN interface=$wan1]] = 0) do={ /interface list member add list=WAN interface=$wan1 }', $script);

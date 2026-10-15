@@ -771,8 +771,22 @@ SCRIPT;
             '',
             '/system identity set name="'.$routerIdentity.'"',
             '/ip dns set allow-remote-requests=yes servers=1.1.1.1,8.8.8.8',
-            '/interface list add name=WAN comment="Internet uplinks such as Starlink"',
-            '/interface list member add list=WAN interface=$wan1',
+            // Guarded the same way generateBootstrapScript()'s identical lines
+            // already are -- confirmed live 2026-10-15: a router onboarded
+            // through this app's own normal flow (paste Bootstrap Script by
+            // hand first, since no tunnel exists yet to push anything via API,
+            // then push Fresh Infrastructure Script via API once it does)
+            // already has the "WAN" interface list and $wan1's membership in
+            // it from Bootstrap Script by the time this runs -- an unguarded
+            // /interface list add here failed outright with "failure: already
+            // have interface list with such name", the exact "assumes a truly
+            // blank router" gap this app's own normal onboarding sequence
+            // doesn't actually produce. This is a narrow, low-risk guard on
+            // the one object genuinely shared between both scripts -- not the
+            // broader "make the whole script idempotent" effort this file
+            // elsewhere documents as deliberately deferred.
+            ':if ([:len [/interface list find name=WAN]] = 0) do={ /interface list add name=WAN comment="Internet uplinks such as Starlink" }',
+            ':if ([:len [/interface list member find list=WAN interface=$wan1]] = 0) do={ /interface list member add list=WAN interface=$wan1 }',
             $secondWanMember,
             '/ip dhcp-client remove [find interface=$wan1]',
             '/ip dhcp-client add interface=$wan1 add-default-route=yes use-peer-dns=no disabled=no comment="Get WAN IP/default route from Starlink or ISP router"',
