@@ -89,6 +89,17 @@ class RoutersIndex extends Component
             $this->create();
         } elseif (request()->query('open_edit')) {
             $this->edit((int) request()->query('open_edit'));
+
+            // 2026-10-15, direct request: the router show page's read-only
+            // Port Map tab has no editing controls at all -- the actual
+            // drag-and-drop mapper only lives on this wizard's Hardware
+            // step. An "Edit ports" link from that tab passes ?step=2 so
+            // it lands directly there instead of the wizard's default
+            // Identity step, one extra click closer to what the admin
+            // actually came here to do.
+            if (request()->query('step')) {
+                $this->step = max(1, min(4, (int) request()->query('step')));
+            }
         }
     }
 

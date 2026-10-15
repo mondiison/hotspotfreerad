@@ -315,6 +315,9 @@ sudo freeradius -X</code></pre>
                 </flux:tab.panel>
 
                 <flux:tab.panel name="port-map" class="space-y-6">
+                    <div class="flex justify-end">
+                        <a href="{{ route('admin.routers.index', ['open_edit' => $router->id, 'step' => 2]) }}" wire:navigate class="rounded-md border border-zinc-200 dark:border-zinc-700 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-zinc-50 dark:hover:bg-zinc-800">Edit ports</a>
+                    </div>
                     <livewire:admin.router-port-map :router="$router" :key="'port-map-'.$router->id" />
                 </flux:tab.panel>
 

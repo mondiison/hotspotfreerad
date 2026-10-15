@@ -255,6 +255,32 @@ class RouterPortMapperTest extends TestCase
             ->assertSet('provisioning_settings.trunk_port_number', 2);
     }
 
+    /**
+     * 2026-10-15, direct request: the router show page's read-only Port Map
+     * tab has no editing controls of its own -- the actual drag-and-drop
+     * mapper only lives on this wizard's Hardware step (step 2). The tab's
+     * new "Edit ports" link passes ?step=2 alongside the existing
+     * ?open_edit=, so the wizard opens directly on the Hardware step
+     * instead of its default Identity step.
+     */
+    public function test_open_edit_with_a_step_query_param_opens_directly_on_that_step(): void
+    {
+        $shop = $this->shop();
+        $router = Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'Deep Linked Router',
+            'nas_identifier' => 'deep-linked-router',
+            'wireguard_internal_ip' => '10.8.0.97',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        $response = $this->actingAs($this->superAdmin())
+            ->get(route('admin.routers.index', ['open_edit' => $router->id, 'step' => 2]));
+
+        $response->assertSee('Visual port mapping');
+        $response->assertDontSee('NAS identifier');
+    }
+
     private function shop(): Shop
     {
         return Shop::create([

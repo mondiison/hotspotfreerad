@@ -794,6 +794,10 @@ Fixed by making `writePortBucketAssignments()` keep both representations in lock
 
 A new regression test (`RouterPortMapperTest::test_unassigning_extra_ports_and_saving_does_not_resurrect_them_on_the_next_edit`) exercises the full real-world cycle end to end: save a router with extra mgmt/staff/POS ports, remove them via `unassignPort()`, save again, confirm both representations are genuinely blank in the database, then reopen the edit wizard fresh and confirm they don't come back -- confirmed to fail against the pre-fix code (reverted via `git stash` to verify) before passing against the actual fix.
 
+**Direct follow-up, same day ("still not working, can i edit from the port map tab")**: this turned out to be a UX discovery gap, not a bug in the fix above -- the router show page's read-only Port Map tab (the UniFi-style visual diagram) has no editing controls at all by design; the actual drag-and-drop mapper only ever lived on the edit wizard's Hardware step (step 2), reachable only via the page header's "Edit Router" link, which always opens the wizard at its default Identity step (step 1) with no way to jump straight to Hardware. An admin trying to remove a port from the Port Map tab itself had nothing to click -- there was no bug left to hit.
+
+Added a direct "Edit ports" link on the Port Map tab pointing at `route('admin.routers.index', ['open_edit' => $router->id, 'step' => 2])` -- `RoutersIndex::mount()` already reads `open_edit` to open the wizard on an existing router; it now also reads an optional `step` query param (clamped 1-4) and jumps straight there after `edit()` runs, so this link lands directly on the mapper instead of making the admin click through Identity first. Scoped narrowly to this one query param rather than a general "deep link to any step" mechanism, since Hardware is the only step anything currently needs to jump to.
+
 ## Known environment quirk
 
 Local XAMPP MariaDB has previously hung due to a crashed `mysql.db` table; if the app hangs on load, check MySQL first and repair with `aria_chk` before assuming an app bug (see `docs/current-project-status.md`).
