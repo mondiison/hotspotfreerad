@@ -335,6 +335,26 @@ sudo freeradius -X</code></pre>
                         <x-script-block>{{ $freshInfrastructureScript }}</x-script-block>
                     </section>
 
+                    <section class="min-w-0 overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm">
+                        <div class="border-b border-zinc-200 dark:border-zinc-700 px-5 py-4">
+                            <div class="flex flex-col justify-between gap-3 md:flex-row md:items-start">
+                                <div>
+                                    <h2 class="text-base font-semibold">Trunk Port Sync</h2>
+                                    <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Pushes just the configured AP/switch trunk port(s)' bridge membership and VLAN tagging live -- unlike the script above, this is additive-only and safe to re-run. It only ever adds what's missing (a trunk port's bridge membership, a missing VLAN tag); it never removes anything, and it refuses outright on a router whose trunk port reports a hardware switch chip. A VLAN with no existing bridge-vlan row yet is reported, not created -- run Fresh Infrastructure Script (or add it by hand) for that VLAN first.</p>
+                                </div>
+                                <div class="flex items-center gap-3">
+                                    <flux:badge color="blue">Safe to re-run</flux:badge>
+                                    @if ($router->api_username)
+                                        <form method="POST" action="{{ route('admin.routers.sync-trunk-ports', $router) }}" onsubmit="return confirm('This checks the trunk port(s) configured in your saved settings and, over the live API: adds any missing as a bridge-lan member, and tags any missing onto an already-existing VLAN\'s bridge-vlan row. It never removes a bridge port or VLAN tag, and refuses entirely if this router\'s trunk port reports a hardware switch chip. Continue?');">
+                                            @csrf
+                                            <button type="submit" class="rounded-md border border-zinc-200 dark:border-zinc-700 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-zinc-50 dark:hover:bg-zinc-800">Sync trunk ports</button>
+                                        </form>
+                                    @endif
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
                     <section class="min-w-0 overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
                         <h2 class="text-base font-semibold">Infrastructure Profiles</h2>
                         <div class="mt-4 space-y-3">

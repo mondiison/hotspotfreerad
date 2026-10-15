@@ -916,4 +916,73 @@ class RouterOsApiProvisioningTest extends TestCase
         $this->assertFalse($result['success']);
         $this->assertSame('No RouterOS API credentials generated for this router yet.', $result['steps'][0]['error']);
     }
+
+    /**
+     * 2026-10-15, Phase 3 of the router-wizard request: syncTrunkPorts() is
+     * the first live-API method in this codebase to ever touch
+     * /interface bridge port or /interface bridge vlan -- the actual
+     * add/append decision logic is covered by the pure, unit-testable
+     * RouterOsConnectionService::planTrunkPortChanges() (tests/Unit), the
+     * same split this file's other live sync methods already have. These
+     * two tests only cover what can actually be exercised without real
+     * hardware -- the unreachable-router and missing-credentials paths,
+     * matching every other freshly-added live-API method's test coverage
+     * in this file.
+     */
+    public function test_sync_trunk_ports_reports_a_clear_error_when_router_is_unreachable(): void
+    {
+        $router = Router::create([
+            'shop_id' => $this->makeShop()->id,
+            'name' => 'Unreachable Trunk Sync Router',
+            'nas_identifier' => 'unreachable-trunk-sync-router',
+            'wireguard_internal_ip' => '192.0.2.70',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        $result = app(RouterOsConnectionService::class)->syncTrunkPorts($router);
+
+        $this->assertFalse($result['success']);
+        $this->assertCount(1, $result['steps']);
+        $this->assertSame('Sync trunk ports', $result['steps'][0]['label']);
+        $this->assertFalse($result['steps'][0]['success']);
+        $this->assertNotEmpty($result['steps'][0]['error']);
+        $this->assertSame([], $result['skipped_vlans']);
+        $this->assertSame([], $result['drift']['orphaned_bridge_ports']);
+    }
+
+    public function test_sync_trunk_ports_without_api_credentials_reports_a_clear_error(): void
+    {
+        $router = Router::create([
+            'shop_id' => $this->makeShop()->id,
+            'name' => 'No Credentials Trunk Sync Router',
+            'nas_identifier' => 'no-credentials-trunk-sync-router',
+            'wireguard_internal_ip' => '192.0.2.71',
+            'shared_secret' => 'radius-secret',
+        ]);
+        $router->forceFill(['api_username' => null, 'api_password' => null])->save();
+
+        $result = app(RouterOsConnectionService::class)->syncTrunkPorts($router);
+
+        $this->assertFalse($result['success']);
+        $this->assertSame('No RouterOS API credentials generated for this router yet.', $result['steps'][0]['error']);
+    }
+
+    public function test_sync_trunk_ports_route_redirects_with_a_status_message(): void
+    {
+        $user = User::factory()->create(['role' => 'super_admin', 'is_active' => true]);
+
+        $router = Router::create([
+            'shop_id' => $this->makeShop()->id,
+            'name' => 'Trunk Sync Route Router',
+            'nas_identifier' => 'trunk-sync-route-router',
+            'wireguard_internal_ip' => '192.0.2.72',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        $this->actingAs($user)
+            ->post(route('admin.routers.sync-trunk-ports', $router))
+            ->assertRedirect(route('admin.routers.show', $router));
+
+        $this->assertNotNull(session('status'));
+    }
 }

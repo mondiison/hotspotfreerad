@@ -1761,6 +1761,264 @@ class RouterOsConnectionService
     }
 
     /**
+     * Phase 3 of the router-wizard request (2026-10-15), scoped deliberately
+     * narrow after a real live incident: manually removing/re-adding a
+     * bridge port on a board with hardware switch-chip offload silently
+     * corrupted static `/interface bridge vlan` rows into empty dynamic
+     * placeholders. This is the first live-API method in this whole
+     * codebase to ever touch `/interface bridge port` or
+     * `/interface bridge vlan` at all -- every other bridge/VLAN object is
+     * only ever created via generated script text, pasted by hand or
+     * uploaded once via pushFreshInfrastructureScript()'s non-idempotent
+     * "run the whole script" mechanism. Every other live-reconciliation
+     * method in this file (syncRadiusClients(), syncWalledGarden(),
+     * ensurePosInfrastructure() and its Staff/PPPoE siblings) deliberately
+     * stops short of bridge-vlan for exactly this reason -- their own
+     * docblocks say a bridge-vlan row "can't be reduced to a single 'does
+     * this exist' check... reconciling that safely over the API is a
+     * meaningfully larger effort, deferred."
+     *
+     * Scoped to the one concrete gap Phase 2's multi-trunk-port feature
+     * actually created, and strictly additive -- never removes anything:
+     * (1) adds a configured trunk port as a bridge-lan member with the same
+     * admit-only-vlan-tagged lockdown the script generator always uses, if
+     * it isn't a member yet; (2) appends a missing trunk port onto an
+     * already-existing VLAN row's `tagged=` list, preserving every member
+     * already there. A VLAN with no existing row at all is reported under
+     * `skipped_vlans`, never created here -- matches
+     * ensurePosInfrastructure()'s own documented boundary (a brand-new row
+     * needs its full tagged+untagged member set decided correctly, not just
+     * trunk ports). `drift` is a read-only report of live config that no
+     * longer matches current settings -- surfaced to the admin, never
+     * auto-removed; cleaning up a stale entry stays a manual Winbox/console
+     * action, since this app has no reliable way yet to tell "genuinely
+     * orphaned" apart from "an admin's own unrelated config" on this
+     * RouterOS menu -- this is the direct lesson of the incident that
+     * motivated this whole feature.
+     *
+     * Runs its own fresh, live switch-chip check first and refuses outright
+     * (zero write attempts) if any configured trunk port reports a hardware
+     * `switch` property -- never trusts a stale/never-run "Detect from live
+     * router" wizard result, since that's a separate, point-in-time action
+     * that may never have been clicked for this router.
+     *
+     * Not yet confirmed against real hardware -- matching this codebase's
+     * honesty pattern for every other freshly-added RouterOS interaction.
+     * Try this first on a non-switch-chip test router before trusting it on
+     * a live customer-facing one.
+     *
+     * @return array{success: bool, steps: list<array{label: string, success: bool, error: ?string}>, skipped_vlans: list<string>, drift: array{orphaned_bridge_ports: list<string>, orphaned_vlan_tags: array<string,list<string>>}}
+     */
+    public function syncTrunkPorts(Router $router): array
+    {
+        $emptyDrift = ['orphaned_bridge_ports' => [], 'orphaned_vlan_tags' => []];
+
+        if (! $this->isConfigured($router)) {
+            return [
+                'success' => false,
+                'steps' => [['label' => 'Sync trunk ports', 'success' => false, 'error' => 'No RouterOS API credentials generated for this router yet.']],
+                'skipped_vlans' => [],
+                'drift' => $emptyDrift,
+            ];
+        }
+
+        $settings = $this->provisioning->provisioningSettings($router, (string) (((array) $router->provisioning_settings)['profile'] ?? 'starlink_plaza'));
+
+        $desiredTrunkPorts = collect(explode(',', $this->provisioning->trunkPortsCsv($settings)))
+            ->map(fn (string $port): string => trim($port))
+            ->filter(fn (string $port): bool => $port !== '')
+            ->values()
+            ->all();
+
+        $lanBridgeName = 'bridge-lan';
+
+        try {
+            $client = $this->client($router, 8);
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'steps' => [['label' => 'Sync trunk ports', 'success' => false, 'error' => $e->getMessage()]],
+                'skipped_vlans' => [],
+                'drift' => $emptyDrift,
+            ];
+        }
+
+        $ethernetPorts = self::mapEthernetRows($client->query(new Query('/interface/ethernet/print'))->read());
+        $switchChipTrunkPort = collect($ethernetPorts)
+            ->first(fn (array $port): bool => in_array($port['name'], $desiredTrunkPorts, true) && $port['has_switch']);
+
+        if ($switchChipTrunkPort !== null) {
+            return [
+                'success' => false,
+                'steps' => [['label' => 'Sync trunk ports', 'success' => false, 'error' => 'This board offloads VLAN filtering to a hardware switch chip ('.$switchChipTrunkPort['name'].') -- use a fresh script paste instead of live trunk-port sync on this router.']],
+                'skipped_vlans' => [],
+                'drift' => $emptyDrift,
+            ];
+        }
+
+        $existingBridgePorts = $client->query(new Query('/interface/bridge/port/print'))->read();
+        $existingBridgeVlanRows = $client->query(new Query('/interface/bridge/vlan/print'))->read();
+
+        $desiredVlanIds = array_values(array_filter([
+            $settings['mgmt_vlan'],
+            $settings['hotspot_vlan'],
+            $settings['enable_staff'] ? $settings['staff_vlan'] : null,
+            $settings['enable_pos'] ? $settings['pos_vlan'] : null,
+            $settings['enable_pppoe'] ? $settings['pppoe_vlan'] : null,
+        ]));
+
+        $plan = self::planTrunkPortChanges($desiredTrunkPorts, $lanBridgeName, $existingBridgePorts, $desiredVlanIds, $existingBridgeVlanRows);
+
+        $steps = [];
+
+        foreach ($plan['add_bridge_ports'] as $label => $interface) {
+            $steps[$label] = (new Query('/interface/bridge/port/add'))
+                ->equal('bridge', $lanBridgeName)
+                ->equal('interface', $interface)
+                ->equal('frame-types', 'admit-only-vlan-tagged');
+        }
+
+        foreach ($plan['add_vlan_tags'] as $label => $change) {
+            $steps[$label] = (new Query('/interface/bridge/vlan/set'))
+                ->equal('numbers', $change['row_id'])
+                ->equal('tagged', $change['tagged']);
+        }
+
+        $result = $steps === [] ? ['success' => true, 'steps' => []] : $this->runSteps($router, $steps);
+
+        return [
+            'success' => $result['success'],
+            'steps' => $result['steps'],
+            'skipped_vlans' => $plan['skipped_vlans'],
+            'drift' => $plan['drift'],
+        ];
+    }
+
+    /**
+     * Pure diff logic for syncTrunkPorts() -- unit-testable without a live
+     * RouterOS connection, mirroring planRadiusClientChanges()'s shape.
+     * Only ever computes additions (new bridge-port membership, appended
+     * VLAN tags) -- never a removal, by design, per syncTrunkPorts()'s own
+     * docblock. `drift`/`skipped_vlans` are reporting only -- nothing here
+     * ever produces a step to "fix" them.
+     *
+     * RouterOS also surfaces dynamic placeholder bridge-vlan rows (e.g.
+     * "added by pvid"/"added by vlan on bridge") that aren't real, settable
+     * static entries -- rows reporting a truthy `dynamic` property are
+     * excluded from matching, since the live incident this whole feature
+     * exists to avoid repeating involved exactly this kind of row silently
+     * standing in for a real one. This exclusion is a best-effort guard
+     * based on documented RouterOS behavior, not yet confirmed live.
+     *
+     * "Orphaned" bridge ports are scoped to members whose `frame-types` is
+     * the same `admit-only-vlan-tagged` lockdown this app's own trunk ports
+     * always carry -- not every bridge-lan member, which would otherwise
+     * spuriously flag legitimate non-trunk members (a Pi/management port, a
+     * virtual Wi-Fi SSID interface, an extra untagged access port) as if
+     * they were a stale trunk port.
+     *
+     * @param  list<string>  $desiredTrunkPorts
+     * @param  list<array<string,mixed>>  $existingBridgePorts  rows from /interface/bridge/port/print
+     * @param  list<int|string>  $desiredVlanIds  only the VLAN IDs this router currently has enabled
+     * @param  list<array<string,mixed>>  $existingBridgeVlanRows  rows from /interface/bridge/vlan/print
+     * @return array{
+     *     add_bridge_ports: array<string,string>,
+     *     add_vlan_tags: array<string,array{row_id:string,tagged:string}>,
+     *     skipped_vlans: list<string>,
+     *     drift: array{orphaned_bridge_ports: list<string>, orphaned_vlan_tags: array<string,list<string>>},
+     * }
+     */
+    public static function planTrunkPortChanges(
+        array $desiredTrunkPorts,
+        string $lanBridgeName,
+        array $existingBridgePorts,
+        array $desiredVlanIds,
+        array $existingBridgeVlanRows,
+    ): array {
+        $desiredTrunkPorts = array_values(array_unique(array_filter($desiredTrunkPorts, fn (string $port): bool => $port !== '')));
+
+        $bridgePortRows = collect($existingBridgePorts)
+            ->filter(fn ($row): bool => is_array($row) && ($row['bridge'] ?? null) === $lanBridgeName);
+
+        $bridgeMemberInterfaces = $bridgePortRows
+            ->pluck('interface')
+            ->map(fn ($name): string => (string) $name)
+            ->all();
+
+        $addBridgePorts = [];
+        foreach ($desiredTrunkPorts as $port) {
+            if (! in_array($port, $bridgeMemberInterfaces, true)) {
+                $addBridgePorts['Add bridge port ('.$port.')'] = $port;
+            }
+        }
+
+        $trunkLikeMembers = $bridgePortRows
+            ->filter(fn ($row): bool => ($row['frame-types'] ?? null) === 'admit-only-vlan-tagged')
+            ->pluck('interface')
+            ->map(fn ($name): string => (string) $name)
+            ->all();
+
+        $staticVlanRows = collect($existingBridgeVlanRows)
+            ->filter(fn ($row): bool => is_array($row)
+                && ($row['bridge'] ?? null) === $lanBridgeName
+                && ! in_array(strtolower((string) ($row['dynamic'] ?? '')), ['yes', 'true', '1'], true));
+
+        $addVlanTags = [];
+        $skippedVlans = [];
+        $orphanedVlanTags = [];
+
+        foreach ($desiredVlanIds as $vlanId) {
+            $vlanId = (string) $vlanId;
+            $row = $staticVlanRows->first(fn ($row): bool => (string) ($row['vlan-ids'] ?? '') === $vlanId);
+
+            if ($row === null) {
+                $skippedVlans[] = $vlanId;
+                continue;
+            }
+
+            $existingTagged = collect(explode(',', (string) ($row['tagged'] ?? '')))
+                ->map(fn (string $piece): string => trim($piece))
+                ->filter(fn (string $piece): bool => $piece !== '')
+                ->values();
+
+            $missingTags = collect($desiredTrunkPorts)
+                ->reject(fn (string $port): bool => $existingTagged->contains($port))
+                ->values();
+
+            if ($missingTags->isNotEmpty()) {
+                $addVlanTags['Add VLAN '.$vlanId.' tag ('.$missingTags->implode(',').')'] = [
+                    'row_id' => (string) ($row['.id'] ?? ''),
+                    'tagged' => $existingTagged->merge($missingTags)->implode(','),
+                ];
+            }
+
+            $orphaned = $existingTagged
+                ->reject(fn (string $member): bool => $member === $lanBridgeName || in_array($member, $desiredTrunkPorts, true))
+                ->values()
+                ->all();
+
+            if ($orphaned !== []) {
+                $orphanedVlanTags[$vlanId] = $orphaned;
+            }
+        }
+
+        $orphanedBridgePorts = collect($trunkLikeMembers)
+            ->reject(fn (string $interface): bool => in_array($interface, $desiredTrunkPorts, true))
+            ->values()
+            ->all();
+
+        return [
+            'add_bridge_ports' => $addBridgePorts,
+            'add_vlan_tags' => $addVlanTags,
+            'skipped_vlans' => $skippedVlans,
+            'drift' => [
+                'orphaned_bridge_ports' => $orphanedBridgePorts,
+                'orphaned_vlan_tags' => $orphanedVlanTags,
+            ],
+        ];
+    }
+
+    /**
      * Pushes the PPPoE/RADIUS side of `MikroTikProvisioningService::generatePppoeScript()`
      * live over the API. See provisionHotspot() for the per-step failure model.
      *

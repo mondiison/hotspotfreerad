@@ -516,4 +516,141 @@ class RouterOsConnectionServiceTest extends TestCase
             'empty string' => ['', []],
         ];
     }
+
+    /**
+     * 2026-10-15, Phase 3 of the router-wizard request: planTrunkPortChanges()
+     * is the pure diff logic behind syncTrunkPorts() -- see that method's
+     * docblock for the full safety scope (additive-only, never a removal).
+     */
+    public function test_plan_trunk_port_changes_adds_a_missing_bridge_port(): void
+    {
+        $plan = RouterOsConnectionService::planTrunkPortChanges(
+            desiredTrunkPorts: ['ether2'],
+            lanBridgeName: 'bridge-lan',
+            existingBridgePorts: [],
+            desiredVlanIds: [],
+            existingBridgeVlanRows: [],
+        );
+
+        $this->assertSame(['Add bridge port (ether2)' => 'ether2'], $plan['add_bridge_ports']);
+        $this->assertSame([], $plan['add_vlan_tags']);
+    }
+
+    public function test_plan_trunk_port_changes_leaves_an_already_present_bridge_port_alone(): void
+    {
+        $plan = RouterOsConnectionService::planTrunkPortChanges(
+            desiredTrunkPorts: ['ether2'],
+            lanBridgeName: 'bridge-lan',
+            existingBridgePorts: [
+                ['.id' => '*1', 'bridge' => 'bridge-lan', 'interface' => 'ether2', 'frame-types' => 'admit-only-vlan-tagged'],
+            ],
+            desiredVlanIds: [],
+            existingBridgeVlanRows: [],
+        );
+
+        $this->assertSame([], $plan['add_bridge_ports']);
+    }
+
+    public function test_plan_trunk_port_changes_appends_a_missing_tag_without_disturbing_existing_members(): void
+    {
+        $plan = RouterOsConnectionService::planTrunkPortChanges(
+            desiredTrunkPorts: ['ether2', 'ether6'],
+            lanBridgeName: 'bridge-lan',
+            existingBridgePorts: [
+                ['.id' => '*1', 'bridge' => 'bridge-lan', 'interface' => 'ether2', 'frame-types' => 'admit-only-vlan-tagged'],
+                ['.id' => '*2', 'bridge' => 'bridge-lan', 'interface' => 'ether6', 'frame-types' => 'admit-only-vlan-tagged'],
+            ],
+            desiredVlanIds: [20],
+            existingBridgeVlanRows: [
+                ['.id' => '*10', 'bridge' => 'bridge-lan', 'vlan-ids' => '20', 'tagged' => 'bridge-lan,ether2'],
+            ],
+        );
+
+        $this->assertSame([], $plan['add_bridge_ports']);
+        $this->assertSame(
+            ['Add VLAN 20 tag (ether6)' => ['row_id' => '*10', 'tagged' => 'bridge-lan,ether2,ether6']],
+            $plan['add_vlan_tags'],
+        );
+    }
+
+    public function test_plan_trunk_port_changes_is_a_no_op_when_every_trunk_port_is_already_tagged(): void
+    {
+        $plan = RouterOsConnectionService::planTrunkPortChanges(
+            desiredTrunkPorts: ['ether2', 'ether6'],
+            lanBridgeName: 'bridge-lan',
+            existingBridgePorts: [
+                ['.id' => '*1', 'bridge' => 'bridge-lan', 'interface' => 'ether2', 'frame-types' => 'admit-only-vlan-tagged'],
+                ['.id' => '*2', 'bridge' => 'bridge-lan', 'interface' => 'ether6', 'frame-types' => 'admit-only-vlan-tagged'],
+            ],
+            desiredVlanIds: [20],
+            existingBridgeVlanRows: [
+                ['.id' => '*10', 'bridge' => 'bridge-lan', 'vlan-ids' => '20', 'tagged' => 'bridge-lan,ether2,ether6'],
+            ],
+        );
+
+        $this->assertSame([], $plan['add_bridge_ports']);
+        $this->assertSame([], $plan['add_vlan_tags']);
+        $this->assertSame([], $plan['skipped_vlans']);
+        $this->assertSame([], $plan['drift']['orphaned_bridge_ports']);
+        $this->assertSame([], $plan['drift']['orphaned_vlan_tags']);
+    }
+
+    public function test_plan_trunk_port_changes_skips_a_vlan_with_no_existing_bridge_vlan_row_rather_than_creating_one(): void
+    {
+        $plan = RouterOsConnectionService::planTrunkPortChanges(
+            desiredTrunkPorts: ['ether2'],
+            lanBridgeName: 'bridge-lan',
+            existingBridgePorts: [
+                ['.id' => '*1', 'bridge' => 'bridge-lan', 'interface' => 'ether2', 'frame-types' => 'admit-only-vlan-tagged'],
+            ],
+            desiredVlanIds: [50],
+            existingBridgeVlanRows: [],
+        );
+
+        $this->assertSame([], $plan['add_vlan_tags']);
+        $this->assertSame(['50'], $plan['skipped_vlans']);
+    }
+
+    public function test_plan_trunk_port_changes_ignores_a_dynamic_placeholder_vlan_row(): void
+    {
+        $plan = RouterOsConnectionService::planTrunkPortChanges(
+            desiredTrunkPorts: ['ether2'],
+            lanBridgeName: 'bridge-lan',
+            existingBridgePorts: [],
+            desiredVlanIds: [20],
+            existingBridgeVlanRows: [
+                ['.id' => '*10', 'bridge' => 'bridge-lan', 'vlan-ids' => '20', 'tagged' => '', 'dynamic' => 'true'],
+            ],
+        );
+
+        $this->assertSame([], $plan['add_vlan_tags']);
+        $this->assertSame(['20'], $plan['skipped_vlans']);
+    }
+
+    public function test_plan_trunk_port_changes_reports_drift_without_producing_a_removal_step(): void
+    {
+        $plan = RouterOsConnectionService::planTrunkPortChanges(
+            desiredTrunkPorts: ['ether2'],
+            lanBridgeName: 'bridge-lan',
+            existingBridgePorts: [
+                ['.id' => '*1', 'bridge' => 'bridge-lan', 'interface' => 'ether2', 'frame-types' => 'admit-only-vlan-tagged'],
+                // A previously-configured trunk port no longer in settings --
+                // still a bridge member, still tagged-only, but not desired.
+                ['.id' => '*2', 'bridge' => 'bridge-lan', 'interface' => 'ether5', 'frame-types' => 'admit-only-vlan-tagged'],
+                // A legitimate non-trunk bridge member (e.g. the pi/mgmt port)
+                // must never be flagged as drift -- it isn't tagged-only.
+                ['.id' => '*3', 'bridge' => 'bridge-lan', 'interface' => 'ether3', 'frame-types' => 'admit-only-untagged'],
+            ],
+            desiredVlanIds: [20],
+            existingBridgeVlanRows: [
+                ['.id' => '*10', 'bridge' => 'bridge-lan', 'vlan-ids' => '20', 'tagged' => 'bridge-lan,ether2,ether5'],
+            ],
+        );
+
+        $this->assertSame(['ether5'], $plan['drift']['orphaned_bridge_ports']);
+        $this->assertSame(['20' => ['ether5']], $plan['drift']['orphaned_vlan_tags']);
+        // Drift is reporting-only -- never a removal step.
+        $this->assertSame([], $plan['add_bridge_ports']);
+        $this->assertSame([], $plan['add_vlan_tags']);
+    }
 }

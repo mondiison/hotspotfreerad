@@ -197,6 +197,27 @@ class RouterController extends Controller
     }
 
     /**
+     * Phase 3 of the router-wizard request (2026-10-15): additive-only live
+     * sync of just the configured trunk port(s)' bridge membership and VLAN
+     * tagging -- see RouterOsConnectionService::syncTrunkPorts()'s own
+     * docblock for the full safety scope. Deliberately does NOT call
+     * markAutoProvisionedIfSuccessful() -- this isn't part of the "fully
+     * provisioned" bar every other provision* action marks -- and is not
+     * wired into the scheduled auto-provisioning loop, since this is brand
+     * new, unverified-against-real-hardware code touching a RouterOS menu
+     * this app has never touched live before.
+     */
+    public function syncTrunkPorts(Request $request, Router $router, RouterOsConnectionService $routerOs): RedirectResponse
+    {
+        TenantAccess::assertRouter($router, $request->user());
+
+        $result = $routerOs->syncTrunkPorts($router);
+
+        return redirect()->route('admin.routers.show', $router)
+            ->with('status', $this->summarizeProvisioningResult($result));
+    }
+
+    /**
      * A manual "Provision via API" click closes the same loop the background
      * hotspot:auto-provision-routers job is trying to close -- marking it here
      * too means the scheduled job doesn't waste a cycle re-attempting a router
@@ -212,7 +233,14 @@ class RouterController extends Controller
     }
 
     /**
-     * @param  array{success: bool, steps: list<array{label: string, success: bool, error: ?string}>}  $result
+     * `skipped_vlans`/`drift` only ever come from syncTrunkPorts() -- every
+     * other provision*() result has neither key, so this renders exactly as
+     * before for them. Both are reporting-only (a VLAN this method wouldn't
+     * safely create a row for, and live config that no longer matches saved
+     * settings) -- appended as plain informational text, never implying an
+     * action was taken on them.
+     *
+     * @param  array{success: bool, steps: list<array{label: string, success: bool, error: ?string}>, skipped_vlans?: list<string>, drift?: array{orphaned_bridge_ports: list<string>, orphaned_vlan_tags: array<string,list<string>>}}  $result
      */
     private function summarizeProvisioningResult(array $result): string
     {
@@ -220,6 +248,28 @@ class RouterController extends Controller
             fn (array $step): string => ($step['success'] ? 'OK' : 'FAILED').' - '.$step['label'].($step['error'] ? ' ('.$step['error'].')' : '')
         );
 
-        return ($result['success'] ? 'Provisioning complete. ' : 'Provisioning finished with errors. ').$lines->implode(' | ');
+        $summary = ($result['success'] ? 'Provisioning complete. ' : 'Provisioning finished with errors. ').$lines->implode(' | ');
+
+        if (! empty($result['skipped_vlans'])) {
+            $summary .= ' | Skipped (no existing bridge-vlan row -- run Fresh Infrastructure Script or add it by hand first): VLAN '.implode(', VLAN ', $result['skipped_vlans']).'.';
+        }
+
+        $drift = $result['drift'] ?? null;
+
+        if ($drift && ($drift['orphaned_bridge_ports'] !== [] || $drift['orphaned_vlan_tags'] !== [])) {
+            $driftParts = [];
+
+            if ($drift['orphaned_bridge_ports'] !== []) {
+                $driftParts[] = 'bridge port(s) no longer in your saved settings: '.implode(', ', $drift['orphaned_bridge_ports']);
+            }
+
+            foreach ($drift['orphaned_vlan_tags'] as $vlanId => $members) {
+                $driftParts[] = 'VLAN '.$vlanId.' still tags: '.implode(', ', $members);
+            }
+
+            $summary .= ' | Live config not in your saved settings, review manually (not changed automatically): '.implode('; ', $driftParts).'.';
+        }
+
+        return $summary;
     }
 }

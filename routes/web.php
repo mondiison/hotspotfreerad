@@ -115,6 +115,7 @@ Route::middleware(['auth', AuthorizeTenantStaff::class])->prefix('admin')->name(
     Route::post('routers/{router}/provision-pos', [RouterController::class, 'provisionPos'])->name('routers.provision-pos');
     Route::post('routers/{router}/provision-staff-wifi', [RouterController::class, 'provisionStaffWifi'])->name('routers.provision-staff-wifi');
     Route::post('routers/{router}/push-fresh-infrastructure', [RouterController::class, 'pushFreshInfrastructure'])->name('routers.push-fresh-infrastructure');
+    Route::post('routers/{router}/sync-trunk-ports', [RouterController::class, 'syncTrunkPorts'])->name('routers.sync-trunk-ports');
     Route::get('topology', [TopologyController::class, 'index'])->name('topology.index');
     Route::resource('routers', RouterController::class);
     Route::resource('packages', PackageController::class)->except('show');

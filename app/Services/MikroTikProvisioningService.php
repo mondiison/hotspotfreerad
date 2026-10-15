@@ -1214,9 +1214,14 @@ HTML;
      * extra_mgmt_port_numbers' exact shape -- every trunk port (the
      * singular required one plus any extras) gets tagged onto every VLAN
      * identically, so every `tagged=` line this file builds needs the full
-     * combined list, not just the one singular trunk_port.
+     * combined list, not just the one singular trunk_port. Made public
+     * 2026-10-15 so RouterOsConnectionService::syncTrunkPorts() reads this
+     * exact same desired set live -- the same "one source of truth" reasoning
+     * already applied to provisioningSettings()/portConflictRule() elsewhere
+     * in this file, so the live sync can never silently disagree with what
+     * the script generator itself would produce.
      */
-    private function trunkPortsCsv(array $settings): string
+    public function trunkPortsCsv(array $settings): string
     {
         return implode(',', array_merge(
             [$settings['trunk_port']],
