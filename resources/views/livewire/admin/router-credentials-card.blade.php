@@ -120,6 +120,44 @@
             @else
                 <dd class="mt-1 text-xs text-amber-600">No node ID saved yet &mdash; enable ZeroTier on the physical router, copy the ID from "/zerotier print detail", paste it above, and click Save.</dd>
             @endif
+            <dd class="mt-3">
+                <details class="group rounded-md border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800">
+                    <summary class="cursor-pointer select-none px-3 py-2 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100">
+                        Troubleshooting: "Authorize &amp; connect now" fails / controller unreachable on the Pi
+                    </summary>
+                    <div class="border-t border-zinc-200 dark:border-zinc-700 px-3 py-3 text-xs leading-5 text-zinc-600 dark:text-zinc-400">
+                        <p>
+                            A past outage traced to a Debian/Raspberry Pi OS update resetting <code>authtoken.secret</code>'s permissions back to root-only, which the app (running as <code>www-data</code>) can't read &mdash; this breaks every ZeroTier controller-API call this button makes, including this one, without taking the tunnel itself down (routers already joined keep working; only authorizing new ones fails). Run this once on the Pi to install a permanent fix that survives future updates &mdash; it reapplies the correct permissions after every ZeroTier service restart, and is written to always exit cleanly even if the file is briefly missing, so it can never itself take the tunnel daemon down the way the original fix (removed) once did:
+                        </p>
+                        <x-script-block label="Copy">sudo tee /usr/local/sbin/hotspotfreerad-fix-zerotier-authtoken > /dev/null &lt;&lt;'EOF'
+#!/bin/sh
+# Reapplies group/permissions on authtoken.secret so www-data can read it
+# for the app's ZeroTier controller-API calls. Always exits 0 -- this is a
+# convenience fix, never something that should be able to take the core
+# tunnel daemon itself down.
+FILE=/var/lib/zerotier-one/authtoken.secret
+if [ -f "$FILE" ]; then
+    chgrp www-data "$FILE"
+    chmod 640 "$FILE"
+fi
+exit 0
+EOF
+sudo chmod 755 /usr/local/sbin/hotspotfreerad-fix-zerotier-authtoken
+
+sudo mkdir -p /etc/systemd/system/zerotier-one.service.d
+sudo tee /etc/systemd/system/zerotier-one.service.d/override.conf > /dev/null &lt;&lt;'EOF'
+[Service]
+ExecStartPost=/usr/local/sbin/hotspotfreerad-fix-zerotier-authtoken
+EOF
+sudo systemctl daemon-reload
+sudo systemctl restart zerotier-one</x-script-block>
+                        <p class="mt-3">Quick one-off check instead (doesn't survive the next update that regenerates the file, use the script above for a lasting fix):</p>
+                        <x-script-block label="Copy">sudo chgrp www-data /var/lib/zerotier-one/authtoken.secret
+sudo chmod 640 /var/lib/zerotier-one/authtoken.secret</x-script-block>
+                        <p class="mt-3">Confirm it worked: <code>sudo -u www-data cat /var/lib/zerotier-one/authtoken.secret</code> should print the token, not a permission error. Full write-up: <code>docs/zerotier-fallback-setup.md</code>, "If something goes wrong."</p>
+                    </div>
+                </details>
+            </dd>
         </div>
     @endif
 </div>
