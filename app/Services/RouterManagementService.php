@@ -504,7 +504,25 @@ class RouterManagementService
     public function portConflictRule(array $provisioningSettings): Closure
     {
         return function (string $attribute, mixed $value, Closure $fail) use ($provisioningSettings): void {
-            if (($provisioningSettings['ports_advanced_mode'] ?? false) || blank($value)) {
+            // Confirmed live 2026-10-15: advanced mode used to skip conflict
+            // detection entirely (the number-based check below genuinely
+            // can't run without port numbers), silently allowing the exact
+            // same physical interface to be typed into two different role
+            // fields -- a real router had "ether3" saved as both the trunk
+            // port and an extra management port, only discovered after a
+            // live RouterOS push rejected the resulting bridge-VLAN line
+            // ("interface cannot be in tagged and untagged at the same
+            // time"). This runs the identical conflictingRoles() check
+            // against the raw interface-NAME fields instead of port numbers
+            // -- still skipped only when there's nothing to compare, not
+            // whenever advanced mode is simply on.
+            if ($provisioningSettings['ports_advanced_mode'] ?? false) {
+                $this->advancedModePortConflictCheck($provisioningSettings, $fail);
+
+                return;
+            }
+
+            if (blank($value)) {
                 return;
             }
 
@@ -551,6 +569,53 @@ class RouterManagementService
                 $fail(implode(' ', $conflicts));
             }
         };
+    }
+
+    /**
+     * Advanced mode's own conflict check -- mirrors portConflictRule()'s
+     * number-based logic exactly, except keyed on raw interface-NAME
+     * strings (RouterPortLayout::conflictingRoles() is generic over its
+     * map's values, so the identical duplicate-detection logic works
+     * unchanged for either). No port-count bound check here -- advanced
+     * mode's interfaces aren't necessarily "etherN" at all (e.g.
+     * "sfp-sfpplus1"), so there's no number to bound-check against.
+     */
+    private function advancedModePortConflictCheck(array $provisioningSettings, Closure $fail): void
+    {
+        $roles = [
+            'WAN 1' => $provisioningSettings['wan1'] ?? null,
+            'WAN 2' => ($provisioningSettings['enable_second_wan'] ?? false) ? ($provisioningSettings['wan2'] ?? null) : null,
+            'Trunk port' => $provisioningSettings['trunk_port'] ?? null,
+            'Pi port' => $provisioningSettings['pi_port'] ?? null,
+        ];
+
+        foreach ([
+            'Extra management port' => $provisioningSettings['extra_mgmt_ports'] ?? null,
+            'Extra trunk port' => $provisioningSettings['extra_trunk_ports'] ?? null,
+            'Extra hotspot port' => $provisioningSettings['extra_hotspot_ports'] ?? null,
+            'Extra staff port' => ($provisioningSettings['enable_staff'] ?? false) ? ($provisioningSettings['extra_staff_ports'] ?? null) : null,
+            'Extra POS port' => ($provisioningSettings['enable_pos'] ?? false) ? ($provisioningSettings['extra_pos_ports'] ?? null) : null,
+            'Extra PPPoE port' => ($provisioningSettings['enable_pppoe'] ?? false) ? ($provisioningSettings['extra_pppoe_ports'] ?? null) : null,
+        ] as $roleLabel => $csv) {
+            $names = array_values(array_filter(array_map('trim', explode(',', (string) $csv)), fn (string $piece): bool => $piece !== ''));
+
+            foreach ($names as $i => $name) {
+                $roles["{$roleLabel} (#".($i + 1).')'] = $name;
+            }
+        }
+
+        // A role simply left blank (e.g. no second WAN, no extra ports) must
+        // never collide with another blank role -- filter these out first,
+        // since conflictingRoles() only skips a literal null, not an empty
+        // string, and every ?? null fallback above still leaves a blank
+        // string in place for a key that exists but was submitted empty.
+        $roles = array_filter($roles, fn (?string $name): bool => filled($name));
+
+        $conflicts = RouterPortLayout::conflictingRoles($roles);
+
+        if ($conflicts !== []) {
+            $fail(implode(' ', $conflicts));
+        }
     }
 
     /**

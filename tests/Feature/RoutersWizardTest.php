@@ -333,6 +333,37 @@ class RoutersWizardTest extends TestCase
             ->assertHasErrors('provisioning_settings.extra_staff_port_numbers');
     }
 
+    /**
+     * 2026-10-15, direct request after a live router was found with "ether3"
+     * saved as both its trunk port and an extra management port -- only
+     * discovered after a RouterOS push rejected the resulting bridge-VLAN
+     * line, since advanced mode previously skipped port-conflict detection
+     * entirely (the number-based check genuinely can't run without port
+     * numbers). RouterManagementService::advancedModePortConflictCheck()
+     * runs the identical conflictingRoles() check against raw interface-name
+     * fields instead, so this is now caught at save time.
+     */
+    public function test_advanced_mode_still_rejects_the_same_interface_claimed_by_two_roles(): void
+    {
+        $shop = $this->shop();
+
+        Livewire::actingAs($this->superAdmin())
+            ->test(RoutersIndex::class)
+            ->call('create')
+            ->set('shop_id', (string) $shop->id)
+            ->set('name', 'Advanced Conflict Router')
+            ->set('nas_identifier', 'advanced-conflict-router')
+            ->set('wireguard_internal_ip', '10.8.0.87')
+            ->set('shared_secret', 'radius-secret')
+            ->call('nextStep')
+            ->set('provisioning_settings.ports_advanced_mode', true)
+            ->set('provisioning_settings.trunk_port', 'ether3')
+            ->set('provisioning_settings.pi_port', 'ether2')
+            ->set('provisioning_settings.extra_mgmt_ports', 'ether3')
+            ->call('nextStep')
+            ->assertHasErrors('provisioning_settings.port_count');
+    }
+
     public function test_advanced_mode_accepts_raw_interface_names_without_port_count_bounds(): void
     {
         $shop = $this->shop();

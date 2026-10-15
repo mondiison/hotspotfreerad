@@ -43,7 +43,12 @@ final class RouterPortLayout
     }
 
     /**
-     * @param  array<string, int|null>  $portNumbersByRole  role label => port number
+     * Generic over its values -- works identically for port-NUMBER conflicts
+     * (RouterManagementService::portConflictRule()'s own number-picker mode)
+     * and for raw interface-NAME conflicts (that same method's advanced-mode
+     * check), since the comparison is just an array-key lookup either way.
+     *
+     * @param  array<string, int|string|null>  $portNumbersByRole  role label => port number or interface name
      * @return list<string>  human-readable collision descriptions, empty if none
      */
     public static function conflictingRoles(array $portNumbersByRole): array
