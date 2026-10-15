@@ -226,6 +226,60 @@ class RouterPortMapperTest extends TestCase
             ->assertSet('provisioning_settings.extra_pos_port_numbers', '');
     }
 
+    /**
+     * 2026-10-15, direct follow-up live report ("port edit don't save on
+     * the router wizard tab... it still preload with default values"): the
+     * fix above only covered clearing a port via the drag-and-drop mapper
+     * (writePortBucketAssignments()) -- but editing the plain
+     * "extra_*_port_numbers" CSV text field directly (wire:model.live,
+     * bypassing the mapper entirely) funnels through
+     * RouterManagementService::normalizeProvisioningSettings() instead,
+     * which had the identical stale-string-sibling bug independently.
+     * Confirmed this test genuinely failed against the pre-fix service
+     * code (reverted via git stash) before the save-pipeline reordering
+     * fix (derivePortInterfaceNames() now runs before the blank-stripping
+     * filter, and the plural roles re-derive on array_key_exists() rather
+     * than !empty()) made it pass.
+     */
+    public function test_clearing_the_extra_port_text_field_directly_also_does_not_resurrect_it(): void
+    {
+        $shop = $this->shop();
+        $admin = $this->superAdmin();
+
+        $router = Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'Text Field Router',
+            'nas_identifier' => 'text-field-router',
+            'wireguard_internal_ip' => '10.8.0.100',
+            'shared_secret' => 'radius-secret',
+            'provisioning_settings' => [
+                'wan1' => 'ether1',
+                'trunk_port' => 'ether2',
+                'pi_port' => 'ether3',
+                'enable_staff' => true,
+                'extra_staff_port_numbers' => '7',
+                'extra_staff_ports' => 'ether7',
+            ],
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test(RoutersIndex::class)
+            ->call('edit', $router->id)
+            ->assertSet('provisioning_settings.extra_staff_port_numbers', '7')
+            ->set('provisioning_settings.extra_staff_port_numbers', '')
+            ->call('save');
+
+        $router->refresh();
+
+        $this->assertSame('', (string) ($router->provisioning_settings['extra_staff_port_numbers'] ?? ''));
+        $this->assertSame('', (string) ($router->provisioning_settings['extra_staff_ports'] ?? ''));
+
+        Livewire::actingAs($admin)
+            ->test(RoutersIndex::class)
+            ->call('edit', $router->id)
+            ->assertSet('provisioning_settings.extra_staff_port_numbers', '');
+    }
+
     public function test_re_dropping_a_port_into_its_own_bucket_is_a_no_op(): void
     {
         $shop = $this->shop();

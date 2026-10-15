@@ -425,11 +425,23 @@ class RouterManagementService
 
     private function normalizeProvisioningSettings(array $settings): array
     {
-        $settings = array_filter($settings, fn ($value): bool => $value !== null && $value !== '');
-        // Derive interface-name strings from *_port_number BEFORE merging in profile
-        // defaults below -- otherwise a defaulted (not actually submitted) port number
-        // would overwrite an explicitly-typed raw interface name like "sfp-sfpplus1".
+        // Derive interface-name strings from *_port_number BEFORE the
+        // blank-stripping filter below (and before merging in profile
+        // defaults further down) -- a defaulted (not actually submitted)
+        // port number must never overwrite an explicitly-typed raw
+        // interface name like "sfp-sfpplus1", which is what the filter
+        // ordering originally protected against. But derivePortInterfaceNames()
+        // also needs to see an EXPLICITLY-CLEARED (blank) *_port_number key,
+        // for the plural extra-port roles, to correctly blank its matching
+        // *_ports string sibling too -- once array_filter() strips a blank
+        // key, "cleared" and "never submitted" become indistinguishable to
+        // it. Confirmed live 2026-10-15: without this ordering, clearing an
+        // extra port's number field (whether by typing or via the visual
+        // mapper) left its string sibling stale, which survived the save
+        // untouched and resurrected the "removed" port on the very next
+        // edit-open.
         $settings = $this->derivePortInterfaceNames($settings);
+        $settings = array_filter($settings, fn ($value): bool => $value !== null && $value !== '');
         $settings = $settings + ['profile' => 'starlink_plaza'];
         $settings = array_replace($this->defaultProvisioningSettings((string) $settings['profile']), $settings);
 
@@ -473,6 +485,14 @@ class RouterManagementService
             }
         }
 
+        // Unlike the four singular roles above, these plural fields are
+        // re-derived whenever the number key is present at all -- not just
+        // when it's non-empty -- so an explicitly-cleared number (e.g. the
+        // admin removed every extra staff port) correctly blanks the string
+        // sibling too instead of leaving it stale. Safe to do even when
+        // blank: RouterPortLayout::interfaceNamesFromNumberList('') returns
+        // [], not null, so this never risks forcing advanced mode the way
+        // doing the same for wan1/wan2/trunk_port/pi_port above would.
         foreach ([
             'extra_mgmt_ports' => 'extra_mgmt_port_numbers',
             'extra_trunk_ports' => 'extra_trunk_port_numbers',
@@ -481,8 +501,8 @@ class RouterManagementService
             'extra_pos_ports' => 'extra_pos_port_numbers',
             'extra_pppoe_ports' => 'extra_pppoe_port_numbers',
         ] as $stringKey => $numberKey) {
-            if (! empty($settings[$numberKey])) {
-                $settings[$stringKey] = implode(',', RouterPortLayout::interfaceNamesFromNumberList((string) $settings[$numberKey]));
+            if (array_key_exists($numberKey, $settings)) {
+                $settings[$stringKey] = implode(',', RouterPortLayout::interfaceNamesFromNumberList((string) ($settings[$numberKey] ?? '')));
             }
         }
 
