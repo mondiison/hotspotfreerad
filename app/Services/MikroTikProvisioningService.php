@@ -1596,31 +1596,49 @@ HTML;
 
     /**
      * `pushFreshInfrastructureScript()`'s own temporary `/system script`
-     * object's `policy=` -- a genuinely smaller, fixed domain than
-     * `/user group`'s own `policy=` property, confirmed live 2026-10-15
-     * directly on a real RouterOS 7.18.2 router via the router's own Tab-
-     * completion (`/system script add name=t policy=<Tab>`), the only
+     * object's `policy=` -- a genuinely different shape from `/user group`'s
+     * own `policy=` property, confirmed live 2026-10-15 directly on a real
+     * RouterOS 7.18.2 router, in two rounds. First, via the router's own
+     * Tab-completion (`/system script add name=t policy=<Tab>`, the only
      * authoritative source for this, since the binary API this app talks to
-     * has no schema-introspection call to ask it programmatically. The
-     * complete, confirmed set a `/system script` object's policy accepts is
-     * exactly these 10 -- `api`, `local`, `telnet`, `ssh`, `winbox`, `web`,
-     * and `rest-api` (all present in apiGroupPolicy(), since `/user group`
-     * genuinely does accept them) are not valid here at all, not a version-
-     * dependent gap like the earlier "dude"/"tikapp" fix. This makes sense
-     * once you separate the two concerns these two objects' policy actually
-     * govern: `/user group`'s policy includes which *connection methods*
-     * (api/web/winbox/ssh/telnet/local/rest-api) a user is allowed to reach
-     * the router through, which is meaningless for a script that's already
-     * running on the router's own CPU once invoked -- so this is a stable
-     * RouterOS object-type definition, not a per-board quirk, and should
-     * hold on any RouterOS 7 router, not just this one.
+     * has no schema-introspection call to ask it programmatically): the
+     * complete, confirmed set a `/system script` object's policy recognizes
+     * at all is exactly 10 tokens -- `api`, `local`, `telnet`, `ssh`,
+     * `winbox`, `web`, and `rest-api` (all present in apiGroupPolicy(),
+     * since `/user group` genuinely does accept them) aren't valid here at
+     * all, not a version-dependent gap like the earlier "dude"/"tikapp" fix.
+     * This makes sense once you separate the two concerns these two
+     * objects' policy actually govern: `/user group`'s policy includes
+     * which *connection methods* (api/web/winbox/ssh/telnet/local/rest-api)
+     * a user is allowed to reach the router through, which is meaningless
+     * for a script that's already running on the router's own CPU once
+     * invoked.
+     *
+     * Filtering down to just those 10 recognized tokens (keeping
+     * apiGroupPolicy()'s mixed allow+explicit-deny shorthand, e.g.
+     * `read,write,...,!reboot,!policy,...`) still wasn't enough, though --
+     * confirmed live immediately after that fix shipped, the identical trap
+     * persisted even with every token individually valid. The second round
+     * of live testing isolated the real cause: typed directly on the
+     * router's own terminal, that exact mixed allow+deny string was
+     * STILL rejected, while the identical allow tokens alone with every
+     * `!deny` token dropped entirely (`read,write,test,sensitive,ftp`, no
+     * `!` prefix anywhere) was accepted cleanly. `/system script`'s
+     * `policy=` property doesn't support the deny-shorthand syntax
+     * `/user group` does at all -- it's a pure allow-list, with anything
+     * left unlisted implicitly denied by default, so there's no need (and
+     * no valid syntax) to explicitly deny `reboot`/`policy`/`password`/
+     * `sniff`/`romon` here the way `apiGroupPolicy()` does for the
+     * persistent user group. Both of these are stable RouterOS object-type
+     * definitions, not per-board quirks, and should hold on any RouterOS 7
+     * router, not just this one.
      */
-    private const SCRIPT_OBJECT_VALID_POLICY_TOKENS = ['ftp', 'policy', 'reboot', 'sensitive', 'test', 'password', 'read', 'romon', 'sniff', 'write'];
+    private const SCRIPT_OBJECT_ALLOWED_POLICY_TOKENS = ['read', 'write', 'test', 'sensitive', 'ftp'];
 
     public function scriptObjectPolicy(): string
     {
         return collect(explode(',', $this->apiGroupPolicy()))
-            ->filter(fn (string $token): bool => in_array(ltrim($token, '!'), self::SCRIPT_OBJECT_VALID_POLICY_TOKENS, true))
+            ->filter(fn (string $token): bool => ! str_starts_with($token, '!') && in_array($token, self::SCRIPT_OBJECT_ALLOWED_POLICY_TOKENS, true))
             ->implode(',');
     }
 

@@ -1554,18 +1554,22 @@ class RouterOsConnectionService
      * malformed token, since a script object's policy property apparently
      * doesn't accept a partial/implicit-deny list the same way `/user/group`
      * does. Switching to `apiGroupPolicy()` verbatim didn't fully close this,
-     * though -- confirmed live 2026-10-15, directly on a real RouterOS
-     * 7.18.2 router: stripping just `rest-api` wasn't enough either, the
-     * identical trap persisted. The router's own Tab-completion
-     * (`/system script add name=t policy=<Tab>`) gave the actual, complete
-     * answer -- `/system script`'s `policy=` property only ever accepts 10
-     * tokens total (`ftp`/`policy`/`reboot`/`sensitive`/`test`/`password`/
-     * `read`/`romon`/`sniff`/`write`), a genuinely smaller fixed domain than
-     * `/user group`'s, excluding every connection-method token (`api`,
-     * `local`, `telnet`, `ssh`, `winbox`, `web`, `rest-api`) that's
-     * meaningless for a script already running on the router's own CPU
-     * once invoked. `scriptObjectPolicy()` is `apiGroupPolicy()` filtered
-     * down to that confirmed set -- see its own docblock for the full
+     * though, confirmed live 2026-10-15 in two rounds directly on a real
+     * RouterOS 7.18.2 router. Round one: stripping just `rest-api` wasn't
+     * enough, the identical trap persisted -- the router's own Tab-
+     * completion (`/system script add name=t policy=<Tab>`) found
+     * `/system script`'s `policy=` property only recognizes 10 tokens total
+     * (`ftp`/`policy`/`reboot`/`sensitive`/`test`/`password`/`read`/`romon`/
+     * `sniff`/`write`), excluding every connection-method token `/user
+     * group` also carries. Round two: even filtered down to just those 10
+     * recognized tokens, `apiGroupPolicy()`'s mixed allow+explicit-deny
+     * shorthand (e.g. `read,write,...,!reboot,!policy,...`) was STILL
+     * rejected when typed directly on the router's own terminal -- the
+     * identical allow tokens alone with every `!deny` token dropped
+     * entirely was what actually got accepted. `/system script`'s policy
+     * doesn't support `/user group`'s deny-shorthand syntax at all; it's a
+     * pure allow-list. `scriptObjectPolicy()` is that confirmed, final
+     * allow-only set -- see its own docblock for the full two-round
      * reasoning.
      *
      * @return array{success: bool, steps: list<array{label: string, success: bool, error: ?string}>}
