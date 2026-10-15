@@ -158,4 +158,32 @@ class RouterPortLayoutTest extends TestCase
         $this->assertSame([], $assignments['trunk']);
         $this->assertSame([3], $assignments['pi']);
     }
+
+    /**
+     * 2026-10-15, live report: "the visual mapper always preload[s] port i
+     * did not save" -- wan2_port_number defaults to 8 regardless of
+     * enable_second_wan (RouterManagementService::defaultProvisioningSettings()),
+     * unlike wan1/trunk/pi, which are always-present roles. A router that
+     * never enabled/saved a second WAN must not show that default port as
+     * occupied here, or it vanishes from the unassigned-ports pool too.
+     */
+    public function test_wan2_bucket_is_empty_when_second_wan_is_not_enabled(): void
+    {
+        $assignments = RouterPortLayout::bucketAssignments([
+            'wan2_port_number' => 8,
+            'enable_second_wan' => false,
+        ]);
+
+        $this->assertSame([], $assignments['wan2']);
+    }
+
+    public function test_wan2_bucket_holds_its_port_once_second_wan_is_enabled(): void
+    {
+        $assignments = RouterPortLayout::bucketAssignments([
+            'wan2_port_number' => 8,
+            'enable_second_wan' => true,
+        ]);
+
+        $this->assertSame([8], $assignments['wan2']);
+    }
 }

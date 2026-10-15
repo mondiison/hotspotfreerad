@@ -36,12 +36,45 @@ class RouterPortMapperTest extends TestCase
         $this->assertSame([1], $assignments['wan1']);
         $this->assertSame([2], $assignments['trunk']);
         $this->assertSame([3], $assignments['pi']);
-        // wan2_port_number defaults to 8 regardless of enable_second_wan --
-        // the bucket still holds it, it's just not rendered in the UI
-        // while the toggle is off (matching the existing codebase
-        // convention of defaulting this field unconditionally).
-        $this->assertSame([8], $assignments['wan2']);
+        // wan2_port_number defaults to 8 regardless of enable_second_wan,
+        // but enable_second_wan defaults to false -- confirmed live
+        // 2026-10-15 ("always preload port i did not save"): that port
+        // must stay empty here, not just have its bucket's label hidden in
+        // the blade, or it vanishes from the unassigned-ports pool too.
+        $this->assertSame([], $assignments['wan2']);
         $this->assertSame([], $assignments['extra_mgmt']);
+    }
+
+    public function test_wan2_bucket_only_holds_its_port_once_second_wan_is_enabled(): void
+    {
+        $shop = $this->shop();
+
+        $component = Livewire::actingAs($this->superAdmin())
+            ->test(RoutersIndex::class)
+            ->call('create')
+            ->set('shop_id', (string) $shop->id)
+            ->set('provisioning_settings.port_count', 8)
+            ->set('provisioning_settings.enable_second_wan', true);
+
+        $assignments = $component->instance()->portBucketAssignments();
+
+        $this->assertSame([8], $assignments['wan2']);
+        // And port 8 is correctly excluded from "unassigned" once it's
+        // genuinely claimed.
+        $this->assertNotContains(8, $component->instance()->unassignedPorts());
+    }
+
+    public function test_wan2_port_is_available_in_the_unassigned_pool_while_second_wan_is_disabled(): void
+    {
+        $shop = $this->shop();
+
+        $component = Livewire::actingAs($this->superAdmin())
+            ->test(RoutersIndex::class)
+            ->call('create')
+            ->set('shop_id', (string) $shop->id)
+            ->set('provisioning_settings.port_count', 8);
+
+        $this->assertContains(8, $component->instance()->unassignedPorts());
     }
 
     public function test_unassigned_ports_excludes_every_currently_assigned_port(): void

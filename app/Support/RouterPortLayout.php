@@ -75,7 +75,16 @@ final class RouterPortLayout
 
         return [
             'wan1' => $singular('wan1_port_number', 'wan1'),
-            'wan2' => $singular('wan2_port_number', 'wan2'),
+            // wan2_port_number/wan2 default to a real value (8/"ether8")
+            // regardless of enable_second_wan -- unlike wan1/trunk/pi, which
+            // are always-present roles, a second WAN is opt-in, so an
+            // unenabled router's port never actually occupies this bucket.
+            // Gating here (not just hiding the bucket's label in the blade)
+            // is what keeps that port from vanishing out of "Unassigned
+            // ports" too -- confirmed live 2026-10-15: without this, a
+            // router with enable_second_wan off showed its WAN2 default
+            // port neither in any bucket nor in the unassigned pool.
+            'wan2' => ($settings['enable_second_wan'] ?? false) ? $singular('wan2_port_number', 'wan2') : [],
             'trunk' => array_values(array_unique(array_merge(
                 $singular('trunk_port_number', 'trunk_port'),
                 $plural('extra_trunk_port_numbers', 'extra_trunk_ports')
