@@ -147,10 +147,11 @@ sudo chmod 755 /usr/local/sbin/hotspotfreerad-fix-zerotier-authtoken
 sudo mkdir -p /etc/systemd/system/zerotier-one.service.d
 sudo tee /etc/systemd/system/zerotier-one.service.d/override.conf > /dev/null &lt;&lt;'EOF'
 [Service]
-ExecStartPost=/usr/local/sbin/hotspotfreerad-fix-zerotier-authtoken
+ExecStartPost=+/bin/sh -c 'sleep 3; /usr/local/sbin/hotspotfreerad-fix-zerotier-authtoken'
 EOF
 sudo systemctl daemon-reload
 sudo systemctl restart zerotier-one</x-script-block>
+                        <p class="mt-3 text-amber-600 dark:text-amber-500">Confirmed live 2026-10-15: the <code>sleep 3</code> matters &mdash; ZeroTier's own startup re-asserts ownership on this file moments after the service forks, racing (and beating) an undelayed fix. If a router you already ran this script on still fails, re-run it &mdash; an older copy may be missing the delay.</p>
                         <p class="mt-3">Quick one-off check instead (doesn't survive the next update that regenerates the file, use the script above for a lasting fix):</p>
                         <x-script-block label="Copy">sudo chgrp www-data /var/lib/zerotier-one/authtoken.secret
 sudo chmod 640 /var/lib/zerotier-one/authtoken.secret</x-script-block>
