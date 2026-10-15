@@ -186,4 +186,72 @@ class RouterPortLayoutTest extends TestCase
 
         $this->assertSame([8], $assignments['wan2']);
     }
+
+    /**
+     * Same bug class as wan2 above, for all three: extra_staff/extra_pos/
+     * extra_pppoe's defaults are blank, but an already-saved router can
+     * still hold a non-blank value while its feature is off (a legacy row,
+     * or data from before Rule::prohibitedIf existed) -- that port must
+     * not show as occupied here, mirroring the gate RouterManagementService's
+     * own conflict-check already applies at its own read site.
+     */
+    public function test_extra_staff_bucket_is_empty_when_staff_is_not_enabled(): void
+    {
+        $assignments = RouterPortLayout::bucketAssignments([
+            'extra_staff_port_numbers' => '5',
+            'enable_staff' => false,
+        ]);
+
+        $this->assertSame([], $assignments['extra_staff']);
+    }
+
+    public function test_extra_staff_bucket_holds_its_port_once_staff_is_enabled(): void
+    {
+        $assignments = RouterPortLayout::bucketAssignments([
+            'extra_staff_port_numbers' => '5',
+            'enable_staff' => true,
+        ]);
+
+        $this->assertSame([5], $assignments['extra_staff']);
+    }
+
+    public function test_extra_pos_bucket_is_empty_when_pos_is_not_enabled(): void
+    {
+        $assignments = RouterPortLayout::bucketAssignments([
+            'extra_pos_port_numbers' => '5',
+            'enable_pos' => false,
+        ]);
+
+        $this->assertSame([], $assignments['extra_pos']);
+    }
+
+    public function test_extra_pos_bucket_holds_its_port_once_pos_is_enabled(): void
+    {
+        $assignments = RouterPortLayout::bucketAssignments([
+            'extra_pos_port_numbers' => '5',
+            'enable_pos' => true,
+        ]);
+
+        $this->assertSame([5], $assignments['extra_pos']);
+    }
+
+    public function test_extra_pppoe_bucket_is_empty_when_pppoe_is_not_enabled(): void
+    {
+        $assignments = RouterPortLayout::bucketAssignments([
+            'extra_pppoe_port_numbers' => '5',
+            'enable_pppoe' => false,
+        ]);
+
+        $this->assertSame([], $assignments['extra_pppoe']);
+    }
+
+    public function test_extra_pppoe_bucket_holds_its_port_once_pppoe_is_enabled(): void
+    {
+        $assignments = RouterPortLayout::bucketAssignments([
+            'extra_pppoe_port_numbers' => '5',
+            'enable_pppoe' => true,
+        ]);
+
+        $this->assertSame([5], $assignments['extra_pppoe']);
+    }
 }

@@ -115,4 +115,41 @@ class RouterPortMapTest extends TestCase
 
         $this->assertTrue($ports->every(fn (array $port): bool => $port['role'] !== 'extra_staff'));
     }
+
+    /**
+     * 2026-10-15, same bug class as wan2's "always preload port i did not
+     * save" fix: a router can have a non-blank extra_staff/pos/pppoe port
+     * number saved from before RouterManagementService::rules()'s
+     * Rule::prohibitedIf existed (or from the now-fixed
+     * RouterNetworkSettingsCard POS regression documented elsewhere in
+     * CLAUDE.md) while its feature is currently disabled. That port must
+     * show as unassigned, not stuck under a role nobody can see is active.
+     */
+    public function test_a_saved_but_now_disabled_network_does_not_claim_its_old_extra_port(): void
+    {
+        $router = Router::create([
+            'shop_id' => $this->shop()->id,
+            'name' => 'Poisoned Extra Ports Router',
+            'nas_identifier' => 'poisoned-extra-ports-router',
+            'wireguard_internal_ip' => '10.8.0.233',
+            'shared_secret' => 'radius-secret',
+            'provisioning_settings' => [
+                'port_count' => 7,
+                'enable_staff' => false,
+                'extra_staff_port_numbers' => '5',
+                'enable_pos' => false,
+                'extra_pos_port_numbers' => '6',
+                'enable_pppoe' => false,
+                'extra_pppoe_port_numbers' => '7',
+            ],
+        ]);
+
+        $component = Livewire::test(RouterPortMap::class, ['router' => $router]);
+
+        $ports = collect($component->get('ports'))->keyBy('number');
+
+        $this->assertSame('Unassigned', $ports[5]['role_label']);
+        $this->assertSame('Unassigned', $ports[6]['role_label']);
+        $this->assertSame('Unassigned', $ports[7]['role_label']);
+    }
 }

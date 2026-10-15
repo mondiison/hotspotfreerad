@@ -90,11 +90,26 @@ final class RouterPortLayout
                 $plural('extra_trunk_port_numbers', 'extra_trunk_ports')
             ))),
             'pi' => $singular('pi_port_number', 'pi_port'),
+            // extra_mgmt/extra_hotspot/extra_trunk have no corresponding
+            // enable_* toggle at all -- mgmt, hotspot, and the trunk port
+            // are always-on concepts, matching how RouterManagementService's
+            // own conflict-check (portConflictRule()) and the wizard blade's
+            // bucket labels never gate these three either. Only extra_staff/
+            // extra_pos/extra_pppoe need the same enable_*-gate wan2 got
+            // above -- same reasoning: their defaults are blank, but an
+            // already-saved router can still hold a non-blank value while
+            // its feature is off (e.g. a router saved before
+            // RouterManagementService::rules()'s Rule::prohibitedIf existed,
+            // or from the now-fixed RouterNetworkSettingsCard POS regression
+            // documented elsewhere in this file) -- without this gate, that
+            // port would vanish from the mapper the same way wan2's did,
+            // since the blade's own bucket label is already hidden for a
+            // disabled network, but unassignedPorts() wasn't excluding it.
             'extra_mgmt' => $plural('extra_mgmt_port_numbers', 'extra_mgmt_ports'),
             'extra_hotspot' => $plural('extra_hotspot_port_numbers', 'extra_hotspot_ports'),
-            'extra_staff' => $plural('extra_staff_port_numbers', 'extra_staff_ports'),
-            'extra_pos' => $plural('extra_pos_port_numbers', 'extra_pos_ports'),
-            'extra_pppoe' => $plural('extra_pppoe_port_numbers', 'extra_pppoe_ports'),
+            'extra_staff' => ($settings['enable_staff'] ?? false) ? $plural('extra_staff_port_numbers', 'extra_staff_ports') : [],
+            'extra_pos' => ($settings['enable_pos'] ?? false) ? $plural('extra_pos_port_numbers', 'extra_pos_ports') : [],
+            'extra_pppoe' => ($settings['enable_pppoe'] ?? false) ? $plural('extra_pppoe_port_numbers', 'extra_pppoe_ports') : [],
         ];
     }
 
