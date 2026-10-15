@@ -127,6 +127,32 @@ class RouterOsApiProvisioningTest extends TestCase
         $this->assertStringContainsString('!rest-api', $script);
     }
 
+    /**
+     * 2026-10-15, confirmed live directly on a real RouterOS 7.18.2 router --
+     * the same version apiGroupPolicy() was already validated against: a
+     * single-token isolated test (`/system script add ... policy=rest-api`)
+     * proved /system script's policy property rejects "rest-api" outright,
+     * even though the identical token is accepted fine by /user group's own
+     * policy property on the same router. scriptObjectPolicy() (used only by
+     * pushFreshInfrastructureScript()'s temporary script object) is
+     * apiGroupPolicy() with that one token stripped -- apiGroupPolicy()
+     * itself is untouched, since /user group genuinely does accept it.
+     */
+    public function test_script_object_policy_strips_rest_api_but_keeps_everything_else(): void
+    {
+        $service = app(MikroTikProvisioningService::class);
+
+        $this->assertStringNotContainsString('rest-api', $service->scriptObjectPolicy());
+
+        $groupPolicyTokens = explode(',', $service->apiGroupPolicy());
+        $scriptPolicyTokens = explode(',', $service->scriptObjectPolicy());
+
+        $this->assertSame(
+            array_values(array_diff($groupPolicyTokens, ['rest-api', '!rest-api'])),
+            $scriptPolicyTokens,
+        );
+    }
+
     public function test_api_user_provisioning_is_idempotent_for_regenerated_credentials(): void
     {
         $router = Router::create([

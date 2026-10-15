@@ -1595,6 +1595,33 @@ HTML;
     }
 
     /**
+     * `pushFreshInfrastructureScript()`'s own temporary `/system script`
+     * object's `policy=` -- confirmed live 2026-10-15, directly on a real
+     * RouterOS 7.18.2 router (the exact same version `apiGroupPolicy()`'s
+     * own docblock says it was validated against): `rest-api` alone, in
+     * isolation, is rejected as a `/system script` policy value
+     * ("input does not match any value of policy"), even though the
+     * identical token is accepted fine by `/user group`'s own `policy=`
+     * property on the same router (confirmed indirectly -- group/user
+     * creation via apiUserProvisioningLines() already works on this exact
+     * router). This isn't the version-dependent gap the earlier "dude"/
+     * "tikapp" fix assumed -- it's a genuine difference in which policy
+     * tokens RouterOS validates per object type, `/system script` apparently
+     * not recognizing this one at all regardless of RouterOS version. Since
+     * `rest-api` was only ever present as an explicit deny (`!rest-api`),
+     * never something the uploaded script actually needs, dropping it here
+     * entirely (rather than guessing at a replacement token) costs nothing
+     * functionally -- the REST API surface stays untouched either way,
+     * since this account was never going to be granted it.
+     */
+    public function scriptObjectPolicy(): string
+    {
+        return collect(explode(',', $this->apiGroupPolicy()))
+            ->reject(fn (string $token): bool => $token === 'rest-api' || $token === '!rest-api')
+            ->implode(',');
+    }
+
+    /**
      * The `html-directory` value every hotspot profile this service generates
      * (`saas-prof` in generateScript(), `mms-hotspot-profile` in
      * generateFreshInfrastructureScript()) uses. Confirmed live 2026-09-22 as

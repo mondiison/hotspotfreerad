@@ -1540,20 +1540,28 @@ class RouterOsConnectionService
      * successful run so nothing is left behind on the router either way.
      *
      * The temporary script object's `policy=` reuses
-     * `MikroTikProvisioningService::apiGroupPolicy()` verbatim -- the exact
-     * same string already confirmed live against real RouterOS 7 hardware
-     * for the persistent `mmsradius-api-group` user. An earlier version of
-     * this method hand-rolled its own shorter, allow-only policy string
-     * instead of reusing that one, on the theory that "a script's policy
-     * can't exceed what the running user already has, so any subset of it is
-     * safe" -- confirmed live 2026-09-26 that this was wrong in practice:
-     * RouterOS rejected it outright with `input does not match any value of
-     * policy`, the identical failure mode `apiGroupPolicy()`'s own docblock
-     * already documents for a policy string with an invalid or malformed
-     * token, since a script object's policy property apparently doesn't
-     * accept a partial/implicit-deny list the same way `/user/group` does.
-     * Reusing the group's own already-correct, full-deny-list string sidesteps
-     * needing to re-derive the exact valid syntax a second time.
+     * `MikroTikProvisioningService::apiGroupPolicy()` -- the exact same
+     * string already confirmed live against real RouterOS 7 hardware for the
+     * persistent `mmsradius-api-group` user -- via the narrower
+     * `scriptObjectPolicy()` wrapper, not the raw string directly. An earlier
+     * version of this method hand-rolled its own shorter, allow-only policy
+     * string instead of reusing that one, on the theory that "a script's
+     * policy can't exceed what the running user already has, so any subset
+     * of it is safe" -- confirmed live 2026-09-26 that this was wrong in
+     * practice: RouterOS rejected it outright with `input does not match any
+     * value of policy`, the identical failure mode `apiGroupPolicy()`'s own
+     * docblock already documents for a policy string with an invalid or
+     * malformed token, since a script object's policy property apparently
+     * doesn't accept a partial/implicit-deny list the same way `/user/group`
+     * does. Switching to `apiGroupPolicy()` verbatim didn't fully close this,
+     * though -- confirmed live 2026-10-15, directly on a real RouterOS
+     * 7.18.2 router, a single-token isolated test proved `/system script`'s
+     * `policy=` property rejects `rest-api` specifically, even though the
+     * identical token is accepted fine by `/user group`'s own `policy=`
+     * property on the same router (which is why group/user creation already
+     * works). `scriptObjectPolicy()` is `apiGroupPolicy()` with that one
+     * token stripped -- see its own docblock for why dropping it costs
+     * nothing functionally.
      *
      * @return array{success: bool, steps: list<array{label: string, success: bool, error: ?string}>}
      */
@@ -1586,7 +1594,7 @@ class RouterOsConnectionService
             $addRaw = $client->query(
                 (new Query('/system/script/add'))
                     ->equal('name', $scriptName)
-                    ->equal('policy', $this->provisioning->apiGroupPolicy())
+                    ->equal('policy', $this->provisioning->scriptObjectPolicy())
                     ->equal('source', $scriptContent)
             )->read(false);
 
