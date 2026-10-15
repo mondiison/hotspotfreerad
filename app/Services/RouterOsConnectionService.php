@@ -1620,7 +1620,15 @@ class RouterOsConnectionService
                 throw new \RuntimeException('Script was uploaded but could not be found afterward to run it.');
             }
 
-            $runRaw = $client->query((new Query('/system/script/run'))->equal('numbers', $uploaded['.id']))->read(false);
+            // Confirmed live 2026-10-15, via the router's own Tab-completion
+            // ("/system script run" + Tab showed "number:", not "numbers:"):
+            // unlike /add, /remove, /enable, /disable -- generic bulk-selector
+            // verbs every other object type's CRUD commands in this file use
+            // "numbers=" for -- /system script's own "run" action is a
+            // distinct, non-generic command that takes a singular "number="
+            // parameter instead. Easy to miss since every other usage of this
+            // exact pattern in this file really is "numbers".
+            $runRaw = $client->query((new Query('/system/script/run'))->equal('number', $uploaded['.id']))->read(false);
 
             if ($trapMessage = self::extractTrapMessage($runRaw)) {
                 throw new \RuntimeException('The script ran but reported an error: '.$trapMessage);
