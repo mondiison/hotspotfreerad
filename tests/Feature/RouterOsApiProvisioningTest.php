@@ -316,6 +316,41 @@ class RouterOsApiProvisioningTest extends TestCase
         $this->assertStringContainsString(':if ([:len [/interface list member find list=WAN interface=$wan1]] = 0) do={ /interface list member add list=WAN interface=$wan1 }', $script);
     }
 
+    /**
+     * 2026-10-15, confirmed live immediately after the WAN interface list fix
+     * above -- the very next push got further and failed with "failure:
+     * device already added as bridge port" on the bridge/bridge-port lines,
+     * the same class of collision for the same reason: a router that's had
+     * Fresh Infrastructure Script partially applied before (it's
+     * deliberately not idempotent end-to-end) already has the bridge and
+     * some/all of its port memberships from that earlier attempt. Guarded
+     * via the new shared guardedAdd() helper -- scoped to just the bridge
+     * itself plus every bridge-port line (trunk, extra trunk ports, pi,
+     * extra mgmt/hotspot/staff/pos ports), not the rest of the script.
+     */
+    public function test_fresh_infrastructure_bridge_and_bridge_port_creation_is_idempotent(): void
+    {
+        $router = Router::create([
+            'shop_id' => $this->makeShop()->id,
+            'name' => 'Idempotent Bridge Router',
+            'nas_identifier' => 'idempotent-bridge-router',
+            'wireguard_internal_ip' => '10.8.0.77',
+            'shared_secret' => 'radius-secret',
+            'provisioning_settings' => [
+                'extra_trunk_ports' => 'ether4',
+                'extra_mgmt_ports' => 'ether5',
+            ],
+        ]);
+
+        $script = app(MikroTikProvisioningService::class)->generateFreshInfrastructureScript($router);
+
+        $this->assertStringContainsString(':if ([:len [/interface bridge find name=$lanBridge]] = 0) do={ /interface bridge add name=$lanBridge', $script);
+        $this->assertStringContainsString(':if ([:len [/interface bridge port find interface=$trunkPort]] = 0) do={ /interface bridge port add bridge=$lanBridge interface=$trunkPort', $script);
+        $this->assertStringContainsString(':if ([:len [/interface bridge port find interface=ether4]] = 0) do={ /interface bridge port add bridge=$lanBridge interface=ether4', $script);
+        $this->assertStringContainsString(':if ([:len [/interface bridge port find interface=$piPort]] = 0) do={ /interface bridge port add bridge=$lanBridge interface=$piPort', $script);
+        $this->assertStringContainsString(':if ([:len [/interface bridge port find interface=ether5]] = 0) do={ /interface bridge port add bridge=$lanBridge interface=ether5', $script);
+    }
+
     public function test_provision_hotspot_reports_a_clear_error_when_router_is_unreachable(): void
     {
         $router = Router::create([

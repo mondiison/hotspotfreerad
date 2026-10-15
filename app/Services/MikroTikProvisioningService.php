@@ -791,14 +791,25 @@ SCRIPT;
             '/ip dhcp-client remove [find interface=$wan1]',
             '/ip dhcp-client add interface=$wan1 add-default-route=yes use-peer-dns=no disabled=no comment="Get WAN IP/default route from Starlink or ISP router"',
             $secondWanDhcp,
-            '/interface bridge add name=$lanBridge protocol-mode=rstp vlan-filtering=no comment="MMS Radius LAN bridge"',
-            '/interface bridge port add bridge=$lanBridge interface=$trunkPort frame-types=admit-only-vlan-tagged comment="AP/switch trunk carrying MMS Radius VLANs -- tagged only, untagged frames dropped"',
-            ...array_map(fn (string $p): string => '/interface bridge port add bridge=$lanBridge interface='.$p.' frame-types=admit-only-vlan-tagged comment="Extra AP/switch trunk carrying MMS Radius VLANs -- tagged only, untagged frames dropped"', $extraTrunkPorts),
-            '/interface bridge port add bridge=$lanBridge interface=$piPort pvid=$mgmtVlan comment="Pi/management access port, untagged VLAN 10 by default"',
-            ...array_map(fn (string $p): string => '/interface bridge port add bridge=$lanBridge interface='.$p.' pvid=$mgmtVlan comment="Extra management access port"', $extraMgmtPorts),
-            ...array_map(fn (string $p): string => '/interface bridge port add bridge=$lanBridge interface='.$p.' pvid=$hotspotVlan comment="Extra hotspot access port"', $extraHotspotPorts),
-            ...array_map(fn (string $p): string => '/interface bridge port add bridge=$lanBridge interface='.$p.' pvid=$staffVlan comment="Extra staff access port"', $extraStaffPorts),
-            ...array_map(fn (string $p): string => '/interface bridge port add bridge=$lanBridge interface='.$p.' pvid=$posVlan comment="Extra POS access port"', $extraPosPorts),
+            // Guarded for the same reason the WAN interface list lines above
+            // are: confirmed live 2026-10-15, a router that's already had
+            // Fresh Infrastructure Script partially applied (it's
+            // deliberately not idempotent end-to-end -- this doesn't change
+            // that for the rest of the script) already has the bridge and
+            // some/all of its port memberships from that earlier attempt,
+            // and an unguarded /add failed outright with "failure: device
+            // already added as bridge port" on the very next push. Narrow
+            // guard scoped to just these genuinely-reusable-across-attempts
+            // objects via guardedAdd(), not a broader idempotency rewrite of
+            // the rest of the method.
+            $this->guardedAdd('/interface bridge find name=$lanBridge', '/interface bridge add name=$lanBridge protocol-mode=rstp vlan-filtering=no comment="MMS Radius LAN bridge"'),
+            $this->guardedAdd('/interface bridge port find interface=$trunkPort', '/interface bridge port add bridge=$lanBridge interface=$trunkPort frame-types=admit-only-vlan-tagged comment="AP/switch trunk carrying MMS Radius VLANs -- tagged only, untagged frames dropped"'),
+            ...array_map(fn (string $p): string => $this->guardedAdd('/interface bridge port find interface='.$p, '/interface bridge port add bridge=$lanBridge interface='.$p.' frame-types=admit-only-vlan-tagged comment="Extra AP/switch trunk carrying MMS Radius VLANs -- tagged only, untagged frames dropped"'), $extraTrunkPorts),
+            $this->guardedAdd('/interface bridge port find interface=$piPort', '/interface bridge port add bridge=$lanBridge interface=$piPort pvid=$mgmtVlan comment="Pi/management access port, untagged VLAN 10 by default"'),
+            ...array_map(fn (string $p): string => $this->guardedAdd('/interface bridge port find interface='.$p, '/interface bridge port add bridge=$lanBridge interface='.$p.' pvid=$mgmtVlan comment="Extra management access port"'), $extraMgmtPorts),
+            ...array_map(fn (string $p): string => $this->guardedAdd('/interface bridge port find interface='.$p, '/interface bridge port add bridge=$lanBridge interface='.$p.' pvid=$hotspotVlan comment="Extra hotspot access port"'), $extraHotspotPorts),
+            ...array_map(fn (string $p): string => $this->guardedAdd('/interface bridge port find interface='.$p, '/interface bridge port add bridge=$lanBridge interface='.$p.' pvid=$staffVlan comment="Extra staff access port"'), $extraStaffPorts),
+            ...array_map(fn (string $p): string => $this->guardedAdd('/interface bridge port find interface='.$p, '/interface bridge port add bridge=$lanBridge interface='.$p.' pvid=$posVlan comment="Extra POS access port"'), $extraPosPorts),
             '/interface vlan add interface=$lanBridge name=vlan-mgmt vlan-id=$mgmtVlan',
             '/interface vlan add interface=$lanBridge name=vlan-hotspot vlan-id=$hotspotVlan',
             $settings['enable_staff'] ? '/interface vlan add interface=$lanBridge name=vlan-staff vlan-id=$staffVlan' : '# Staff VLAN interface disabled',
@@ -1257,6 +1268,25 @@ HTML;
             [$settings['trunk_port']],
             $this->extraPortInterfaces($settings, 'extra_trunk_ports')
         ));
+    }
+
+    /**
+     * Wraps a RouterOS `/add` command in the standard
+     * `:if ([:len [<existence-check>]] = 0) do={ <command> }` idempotency
+     * guard this file already uses inline for Bootstrap Script's own WAN
+     * interface list lines -- pulled into a shared helper 2026-10-15 to
+     * apply the identical pattern to Fresh Infrastructure Script's bridge
+     * and bridge-port creation, confirmed live necessary for the same
+     * reason: a router that's had this script partially applied before
+     * (it's deliberately not idempotent end-to-end) already has these
+     * specific objects, and an unguarded `/add` fails outright on the next
+     * push attempt. `$existenceCheck` is a RouterOS `find` expression
+     * (without the surrounding `[...]`) -- e.g. `/interface bridge port
+     * find interface=ether2`.
+     */
+    private function guardedAdd(string $existenceCheck, string $command): string
+    {
+        return ':if ([:len ['.$existenceCheck.']] = 0) do={ '.$command.' }';
     }
 
     private function quote(?string $value): string
