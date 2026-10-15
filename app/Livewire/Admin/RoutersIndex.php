@@ -327,31 +327,7 @@ class RoutersIndex extends Component
      */
     public function portBucketAssignments(): array
     {
-        $settings = $this->provisioning_settings;
-
-        $numbers = function (string $key) use ($settings): array {
-            return collect(explode(',', (string) ($settings[$key] ?? '')))
-                ->map(fn (string $piece): string => trim($piece))
-                ->filter(fn (string $piece): bool => $piece !== '')
-                ->map(fn (string $piece): int => (int) $piece)
-                ->values()
-                ->all();
-        };
-
-        return [
-            'wan1' => array_values(array_filter([$settings['wan1_port_number'] ?? null])),
-            'wan2' => array_values(array_filter([$settings['wan2_port_number'] ?? null])),
-            'trunk' => array_values(array_unique(array_merge(
-                array_filter([$settings['trunk_port_number'] ?? null]),
-                $numbers('extra_trunk_port_numbers')
-            ))),
-            'pi' => array_values(array_filter([$settings['pi_port_number'] ?? null])),
-            'extra_mgmt' => $numbers('extra_mgmt_port_numbers'),
-            'extra_hotspot' => $numbers('extra_hotspot_port_numbers'),
-            'extra_staff' => $numbers('extra_staff_port_numbers'),
-            'extra_pos' => $numbers('extra_pos_port_numbers'),
-            'extra_pppoe' => $numbers('extra_pppoe_port_numbers'),
-        ];
+        return RouterPortLayout::bucketAssignments($this->provisioning_settings);
     }
 
     /**

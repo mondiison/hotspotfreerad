@@ -103,4 +103,59 @@ class RouterPortLayoutTest extends TestCase
         $this->assertNull(RouterPortLayout::portNumbersFromInterfaceList('ether5,sfp-sfpplus1'));
         $this->assertNull(RouterPortLayout::portNumbersFromInterfaceList('bridge1'));
     }
+
+    /**
+     * 2026-10-15, extracted from RoutersIndex::portBucketAssignments() for
+     * the new read-only Port Map tab -- simple-mode numeric fields take
+     * priority when present, matching the wizard's own existing behavior
+     * exactly (confirmed by RouterPortMapperTest passing unmodified).
+     */
+    public function test_bucket_assignments_from_simple_mode_numeric_fields(): void
+    {
+        $assignments = RouterPortLayout::bucketAssignments([
+            'wan1_port_number' => 1,
+            'trunk_port_number' => 2,
+            'pi_port_number' => 3,
+            'extra_trunk_port_numbers' => '4',
+            'extra_mgmt_port_numbers' => '5',
+        ]);
+
+        $this->assertSame([1], $assignments['wan1']);
+        $this->assertSame([2, 4], $assignments['trunk']);
+        $this->assertSame([3], $assignments['pi']);
+        $this->assertSame([5], $assignments['extra_mgmt']);
+    }
+
+    /**
+     * 2026-10-15, confirmed necessary live: a router saved entirely in
+     * advanced mode (no *_port_number fields at all, raw interface-name
+     * strings instead) is exactly the kind of router that motivated this
+     * whole feature -- it still needs a correct port map, derived here via
+     * portNumberFromInterfaceName() against the standard "etherN"
+     * convention.
+     */
+    public function test_bucket_assignments_falls_back_to_advanced_mode_interface_names(): void
+    {
+        $assignments = RouterPortLayout::bucketAssignments([
+            'trunk_port' => 'ether3',
+            'pi_port' => 'ether2',
+            'extra_trunk_ports' => 'ether4',
+            'extra_mgmt_ports' => 'ether5,ether6',
+        ]);
+
+        $this->assertSame([3, 4], $assignments['trunk']);
+        $this->assertSame([2], $assignments['pi']);
+        $this->assertSame([5, 6], $assignments['extra_mgmt']);
+    }
+
+    public function test_bucket_assignments_omits_a_non_standard_interface_name_from_the_numbered_grid(): void
+    {
+        $assignments = RouterPortLayout::bucketAssignments([
+            'trunk_port' => 'sfp-sfpplus1',
+            'pi_port' => 'ether3',
+        ]);
+
+        $this->assertSame([], $assignments['trunk']);
+        $this->assertSame([3], $assignments['pi']);
+    }
 }

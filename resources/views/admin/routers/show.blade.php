@@ -64,6 +64,7 @@
             <flux:tab.group>
                 <flux:tabs variant="segmented" scrollable>
                     <flux:tab name="overview" icon="chart-bar">Overview</flux:tab>
+                    <flux:tab name="port-map" icon="squares-2x2">Port Map</flux:tab>
                     <flux:tab name="fresh-infra" icon="sparkles">Fresh Infrastructure Script</flux:tab>
                     <flux:tab name="hotspot" icon="wifi">Hotspot Script</flux:tab>
                     <flux:tab name="pppoe" icon="signal">PPPoE Script</flux:tab>
@@ -311,6 +312,10 @@ sudo freeradius -X</code></pre>
                             </div>
                         </div>
                     </section>
+                </flux:tab.panel>
+
+                <flux:tab.panel name="port-map" class="space-y-6">
+                    <livewire:admin.router-port-map :router="$router" :key="'port-map-'.$router->id" />
                 </flux:tab.panel>
 
                 <flux:tab.panel name="fresh-infra" class="space-y-6">
