@@ -395,7 +395,9 @@ class RouterOsApiProvisioningTest extends TestCase
         $result = app(RouterOsConnectionService::class)->provisionHotspot($router);
 
         // API service address restriction sync, management service (winbox/www/
-        // www-ssl/ssh) address restriction sync, RADIUS client, hotspot profile,
+        // www-ssl/ssh) address restriction sync, RADIUS client, Management VLAN
+        // infrastructure check (ensureMgmtInfrastructure()), Hotspot VLAN
+        // infrastructure check (ensureHotspotInfrastructure()), hotspot profile,
         // portal walled-garden entry, one walled-garden entry per host in the
         // shop's active gateway's PaymentGatewayCatalog list (flutterwave by
         // default: *.flutterwave.com, *.ravepay.co, *.dev-flutterwave.com), the
@@ -405,10 +407,12 @@ class RouterOsApiProvisioningTest extends TestCase
         // Script" tab/button) rather than bundled in here, so it contributes no
         // steps to this result.
         $this->assertFalse($result['success']);
-        $this->assertCount(13, $result['steps']);
+        $this->assertCount(15, $result['steps']);
         $this->assertFalse($result['steps'][0]['success']);
         $this->assertNotEmpty($result['steps'][0]['error']);
         $labels = array_column($result['steps'], 'label');
+        $this->assertContains('Check Management VLAN infrastructure', $labels);
+        $this->assertContains('Check Hotspot VLAN infrastructure', $labels);
         $this->assertContains('Push hotspot login page', $labels);
         $lastStep = $result['steps'][count($result['steps']) - 1];
         $this->assertSame('Point hotspot server at "saas-prof"', $lastStep['label']);
@@ -429,7 +433,7 @@ class RouterOsApiProvisioningTest extends TestCase
         $result = app(RouterOsConnectionService::class)->provisionHotspot($router);
 
         $this->assertFalse($result['success']);
-        $this->assertCount(13, $result['steps']);
+        $this->assertCount(15, $result['steps']);
         $labels = array_column($result['steps'], 'label');
         $this->assertContains('Push hotspot login page', $labels);
     }

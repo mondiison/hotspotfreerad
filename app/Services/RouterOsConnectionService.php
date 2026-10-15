@@ -645,6 +645,8 @@ class RouterOsConnectionService
         $managementRestrictionResult = $this->syncManagementServiceRestriction($router);
         $radiusResult = $this->syncRadiusClients($router, 'hotspot,ppp');
         $zeroTierResult = $this->syncZeroTierNetworkMembership($router);
+        $mgmtInfraResult = $this->ensureMgmtInfrastructure($router);
+        $hotspotInfraResult = $this->ensureHotspotInfrastructure($router);
 
         // Confirmed live 2026-09-22: this was a plain, unconditional /add -- the router's
         // very first successful provisionHotspot() run created "saas-prof" fine, but every
@@ -696,8 +698,8 @@ class RouterOsConnectionService
         ];
 
         $result = $this->runSteps($router, $steps);
-        $result['steps'] = array_merge($apiRestrictionResult['steps'], $managementRestrictionResult['steps'], $radiusResult['steps'], $zeroTierResult['steps'], $result['steps']);
-        $result['success'] = $apiRestrictionResult['success'] && $managementRestrictionResult['success'] && $radiusResult['success'] && $zeroTierResult['success'] && $result['success'];
+        $result['steps'] = array_merge($apiRestrictionResult['steps'], $managementRestrictionResult['steps'], $radiusResult['steps'], $zeroTierResult['steps'], $mgmtInfraResult['steps'], $hotspotInfraResult['steps'], $result['steps']);
+        $result['success'] = $apiRestrictionResult['success'] && $managementRestrictionResult['success'] && $radiusResult['success'] && $zeroTierResult['success'] && $mgmtInfraResult['success'] && $hotspotInfraResult['success'] && $result['success'];
 
         $walledGardenResult = $this->syncWalledGarden($router);
         // $router->hotspot_login_directory is null for a router freshly onboarded through
@@ -921,6 +923,203 @@ class RouterOsConnectionService
                 ->equal('address', $posNetwork)
                 ->equal('gateway', $posGatewayIp)
                 ->equal('dns-server', $posGatewayIp);
+        }
+
+        if ($steps === []) {
+            return ['success' => true, 'steps' => []];
+        }
+
+        return $this->runSteps($router, $steps);
+    }
+
+    /**
+     * Mirrors ensurePosInfrastructure()/ensureStaffInfrastructure() exactly
+     * for the Management and customer Hotspot VLANs -- added 2026-10-16
+     * after a live report of a freshly re-provisioned router having no
+     * dhcp-mgmt/dhcp-hotspot (or pool-mgmt/pool-hotspot) at all, despite
+     * "Push Fresh Infrastructure Script" reporting a clean, fully-successful
+     * run. The live-API trap check on /system/script/run can only ever see
+     * whether the RUN COMMAND ITSELF came back clean -- a plain RouterOS
+     * script does not abort on an individual command's own failure (unlike
+     * this app's own guardedAdd()-wrapped lines, which just skip when
+     * something already exists; an unguarded line that fails for some other
+     * reason just gets logged and the script carries on to the next line),
+     * so a mid-script failure on these two networks' specific lines can be
+     * completely invisible to the admin even though later sections (Staff/
+     * POS/PPPoE, which come after them in the generated script) go on to
+     * succeed -- confirmed live: dhcp-staff/dhcp-pos/pool-staff/pool-pos all
+     * existed on the affected router, dhcp-mgmt/dhcp-hotspot/pool-mgmt/
+     * pool-hotspot did not, and /log print had already rotated past
+     * whatever RouterOS logged internally at the time.
+     *
+     * Unlike POS/Staff, Management and the customer Hotspot are both core,
+     * always-needed networks with no enable_* toggle of their own -- so
+     * both of these now run unconditionally from provisionHotspot() itself
+     * (the one live-API action already invoked on every auto-provisioning
+     * cycle and every manual "Provision via API" click), the same way
+     * ensurePosInfrastructure()/ensureStaffInfrastructure() are unconditional
+     * from their own provision*() callers. This makes "Provision via API"
+     * on the Hotspot Script tab self-healing for exactly this failure mode
+     * going forward, the same safety net POS/Staff/PPPoE already had that
+     * Management/Hotspot never did.
+     */
+    private function ensureMgmtInfrastructure(Router $router): array
+    {
+        $settings = $this->provisioning->provisioningSettings($router, (string) (((array) $router->provisioning_settings)['profile'] ?? 'starlink_plaza'));
+
+        $mgmtVlan = (string) $settings['mgmt_vlan'];
+        $mgmtGateway = (string) $settings['mgmt_gateway'];
+        $mgmtNetwork = (string) $settings['mgmt_network'];
+        $mgmtPool = (string) $settings['mgmt_pool'];
+        $mgmtGatewayIp = str($mgmtGateway)->before('/')->toString();
+
+        try {
+            $client = $this->client($router, 8);
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'steps' => [['label' => 'Check Management VLAN infrastructure', 'success' => false, 'error' => $e->getMessage()]],
+            ];
+        }
+
+        $steps = [];
+
+        $vlanExists = collect($client->query(new Query('/interface/vlan/print'))->read())
+            ->contains(fn ($row) => is_array($row) && ($row['name'] ?? null) === 'vlan-mgmt');
+
+        if (! $vlanExists) {
+            $steps['Create Management VLAN interface'] = (new Query('/interface/vlan/add'))
+                ->equal('interface', 'bridge-lan')
+                ->equal('name', 'vlan-mgmt')
+                ->equal('vlan-id', $mgmtVlan);
+        }
+
+        $addressExists = collect($client->query(new Query('/ip/address/print'))->read())
+            ->contains(fn ($row) => is_array($row) && ($row['interface'] ?? null) === 'vlan-mgmt');
+
+        if (! $addressExists) {
+            $steps['Create Management VLAN IP address'] = (new Query('/ip/address/add'))
+                ->equal('address', $mgmtGateway)
+                ->equal('interface', 'vlan-mgmt');
+        }
+
+        $poolExists = collect($client->query(new Query('/ip/pool/print'))->read())
+            ->contains(fn ($row) => is_array($row) && ($row['name'] ?? null) === 'pool-mgmt');
+
+        if (! $poolExists) {
+            $steps['Create Management address pool'] = (new Query('/ip/pool/add'))
+                ->equal('name', 'pool-mgmt')
+                ->equal('ranges', $mgmtPool);
+        }
+
+        $dhcpServerExists = collect($client->query(new Query('/ip/dhcp-server/print'))->read())
+            ->contains(fn ($row) => is_array($row) && ($row['name'] ?? null) === 'dhcp-mgmt');
+
+        if (! $dhcpServerExists) {
+            $steps['Create Management DHCP server'] = (new Query('/ip/dhcp-server/add'))
+                ->equal('name', 'dhcp-mgmt')
+                ->equal('interface', 'vlan-mgmt')
+                ->equal('address-pool', 'pool-mgmt')
+                ->equal('lease-time', '8h')
+                ->equal('disabled', 'no');
+        }
+
+        $dhcpNetworkExists = collect($client->query(new Query('/ip/dhcp-server/network/print'))->read())
+            ->contains(fn ($row) => is_array($row) && ($row['address'] ?? null) === $mgmtNetwork);
+
+        if (! $dhcpNetworkExists) {
+            $steps['Create Management DHCP network'] = (new Query('/ip/dhcp-server/network/add'))
+                ->equal('address', $mgmtNetwork)
+                ->equal('gateway', $mgmtGatewayIp)
+                ->equal('dns-server', $mgmtGatewayIp);
+        }
+
+        if ($steps === []) {
+            return ['success' => true, 'steps' => []];
+        }
+
+        return $this->runSteps($router, $steps);
+    }
+
+    /**
+     * See ensureMgmtInfrastructure()'s own docblock -- this is its sibling
+     * for the customer-facing Hotspot VLAN. Deliberately does not create
+     * the `/ip hotspot` server object itself (mms-hotspot) -- that stays
+     * applyHotspotProfile()'s own job, unchanged, since (per that method's
+     * existing docblock) the customer hotspot's interface/pool could
+     * legitimately come from a manual `/ip hotspot setup` instead of this
+     * app's own fixed vlan-hotspot/pool-hotspot names, unlike POS/Staff's
+     * MAC-auth hotspot servers, which this app always creates itself.
+     */
+    private function ensureHotspotInfrastructure(Router $router): array
+    {
+        $settings = $this->provisioning->provisioningSettings($router, (string) (((array) $router->provisioning_settings)['profile'] ?? 'starlink_plaza'));
+
+        $hotspotVlan = (string) $settings['hotspot_vlan'];
+        $hotspotGateway = (string) $settings['hotspot_gateway'];
+        $hotspotNetwork = (string) $settings['hotspot_network'];
+        $hotspotPool = (string) $settings['hotspot_pool'];
+        $hotspotGatewayIp = str($hotspotGateway)->before('/')->toString();
+
+        try {
+            $client = $this->client($router, 8);
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'steps' => [['label' => 'Check Hotspot VLAN infrastructure', 'success' => false, 'error' => $e->getMessage()]],
+            ];
+        }
+
+        $steps = [];
+
+        $vlanExists = collect($client->query(new Query('/interface/vlan/print'))->read())
+            ->contains(fn ($row) => is_array($row) && ($row['name'] ?? null) === 'vlan-hotspot');
+
+        if (! $vlanExists) {
+            $steps['Create Hotspot VLAN interface'] = (new Query('/interface/vlan/add'))
+                ->equal('interface', 'bridge-lan')
+                ->equal('name', 'vlan-hotspot')
+                ->equal('vlan-id', $hotspotVlan);
+        }
+
+        $addressExists = collect($client->query(new Query('/ip/address/print'))->read())
+            ->contains(fn ($row) => is_array($row) && ($row['interface'] ?? null) === 'vlan-hotspot');
+
+        if (! $addressExists) {
+            $steps['Create Hotspot VLAN IP address'] = (new Query('/ip/address/add'))
+                ->equal('address', $hotspotGateway)
+                ->equal('interface', 'vlan-hotspot');
+        }
+
+        $poolExists = collect($client->query(new Query('/ip/pool/print'))->read())
+            ->contains(fn ($row) => is_array($row) && ($row['name'] ?? null) === 'pool-hotspot');
+
+        if (! $poolExists) {
+            $steps['Create Hotspot address pool'] = (new Query('/ip/pool/add'))
+                ->equal('name', 'pool-hotspot')
+                ->equal('ranges', $hotspotPool);
+        }
+
+        $dhcpServerExists = collect($client->query(new Query('/ip/dhcp-server/print'))->read())
+            ->contains(fn ($row) => is_array($row) && ($row['name'] ?? null) === 'dhcp-hotspot');
+
+        if (! $dhcpServerExists) {
+            $steps['Create Hotspot DHCP server'] = (new Query('/ip/dhcp-server/add'))
+                ->equal('name', 'dhcp-hotspot')
+                ->equal('interface', 'vlan-hotspot')
+                ->equal('address-pool', 'pool-hotspot')
+                ->equal('lease-time', '30m')
+                ->equal('disabled', 'no');
+        }
+
+        $dhcpNetworkExists = collect($client->query(new Query('/ip/dhcp-server/network/print'))->read())
+            ->contains(fn ($row) => is_array($row) && ($row['address'] ?? null) === $hotspotNetwork);
+
+        if (! $dhcpNetworkExists) {
+            $steps['Create Hotspot DHCP network'] = (new Query('/ip/dhcp-server/network/add'))
+                ->equal('address', $hotspotNetwork)
+                ->equal('gateway', $hotspotGatewayIp)
+                ->equal('dns-server', $hotspotGatewayIp);
         }
 
         if ($steps === []) {
