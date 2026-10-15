@@ -129,28 +129,43 @@ class RouterOsApiProvisioningTest extends TestCase
 
     /**
      * 2026-10-15, confirmed live directly on a real RouterOS 7.18.2 router --
-     * the same version apiGroupPolicy() was already validated against: a
-     * single-token isolated test (`/system script add ... policy=rest-api`)
-     * proved /system script's policy property rejects "rest-api" outright,
-     * even though the identical token is accepted fine by /user group's own
-     * policy property on the same router. scriptObjectPolicy() (used only by
-     * pushFreshInfrastructureScript()'s temporary script object) is
-     * apiGroupPolicy() with that one token stripped -- apiGroupPolicy()
-     * itself is untouched, since /user group genuinely does accept it.
+     * stripping just "rest-api" wasn't enough (same trap message persisted).
+     * The router's own Tab-completion (`/system script add name=t policy=
+     * <Tab>`) gave the complete, authoritative list `/system script`'s
+     * policy property actually accepts: ftp, policy, reboot, sensitive,
+     * test, password, read, romon, sniff, write -- a genuinely smaller fixed
+     * domain than /user group's, excluding every connection-method token
+     * (api, local, telnet, ssh, winbox, web, rest-api) that's meaningless
+     * for a script already running on the router's own CPU.
      */
-    public function test_script_object_policy_strips_rest_api_but_keeps_everything_else(): void
+    public function test_script_object_policy_only_contains_tokens_system_script_actually_accepts(): void
     {
         $service = app(MikroTikProvisioningService::class);
 
-        $this->assertStringNotContainsString('rest-api', $service->scriptObjectPolicy());
+        $validTokens = ['ftp', 'policy', 'reboot', 'sensitive', 'test', 'password', 'read', 'romon', 'sniff', 'write'];
 
-        $groupPolicyTokens = explode(',', $service->apiGroupPolicy());
-        $scriptPolicyTokens = explode(',', $service->scriptObjectPolicy());
+        $scriptPolicyTokens = collect(explode(',', $service->scriptObjectPolicy()))
+            ->map(fn (string $token): string => ltrim($token, '!'))
+            ->all();
 
-        $this->assertSame(
-            array_values(array_diff($groupPolicyTokens, ['rest-api', '!rest-api'])),
-            $scriptPolicyTokens,
-        );
+        foreach ($scriptPolicyTokens as $token) {
+            $this->assertContains($token, $validTokens, "\"{$token}\" is not a token RouterOS confirmed valid for /system script's policy property.");
+        }
+
+        // Every one of apiGroupPolicy()'s own tokens that IS valid here should
+        // still be present -- this isn't a narrower deny, just the connection-
+        // method tokens (api/local/telnet/ssh/winbox/web/rest-api) dropped.
+        $groupPolicyTokens = collect(explode(',', $service->apiGroupPolicy()))
+            ->map(fn (string $token): string => ltrim($token, '!'))
+            ->all();
+
+        foreach (array_intersect($groupPolicyTokens, $validTokens) as $expectedToken) {
+            $this->assertContains($expectedToken, $scriptPolicyTokens);
+        }
+
+        foreach (['api', 'local', 'telnet', 'ssh', 'winbox', 'web', 'rest-api'] as $droppedToken) {
+            $this->assertNotContains($droppedToken, $scriptPolicyTokens);
+        }
     }
 
     public function test_api_user_provisioning_is_idempotent_for_regenerated_credentials(): void

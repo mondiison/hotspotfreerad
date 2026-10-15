@@ -1555,13 +1555,18 @@ class RouterOsConnectionService
      * doesn't accept a partial/implicit-deny list the same way `/user/group`
      * does. Switching to `apiGroupPolicy()` verbatim didn't fully close this,
      * though -- confirmed live 2026-10-15, directly on a real RouterOS
-     * 7.18.2 router, a single-token isolated test proved `/system script`'s
-     * `policy=` property rejects `rest-api` specifically, even though the
-     * identical token is accepted fine by `/user group`'s own `policy=`
-     * property on the same router (which is why group/user creation already
-     * works). `scriptObjectPolicy()` is `apiGroupPolicy()` with that one
-     * token stripped -- see its own docblock for why dropping it costs
-     * nothing functionally.
+     * 7.18.2 router: stripping just `rest-api` wasn't enough either, the
+     * identical trap persisted. The router's own Tab-completion
+     * (`/system script add name=t policy=<Tab>`) gave the actual, complete
+     * answer -- `/system script`'s `policy=` property only ever accepts 10
+     * tokens total (`ftp`/`policy`/`reboot`/`sensitive`/`test`/`password`/
+     * `read`/`romon`/`sniff`/`write`), a genuinely smaller fixed domain than
+     * `/user group`'s, excluding every connection-method token (`api`,
+     * `local`, `telnet`, `ssh`, `winbox`, `web`, `rest-api`) that's
+     * meaningless for a script already running on the router's own CPU
+     * once invoked. `scriptObjectPolicy()` is `apiGroupPolicy()` filtered
+     * down to that confirmed set -- see its own docblock for the full
+     * reasoning.
      *
      * @return array{success: bool, steps: list<array{label: string, success: bool, error: ?string}>}
      */

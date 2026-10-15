@@ -1596,28 +1596,31 @@ HTML;
 
     /**
      * `pushFreshInfrastructureScript()`'s own temporary `/system script`
-     * object's `policy=` -- confirmed live 2026-10-15, directly on a real
-     * RouterOS 7.18.2 router (the exact same version `apiGroupPolicy()`'s
-     * own docblock says it was validated against): `rest-api` alone, in
-     * isolation, is rejected as a `/system script` policy value
-     * ("input does not match any value of policy"), even though the
-     * identical token is accepted fine by `/user group`'s own `policy=`
-     * property on the same router (confirmed indirectly -- group/user
-     * creation via apiUserProvisioningLines() already works on this exact
-     * router). This isn't the version-dependent gap the earlier "dude"/
-     * "tikapp" fix assumed -- it's a genuine difference in which policy
-     * tokens RouterOS validates per object type, `/system script` apparently
-     * not recognizing this one at all regardless of RouterOS version. Since
-     * `rest-api` was only ever present as an explicit deny (`!rest-api`),
-     * never something the uploaded script actually needs, dropping it here
-     * entirely (rather than guessing at a replacement token) costs nothing
-     * functionally -- the REST API surface stays untouched either way,
-     * since this account was never going to be granted it.
+     * object's `policy=` -- a genuinely smaller, fixed domain than
+     * `/user group`'s own `policy=` property, confirmed live 2026-10-15
+     * directly on a real RouterOS 7.18.2 router via the router's own Tab-
+     * completion (`/system script add name=t policy=<Tab>`), the only
+     * authoritative source for this, since the binary API this app talks to
+     * has no schema-introspection call to ask it programmatically. The
+     * complete, confirmed set a `/system script` object's policy accepts is
+     * exactly these 10 -- `api`, `local`, `telnet`, `ssh`, `winbox`, `web`,
+     * and `rest-api` (all present in apiGroupPolicy(), since `/user group`
+     * genuinely does accept them) are not valid here at all, not a version-
+     * dependent gap like the earlier "dude"/"tikapp" fix. This makes sense
+     * once you separate the two concerns these two objects' policy actually
+     * govern: `/user group`'s policy includes which *connection methods*
+     * (api/web/winbox/ssh/telnet/local/rest-api) a user is allowed to reach
+     * the router through, which is meaningless for a script that's already
+     * running on the router's own CPU once invoked -- so this is a stable
+     * RouterOS object-type definition, not a per-board quirk, and should
+     * hold on any RouterOS 7 router, not just this one.
      */
+    private const SCRIPT_OBJECT_VALID_POLICY_TOKENS = ['ftp', 'policy', 'reboot', 'sensitive', 'test', 'password', 'read', 'romon', 'sniff', 'write'];
+
     public function scriptObjectPolicy(): string
     {
         return collect(explode(',', $this->apiGroupPolicy()))
-            ->reject(fn (string $token): bool => $token === 'rest-api' || $token === '!rest-api')
+            ->filter(fn (string $token): bool => in_array(ltrim($token, '!'), self::SCRIPT_OBJECT_VALID_POLICY_TOKENS, true))
             ->implode(',');
     }
 
