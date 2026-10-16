@@ -158,6 +158,17 @@
                         <flux:description>iOS/Android can present a different (privacy-randomized) MAC address on reconnect, leaving an already-paid customer stuck on the login screen for access they already own. When on, a device recognized by its recognition cookie as one that still has an active subscription under a different MAC is moved to its current MAC automatically, with no support contact needed -- skipped entirely if the new MAC already has its own active subscription. Off by default.</flux:description>
                     </flux:field>
 
+                    <div class="md:col-span-2 grid gap-4 rounded-lg border border-zinc-200 dark:border-zinc-700 p-4 sm:grid-cols-2">
+                        <flux:field>
+                            <flux:checkbox wire:model.live="collect_customer_phone" label="Ask for phone number at checkout" />
+                            <flux:description>Shown as an optional field on the payment form -- never required, a customer can still pay without filling it in. Useful for following up with a customer struggling to pay online. Off by default.</flux:description>
+                        </flux:field>
+                        <flux:field>
+                            <flux:checkbox wire:model.live="collect_customer_email" label="Ask for email at checkout" />
+                            <flux:description>Same as phone above -- optional, shown on the payment form only, never blocks checkout. Off by default.</flux:description>
+                        </flux:field>
+                    </div>
+
                     <div class="md:col-span-2 rounded-lg border border-zinc-200 dark:border-zinc-700 p-4">
                         <flux:field>
                             <flux:checkbox wire:model.live="trial_enabled" label="Enable free trial (customer-facing promotion)" />

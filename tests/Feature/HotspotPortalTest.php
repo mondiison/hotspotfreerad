@@ -123,6 +123,53 @@ class HotspotPortalTest extends TestCase
     }
 
     /**
+     * 2026-10-16, direct request: some tenants need to follow up with a
+     * customer struggling to pay online, so the optional phone/email
+     * fields dropped from the portal on 2026-09-25 come back here as a
+     * per-shop opt-in (collect_customer_phone/collect_customer_email,
+     * both off by default) -- never required either way, matching how
+     * PortalController::pay()'s own validation has always treated both.
+     */
+    public function test_portal_shows_optional_phone_and_email_fields_when_the_shop_enables_them(): void
+    {
+        [$router, $package] = $this->routerWithPackage();
+        $router->shop->update([
+            'collect_customer_phone' => true,
+            'collect_customer_email' => true,
+        ]);
+
+        $this->get('/hotspot/portal?mac=AA:BB:CC:DD:EE:FF&nasid='.$router->nas_identifier)
+            ->assertOk()
+            ->assertSee('Phone number (optional)')
+            ->assertSee('Email (optional)')
+            ->assertSee('name="phone"', false)
+            ->assertSee('name="email"', false);
+    }
+
+    public function test_portal_hides_phone_and_email_fields_by_default(): void
+    {
+        [$router, $package] = $this->routerWithPackage();
+
+        $this->get('/hotspot/portal?mac=AA:BB:CC:DD:EE:FF&nasid='.$router->nas_identifier)
+            ->assertOk()
+            ->assertDontSee('Phone number (optional)')
+            ->assertDontSee('Email (optional)')
+            ->assertDontSee('name="phone"', false)
+            ->assertDontSee('name="email"', false);
+    }
+
+    public function test_portal_shows_only_the_one_field_the_shop_enabled(): void
+    {
+        [$router, $package] = $this->routerWithPackage();
+        $router->shop->update(['collect_customer_phone' => true]);
+
+        $this->get('/hotspot/portal?mac=AA:BB:CC:DD:EE:FF&nasid='.$router->nas_identifier)
+            ->assertOk()
+            ->assertSee('Phone number (optional)')
+            ->assertDontSee('Email (optional)');
+    }
+
+    /**
      * 2026-09-27, direct follow-up: a tenant with several shops may staff
      * each one with a different attendant, so the "call to get a voucher"
      * number needs a per-shop override rather than always using the

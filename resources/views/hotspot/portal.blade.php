@@ -196,6 +196,30 @@
                                         </div>
                                     @endif
                                 </fieldset>
+                                {{--
+                                    2026-10-16, direct request: some tenants need a way to
+                                    follow up with a customer who gets stuck mid-payment --
+                                    PortalController::pay()'s own email/phone handling was
+                                    never removed when these fields were dropped from the
+                                    view (2026-09-25), only the inputs themselves were, so
+                                    re-adding them here needed no controller change at all.
+                                    Per-shop opt-in (collect_customer_phone/email, both off
+                                    by default) and always optional regardless -- neither
+                                    field is ever `required`, matching how the controller's
+                                    own validation has always treated both.
+                                --}}
+                                @if ($shop->collect_customer_phone)
+                                    <div>
+                                        <label for="phone-{{ $package->id }}" class="mb-1 block text-xs font-medium text-zinc-500">Phone number (optional)</label>
+                                        <input type="tel" name="phone" id="phone-{{ $package->id }}" value="{{ old('phone') }}" placeholder="In case we need to follow up" class="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-700">
+                                    </div>
+                                @endif
+                                @if ($shop->collect_customer_email)
+                                    <div>
+                                        <label for="email-{{ $package->id }}" class="mb-1 block text-xs font-medium text-zinc-500">Email (optional)</label>
+                                        <input type="email" name="email" id="email-{{ $package->id }}" value="{{ old('email') }}" placeholder="In case we need to follow up" class="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-700">
+                                    </div>
+                                @endif
                                 @if ($loginUrl)
                                     <input type="hidden" name="link-login" value="{{ $loginUrl }}">
                                 @endif

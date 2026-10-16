@@ -29,6 +29,8 @@ class Shop extends Model
             'is_active' => 'boolean',
             'allow_test_access' => 'boolean',
             'auto_recover_mac_changes' => 'boolean',
+            'collect_customer_phone' => 'boolean',
+            'collect_customer_email' => 'boolean',
             'trial_enabled' => 'boolean',
             'trial_duration_minutes' => 'integer',
             'trial_max_uses_per_day' => 'integer',
