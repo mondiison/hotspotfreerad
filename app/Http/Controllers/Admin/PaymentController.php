@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Services\PaymentReportService;
+use App\Support\PaymentGatewayCatalog;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -22,6 +23,7 @@ class PaymentController extends Controller
                 'search' => $filters['search'],
                 'status' => $filters['status'],
                 'provider' => $filters['provider'],
+                'channel' => $filters['channel'],
             ],
         ]);
     }
@@ -39,6 +41,7 @@ class PaymentController extends Controller
             fputcsv($handle, ['To', $filters['to']]);
             fputcsv($handle, ['Status', $reports->statusLabel($filters['status'])]);
             fputcsv($handle, ['Provider', $reports->providerLabel($filters['provider'])]);
+            fputcsv($handle, ['Channel', $reports->channelLabel($filters['channel'])]);
             fputcsv($handle, ['Search', $filters['search'] ?: '']);
             fputcsv($handle, []);
             fputcsv($handle, [
@@ -47,6 +50,7 @@ class PaymentController extends Controller
                 'Transaction Ref',
                 'Provider Ref',
                 'Provider',
+                'Channel',
                 'Status',
                 'Customer MAC',
                 'Customer Email',
@@ -73,6 +77,7 @@ class PaymentController extends Controller
                             $payment->tx_ref,
                             $payment->provider_reference,
                             $payment->provider,
+                            PaymentGatewayCatalog::isOnlineProvider($payment->provider) ? 'Online' : 'Offline',
                             $payment->status,
                             $payment->customer?->mac_address ?? data_get($payment->payload, 'mac'),
                             $payment->customer?->email,

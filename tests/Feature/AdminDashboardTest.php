@@ -91,6 +91,66 @@ class AdminDashboardTest extends TestCase
             ->assertSee('Setup Progress');
     }
 
+    /**
+     * 2026-10-16, direct request: "the dashboard shows number of devices
+     * online but when clicked we should be able to inspect to see the
+     * devices." The detailed table already existed (the "Users Online"
+     * accordion section, live sessions from FreeRADIUS accounting) -- it
+     * was just collapsed by default with no link pointing at it, since
+     * both the "Users Online" and "RADIUS Sessions" stat tiles had
+     * 'href' => null. Fixed by linking both tiles to the dashboard's own
+     * route with an ?open=users-online query param, which the target
+     * accordion item now reads to force itself open, plus a #fragment so
+     * the browser scrolls straight to it.
+     */
+    public function test_users_online_stat_tiles_link_to_the_sessions_section(): void
+    {
+        $tenant = Tenant::create([
+            'company_name' => 'Mondi Internet',
+            'owner_email' => 'owner2@example.com',
+        ]);
+        $shop = Shop::create(['tenant_id' => $tenant->id, 'name' => 'Main Hall']);
+        $router = Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'Main Router',
+            'nas_identifier' => 'main-router-2',
+            'wireguard_internal_ip' => '10.8.0.11',
+            'shared_secret' => 'radius-secret',
+        ]);
+        DB::table('radacct')->insert([
+            'acctsessionid' => 'session-2',
+            'acctuniqueid' => 'unique-session-2',
+            'username' => 'AA:BB:CC:DD:EE:01',
+            'nasipaddress' => '10.8.0.11',
+            'acctstarttime' => now()->subMinutes(2),
+            'acctupdatetime' => now(),
+            'acctstoptime' => null,
+            'acctinputoctets' => 1024,
+            'acctoutputoctets' => 1024,
+            'callingstationid' => 'AA:BB:CC:DD:EE:01',
+            'framedipaddress' => '192.168.88.21',
+        ]);
+
+        $user = User::factory()->create(['role' => 'super_admin', 'is_active' => true]);
+        $expectedHref = route('admin.dashboard', ['open' => 'users-online']).'#users-online-section';
+
+        // Not expanded by default -- the collapsed-by-default dashboard
+        // convention stays intact for a plain visit.
+        $this->actingAs($user)
+            ->get(route('admin.dashboard'))
+            ->assertOk()
+            ->assertSee($expectedHref, false)
+            ->assertSee('x-data="{ open: false }"', false);
+
+        // Visiting with ?open=users-online forces that one section open.
+        $this->actingAs($user)
+            ->get(route('admin.dashboard', ['open' => 'users-online']))
+            ->assertOk()
+            ->assertSee('AA:BB:CC:DD:EE:01')
+            ->assertSee('192.168.88.21')
+            ->assertSee('x-data="{ open: true }"', false);
+    }
+
     public function test_super_admin_layout_shows_platform_mode(): void
     {
         $user = User::factory()->create([

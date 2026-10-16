@@ -986,6 +986,19 @@ class AdminVoucherTest extends TestCase
             'username' => 'AA:BB:CC:DD:EE:FF',
             'groupname' => $package->refresh()->radius_group_name,
         ]);
+
+        // 2026-10-16, direct report ("used voucher are not marked as sells
+        // transaction"): a voucher redeemed directly, with no prior
+        // markSold() call, must still create a real Payment row -- at the
+        // package's own listed price, never a freely-typed figure -- so it
+        // shows up in Sales/Payment reports the same as any other sale.
+        $voucher->loadMissing('payment');
+        $this->assertNotNull($voucher->payment);
+        $this->assertSame('voucher_cash', $voucher->payment->provider);
+        $this->assertSame('successful', $voucher->payment->status);
+        $this->assertEquals(1000, $voucher->payment->amount);
+        $this->assertNotNull($voucher->payment->paid_at);
+        $this->assertSame($voucher->payment->id, $voucher->subscription->payment_id);
     }
 
     public function test_hotspot_portal_shows_voucher_entry(): void

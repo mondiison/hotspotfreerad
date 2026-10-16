@@ -204,7 +204,26 @@ class VoucherManagementService
                 []
             );
 
-            $paymentId = $voucher->payment?->id;
+            // 2026-10-16, direct report ("used voucher are not marked as
+            // sells transaction"): a printed/handed-out voucher is normally
+            // redeemed directly, never explicitly run through markSold()
+            // first (that's a separate, optional bookkeeping step) -- so
+            // without this, the real-world cash sale it represents never
+            // created a Payment row at all, and never showed up in Sales/
+            // Payment reports. Reuses recordVoucherPayment() (the same
+            // method markSold() already calls, keyed uniquely on
+            // voucher_id) against the package's own listed price -- never
+            // a freely-typed figure, since no separate sale_amount was ever
+            // entered here, matching the same convention POS's own manual
+            // accounting already established. A voucher that WAS already
+            // marked sold (or linked to a recovery payment, see
+            // generateRecoveryVoucher()) already has $voucher->payment set,
+            // so this never creates a second, duplicate payment for it.
+            if (! $voucher->payment) {
+                $voucher->setRelation('payment', $this->recordVoucherPayment(
+                    $voucher, $voucher->shop, (float) $voucher->package->price, null
+                ));
+            }
 
             $subscription = Subscription::updateOrCreate(
                 [
@@ -213,23 +232,21 @@ class VoucherManagementService
                 ],
                 [
                     'package_id' => $voucher->package_id,
-                    'payment_id' => $paymentId,
+                    'payment_id' => $voucher->payment->id,
                     'starts_at' => now(),
                     'expires_at' => now()->addSeconds((int) $voucher->package->limit_uptime_seconds),
                     'is_throttled' => false,
                 ]
             );
 
-            if ($voucher->payment) {
-                $voucher->payment->update([
-                    'customer_id' => $customer->id,
-                    'payload' => array_merge($voucher->payment->payload ?? [], [
-                        'mac' => $macAddress,
-                        'voucher_code' => $voucher->code,
-                        'subscription_id' => $subscription->id,
-                    ]),
-                ]);
-            }
+            $voucher->payment->update([
+                'customer_id' => $customer->id,
+                'payload' => array_merge($voucher->payment->payload ?? [], [
+                    'mac' => $macAddress,
+                    'voucher_code' => $voucher->code,
+                    'subscription_id' => $subscription->id,
+                ]),
+            ]);
 
             $voucher->update([
                 'status' => 'used',
@@ -354,6 +371,14 @@ class VoucherManagementService
         return $codes;
     }
 
+    /**
+     * Shared by markSold() (an explicit, admin-recorded cash sale -- sold_at
+     * is set, a custom sale_amount may differ from the package price) and
+     * redeem() (a voucher used directly with no prior sale ever recorded --
+     * neither sold_at nor used_at is set yet at call time, so "now" is the
+     * only correct moment for the transaction). Always offline/manual,
+     * provider=voucher_cash -- never a live gateway charge.
+     */
     public function recordVoucherPayment(Voucher $voucher, Shop $shop, float $amount, ?string $saleReference, ?User $user = null): Payment
     {
         $paymentData = array_merge([
@@ -365,7 +390,7 @@ class VoucherManagementService
             'amount' => $amount,
             'currency' => $voucher->package?->currency ?? 'NGN',
             'status' => 'successful',
-            'paid_at' => $voucher->sold_at,
+            'paid_at' => $voucher->sold_at ?? $voucher->used_at ?? now(),
             'payload' => [
                 'voucher_id' => $voucher->id,
                 'voucher_code' => $voucher->code,

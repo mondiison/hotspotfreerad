@@ -32,6 +32,7 @@ class PaymentReportService
             'search' => ['nullable', 'string', 'max:255'],
             'status' => ['nullable', 'in:attention,pending,successful,failed,verification_failed'],
             'provider' => ['nullable', 'in:'.implode(',', array_keys(PaymentGatewayCatalog::paymentMethods()))],
+            'channel' => ['nullable', 'in:online,offline'],
         ])->validate();
 
         $preset = $data['preset'] ?? null;
@@ -56,6 +57,7 @@ class PaymentReportService
             'search' => $data['search'] ?? null,
             'status' => $data['status'] ?? null,
             'provider' => $data['provider'] ?? null,
+            'channel' => $data['channel'] ?? null,
         ];
     }
 
@@ -84,7 +86,9 @@ class PaymentReportService
             })
             ->when($filters['status'] === 'attention', fn ($query) => $query->whereIn('status', ['pending', 'failed', 'verification_failed']))
             ->when(filled($filters['status']) && $filters['status'] !== 'attention', fn ($query) => $query->where('status', $filters['status']))
-            ->when(filled($filters['provider']), fn ($query) => $query->where('provider', $filters['provider']));
+            ->when(filled($filters['provider']), fn ($query) => $query->where('provider', $filters['provider']))
+            ->when($filters['channel'] === 'online', fn ($query) => $query->whereIn('provider', PaymentGatewayCatalog::onlineProviderKeys()))
+            ->when($filters['channel'] === 'offline', fn ($query) => $query->whereNotIn('provider', PaymentGatewayCatalog::onlineProviderKeys()));
     }
 
     public function summary($query): array
@@ -124,6 +128,15 @@ class PaymentReportService
         return $provider ? PaymentGatewayCatalog::providerLabel($provider) : 'All';
     }
 
+    public function channelLabel(?string $channel): string
+    {
+        return match ($channel) {
+            'online' => 'Online',
+            'offline' => 'Offline',
+            default => 'All',
+        };
+    }
+
     public function queryParams(array $filters): array
     {
         return array_filter([
@@ -133,6 +146,7 @@ class PaymentReportService
             'search' => $filters['search'],
             'status' => $filters['status'],
             'provider' => $filters['provider'],
+            'channel' => $filters['channel'],
         ], fn ($value) => filled($value));
     }
 

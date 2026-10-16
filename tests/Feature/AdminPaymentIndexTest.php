@@ -84,6 +84,37 @@ class AdminPaymentIndexTest extends TestCase
             ->assertDontSee($successfulPayment->tx_ref);
     }
 
+    /**
+     * 2026-10-16, direct report ("how do we fix that so the system shows
+     * offline and online payment"): the Channel filter is the new way to
+     * isolate automated gateway charges (online) from manually-recorded
+     * ones (offline: manual_bank, voucher_cash, pos_manual) -- this also
+     * covers the pre-existing bug where every non-Flutterwave provider,
+     * including genuinely online ones like Monnify, displayed as
+     * "Offline sale" in the table's own sub-label.
+     */
+    public function test_payment_report_can_filter_by_online_or_offline_channel(): void
+    {
+        [$onlinePayment, $tenant] = $this->paymentFixture('Channel Tenant', 'channel@example.com', 'Channel Shop', 'ONLINE-REF', 'successful', [], 'monnify');
+        [$offlinePayment] = $this->paymentFixture('Channel Tenant Two', 'channel2@example.com', 'Channel Shop Two', 'OFFLINE-REF', 'successful', [], 'voucher_cash');
+
+        $user = User::factory()->create(['role' => 'super_admin', 'is_active' => true]);
+
+        $this->actingAs($user)
+            ->get(route('admin.payments.index', ['channel' => 'online']))
+            ->assertOk()
+            ->assertSee($onlinePayment->tx_ref)
+            ->assertSee('Online checkout')
+            ->assertDontSee($offlinePayment->tx_ref);
+
+        $this->actingAs($user)
+            ->get(route('admin.payments.index', ['channel' => 'offline']))
+            ->assertOk()
+            ->assertSee($offlinePayment->tx_ref)
+            ->assertSee('Offline sale')
+            ->assertDontSee($onlinePayment->tx_ref);
+    }
+
     public function test_payment_report_shows_commission_totals(): void
     {
         [$payment] = $this->paymentFixture('Commission Tenant', 'commission@example.com', 'Commission Shop', 'COMMISSION-REF', 'successful', [
@@ -206,10 +237,11 @@ class AdminPaymentIndexTest extends TestCase
         $this->assertStringContainsString('Payment Report', $content);
         $this->assertStringContainsString('Status,Successful', $content);
         $this->assertStringContainsString('Search,"Own Export"', $content);
-        $this->assertStringContainsString('"Transaction Ref","Provider Ref",Provider,Status', $content);
+        $this->assertStringContainsString('"Transaction Ref","Provider Ref",Provider,Channel,Status', $content);
         $this->assertStringContainsString($ownPayment->tx_ref, $content);
         $this->assertStringContainsString('"Own Export Shop"', $content);
         $this->assertStringContainsString('"Own Export Tenant"', $content);
+        $this->assertStringContainsString('flutterwave,Online,successful', $content);
         $this->assertStringContainsString('500.00,100.00,400.00,20.00,commission,Yes', $content);
         $this->assertStringNotContainsString($otherPayment->tx_ref, $content);
         $this->assertStringNotContainsString('Other Export Shop', $content);
@@ -656,7 +688,7 @@ class AdminPaymentIndexTest extends TestCase
         $this->assertDatabaseMissing('radcheck', ['username' => $oldMac]);
     }
 
-    private function paymentFixture(string $tenantName, string $ownerEmail, string $shopName, string $txRef, string $status, array $tenantOverrides = []): array
+    private function paymentFixture(string $tenantName, string $ownerEmail, string $shopName, string $txRef, string $status, array $tenantOverrides = [], string $provider = 'flutterwave'): array
     {
         $tenant = Tenant::create(array_merge([
             'company_name' => $tenantName,
@@ -688,7 +720,7 @@ class AdminPaymentIndexTest extends TestCase
             'shop_id' => $shop->id,
             'package_id' => $package->id,
             'customer_id' => $customer->id,
-            'provider' => 'flutterwave',
+            'provider' => $provider,
             'tx_ref' => $txRef,
             'provider_reference' => $status === 'successful' ? 'ord_'.$txRef : null,
             'amount' => 500,

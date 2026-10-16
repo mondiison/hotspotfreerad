@@ -29,6 +29,8 @@ class PaymentsIndex extends Component
 
     public string $provider = '';
 
+    public string $channel = '';
+
     public string $sortBy = 'created_at';
 
     public string $sortDirection = 'desc';
@@ -46,6 +48,7 @@ class PaymentsIndex extends Component
         'search' => ['except' => ''],
         'status' => ['except' => ''],
         'provider' => ['except' => ''],
+        'channel' => ['except' => ''],
         'sortBy' => ['except' => 'created_at'],
         'sortDirection' => ['except' => 'desc'],
     ];
@@ -58,6 +61,7 @@ class PaymentsIndex extends Component
         $this->search = (string) ($filters['search'] ?? '');
         $this->status = (string) ($filters['status'] ?? '');
         $this->provider = (string) ($filters['provider'] ?? '');
+        $this->channel = (string) ($filters['channel'] ?? '');
     }
 
     public function updated($property): void
@@ -66,7 +70,7 @@ class PaymentsIndex extends Component
             $this->preset = '';
         }
 
-        if (in_array($property, ['preset', 'from', 'to', 'search', 'status', 'provider'], true)) {
+        if (in_array($property, ['preset', 'from', 'to', 'search', 'status', 'provider', 'channel'], true)) {
             $this->resetPage();
         }
     }
@@ -81,6 +85,7 @@ class PaymentsIndex extends Component
             'preset' => $preset,
             'status' => $this->status,
             'provider' => $this->provider,
+            'channel' => $this->channel,
             'search' => $this->search,
         ]);
 
@@ -104,6 +109,7 @@ class PaymentsIndex extends Component
         $this->search = '';
         $this->status = '';
         $this->provider = '';
+        $this->channel = '';
         $this->resetPage();
     }
 
@@ -251,6 +257,7 @@ class PaymentsIndex extends Component
             'search' => $this->search,
             'status' => $this->status,
             'provider' => $this->provider,
+            'channel' => $this->channel,
         ]);
 
         $this->preset = (string) ($filters['preset'] ?? '');

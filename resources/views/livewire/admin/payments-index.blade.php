@@ -61,6 +61,9 @@
         if (filled($provider)) {
             $paymentsActiveFilters[] = ['label' => 'Method: '.($paymentMethods[$provider] ?? $provider), 'clear' => "\$set('provider', '')"];
         }
+        if (filled($channel)) {
+            $paymentsActiveFilters[] = ['label' => 'Channel: '.ucfirst($channel), 'clear' => "\$set('channel', '')"];
+        }
     @endphp
 
     <x-admin.filter-bar modal-name="filters-payments" :active="$paymentsActiveFilters" class="mt-4">
@@ -88,7 +91,12 @@
                 <flux:select.option value="{{ $methodKey }}">{{ $methodLabel }}</flux:select.option>
             @endforeach
         </flux:select>
-        <flux:button type="button" variant="outline" icon="x-mark" class="w-full sm:col-span-2" wire:click="clearFilters" x-on:click="$flux.modal('filters-payments').close()" wire:loading.attr="disabled" wire:target="clearFilters,from,to,search,status,provider">
+        <flux:select wire:model.live="channel">
+            <flux:select.option value="">Online + offline</flux:select.option>
+            <flux:select.option value="online">Online only (gateway checkout)</flux:select.option>
+            <flux:select.option value="offline">Offline only (voucher, POS, bank transfer)</flux:select.option>
+        </flux:select>
+        <flux:button type="button" variant="outline" icon="x-mark" class="w-full sm:col-span-2" wire:click="clearFilters" x-on:click="$flux.modal('filters-payments').close()" wire:loading.attr="disabled" wire:target="clearFilters,from,to,search,status,provider,channel">
             Reset
         </flux:button>
     </x-admin.filter-bar>
@@ -136,7 +144,18 @@
                         </td>
                         <td class="px-4 py-3">
                             <p class="font-medium">{{ $paymentMethods[$payment->provider] ?? str($payment->provider)->replace('_', ' ')->headline() }}</p>
-                            <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ data_get($payment->payload, 'payment_channel') ?: ($payment->provider === 'flutterwave' ? 'Online checkout' : 'Offline sale') }}</p>
+                            {{--
+                                2026-10-16, direct report ("used voucher are not marked
+                                as sells transaction... system [should] show offline and
+                                online payment"): this used to read
+                                $payment->provider === 'flutterwave' ? 'Online checkout'
+                                : 'Offline sale' -- mislabeling every other genuinely
+                                online gateway (Paystack/Monnify/Squad/Stripe) as
+                                offline. PaymentGatewayCatalog::isOnlineProvider() is the
+                                single source of truth for this now, also driving the
+                                Channel filter above.
+                            --}}
+                            <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ \App\Support\PaymentGatewayCatalog::isOnlineProvider($payment->provider) ? 'Online checkout' : 'Offline sale' }}</p>
                         </td>
                         <td class="px-4 py-3">
                             <flux:badge :color="$payment->status === 'successful' ? 'green' : ($payment->status === 'pending' ? 'amber' : 'red')">

@@ -94,7 +94,7 @@
             ['label' => 'Routers Online', 'value' => "{$onlineRouterCount}/{$routerCount}", 'hint' => 'Reachable on a 5-minute heartbeat ping, or with an active accounting session', 'href' => route('admin.routers.index', ['status' => 'online'])],
             ['label' => 'Active Plans', 'value' => "{$activePackageCount}/{$packageCount}", 'hint' => 'Published packages customers can select', 'href' => route('admin.packages.index', ['status' => 'active'])],
             ['label' => 'Active Access', 'value' => $activeSubscriptionCount, 'hint' => 'Unexpired app subscriptions', 'href' => route('admin.subscriptions.index', ['status' => 'active'])],
-            ['label' => 'Users Online', 'value' => is_null($onlineUserCount) ? 'Not ready' : $onlineUserCount, 'hint' => $radiusAccountingReady ? 'Unique active RADIUS usernames' : 'radacct table has not been created', 'href' => null],
+            ['label' => 'Users Online', 'value' => is_null($onlineUserCount) ? 'Not ready' : $onlineUserCount, 'hint' => $radiusAccountingReady ? 'Unique active RADIUS usernames' : 'radacct table has not been created', 'href' => route('admin.dashboard', ['open' => 'users-online']).'#users-online-section'],
             ['label' => 'Gross Sales', 'value' => 'NGN '.number_format($paidRevenue, 2), 'hint' => 'Successful customer payments', 'href' => route('admin.reports.sales')],
             ['label' => 'Estimated Profit', 'value' => 'NGN '.number_format($estimatedProfit, 2), 'hint' => 'Tenant net sales minus expenses', 'href' => route('admin.reports.sales')],
         ] as $stat)
@@ -196,7 +196,7 @@
                 @foreach ([
                     ['label' => 'Tenants', 'value' => $tenantCount, 'hint' => auth()->user()->isSuperAdmin() ? 'Total platform customers' : 'Your assigned tenant', 'href' => auth()->user()->isSuperAdmin() ? route('admin.tenants.index') : null],
                     ['label' => 'Locations', 'value' => $shopCount, 'hint' => 'Active hotspot shops/sites', 'href' => route('admin.shops.index')],
-                    ['label' => 'RADIUS Sessions', 'value' => is_null($activeSessionCount) ? 'Not ready' : $activeSessionCount, 'hint' => $radiusAccountingReady ? 'Live accounting sessions' : 'radacct table has not been created', 'href' => null],
+                    ['label' => 'RADIUS Sessions', 'value' => is_null($activeSessionCount) ? 'Not ready' : $activeSessionCount, 'hint' => $radiusAccountingReady ? 'Live accounting sessions' : 'radacct table has not been created', 'href' => route('admin.dashboard', ['open' => 'users-online']).'#users-online-section'],
                     ['label' => 'Usage Today', 'value' => $formatBytes($todayUsageBytes), 'hint' => 'Upload + download from sessions started today', 'href' => null],
                     ['label' => 'Total Usage', 'value' => $formatBytes($totalUsageBytes), 'hint' => 'All accounting traffic for scoped routers', 'href' => null],
                     ['label' => auth()->user()->isSuperAdmin() ? 'Platform Commission' : 'Platform Fees', 'value' => 'NGN '.number_format($platformCommission, 2), 'hint' => 'Commission deducted from sales', 'href' => route('admin.reports.sales')],
@@ -954,7 +954,7 @@
             </div>
         </flux:accordion.item>
 
-        <flux:accordion.item heading="Users Online">
+        <flux:accordion.item id="users-online-section" heading="Users Online" :expanded="request()->query('open') === 'users-online'">
             <div class="flex items-center justify-between gap-4">
                 <p class="text-sm text-zinc-500 dark:text-zinc-400">Live sessions from FreeRADIUS accounting, grouped by routers this admin can access.</p>
             </div>

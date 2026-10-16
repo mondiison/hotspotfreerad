@@ -19,6 +19,30 @@ class PaymentGatewayCatalog
 
     public const MANUAL_BANK = 'manual_bank';
 
+    /**
+     * The five real, automated online checkout gateways -- deliberately
+     * distinct from onlineGateways()'s own key set above (which also
+     * includes MANUAL_BANK, since that method is really "tenant-facing
+     * checkout options," not an online/offline classification) and from
+     * paymentMethods()'s key set (which also includes non-gateway manual
+     * providers like voucher_cash). A Payment.provider in this list
+     * represents a live gateway charge; anything else (manual_bank,
+     * voucher_cash, pos_manual, or any future manually-recorded provider)
+     * represents a payment confirmed/recorded without one -- 2026-10-16,
+     * direct report that the admin payments list mislabeled every non-
+     * Flutterwave provider (including Paystack/Monnify/Squad/Stripe, all
+     * genuinely online) as an "Offline sale."
+     */
+    public static function onlineProviderKeys(): array
+    {
+        return [self::FLUTTERWAVE, self::PAYSTACK, self::MONNIFY, self::SQUAD, self::STRIPE];
+    }
+
+    public static function isOnlineProvider(?string $provider): bool
+    {
+        return in_array($provider, self::onlineProviderKeys(), true);
+    }
+
     public static function onlineGateways(): array
     {
         return [
