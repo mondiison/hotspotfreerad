@@ -3,6 +3,7 @@
 use App\Mail\HotspotTestMail;
 use App\Models\PosDevice;
 use App\Models\PppoeSubscriber;
+use App\Models\Payment;
 use App\Models\Router;
 use App\Models\RouterMetricSample;
 use App\Models\SecurityActivity;
@@ -11,6 +12,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Models\Voucher;
 use App\Services\FreeRadiusClientSyncService;
+use App\Services\HotspotPaymentConfirmationService;
 use App\Services\PosDeviceManagementService;
 use App\Services\PppoeSubscriberManagementService;
 use App\Services\RadiusProvisioningService;
@@ -21,6 +23,7 @@ use App\Services\VoucherManagementService;
 use App\Services\WireGuardPeerSyncService;
 use App\Services\WireGuardRouteSyncService;
 use App\Services\ZeroTierMembershipSyncService;
+use App\Support\PaymentGatewayCatalog;
 use App\Support\SchedulerHealth;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -322,6 +325,90 @@ Artisan::command('hotspot:sync-expired-pos {--dry-run}', function (PosDeviceMana
     return Command::SUCCESS;
 })->purpose('Revoke expired or disabled POS devices from FreeRADIUS');
 
+/**
+ * 2026-10-16, direct report: "I notice someone make payment and it's
+ * after a day that i clicked verify that it became successful" -- a
+ * customer's online payment can genuinely complete on the gateway's own
+ * side (webhook never arrived, or they never got redirected back through
+ * the callback URL) and sit at status=pending/verification_failed
+ * indefinitely until an admin happens to notice it in the Payments list
+ * and clicks "Verify" by hand. This re-checks it automatically instead,
+ * reusing the exact same HotspotPaymentConfirmationService::verifyAndGrant()
+ * the manual "Verify" button already calls -- same gateway call, same
+ * success/failure handling, same idempotency guard against a concurrent
+ * manual click -- so this is purely "do it on a schedule too," not a
+ * second verification mechanism.
+ *
+ * Scoped to the five real online gateways only (PaymentGatewayCatalog::
+ * onlineProviderKeys()) -- manual_bank requires an admin's own bank-
+ * statement confirmation and has no live API to check, and voucher_cash/
+ * pos_manual are already created with status=successful at the moment
+ * they're recorded, so neither would ever match the pending/
+ * verification_failed query below anyway; excluding them here is just
+ * defensive. A payment with no provider_reference yet can't be verified
+ * at all (mirrors PaymentsIndex::verifyPayment()'s own early-exit).
+ *
+ * "3 times at different interval," per the direct request: retries are
+ * counted on Payment.verification_attempts and scheduled relative to
+ * Payment.created_at (not the previous attempt) for a simple, predictable
+ * schedule -- 5 minutes, 30 minutes, then 3 hours after checkout. After
+ * the third attempt with still no success, this deliberately stops
+ * retrying that payment forever rather than hammering a gateway
+ * indefinitely for a transaction that may never actually complete --
+ * it's left for an admin to check manually via the existing Payments
+ * list "Verify"/"Recover access" actions at that point, same as today.
+ */
+Artisan::command('hotspot:retry-pending-payments {--dry-run}', function (HotspotPaymentConfirmationService $payments): int {
+    $retryThresholds = [
+        0 => now()->subMinutes(5),
+        1 => now()->subMinutes(30),
+        2 => now()->subHours(3),
+    ];
+
+    $candidates = Payment::query()
+        ->with(['shop.tenant', 'package', 'subscription'])
+        ->whereIn('status', ['pending', 'verification_failed'])
+        ->whereIn('provider', PaymentGatewayCatalog::onlineProviderKeys())
+        ->whereNotNull('provider_reference')
+        ->where('verification_attempts', '<', 3)
+        ->get()
+        ->filter(fn (Payment $payment): bool => $payment->created_at->lte($retryThresholds[$payment->verification_attempts]));
+
+    if ($this->option('dry-run')) {
+        $this->info($candidates->count().' pending payment(s) would be retried.');
+
+        return Command::SUCCESS;
+    }
+
+    $confirmed = 0;
+    $stillUnconfirmed = 0;
+
+    foreach ($candidates as $payment) {
+        // Same "chg" vs "order" resource-type detection
+        // PaymentsIndex::verifyPayment()'s own paymentResourceType() uses --
+        // only meaningful to Flutterwave's verification call, harmlessly
+        // ignored by every other gateway.
+        $resourceType = str_starts_with(strtolower((string) $payment->provider_reference), 'chg') ? 'charge' : 'order';
+
+        try {
+            $subscription = $payments->verifyAndGrant($payment, (string) $payment->provider_reference, $resourceType);
+        } catch (\Throwable $e) {
+            $subscription = null;
+        }
+
+        $payment->forceFill([
+            'verification_attempts' => $payment->verification_attempts + 1,
+            'last_verification_attempt_at' => now(),
+        ])->save();
+
+        $subscription ? $confirmed++ : $stillUnconfirmed++;
+    }
+
+    $this->info("Retried {$candidates->count()} pending payment(s): {$confirmed} confirmed, {$stillUnconfirmed} still unconfirmed.");
+
+    return Command::SUCCESS;
+})->purpose('Automatically re-check pending/unconfirmed online payments at escalating intervals, up to 3 attempts');
+
 Schedule::command('hotspot:prune-security-activity')
     ->dailyAt('02:15')
     ->withoutOverlapping();
@@ -343,6 +430,10 @@ Schedule::command('hotspot:sync-expired-hotspot')
     ->withoutOverlapping();
 
 Schedule::command('hotspot:sync-expired-pos')
+    ->everyFiveMinutes()
+    ->withoutOverlapping();
+
+Schedule::command('hotspot:retry-pending-payments')
     ->everyFiveMinutes()
     ->withoutOverlapping();
 

@@ -20,6 +20,7 @@ class Payment extends Model
             'commission_rate' => 'decimal:2',
             'payload' => 'array',
             'paid_at' => 'datetime',
+            'last_verification_attempt_at' => 'datetime',
         ];
     }
 
