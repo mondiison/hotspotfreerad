@@ -144,6 +144,9 @@
                     <tr wire:key="subscription-{{ $subscription->id }}">
                         <td class="px-4 py-3">
                             <p class="font-mono text-xs font-medium">{{ $subscription->mac_address }}</p>
+                            @if ($subscription->device_hostname)
+                                <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $subscription->device_hostname }}</p>
+                            @endif
                             <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Created {{ $subscription->created_at->diffForHumans() }}</p>
                         </td>
                         <td class="px-4 py-3">
@@ -219,6 +222,21 @@
                                     Change device
                                 </button>
                             </flux:text>
+
+                            {{--
+                                2026-10-17: captured in the background right after
+                                grant (CaptureSubscriptionDeviceHostname) from the
+                                device's own DHCP lease host-name -- a much more
+                                durable way for staff to recognize "whose phone this
+                                is" than the MAC above, which privacy-randomization
+                                can change on its own. Blank until that job has had
+                                a chance to run, or if the lease never carried one.
+                            --}}
+                            @if ($selectedSubscription->device_hostname)
+                                <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                                    Device name: <span class="font-medium text-zinc-700 dark:text-zinc-300">{{ $selectedSubscription->device_hostname }}</span>
+                                </p>
+                            @endif
 
                             {{--
                                 2026-10-09: audit trail for the automated MAC-change

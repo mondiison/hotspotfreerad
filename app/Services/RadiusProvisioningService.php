@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Jobs\CaptureSubscriptionDeviceHostname;
 use App\Models\Package;
 use App\Models\PosDevice;
 use App\Models\PppoeSubscriber;
@@ -174,6 +175,18 @@ class RadiusProvisioningService
                 'priority' => 1,
             ]
         );
+
+        // 2026-10-17: queued, not awaited -- see CaptureSubscriptionDeviceHostname's
+        // own docblock for why this has to be async (never block/slow down the
+        // customer-facing grant request) and why it's keyed off the subscription's
+        // shop rather than a specific router (a Subscription has no router_id of
+        // its own). This one call site covers every grant path, including a MAC
+        // change, since all of them funnel through here. Gated by config/hotspot.php's
+        // capture_device_hostname (on by default, off in the test environment -- see
+        // that config file's own comment for why).
+        if (config('hotspot.capture_device_hostname')) {
+            CaptureSubscriptionDeviceHostname::dispatch($subscription->id);
+        }
     }
 
     /**

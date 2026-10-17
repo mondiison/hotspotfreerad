@@ -2,6 +2,7 @@
 
 namespace Tests\Unit;
 
+use App\Jobs\CaptureSubscriptionDeviceHostname;
 use App\Models\Package;
 use App\Models\PosDevice;
 use App\Models\PppoeSubscriber;
@@ -14,6 +15,7 @@ use App\Services\FreeRadiusClientSyncService;
 use App\Services\RadiusProvisioningService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
@@ -245,6 +247,56 @@ class RadiusProvisioningServiceTest extends TestCase
 
         $this->assertDatabaseMissing('radcheck', ['username' => 'AA:BB:CC:DD:EE:FF']);
         $this->assertDatabaseMissing('radusergroup', ['username' => 'AA:BB:CC:DD:EE:FF']);
+    }
+
+    /**
+     * 2026-10-17: phpunit.xml sets CAPTURE_DEVICE_HOSTNAME=false specifically so
+     * every other test here that calls grantSubscriptionAccess() never dispatches
+     * a real CaptureSubscriptionDeviceHostname job -- under the sync queue
+     * connection tests run with, that job would otherwise attempt a genuine
+     * RouterOS connection against whatever fake IP a test router happens to have.
+     * This test is the one place that deliberately flips the config on, under
+     * Queue::fake(), to prove the dispatch itself is wired correctly without
+     * ever letting the job's handle() actually run.
+     */
+    public function test_it_dispatches_hostname_capture_when_enabled(): void
+    {
+        Queue::fake();
+        config(['hotspot.capture_device_hostname' => true]);
+
+        $package = $this->package();
+        $subscription = Subscription::create([
+            'shop_id' => $package->shop_id,
+            'package_id' => $package->id,
+            'mac_address' => 'AA:BB:CC:DD:EE:01',
+            'starts_at' => now(),
+            'expires_at' => now()->addHour(),
+        ]);
+
+        app(RadiusProvisioningService::class)->grantSubscriptionAccess($subscription);
+
+        Queue::assertPushed(
+            fn (CaptureSubscriptionDeviceHostname $job): bool => true
+        );
+    }
+
+    public function test_it_does_not_dispatch_hostname_capture_when_disabled(): void
+    {
+        Queue::fake();
+        config(['hotspot.capture_device_hostname' => false]);
+
+        $package = $this->package();
+        $subscription = Subscription::create([
+            'shop_id' => $package->shop_id,
+            'package_id' => $package->id,
+            'mac_address' => 'AA:BB:CC:DD:EE:02',
+            'starts_at' => now(),
+            'expires_at' => now()->addHour(),
+        ]);
+
+        app(RadiusProvisioningService::class)->grantSubscriptionAccess($subscription);
+
+        Queue::assertNotPushed(CaptureSubscriptionDeviceHostname::class);
     }
 
     public function test_it_provisions_and_revokes_pppoe_subscriber_access(): void
