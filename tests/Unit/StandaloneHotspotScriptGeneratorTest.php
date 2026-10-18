@@ -232,6 +232,21 @@ class StandaloneHotspotScriptGeneratorTest extends TestCase
         $this->assertNotFalse($enablePos);
         $this->assertNotFalse($setPos);
         $this->assertLessThan($setPos, $enablePos);
+
+        // 2026-10-18, confirmed live on two different physical routers: even with
+        // the enable+set above both succeeding with no error, the very next
+        // command referencing this interface by its literal name still failed --
+        // enabling a radio isn't instantaneous, RouterOS returns control before
+        // the driver has actually finished bringing it up. A fixed delay (the
+        // same fix already used elsewhere in this codebase for an identical
+        // ZeroTier interface-registration race) has to sit between the set line
+        // and the bridge-port-add that references the interface directly.
+        $delayPos = strpos($result['script'], ':delay 3s');
+        $bridgePortPos = strpos($result['script'], '/interface bridge port add bridge=bridge-hotspot interface=wifi1');
+        $this->assertNotFalse($delayPos);
+        $this->assertNotFalse($bridgePortPos);
+        $this->assertGreaterThan($setPos, $delayPos);
+        $this->assertLessThan($bridgePortPos, $delayPos);
     }
 
     public function test_ros6_wireless_uses_legacy_syntax(): void
@@ -251,6 +266,13 @@ class StandaloneHotspotScriptGeneratorTest extends TestCase
         $this->assertNotFalse($enablePos);
         $this->assertNotFalse($setPos);
         $this->assertLessThan($setPos, $enablePos);
+
+        $delayPos = strpos($result['script'], ':delay 3s');
+        $bridgePortPos = strpos($result['script'], '/interface bridge port add bridge=bridge-hotspot interface=wlan1');
+        $this->assertNotFalse($delayPos);
+        $this->assertNotFalse($bridgePortPos);
+        $this->assertGreaterThan($setPos, $delayPos);
+        $this->assertLessThan($bridgePortPos, $delayPos);
     }
 
     public function test_wired_only_router_skips_wireless_and_notes_external_ap(): void
@@ -318,6 +340,20 @@ class StandaloneHotspotScriptGeneratorTest extends TestCase
         // master-interface= -- that radio has to be enabled first too, same
         // factory-default-disabled reasoning as the hotspot SSID's own interface.
         $this->assertStringContainsString('/interface wifi enable [find default-name=wifi1]', $result['script']);
+
+        // 2026-10-18, confirmed live: master-interface=wifi1 below is also a
+        // literal-name reference needing the same registration-race delay as
+        // the hotspot section's own bridge-port-add -- this method adds its own
+        // rather than trusting wirelessLines() always ran recently enough.
+        $firstEnablePos = strpos($result['script'], '/interface wifi enable [find default-name=wifi1]');
+        $secondEnablePos = strpos($result['script'], '/interface wifi enable [find default-name=wifi1]', $firstEnablePos + 1);
+        $masterInterfacePos = strpos($result['script'], 'master-interface=wifi1');
+        $this->assertNotFalse($secondEnablePos);
+        $this->assertNotFalse($masterInterfacePos);
+        $delayBetween = strpos($result['script'], ':delay 3s', $secondEnablePos);
+        $this->assertNotFalse($delayBetween);
+        $this->assertGreaterThan($secondEnablePos, $delayBetween);
+        $this->assertLessThan($masterInterfacePos, $delayBetween);
     }
 
     public function test_management_network_locks_router_admin_services_to_its_subnet(): void

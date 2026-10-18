@@ -204,6 +204,18 @@ class StandaloneHotspotScriptGenerator
                 // pasted, so this interface starts disabled far more often than not.
                 '/interface wireless enable '.$interface,
                 '/interface wireless set '.$interface.' mode=ap-bridge ssid="'.$ssid.'" security-profile=hotspot-open disabled=no',
+                // 2026-10-18, confirmed live on two different physical routers: even
+                // with the enable+set above both succeeding with no error, the very
+                // next command referencing this interface by its literal name still
+                // failed ("input does not match any value of interface") -- enabling
+                // a radio is not instantaneous, and RouterOS returns control before
+                // the driver has actually finished bringing it up and registering it
+                // as a bridgeable interface. The same race already needed a fixed
+                // :delay elsewhere in this codebase (ZeroTier interface registration,
+                // MikroTikProvisioningService::zeroTierLines()) -- same fix here, a
+                // generous fixed wait chosen over a polling loop for the same reason
+                // that one was: it only costs a few seconds once, during bootstrap.
+                ':delay 3s',
                 '/interface bridge port add bridge=bridge-hotspot interface='.$interface,
                 '',
             ];
@@ -215,6 +227,8 @@ class StandaloneHotspotScriptGenerator
             // Same reasoning as the RouterOS 6 branch above.
             '/interface wifi enable [find default-name='.$interface.']',
             '/interface wifi set [find default-name='.$interface.'] configuration=hotspot-open-cfg disabled=no',
+            // Same registration-race reasoning as the RouterOS 6 branch above.
+            ':delay 3s',
             '/interface bridge port add bridge=bridge-hotspot interface='.$interface,
             '',
         ];
@@ -253,12 +267,21 @@ class StandaloneHotspotScriptGenerator
             // normally a harmless no-op), but repeated defensively since a factory-
             // reset router starts with it disabled and this method shouldn't silently
             // depend on another private method's execution order to work correctly.
+            // 2026-10-18, confirmed live: master-interface=/interface= below are
+            // literal-name references, the same ones that need the interface to
+            // have actually finished coming up first -- see the matching :delay
+            // in wirelessLines(). That earlier delay normally covers this too
+            // (several other commands run in between, consuming real time), but
+            // this method shouldn't depend on that -- it's enabling the radio
+            // defensively right above already, so it adds its own delay too.
             if ($config['ros_version'] === '6') {
                 $lines[] = '/interface wireless enable '.$config['wireless_interface'];
+                $lines[] = ':delay 3s';
                 $lines[] = '/interface wireless security-profiles add name=mgmt-sec mode=dynamic-keys authentication-types=wpa2-psk wpa2-pre-shared-key="'.$password.'"';
                 $lines[] = '/interface wireless add name='.$interface.' master-interface='.$config['wireless_interface'].' ssid="'.$this->quote($config['hotspot_name'].' Mgmt').'" security-profile=mgmt-sec disabled=no';
             } else {
                 $lines[] = '/interface wifi enable [find default-name='.$config['wireless_interface'].']';
+                $lines[] = ':delay 3s';
                 $lines[] = '/interface wifi security add name=mgmt-sec authentication-types=wpa2-psk,wpa3-psk passphrase="'.$password.'"';
                 $lines[] = '/interface wifi configuration add name=mgmt-cfg mode=ap ssid="'.$this->quote($config['hotspot_name'].' Mgmt').'" security=mgmt-sec';
                 $lines[] = '/interface wifi add name='.$interface.' master-interface='.$config['wireless_interface'].' configuration=mgmt-cfg disabled=no';
