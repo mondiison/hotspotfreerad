@@ -364,6 +364,19 @@ class StandaloneHotspotScriptGeneratorTest extends TestCase
         );
         $this->assertStringNotContainsString('src-address=bridge-hotspot', $result['script']);
 
+        // 2026-10-18, confirmed live: RouterOS evaluates filter rules top to
+        // bottom and action=drop stops processing right there -- the mgmt
+        // accept rule has to come BEFORE the catch-all "!WAN drop" rule, or
+        // it's dead code, never actually reached. The original ordering
+        // silently dropped every management-network request at the firewall
+        // before it ever reached the www service -- indistinguishable in a
+        // browser from the router being completely unreachable.
+        $mgmtAcceptPos = strpos($result['script'], 'Allow the management network to reach the router');
+        $catchAllDropPos = strpos($result['script'], 'in-interface-list=!WAN action=drop');
+        $this->assertNotFalse($mgmtAcceptPos);
+        $this->assertNotFalse($catchAllDropPos);
+        $this->assertLessThan($catchAllDropPos, $mgmtAcceptPos);
+
         // The virtual management SSID attaches to the physical radio as its
         // master-interface= -- that radio has to be enabled first too, same
         // factory-default-disabled reasoning as the hotspot SSID's own interface.

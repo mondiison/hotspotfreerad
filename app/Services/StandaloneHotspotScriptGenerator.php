@@ -298,11 +298,25 @@ class StandaloneHotspotScriptGenerator
             '/ip firewall filter add chain=input connection-state=established,related action=accept',
             '/ip firewall filter add chain=input connection-state=invalid action=drop',
             '/ip firewall filter add chain=input in-interface=bridge-hotspot protocol=tcp dst-port=80,443,8080 action=accept comment="Hotspot captive portal ports"',
-            '/ip firewall filter add chain=input in-interface-list=!WAN action=drop comment="Block other router access from hotspot clients"',
         ];
 
+        // 2026-10-18, confirmed live: this accept rule has to come BEFORE the
+        // catch-all "!WAN drop" rule below it, not after -- RouterOS evaluates
+        // filter rules top-to-bottom and action=drop stops processing right
+        // there, so an accept rule placed after a matching drop rule is dead
+        // code, never actually reached. The original ordering silently
+        // dropped every management-network request at the firewall before it
+        // ever reached the www service -- indistinguishable in a browser from
+        // the router being completely unreachable ("This site can't be
+        // reached"), not an HTTP-level error, since the packet never got a
+        // response at all.
         if ($config['enable_mgmt_network']) {
             $lines[] = '/ip firewall filter add chain=input in-interface=bridge-mgmt action=accept comment="Allow the management network to reach the router"';
+        }
+
+        $lines[] = '/ip firewall filter add chain=input in-interface-list=!WAN action=drop comment="Block other router access from hotspot clients"';
+
+        if ($config['enable_mgmt_network']) {
             $mgmtNetwork = $this->networkParts($config['mgmt_network']);
             // 2026-10-18, confirmed live: src-address takes an IP/CIDR, never an
             // interface name -- the original "src-address=bridge-hotspot" was
