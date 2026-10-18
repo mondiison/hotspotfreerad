@@ -192,6 +192,40 @@ class StandaloneScriptGeneratorTest extends TestCase
             ->assertSet('profiles.0.voucher_count', 4);
     }
 
+    /**
+     * 2026-10-18, direct request: the step indicator pills were purely
+     * cosmetic -- jumping back to an earlier step meant clicking "Back"
+     * repeatedly. goToStep() backs the now-clickable pills, but only for a
+     * step already reached (and therefore already validated once by
+     * nextStep()) -- it must never let a step be skipped ahead of without
+     * validation.
+     */
+    public function test_go_to_step_jumps_back_to_an_already_reached_step(): void
+    {
+        $this->actingAs($this->superAdmin());
+
+        Livewire::test(StandaloneScriptGenerator::class)
+            ->set('mgmt_password', 'a-strong-password')
+            ->call('nextStep')
+            ->assertSet('step', 2)
+            ->call('nextStep')
+            ->assertSet('step', 3)
+            ->call('nextStep')
+            ->assertSet('step', 4)
+            ->call('goToStep', 1)
+            ->assertSet('step', 1);
+    }
+
+    public function test_go_to_step_cannot_skip_ahead_of_the_current_step(): void
+    {
+        $this->actingAs($this->superAdmin());
+
+        Livewire::test(StandaloneScriptGenerator::class)
+            ->assertSet('step', 1)
+            ->call('goToStep', 4)
+            ->assertSet('step', 1);
+    }
+
     public function test_wizard_can_generate_independent_usernames_and_passwords_with_a_chosen_character_set(): void
     {
         $this->actingAs($this->superAdmin());

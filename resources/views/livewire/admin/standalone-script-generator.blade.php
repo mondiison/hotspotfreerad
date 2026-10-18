@@ -11,10 +11,23 @@
         <div class="mb-5 flex items-center gap-2 text-sm">
             @foreach (['Router basics', 'Management network', 'Hotspot & profiles', 'Voucher template', 'Review & generate'] as $index => $label)
                 @php($stepNumber = $index + 1)
-                <div class="flex items-center gap-2">
-                    <span class="flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold {{ $step >= $stepNumber ? 'bg-zinc-950 text-white' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400' }}">{{ $stepNumber }}</span>
-                    <span class="hidden text-xs font-medium {{ $step === $stepNumber ? 'text-zinc-950 dark:text-zinc-100' : 'text-zinc-500 dark:text-zinc-400' }} md:inline">{{ $label }}</span>
-                </div>
+                {{--
+                    Only an already-reached step is clickable (goToStep() itself
+                    also refuses to jump past the current step) -- a future,
+                    not-yet-validated step has no "jump ahead" affordance, only
+                    the Next button at the bottom, which validates first.
+                --}}
+                @if ($stepNumber < $step)
+                    <button type="button" wire:click="goToStep({{ $stepNumber }})" class="flex items-center gap-2 cursor-pointer" title="Back to {{ $label }}">
+                        <span class="flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold bg-zinc-950 text-white hover:bg-zinc-700 dark:hover:bg-zinc-300">{{ $stepNumber }}</span>
+                        <span class="hidden text-xs font-medium text-zinc-500 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-zinc-100 md:inline">{{ $label }}</span>
+                    </button>
+                @else
+                    <div class="flex items-center gap-2">
+                        <span class="flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold {{ $step >= $stepNumber ? 'bg-zinc-950 text-white' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400' }}">{{ $stepNumber }}</span>
+                        <span class="hidden text-xs font-medium {{ $step === $stepNumber ? 'text-zinc-950 dark:text-zinc-100' : 'text-zinc-500 dark:text-zinc-400' }} md:inline">{{ $label }}</span>
+                    </div>
+                @endif
                 @if (! $loop->last)
                     <span class="h-px w-6 bg-zinc-200 dark:bg-zinc-700"></span>
                 @endif

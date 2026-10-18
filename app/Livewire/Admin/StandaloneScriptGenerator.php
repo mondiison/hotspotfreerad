@@ -119,6 +119,20 @@ class StandaloneScriptGenerator extends Component
         $this->step = max(1, $this->step - 1);
     }
 
+    /**
+     * Backs the clickable step indicator pills, so jumping back to an
+     * already-completed step doesn't require clicking "Back" repeatedly.
+     * Deliberately never allows jumping FORWARD past the current step --
+     * only steps already reached (and therefore already validated once)
+     * are reachable, so this can never skip nextStep()'s own validation.
+     */
+    public function goToStep(int $targetStep): void
+    {
+        if ($targetStep >= 1 && $targetStep <= $this->step) {
+            $this->step = $targetStep;
+        }
+    }
+
     public function generate(StandaloneHotspotScriptGenerator $generator): void
     {
         $this->validate($this->allRules());
