@@ -55,6 +55,40 @@ class StandaloneHotspotScriptGenerator
     public const VOUCHER_TEMPLATE = 'printable_vouchers.html';
 
     /**
+     * 2026-10-18, direct request: a per-profile total-transfer cap (RouterOS
+     * 7 User Manager's /user-manager limitation `transfer-limit`, bytes),
+     * offered as fixed presets rather than a free-typed byte value -- "left
+     * blank it should be unlimited." Byte values use this codebase's own
+     * existing binary-unit convention (docs/roles-and-product-direction.md:
+     * 1GB = 1073741824), not decimal MB/GB, for consistency with the main
+     * app's own data-cap presets elsewhere. "Unlimited" maps to `null`, which
+     * both the wizard's own <select> (blank option value) and
+     * userManagerLines()/voucherUtilityScriptLines() below treat identically
+     * to 0 -- transfer-limit's own documented default -- rather than ever
+     * omitting the property conditionally: MikroTik's docs confirm the
+     * default is 0 but don't separately state what an explicit 0 does, so
+     * this emits it as a literal, always-present value in both the main
+     * generated lines and the reusable create-voucher-profile script (which,
+     * being a static RouterOS script rather than PHP, would need real
+     * conditional-string-building to omit a property dynamically) --
+     * deliberately not confirmed against real hardware yet, flagged in both
+     * call sites' own comments.
+     */
+    public const DATA_LIMIT_PRESETS = [
+        'Unlimited' => null,
+        '200 MB' => 209715200,
+        '300 MB' => 314572800,
+        '500 MB' => 524288000,
+        '800 MB' => 838860800,
+        '1 GB' => 1073741824,
+        '1.5 GB' => 1610612736,
+        '2 GB' => 2147483648,
+        '3 GB' => 3221225472,
+        '5 GB' => 5368709120,
+        '10 GB' => 10737418240,
+    ];
+
+    /**
      * @param  array{
      *     router_identity: string,
      *     hotspot_name: string,
@@ -68,7 +102,7 @@ class StandaloneHotspotScriptGenerator
      *     enable_mgmt_network: bool,
      *     mgmt_network: string,
      *     mgmt_password: string,
-     *     profiles: list<array{name: string, download_mbps: int, upload_mbps: int, session_minutes: int, shared_users: int, voucher_count: int, voucher_prefix: string, voucher_code_length: int, voucher_username_password_same: bool, voucher_character_set: string}>,
+     *     profiles: list<array{name: string, download_mbps: int, upload_mbps: int, session_minutes: int, shared_users: int, data_limit_bytes?: ?int, voucher_count: int, voucher_prefix: string, voucher_code_length: int, voucher_username_password_same: bool, voucher_character_set: string}>,
      * } $config
      * @return array{script: string, vouchers: list<array{profile: string, username: string, password: string}>}
      */
@@ -397,13 +431,18 @@ class StandaloneHotspotScriptGenerator
         foreach ($profiles as $profile) {
             $slug = $this->profileIdentifier($profile['name']);
             $validityMinutes = max(1, (int) $profile['session_minutes']);
+            // See DATA_LIMIT_PRESETS's own docblock: blank/null ("Unlimited")
+            // is treated the same as 0, transfer-limit's own documented
+            // default -- not yet confirmed live that an explicit 0 behaves
+            // identically to never setting the property at all.
+            $dataLimitBytes = (int) ($profile['data_limit_bytes'] ?? 0);
 
             // Three distinct objects, all required for a voucher to actually be
             // rate-limited and time-boxed: Limitation (the rate caps),
             // Profile (validity/starts-when), and Profile-Limitation (the link
             // between the two -- MikroTik's docs note a profile with no
             // profile-limitation entry simply has no limitation applied at all).
-            $lines[] = '/user-manager limitation add name="'.$slug.'-limit" rate-limit-rx='.$profile['upload_mbps'].'M rate-limit-tx='.$profile['download_mbps'].'M';
+            $lines[] = '/user-manager limitation add name="'.$slug.'-limit" rate-limit-rx='.$profile['upload_mbps'].'M rate-limit-tx='.$profile['download_mbps'].'M transfer-limit='.$dataLimitBytes;
             $lines[] = '/user-manager profile add name="'.$slug.'" validity='.$validityMinutes.'m starts-when=first-auth';
             $lines[] = '/user-manager profile-limitation add profile="'.$slug.'" limitation="'.$slug.'-limit"';
         }
@@ -470,8 +509,9 @@ class StandaloneHotspotScriptGenerator
             ? $this->voucherBatchComment($this->profileIdentifier($vouchers[0]['profile']))
             : 'voucher-batch:change-me';
 
-        $defaultProfile = $profiles[0] ?? ['name' => 'new-profile', 'download_mbps' => 5, 'upload_mbps' => 5, 'session_minutes' => 60];
+        $defaultProfile = $profiles[0] ?? ['name' => 'new-profile', 'download_mbps' => 5, 'upload_mbps' => 5, 'session_minutes' => 60, 'data_limit_bytes' => null];
         $defaultProfileName = $this->profileIdentifier($defaultProfile['name']);
+        $defaultDataLimitBytes = (int) ($defaultProfile['data_limit_bytes'] ?? 0);
 
         return [
             '',
@@ -492,10 +532,11 @@ class StandaloneHotspotScriptGenerator
             '    :local downloadMbps '.(int) $defaultProfile['download_mbps'],
             '    :local uploadMbps '.(int) $defaultProfile['upload_mbps'],
             '    :local validityMinutes '.max(1, (int) $defaultProfile['session_minutes']),
-            '    /user-manager limitation add name=($profileName."-limit") rate-limit-rx=($uploadMbps."M") rate-limit-tx=($downloadMbps."M")',
+            '    :local dataLimitBytes '.$defaultDataLimitBytes.' ;# total transfer cap in bytes, 0 = unlimited',
+            '    /user-manager limitation add name=($profileName."-limit") rate-limit-rx=($uploadMbps."M") rate-limit-tx=($downloadMbps."M") transfer-limit=$dataLimitBytes',
             '    /user-manager profile add name=$profileName validity=($validityMinutes."m") starts-when=first-auth',
             '    /user-manager profile-limitation add profile=$profileName limitation=($profileName."-limit")',
-            '    :put ("Created profile: ".$profileName." (".$downloadMbps."M down / ".$uploadMbps."M up, ".$validityMinutes." min validity)")',
+            '    :put ("Created profile: ".$profileName." (".$downloadMbps."M down / ".$uploadMbps."M up, ".$validityMinutes." min validity, data cap ".$dataLimitBytes." bytes -- 0 = unlimited)")',
             '}',
             '',
         ];
@@ -585,6 +626,14 @@ class StandaloneHotspotScriptGenerator
             '# Classic hotspot users (RouterOS 6 has no User Manager v7). The on-login script below',
             '# starts each voucher\'s validity countdown at first login rather than at creation --',
             '# a well-established community pattern, not an official feature. Verify on real hardware.',
+            // 2026-10-18: classic /ip hotspot user profile has no built-in total-
+            // transfer-cap property the way User Manager's limitation object does
+            // -- a per-profile data cap set in the wizard is only ever applied on
+            // RouterOS 7 (userManagerLines()). Enforcing one here would need a
+            // separate scheduler-script mechanism (polling /ip hotspot active
+            // byte counters), the same shape as the on-login expiry script above
+            // but for data instead of time -- not built in this pass.
+            '# Note: RouterOS 6 classic hotspot has no per-profile data-cap equivalent -- any data cap set in the wizard only applies on RouterOS 7 (User Manager).',
             '/ip hotspot profile set hotspot-profile on-login="'.$this->onLoginExpiryScript().'"',
             '',
         ];

@@ -175,7 +175,7 @@
                     <div class="space-y-4">
                         @foreach ($profiles as $index => $profile)
                             <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 p-4" wire:key="profile-{{ $index }}">
-                                <div class="grid gap-3 md:grid-cols-6">
+                                <div class="grid gap-3 md:grid-cols-7">
                                     <flux:field class="md:col-span-2">
                                         <flux:label size="sm">Name</flux:label>
                                         <flux:input wire:model.blur="profiles.{{ $index }}.name" placeholder="1 Hour" />
@@ -200,6 +200,17 @@
                                         <flux:label size="sm">Shared devices</flux:label>
                                         <flux:input type="number" min="1" wire:model.blur="profiles.{{ $index }}.shared_users" />
                                         <flux:error name="profiles.{{ $index }}.shared_users" />
+                                    </flux:field>
+                                    <flux:field>
+                                        <flux:label size="sm">Data cap</flux:label>
+                                        <flux:select wire:model.blur="profiles.{{ $index }}.data_limit_bytes">
+                                            @foreach (\App\Services\StandaloneHotspotScriptGenerator::DATA_LIMIT_PRESETS as $label => $bytes)
+                                                <flux:select.option value="{{ $bytes }}">{{ $label }}</flux:select.option>
+                                            @endforeach
+                                        </flux:select>
+                                        {{-- 2026-10-18: RouterOS 7 (User Manager) only -- classic RouterOS 6 hotspot has no per-profile data-cap equivalent, see classicHotspotLines()'s own note in the generated script for that case. --}}
+                                        <flux:description>RouterOS 7 only.</flux:description>
+                                        <flux:error name="profiles.{{ $index }}.data_limit_bytes" />
                                     </flux:field>
                                 </div>
                                 <div class="mt-3 grid gap-3 md:grid-cols-4">

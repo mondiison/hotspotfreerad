@@ -44,7 +44,7 @@ class StandaloneScriptGenerator extends Component
     public string $hotspot_network = '10.10.10.1/24';
 
     public array $profiles = [
-        ['name' => '1 Hour', 'download_mbps' => 5, 'upload_mbps' => 5, 'session_minutes' => 60, 'shared_users' => 1, 'voucher_count' => 10, 'voucher_prefix' => '', 'voucher_code_length' => 8, 'voucher_username_password_same' => true, 'voucher_character_set' => 'alnum_safe'],
+        ['name' => '1 Hour', 'download_mbps' => 5, 'upload_mbps' => 5, 'session_minutes' => 60, 'shared_users' => 1, 'data_limit_bytes' => null, 'voucher_count' => 10, 'voucher_prefix' => '', 'voucher_code_length' => 8, 'voucher_username_password_same' => true, 'voucher_character_set' => 'alnum_safe'],
     ];
 
     public string $voucher_template = 'grid';
@@ -99,7 +99,7 @@ class StandaloneScriptGenerator extends Component
 
     public function addProfile(): void
     {
-        $this->profiles[] = ['name' => '', 'download_mbps' => 5, 'upload_mbps' => 5, 'session_minutes' => 60, 'shared_users' => 1, 'voucher_count' => 10, 'voucher_prefix' => '', 'voucher_code_length' => 8, 'voucher_username_password_same' => true, 'voucher_character_set' => 'alnum_safe'];
+        $this->profiles[] = ['name' => '', 'download_mbps' => 5, 'upload_mbps' => 5, 'session_minutes' => 60, 'shared_users' => 1, 'data_limit_bytes' => null, 'voucher_count' => 10, 'voucher_prefix' => '', 'voucher_code_length' => 8, 'voucher_username_password_same' => true, 'voucher_character_set' => 'alnum_safe'];
     }
 
     public function removeProfile(int $index): void
@@ -202,6 +202,14 @@ class StandaloneScriptGenerator extends Component
                 'profiles.*.upload_mbps' => ['required', 'integer', 'min:1', 'max:1000'],
                 'profiles.*.session_minutes' => ['required', 'integer', 'min:1', 'max:43200'],
                 'profiles.*.shared_users' => ['required', 'integer', 'min:1', 'max:50'],
+                // Deliberately loose (not 'integer') -- the <select> binds this
+                // to a plain HTML value, so "Unlimited" arrives as an empty
+                // string, not null; 'integer' would reject that even with
+                // 'nullable' present, since '' isn't actually null in PHP. The
+                // generator itself casts blank/''/null to 0 ("unlimited") when
+                // building the RouterOS line, so no stricter validation is
+                // needed for a field that only ever comes from a closed preset list.
+                'profiles.*.data_limit_bytes' => ['nullable'],
                 'profiles.*.voucher_count' => ['required', 'integer', 'min:0', 'max:500'],
                 'profiles.*.voucher_prefix' => ['nullable', 'string', 'max:8', 'regex:/^[A-Za-z0-9-]*$/'],
                 'profiles.*.voucher_code_length' => ['required', 'integer', 'min:4', 'max:16'],

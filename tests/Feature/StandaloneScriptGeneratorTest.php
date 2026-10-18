@@ -104,6 +104,44 @@ class StandaloneScriptGeneratorTest extends TestCase
             });
     }
 
+    /**
+     * 2026-10-18, direct request: a per-profile data cap selected from a
+     * closed preset list, blank meaning unlimited.
+     */
+    public function test_wizard_applies_a_selected_data_cap_preset_to_the_generated_profile(): void
+    {
+        $this->actingAs($this->superAdmin());
+
+        Livewire::test(StandaloneScriptGenerator::class)
+            ->set('router_identity', 'Corner Shop Router')
+            ->set('hotspot_name', 'Corner Shop Wi-Fi')
+            ->set('hotspot_network', '10.10.10.1/24')
+            ->set('mgmt_network', '10.10.20.1/24')
+            ->set('mgmt_password', 'a-strong-password')
+            ->set('profiles.0.name', 'Daily')
+            ->set('profiles.0.data_limit_bytes', 1073741824)
+            ->call('generate')
+            ->assertHasNoErrors()
+            ->assertSee('transfer-limit=1073741824', false);
+    }
+
+    public function test_wizard_leaves_data_cap_unlimited_when_left_blank(): void
+    {
+        $this->actingAs($this->superAdmin());
+
+        Livewire::test(StandaloneScriptGenerator::class)
+            ->set('router_identity', 'Corner Shop Router')
+            ->set('hotspot_name', 'Corner Shop Wi-Fi')
+            ->set('hotspot_network', '10.10.10.1/24')
+            ->set('mgmt_network', '10.10.20.1/24')
+            ->set('mgmt_password', 'a-strong-password')
+            ->set('profiles.0.name', 'Daily')
+            ->set('profiles.0.data_limit_bytes', '')
+            ->call('generate')
+            ->assertHasNoErrors()
+            ->assertSee('transfer-limit=0', false);
+    }
+
     public function test_super_admin_can_walk_through_the_wizard_for_a_second_wired_only_router(): void
     {
         $this->actingAs($this->superAdmin());

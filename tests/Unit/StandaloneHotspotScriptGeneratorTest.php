@@ -94,6 +94,98 @@ class StandaloneHotspotScriptGeneratorTest extends TestCase
         $this->assertStringContainsString('/user-manager limitation add name="daily-limit" rate-limit-rx=2M rate-limit-tx=10M', $result['script']);
         $this->assertStringContainsString('/user-manager profile add name="daily" validity=1440m starts-when=first-auth', $result['script']);
         $this->assertStringContainsString('/user-manager profile-limitation add profile="daily" limitation="daily-limit"', $result['script']);
+
+        // No data_limit_bytes key at all on this profile -- confirms the
+        // generator defaults a genuinely missing key to 0 (unlimited), not
+        // just an explicit null.
+        $this->assertStringContainsString(
+            '/user-manager limitation add name="daily-limit" rate-limit-rx=2M rate-limit-tx=10M transfer-limit=0',
+            $result['script']
+        );
+    }
+
+    /**
+     * 2026-10-18, direct request: a per-profile total-transfer cap, offered
+     * as fixed presets (200 MB through 10 GB) rather than a free-typed byte
+     * value, with blank meaning unlimited.
+     */
+    public function test_ros7_profile_with_a_data_cap_sets_transfer_limit(): void
+    {
+        $result = (new StandaloneHotspotScriptGenerator)->generate($this->config([
+            'ros_version' => '7',
+            'profiles' => [
+                ['name' => 'Daily', 'download_mbps' => 10, 'upload_mbps' => 2, 'session_minutes' => 1440, 'shared_users' => 2, 'data_limit_bytes' => 1073741824, 'voucher_count' => 0, 'voucher_prefix' => '', 'voucher_code_length' => 8],
+            ],
+        ]));
+
+        $this->assertStringContainsString(
+            '/user-manager limitation add name="daily-limit" rate-limit-rx=2M rate-limit-tx=10M transfer-limit=1073741824',
+            $result['script']
+        );
+    }
+
+    public function test_ros7_profile_left_blank_is_unlimited(): void
+    {
+        $result = (new StandaloneHotspotScriptGenerator)->generate($this->config([
+            'ros_version' => '7',
+            'profiles' => [
+                ['name' => 'Daily', 'download_mbps' => 10, 'upload_mbps' => 2, 'session_minutes' => 1440, 'shared_users' => 2, 'data_limit_bytes' => null, 'voucher_count' => 0, 'voucher_prefix' => '', 'voucher_code_length' => 8],
+            ],
+        ]));
+
+        $this->assertStringContainsString(
+            '/user-manager limitation add name="daily-limit" rate-limit-rx=2M rate-limit-tx=10M transfer-limit=0',
+            $result['script']
+        );
+    }
+
+    /**
+     * The <select> binds this to a plain HTML value, so "Unlimited" arrives
+     * as an empty string through the wizard, not null -- the generator has
+     * to tolerate both equally.
+     */
+    public function test_ros7_profile_with_blank_string_data_cap_is_also_unlimited(): void
+    {
+        $result = (new StandaloneHotspotScriptGenerator)->generate($this->config([
+            'ros_version' => '7',
+            'profiles' => [
+                ['name' => 'Daily', 'download_mbps' => 10, 'upload_mbps' => 2, 'session_minutes' => 1440, 'shared_users' => 2, 'data_limit_bytes' => '', 'voucher_count' => 0, 'voucher_prefix' => '', 'voucher_code_length' => 8],
+            ],
+        ]));
+
+        $this->assertStringContainsString(
+            '/user-manager limitation add name="daily-limit" rate-limit-rx=2M rate-limit-tx=10M transfer-limit=0',
+            $result['script']
+        );
+    }
+
+    public function test_create_voucher_profile_script_includes_the_data_cap_variable(): void
+    {
+        $result = (new StandaloneHotspotScriptGenerator)->generate($this->config([
+            'ros_version' => '7',
+            'profiles' => [
+                ['name' => 'Daily', 'download_mbps' => 10, 'upload_mbps' => 2, 'session_minutes' => 1440, 'shared_users' => 2, 'data_limit_bytes' => 5368709120, 'voucher_count' => 0, 'voucher_prefix' => '', 'voucher_code_length' => 8],
+            ],
+        ]));
+
+        $this->assertStringContainsString(':local dataLimitBytes 5368709120', $result['script']);
+        $this->assertStringContainsString(
+            '/user-manager limitation add name=($profileName."-limit") rate-limit-rx=($uploadMbps."M") rate-limit-tx=($downloadMbps."M") transfer-limit=$dataLimitBytes',
+            $result['script']
+        );
+    }
+
+    public function test_ros6_classic_hotspot_notes_data_caps_are_not_supported(): void
+    {
+        $result = (new StandaloneHotspotScriptGenerator)->generate($this->config([
+            'ros_version' => '6',
+            'profiles' => [
+                ['name' => 'Daily', 'download_mbps' => 10, 'upload_mbps' => 2, 'session_minutes' => 1440, 'shared_users' => 2, 'data_limit_bytes' => 1073741824, 'voucher_count' => 0, 'voucher_prefix' => '', 'voucher_code_length' => 8],
+            ],
+        ]));
+
+        $this->assertStringContainsString('RouterOS 6 classic hotspot has no per-profile data-cap equivalent', $result['script']);
+        $this->assertStringNotContainsString('transfer-limit', $result['script']);
     }
 
     public function test_ros7_vouchers_become_user_manager_users(): void
