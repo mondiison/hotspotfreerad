@@ -285,7 +285,14 @@ class StandaloneHotspotScriptGenerator
         $lines = [
             '# RouterOS 7 User Manager -- a local, self-hosted RADIUS server (127.0.0.1 only, never leaves the router).',
             '# starts-when=first-auth means voucher validity counts from first login, not from creation.',
-            '/user-manager set enabled=yes',
+            // 2026-10-18: use-profiles=yes is the documented precondition for every
+            // limitation/profile/profile-limitation/user-profile object below to
+            // actually be enforced at all (help.mikrotik.com/docs/spaces/ROS/pages/
+            // 2555940/User+Manager -- "Profiles and limitations only apply when
+            // /user-manager use-profiles is set to yes") -- without it, a voucher
+            // could authenticate but never actually get its rate limit or validity
+            // window applied, since User Manager would ignore every profile object.
+            '/user-manager set enabled=yes use-profiles=yes',
             '/user-manager router add address=127.0.0.1 name=this-router shared-secret="'.$secret.'"',
             '/radius add address=127.0.0.1 secret="'.$secret.'" service=hotspot',
             '',
@@ -295,6 +302,11 @@ class StandaloneHotspotScriptGenerator
             $slug = $this->profileIdentifier($profile['name']);
             $validityMinutes = max(1, (int) $profile['session_minutes']);
 
+            // Three distinct objects, all required for a voucher to actually be
+            // rate-limited and time-boxed: Limitation (the rate caps),
+            // Profile (validity/starts-when), and Profile-Limitation (the link
+            // between the two -- MikroTik's docs note a profile with no
+            // profile-limitation entry simply has no limitation applied at all).
             $lines[] = '/user-manager limitation add name="'.$slug.'-limit" rate-limit-rx='.$profile['upload_mbps'].'M rate-limit-tx='.$profile['download_mbps'].'M';
             $lines[] = '/user-manager profile add name="'.$slug.'" validity='.$validityMinutes.'m starts-when=first-auth';
             $lines[] = '/user-manager profile-limitation add profile="'.$slug.'" limitation="'.$slug.'-limit"';
@@ -302,18 +314,49 @@ class StandaloneHotspotScriptGenerator
 
         if ($vouchers !== []) {
             $lines[] = '';
-            $lines[] = '# Voucher codes -- also listed on the printable sheet';
+            $lines[] = '# Voucher codes -- also listed on the printable sheet. Each user below carries';
+            $lines[] = '# a comment identifying its batch -- the same comment is reused further down to';
+            $lines[] = '# generate MikroTik\'s own native printable voucher sheet for that batch directly';
+            $lines[] = '# on the router (User Manager\'s built-in generate-voucher action), the same';
+            $lines[] = '# comment-then-filter workflow used when creating these by hand in WinBox.';
 
             foreach ($vouchers as $voucher) {
                 $slug = $this->profileIdentifier($voucher['profile']);
                 $sharedUsers = max(1, (int) ($sharedUsersByProfile[$voucher['profile']] ?? 1));
+                $comment = $this->voucherBatchComment($slug);
 
-                $lines[] = '/user-manager user add name="'.$voucher['username'].'" password="'.$voucher['password'].'" shared-users='.$sharedUsers;
+                $lines[] = '/user-manager user add name="'.$voucher['username'].'" password="'.$voucher['password'].'" shared-users='.$sharedUsers.' comment="'.$comment.'"';
                 $lines[] = '/user-manager user-profile add user="'.$voucher['username'].'" profile="'.$slug.'"';
+            }
+
+            $lines[] = '';
+            $lines[] = '# Generates a print-ready voucher sheet on the router itself for each batch --';
+            $lines[] = '# printable_vouchers.html ships with User Manager by default, per MikroTik\'s own';
+            $lines[] = '# documented example (no upload needed). Find it under Files on the router, or';
+            $lines[] = '# the User Manager web UI, right after pasting this script.';
+
+            foreach (collect($vouchers)->pluck('profile')->unique() as $profileName) {
+                $comment = $this->voucherBatchComment($this->profileIdentifier($profileName));
+                $lines[] = '/user-manager user generate-voucher voucher-template=printable_vouchers.html [find where comment="'.$comment.'"]';
             }
         }
 
         return $lines;
+    }
+
+    /**
+     * A single, deterministic comment per profile slug -- shared between every
+     * voucher /user-manager user add line for that profile and the
+     * generate-voucher [find where comment=...] filter below it, so MikroTik's
+     * own native voucher-printing action picks up exactly this run's batch.
+     * Not timestamped/unique-per-run deliberately: this tool is stateless and
+     * meant to be pasted once on a router that doesn't already have an older
+     * same-profile batch on it (the same "paste once" assumption the rest of
+     * this generator's non-idempotent sections already make).
+     */
+    private function voucherBatchComment(string $slug): string
+    {
+        return 'voucher-batch:'.$slug;
     }
 
     /**

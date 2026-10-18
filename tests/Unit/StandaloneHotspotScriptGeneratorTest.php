@@ -27,6 +27,10 @@ class StandaloneHotspotScriptGeneratorTest extends TestCase
         $result = (new StandaloneHotspotScriptGenerator)->generate($this->config(['ros_version' => '7']));
 
         $this->assertStringContainsString('/user-manager set enabled=yes', $result['script']);
+        // use-profiles=yes is the documented precondition for limitation/profile/
+        // profile-limitation objects to actually be enforced at all -- without it
+        // every voucher would authenticate with no rate limit or validity window.
+        $this->assertStringContainsString('/user-manager set enabled=yes use-profiles=yes', $result['script']);
         $this->assertStringContainsString('/user-manager router add address=127.0.0.1', $result['script']);
         $this->assertStringContainsString('/radius add address=127.0.0.1', $result['script']);
         $this->assertStringContainsString('use-radius=yes', $result['script']);
@@ -56,9 +60,37 @@ class StandaloneHotspotScriptGeneratorTest extends TestCase
         ]));
 
         foreach ($result['vouchers'] as $voucher) {
-            $this->assertStringContainsString('/user-manager user add name="'.$voucher['username'].'" password="'.$voucher['password'].'" shared-users=3', $result['script']);
+            $this->assertStringContainsString('/user-manager user add name="'.$voucher['username'].'" password="'.$voucher['password'].'" shared-users=3 comment="voucher-batch:daily"', $result['script']);
             $this->assertStringContainsString('/user-manager user-profile add user="'.$voucher['username'].'" profile="daily"', $result['script']);
         }
+
+        // The same comment used on every user above is reused here to let
+        // MikroTik's own built-in generate-voucher action pull exactly this
+        // batch (one native printable sheet per profile, no re-typing names).
+        $this->assertStringContainsString(
+            '/user-manager user generate-voucher voucher-template=printable_vouchers.html [find where comment="voucher-batch:daily"]',
+            $result['script']
+        );
+    }
+
+    public function test_ros7_vouchers_from_different_profiles_get_separate_generate_voucher_batches(): void
+    {
+        $result = (new StandaloneHotspotScriptGenerator)->generate($this->config([
+            'ros_version' => '7',
+            'profiles' => [
+                ['name' => 'Daily', 'download_mbps' => 5, 'upload_mbps' => 5, 'session_minutes' => 60, 'shared_users' => 1, 'voucher_count' => 1, 'voucher_prefix' => '', 'voucher_code_length' => 8],
+                ['name' => 'Weekly', 'download_mbps' => 10, 'upload_mbps' => 10, 'session_minutes' => 120, 'shared_users' => 1, 'voucher_count' => 1, 'voucher_prefix' => '', 'voucher_code_length' => 8],
+            ],
+        ]));
+
+        $this->assertStringContainsString(
+            '/user-manager user generate-voucher voucher-template=printable_vouchers.html [find where comment="voucher-batch:daily"]',
+            $result['script']
+        );
+        $this->assertStringContainsString(
+            '/user-manager user generate-voucher voucher-template=printable_vouchers.html [find where comment="voucher-batch:weekly"]',
+            $result['script']
+        );
     }
 
     public function test_ros6_classic_hotspot_gets_an_on_login_expiry_script(): void
