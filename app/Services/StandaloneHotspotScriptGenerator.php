@@ -44,6 +44,17 @@ class StandaloneHotspotScriptGenerator
     ];
 
     /**
+     * 2026-10-18, confirmed live: generate-voucher's output filename is
+     * "gen_" plus the template's own filename, not a fixed name -- a prior
+     * version of this generator hardcoded "gen_tickets.html" from an earlier,
+     * unverified report; checking the actual generated file on a real router
+     * found it named "gen_printable_vouchers.html" under "um5files/PRIVATE/
+     * GENERATED/vouchers/" instead. Kept as one constant so the template name
+     * and the derived output filename/URL can never drift apart again.
+     */
+    public const VOUCHER_TEMPLATE = 'printable_vouchers.html';
+
+    /**
      * @param  array{
      *     router_identity: string,
      *     hotspot_name: string,
@@ -377,18 +388,20 @@ class StandaloneHotspotScriptGenerator
 
             $lines[] = '';
             $lines[] = '# Generates a print-ready voucher sheet on the router itself for each batch --';
-            $lines[] = '# printable_vouchers.html ships with User Manager by default, per MikroTik\'s own';
+            $lines[] = '# '.self::VOUCHER_TEMPLATE.' ships with User Manager by default, per MikroTik\'s own';
             $lines[] = '# documented example (no upload needed).';
-            // 2026-10-18, confirmed live: generate-voucher writes to a FIXED path --
-            // http://<router-ip>/um/PRIVATE/GENERATED/vouchers/gen_tickets.html,
+            // 2026-10-18, confirmed live: generate-voucher writes to a FIXED path,
             // served over the router's own web server -- overwritten on every run,
             // not a new uniquely-named file per batch. Download/print before
-            // generating a different batch, or it's gone.
-            $lines[] = '# Download/print at: http://'.$hotspotHost.'/um/PRIVATE/GENERATED/vouchers/gen_tickets.html (overwritten on every run -- grab it before generating a different batch).';
+            // generating a different batch, or it's gone. The filename itself is
+            // "gen_" plus the template's own name -- not a universally fixed
+            // "gen_tickets.html" as an earlier, unverified version of this comment
+            // assumed; confirmed live with VOUCHER_TEMPLATE's own current value.
+            $lines[] = '# Download/print at: '.$this->voucherSheetUrl($hotspotHost).' (overwritten on every run -- grab it before generating a different batch).';
 
             foreach (collect($vouchers)->pluck('profile')->unique() as $profileName) {
                 $comment = $this->voucherBatchComment($this->profileIdentifier($profileName));
-                $lines[] = '/user-manager user generate-voucher voucher-template=printable_vouchers.html [find comment="'.$comment.'"]';
+                $lines[] = '/user-manager user generate-voucher voucher-template='.self::VOUCHER_TEMPLATE.' [find comment="'.$comment.'"]';
             }
         }
 
@@ -429,9 +442,9 @@ class StandaloneHotspotScriptGenerator
             '# every new voucher batch or tier.',
             '/system script add name=generate-voucher-sheet source={',
             '    :local voucherComment "'.$defaultComment.'"',
-            '    /user-manager user generate-voucher voucher-template=printable_vouchers.html [find comment=$voucherComment]',
+            '    /user-manager user generate-voucher voucher-template='.self::VOUCHER_TEMPLATE.' [find comment=$voucherComment]',
             '    :put ("Voucher sheet generated for batch: ".$voucherComment)',
-            '    :put "Download/print at: http://'.$hotspotHost.'/um/PRIVATE/GENERATED/vouchers/gen_tickets.html"',
+            '    :put "Download/print at: '.$this->voucherSheetUrl($hotspotHost).'"',
             '    :put "Note: this file is overwritten every run -- download or print before generating a different batch."',
             '}',
             '',
@@ -462,6 +475,21 @@ class StandaloneHotspotScriptGenerator
     private function voucherBatchComment(string $slug): string
     {
         return 'voucher-batch:'.$slug;
+    }
+
+    /**
+     * 2026-10-18, confirmed live against a real router: generate-voucher's
+     * output lands under "um5files/PRIVATE/GENERATED/vouchers/", not "um/"
+     * as an earlier, unverified version of this generator assumed, and the
+     * filename is "gen_" plus the template's own name (VOUCHER_TEMPLATE),
+     * not a fixed "gen_tickets.html". Served over the router's own built-in
+     * web server on whatever port it listens on (plain http, port 80 by
+     * default) -- this assumes that default; a router with www moved to a
+     * non-standard port needs that port appended manually.
+     */
+    private function voucherSheetUrl(string $hotspotHost): string
+    {
+        return 'http://'.$hotspotHost.'/um5files/PRIVATE/GENERATED/vouchers/gen_'.self::VOUCHER_TEMPLATE;
     }
 
     /**
