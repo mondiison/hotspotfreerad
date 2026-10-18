@@ -22,6 +22,31 @@ class StandaloneHotspotScriptGeneratorTest extends TestCase
         $this->assertStringNotContainsString('/radius add', $result['script']);
     }
 
+    /**
+     * 2026-10-18, confirmed live: every /user-manager line failed with "bad
+     * command name user-manager" on a real router that simply never had the
+     * separate User Manager package installed -- RouterOS 7's base install
+     * doesn't include it. Since nothing in a pasted script can make a missing
+     * package appear, the fix is a loud warning telling the admin to check/
+     * install it first, surfaced both in the script's own header (read before
+     * anything else) and again right above the User Manager section itself.
+     */
+    public function test_ros7_warns_that_user_manager_is_a_separate_package(): void
+    {
+        $result = (new StandaloneHotspotScriptGenerator)->generate($this->config(['ros_version' => '7']));
+
+        $this->assertStringContainsString('REQUIRES the separate "user-manager" package', $result['script']);
+        $this->assertStringContainsString('/system package print', $result['script']);
+        $this->assertStringContainsString('bad command name user-manager', $result['script']);
+    }
+
+    public function test_ros6_never_mentions_the_user_manager_package(): void
+    {
+        $result = (new StandaloneHotspotScriptGenerator)->generate($this->config(['ros_version' => '6']));
+
+        $this->assertStringNotContainsString('user-manager', $result['script']);
+    }
+
     public function test_ros7_uses_user_manager_as_a_self_hosted_radius_server_only(): void
     {
         $result = (new StandaloneHotspotScriptGenerator)->generate($this->config(['ros_version' => '7']));
@@ -68,7 +93,7 @@ class StandaloneHotspotScriptGeneratorTest extends TestCase
         // MikroTik's own built-in generate-voucher action pull exactly this
         // batch (one native printable sheet per profile, no re-typing names).
         $this->assertStringContainsString(
-            '/user-manager user generate-voucher voucher-template=printable_vouchers.html [find where comment="voucher-batch:daily"]',
+            '/user-manager user generate-voucher voucher-template=printable_vouchers.html [find comment="voucher-batch:daily"]',
             $result['script']
         );
     }
@@ -84,11 +109,11 @@ class StandaloneHotspotScriptGeneratorTest extends TestCase
         ]));
 
         $this->assertStringContainsString(
-            '/user-manager user generate-voucher voucher-template=printable_vouchers.html [find where comment="voucher-batch:daily"]',
+            '/user-manager user generate-voucher voucher-template=printable_vouchers.html [find comment="voucher-batch:daily"]',
             $result['script']
         );
         $this->assertStringContainsString(
-            '/user-manager user generate-voucher voucher-template=printable_vouchers.html [find where comment="voucher-batch:weekly"]',
+            '/user-manager user generate-voucher voucher-template=printable_vouchers.html [find comment="voucher-batch:weekly"]',
             $result['script']
         );
     }
@@ -201,6 +226,16 @@ class StandaloneHotspotScriptGeneratorTest extends TestCase
         $this->assertStringContainsString('bridge-mgmt', $result['script']);
         $this->assertStringContainsString('passphrase="super-secret-1"', $result['script']);
         $this->assertStringContainsString('Hotspot clients cannot reach the management network', $result['script']);
+
+        // 2026-10-18, confirmed live: src-address takes an IP/CIDR, never an
+        // interface name -- RouterOS rejected the original src-address=bridge-hotspot
+        // outright. in-interface is the correct property for "traffic that
+        // entered on this bridge."
+        $this->assertStringContainsString(
+            '/ip firewall filter add chain=forward in-interface=bridge-hotspot dst-address=10.10.20.0/24 action=drop',
+            $result['script']
+        );
+        $this->assertStringNotContainsString('src-address=bridge-hotspot', $result['script']);
     }
 
     public function test_management_network_locks_router_admin_services_to_its_subnet(): void
