@@ -184,6 +184,14 @@ class StandaloneHotspotScriptGenerator
         if ($config['ros_version'] === '6') {
             return [
                 '/interface wireless security-profiles add name=hotspot-open mode=none',
+                // 2026-10-18, confirmed live: a factory-default wireless interface is
+                // administratively disabled, and RouterOS can reject the mode=/ssid=
+                // change below on a still-disabled interface even with disabled=no
+                // in the same `set` command -- the same fix StandalonePtpScriptGenerator
+                // already needed for the identical reason. Enable it as its own
+                // command first; most routers are reset before this script is ever
+                // pasted, so this interface starts disabled far more often than not.
+                '/interface wireless enable '.$interface,
                 '/interface wireless set '.$interface.' mode=ap-bridge ssid="'.$ssid.'" security-profile=hotspot-open disabled=no',
                 '/interface bridge port add bridge=bridge-hotspot interface='.$interface,
                 '',
@@ -193,6 +201,8 @@ class StandaloneHotspotScriptGenerator
         return [
             '/interface wifi security add name=hotspot-open authentication-types=""',
             '/interface wifi configuration add name=hotspot-open-cfg mode=ap ssid="'.$ssid.'" security=hotspot-open',
+            // Same reasoning as the RouterOS 6 branch above.
+            '/interface wifi enable [find default-name='.$interface.']',
             '/interface wifi set [find default-name='.$interface.'] configuration=hotspot-open-cfg disabled=no',
             '/interface bridge port add bridge=bridge-hotspot interface='.$interface,
             '',
@@ -226,10 +236,18 @@ class StandaloneHotspotScriptGenerator
             $interface = $config['wireless_interface'].'-mgmt';
             $password = $this->quote($config['mgmt_password']);
 
+            // 2026-10-18: the master physical radio itself has to be enabled before
+            // a virtual AP interface can attach to it as master-interface= -- this
+            // already happens earlier in wirelessLines() (so re-enabling here is
+            // normally a harmless no-op), but repeated defensively since a factory-
+            // reset router starts with it disabled and this method shouldn't silently
+            // depend on another private method's execution order to work correctly.
             if ($config['ros_version'] === '6') {
+                $lines[] = '/interface wireless enable '.$config['wireless_interface'];
                 $lines[] = '/interface wireless security-profiles add name=mgmt-sec mode=dynamic-keys authentication-types=wpa2-psk wpa2-pre-shared-key="'.$password.'"';
                 $lines[] = '/interface wireless add name='.$interface.' master-interface='.$config['wireless_interface'].' ssid="'.$this->quote($config['hotspot_name'].' Mgmt').'" security-profile=mgmt-sec disabled=no';
             } else {
+                $lines[] = '/interface wifi enable [find default-name='.$config['wireless_interface'].']';
                 $lines[] = '/interface wifi security add name=mgmt-sec authentication-types=wpa2-psk,wpa3-psk passphrase="'.$password.'"';
                 $lines[] = '/interface wifi configuration add name=mgmt-cfg mode=ap ssid="'.$this->quote($config['hotspot_name'].' Mgmt').'" security=mgmt-sec';
                 $lines[] = '/interface wifi add name='.$interface.' master-interface='.$config['wireless_interface'].' configuration=mgmt-cfg disabled=no';

@@ -161,6 +161,18 @@ class StandaloneHotspotScriptGeneratorTest extends TestCase
         $this->assertStringContainsString('/interface wifi security add name=hotspot-open', $result['script']);
         $this->assertStringContainsString('[find default-name=wifi1]', $result['script']);
         $this->assertStringNotContainsString('/interface wireless ', $result['script']);
+
+        // 2026-10-18, confirmed live: a factory-default wireless interface is
+        // administratively disabled, and RouterOS can reject the configuration=
+        // change below on a still-disabled interface even with disabled=no in the
+        // same `set` -- most routers are reset before this script is ever pasted,
+        // so this has to be its own command, before the `set` line, not relied on
+        // via the inline disabled=no alone.
+        $enablePos = strpos($result['script'], '/interface wifi enable [find default-name=wifi1]');
+        $setPos = strpos($result['script'], '/interface wifi set [find default-name=wifi1] configuration=hotspot-open-cfg');
+        $this->assertNotFalse($enablePos);
+        $this->assertNotFalse($setPos);
+        $this->assertLessThan($setPos, $enablePos);
     }
 
     public function test_ros6_wireless_uses_legacy_syntax(): void
@@ -174,6 +186,12 @@ class StandaloneHotspotScriptGeneratorTest extends TestCase
         $this->assertStringContainsString('/interface wireless security-profiles add name=hotspot-open mode=none', $result['script']);
         $this->assertStringContainsString('/interface wireless set wlan1 mode=ap-bridge', $result['script']);
         $this->assertStringNotContainsString('/interface wifi ', $result['script']);
+
+        $enablePos = strpos($result['script'], '/interface wireless enable wlan1');
+        $setPos = strpos($result['script'], '/interface wireless set wlan1 mode=ap-bridge');
+        $this->assertNotFalse($enablePos);
+        $this->assertNotFalse($setPos);
+        $this->assertLessThan($setPos, $enablePos);
     }
 
     public function test_wired_only_router_skips_wireless_and_notes_external_ap(): void
@@ -236,6 +254,11 @@ class StandaloneHotspotScriptGeneratorTest extends TestCase
             $result['script']
         );
         $this->assertStringNotContainsString('src-address=bridge-hotspot', $result['script']);
+
+        // The virtual management SSID attaches to the physical radio as its
+        // master-interface= -- that radio has to be enabled first too, same
+        // factory-default-disabled reasoning as the hotspot SSID's own interface.
+        $this->assertStringContainsString('/interface wifi enable [find default-name=wifi1]', $result['script']);
     }
 
     public function test_management_network_locks_router_admin_services_to_its_subnet(): void
