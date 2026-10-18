@@ -15,6 +15,27 @@ class StandaloneHotspotScriptGeneratorTest extends TestCase
         $this->assertStringNotContainsString('mmsradius-api-group', $result['script']);
     }
 
+    /**
+     * 2026-10-18, confirmed live: hotspot login failed with "radius server
+     * not responding" even with User Manager fully configured correctly --
+     * the hotspot service's RADIUS requests to User Manager (127.0.0.1)
+     * travel over the loopback interface, which the catch-all "!WAN drop"
+     * rule also matches (loopback traffic isn't exempt from RouterOS's
+     * input chain). Without an explicit accept rule ahead of it, every
+     * voucher login attempt was silently dropped before ever reaching User
+     * Manager.
+     */
+    public function test_loopback_traffic_is_accepted_before_the_catch_all_drop(): void
+    {
+        $result = (new StandaloneHotspotScriptGenerator)->generate($this->config());
+
+        $loopbackPos = strpos($result['script'], 'chain=input in-interface=lo action=accept');
+        $catchAllDropPos = strpos($result['script'], 'in-interface-list=!WAN action=drop');
+        $this->assertNotFalse($loopbackPos);
+        $this->assertNotFalse($catchAllDropPos);
+        $this->assertLessThan($catchAllDropPos, $loopbackPos);
+    }
+
     public function test_ros6_never_emits_radius_at_all(): void
     {
         $result = (new StandaloneHotspotScriptGenerator)->generate($this->config(['ros_version' => '6']));

@@ -296,6 +296,19 @@ class StandaloneHotspotScriptGenerator
     {
         $lines = [
             '/ip firewall filter add chain=input connection-state=established,related action=accept',
+            // 2026-10-18, confirmed live: the catch-all "!WAN drop" rule below
+            // also matches the router's own loopback interface ("lo") -- RouterOS
+            // filters loopback traffic through the same input chain, it's not
+            // exempt. On RouterOS 7, the hotspot service's RADIUS requests to
+            // User Manager (127.0.0.1) travel over "lo", so without this accept
+            // rule they were being silently dropped before ever reaching User
+            // Manager -- the hotspot login just saw "radius server not
+            // responding," indistinguishable from User Manager actually being
+            // down. Kept unconditional (not gated to RouterOS 7/User Manager
+            // specifically) since loopback traffic is inherently trusted
+            // (it originates from the router itself) and any other local-only
+            // service added later would hit the identical gap otherwise.
+            '/ip firewall filter add chain=input in-interface=lo action=accept comment="Allow local loopback traffic (e.g. User Manager RADIUS)"',
             '/ip firewall filter add chain=input connection-state=invalid action=drop',
             '/ip firewall filter add chain=input in-interface=bridge-hotspot protocol=tcp dst-port=80,443,8080 action=accept comment="Hotspot captive portal ports"',
         ];
