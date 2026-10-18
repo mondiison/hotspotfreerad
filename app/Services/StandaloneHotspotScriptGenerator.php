@@ -63,6 +63,7 @@ class StandaloneHotspotScriptGenerator
      *     wan_port: string,
      *     ethernet_port_count: int,
      *     wireless_interface: string,
+     *     wireless_driver?: string,
      *     hotspot_network: string,
      *     enable_mgmt_network: bool,
      *     mgmt_network: string,
@@ -192,7 +193,7 @@ class StandaloneHotspotScriptGenerator
         $interface = $config['wireless_interface'];
         $ssid = $this->quote($config['hotspot_name']);
 
-        if ($config['ros_version'] === '6') {
+        if ($this->usesLegacyWireless($config)) {
             return [
                 '/interface wireless security-profiles add name=hotspot-open mode=none',
                 // 2026-10-18, confirmed live: a factory-default wireless interface is
@@ -204,17 +205,10 @@ class StandaloneHotspotScriptGenerator
                 // pasted, so this interface starts disabled far more often than not.
                 '/interface wireless enable '.$interface,
                 '/interface wireless set '.$interface.' mode=ap-bridge ssid="'.$ssid.'" security-profile=hotspot-open disabled=no',
-                // 2026-10-18, confirmed live on two different physical routers: even
-                // with the enable+set above both succeeding with no error, the very
-                // next command referencing this interface by its literal name still
-                // failed ("input does not match any value of interface") -- enabling
-                // a radio is not instantaneous, and RouterOS returns control before
-                // the driver has actually finished bringing it up and registering it
-                // as a bridgeable interface. The same race already needed a fixed
-                // :delay elsewhere in this codebase (ZeroTier interface registration,
-                // MikroTikProvisioningService::zeroTierLines()) -- same fix here, a
-                // generous fixed wait chosen over a polling loop for the same reason
-                // that one was: it only costs a few seconds once, during bootstrap.
+                // Harmless defensive wait, kept from an earlier (disproven, for the
+                // legacy driver specifically) theory that this was purely a
+                // registration race -- see usesLegacyWireless()'s own docblock for
+                // what the real RB951Ui failure turned out to be instead.
                 ':delay 3s',
                 '/interface bridge port add bridge=bridge-hotspot interface='.$interface,
                 '',
@@ -267,14 +261,9 @@ class StandaloneHotspotScriptGenerator
             // normally a harmless no-op), but repeated defensively since a factory-
             // reset router starts with it disabled and this method shouldn't silently
             // depend on another private method's execution order to work correctly.
-            // 2026-10-18, confirmed live: master-interface=/interface= below are
-            // literal-name references, the same ones that need the interface to
-            // have actually finished coming up first -- see the matching :delay
-            // in wirelessLines(). That earlier delay normally covers this too
-            // (several other commands run in between, consuming real time), but
-            // this method shouldn't depend on that -- it's enabling the radio
-            // defensively right above already, so it adds its own delay too.
-            if ($config['ros_version'] === '6') {
+            // The :delay lines are a harmless defensive wait kept from an earlier
+            // theory -- see usesLegacyWireless()'s own docblock.
+            if ($this->usesLegacyWireless($config)) {
                 $lines[] = '/interface wireless enable '.$config['wireless_interface'];
                 $lines[] = ':delay 3s';
                 $lines[] = '/interface wireless security-profiles add name=mgmt-sec mode=dynamic-keys authentication-types=wpa2-psk wpa2-pre-shared-key="'.$password.'"';
@@ -498,6 +487,37 @@ class StandaloneHotspotScriptGenerator
     private function voucherBatchComment(string $slug): string
     {
         return 'voucher-batch:'.$slug;
+    }
+
+    /**
+     * 2026-10-18, confirmed live: this used to branch purely on ros_version
+     * (6 => legacy /interface wireless, 7 => the newer /interface wifi
+     * package) -- but that's not actually how RouterOS decides which driver
+     * to use. The new wifi/wifiwave2 package only runs on specific ARM chips
+     * (IPQ4019/QCA9984-class); older MIPS-based boards (confirmed live on an
+     * RB951Ui, an Atheros AR9300 chip) stay on the legacy driver forever,
+     * REGARDLESS of RouterOS version. The symptom on that router was
+     * identical across two attempts, including one with a 3-second :delay
+     * added specifically to rule out a timing race: /interface wifi
+     * enable/set against "wifi1" always silently matched zero rows (find
+     * against an empty table is not an error), so the later literal
+     * `interface=wifi1` bridge-port-add always failed outright -- "wifi1"
+     * never existed anywhere on that router under any package.
+     * `/interface wireless print` on the same router confirmed the real
+     * interface was "wlan1" under the legacy driver all along.
+     *
+     * Deliberately a capability toggle (wireless_driver), not a router-model
+     * catalog -- every MikroTik board falls into exactly one of these two
+     * camps, so this one binary choice gives full precision without ever
+     * needing updates when a new board ships, the same "no hardcoded model
+     * database" principle StandalonePtpScriptGenerator's wireless handling
+     * already documents. RouterOS 6 has no choice at all (the new package
+     * doesn't exist on it), so it's always legacy regardless of what's
+     * passed -- wireless_driver only matters when ros_version is 7.
+     */
+    private function usesLegacyWireless(array $config): bool
+    {
+        return $config['ros_version'] === '6' || ($config['wireless_driver'] ?? 'wifiwave2') === 'legacy';
     }
 
     /**

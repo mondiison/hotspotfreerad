@@ -25,6 +25,16 @@ class StandaloneScriptGenerator extends Component
 
     public string $wireless_interface = 'wifi1';
 
+    /**
+     * 2026-10-18, confirmed live: the new /interface wifi package only runs
+     * on specific ARM chips (IPQ4019/QCA9984-class) -- older MIPS-based
+     * boards (confirmed on an RB951Ui, an Atheros AR9300 chip) stay on the
+     * legacy /interface wireless driver forever, regardless of RouterOS
+     * version. Only matters when ros_version is '7' -- RouterOS 6 has no
+     * choice at all, see StandaloneHotspotScriptGenerator::usesLegacyWireless().
+     */
+    public string $wireless_driver = 'wifiwave2';
+
     public bool $enable_mgmt_network = true;
 
     public string $mgmt_network = '10.10.20.1/24';
@@ -53,17 +63,38 @@ class StandaloneScriptGenerator extends Component
         if (! $this->has_wireless) {
             $this->wireless_interface = '';
         } elseif ($this->wireless_interface === '') {
-            $this->wireless_interface = $this->ros_version === '6' ? 'wlan1' : 'wifi1';
+            $this->wireless_interface = $this->defaultWirelessInterfaceName();
         }
     }
 
     public function updatedRosVersion(): void
     {
+        if ($this->ros_version === '6') {
+            // RouterOS 6 has no /interface wifi package at all -- there's no
+            // real choice here, so keep the toggle's own stored value
+            // consistent even though the view hides it for this version.
+            $this->wireless_driver = 'legacy';
+        }
+
         if (! $this->has_wireless) {
             return;
         }
 
-        $this->wireless_interface = $this->ros_version === '6' ? 'wlan1' : 'wifi1';
+        $this->wireless_interface = $this->defaultWirelessInterfaceName();
+    }
+
+    public function updatedWirelessDriver(): void
+    {
+        if (! $this->has_wireless) {
+            return;
+        }
+
+        $this->wireless_interface = $this->defaultWirelessInterfaceName();
+    }
+
+    private function defaultWirelessInterfaceName(): string
+    {
+        return ($this->ros_version === '6' || $this->wireless_driver === 'legacy') ? 'wlan1' : 'wifi1';
     }
 
     public function addProfile(): void
@@ -100,6 +131,7 @@ class StandaloneScriptGenerator extends Component
             'wan_port' => $this->wan_port,
             'ethernet_port_count' => $this->ethernet_port_count,
             'wireless_interface' => $this->wireless_interface,
+            'wireless_driver' => $this->wireless_driver,
             'hotspot_network' => $this->hotspot_network,
             'enable_mgmt_network' => $this->enable_mgmt_network,
             'mgmt_network' => $this->mgmt_network,
@@ -138,6 +170,7 @@ class StandaloneScriptGenerator extends Component
                     }
                 }],
                 'wireless_interface' => ['required_if:has_wireless,true', 'nullable', 'string', 'max:32'],
+                'wireless_driver' => ['required_if:has_wireless,true', Rule::in(['wifiwave2', 'legacy'])],
             ],
             2 => [
                 'enable_mgmt_network' => ['boolean'],

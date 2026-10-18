@@ -71,10 +71,32 @@
                 </div>
 
                 @if ($has_wireless)
+                    @if ($ros_version === '7')
+                        <flux:field>
+                            <flux:label>Wireless driver</flux:label>
+                            <flux:select wire:model.live="wireless_driver">
+                                <flux:select.option value="wifiwave2">Newer wifi package (ARM boards: hAP ac³, Audience, RB4011, Chateau, etc.)</flux:select.option>
+                                <flux:select.option value="legacy">Legacy wireless package (older/MIPS boards: RB951Ui, hAP lite, SXT, etc.)</flux:select.option>
+                            </flux:select>
+                            {{--
+                                2026-10-18, confirmed live on an RB951Ui: the newer
+                                wifi/wifiwave2 package only runs on specific ARM chips --
+                                older MIPS-based boards stay on the legacy driver forever,
+                                regardless of RouterOS version. Check /interface wireless
+                                print vs /interface wifi print on the router if unsure --
+                                whichever one actually lists an interface is the real
+                                driver for this hardware.
+                            --}}
+                            <flux:description>Depends on the wireless chipset, not the RouterOS version -- check <code>/interface wireless print</code> vs <code>/interface wifi print</code> on the router if unsure.</flux:description>
+                            <flux:error name="wireless_driver" />
+                        </flux:field>
+                    @endif
+
+                    <?php $isLegacyWireless = $ros_version === '6' || $wireless_driver === 'legacy'; ?>
                     <flux:field>
                         <flux:label>Wireless interface</flux:label>
-                        <flux:input wire:model.blur="wireless_interface" placeholder="{{ $ros_version === '6' ? 'wlan1' : 'wifi1' }}" />
-                        <flux:description>The built-in radio's interface name (check <code>/interface {{ $ros_version === '6' ? 'wireless' : 'wifi' }} print</code> on the router).</flux:description>
+                        <flux:input wire:model.blur="wireless_interface" placeholder="{{ $isLegacyWireless ? 'wlan1' : 'wifi1' }}" />
+                        <flux:description>The built-in radio's interface name (check <code>/interface {{ $isLegacyWireless ? 'wireless' : 'wifi' }} print</code> on the router).</flux:description>
                         <flux:error name="wireless_interface" />
                     </flux:field>
                 @endif

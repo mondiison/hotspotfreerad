@@ -249,6 +249,34 @@ class StandaloneHotspotScriptGeneratorTest extends TestCase
         $this->assertLessThan($bridgePortPos, $delayPos);
     }
 
+    /**
+     * 2026-10-18, confirmed live on an RB951Ui (Atheros AR9300 chip): the
+     * newer wifi/wifiwave2 package only runs on specific ARM chips, so this
+     * router's "wifi1" never existed under any package -- /interface
+     * wireless print confirmed the real interface was "wlan1" under the
+     * legacy driver all along, despite running RouterOS 7. ros_version
+     * alone can't capture this -- wireless_driver is a separate, explicit
+     * choice.
+     */
+    public function test_ros7_with_legacy_wireless_driver_uses_legacy_syntax(): void
+    {
+        $result = (new StandaloneHotspotScriptGenerator)->generate($this->config([
+            'ros_version' => '7',
+            'has_wireless' => true,
+            'wireless_driver' => 'legacy',
+            'wireless_interface' => 'wlan1',
+        ]));
+
+        $this->assertStringContainsString('/interface wireless security-profiles add name=hotspot-open mode=none', $result['script']);
+        $this->assertStringContainsString('/interface wireless set wlan1 mode=ap-bridge', $result['script']);
+        $this->assertStringContainsString('/interface wireless enable wlan1', $result['script']);
+        $this->assertStringNotContainsString('/interface wifi ', $result['script']);
+
+        // The User Manager section is still RouterOS-7-specific regardless of
+        // which wireless driver this hardware uses -- the two are independent.
+        $this->assertStringContainsString('/user-manager set enabled=yes use-profiles=yes', $result['script']);
+    }
+
     public function test_ros6_wireless_uses_legacy_syntax(): void
     {
         $result = (new StandaloneHotspotScriptGenerator)->generate($this->config([
