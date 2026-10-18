@@ -308,7 +308,7 @@ class StandaloneHotspotScriptGenerator
     private function userSystemLines(array $config, array $vouchers): array
     {
         return $config['ros_version'] === '7'
-            ? $this->userManagerLines($config['profiles'], $vouchers)
+            ? $this->userManagerLines($config['profiles'], $vouchers, $this->networkParts($config['hotspot_network'])['host'])
             : $this->classicHotspotLines($config['profiles'], $vouchers);
     }
 
@@ -317,7 +317,7 @@ class StandaloneHotspotScriptGenerator
      * @param  list<array{profile: string, username: string, password: string}>  $vouchers
      * @return list<string>
      */
-    private function userManagerLines(array $profiles, array $vouchers): array
+    private function userManagerLines(array $profiles, array $vouchers, string $hotspotHost): array
     {
         $secret = bin2hex(random_bytes(12));
         $sharedUsersByProfile = collect($profiles)->pluck('shared_users', 'name');
@@ -378,26 +378,75 @@ class StandaloneHotspotScriptGenerator
             $lines[] = '';
             $lines[] = '# Generates a print-ready voucher sheet on the router itself for each batch --';
             $lines[] = '# printable_vouchers.html ships with User Manager by default, per MikroTik\'s own';
-            $lines[] = '# documented example (no upload needed). Find it under Files on the router, or';
-            $lines[] = '# the User Manager web UI, right after pasting this script.';
-            // 2026-10-18: MikroTik's own docs example uses "[find where name=...]",
-            // but every OTHER find-expression in this generator (and this one,
-            // confirmed live) uses the plainer "[find property=value]" form with no
-            // "where" -- RouterOS's console accepts both in most menus, but this
-            // exact line has not yet been confirmed against real hardware with the
-            // User Manager package actually installed (every attempt so far hit
-            // "bad command name user-manager" first, from the missing package
-            // above, never reaching this line's own syntax). Flagged here rather
-            // than guessed at twice -- if this specific line errors once the
-            // package is installed, try dropping "generate-voucher" entirely and
-            // running it interactively from the User Manager menu instead.
+            $lines[] = '# documented example (no upload needed).';
+            // 2026-10-18, confirmed live: generate-voucher writes to a FIXED path --
+            // http://<router-ip>/um/PRIVATE/GENERATED/vouchers/gen_tickets.html,
+            // served over the router's own web server -- overwritten on every run,
+            // not a new uniquely-named file per batch. Download/print before
+            // generating a different batch, or it's gone.
+            $lines[] = '# Download/print at: http://'.$hotspotHost.'/um/PRIVATE/GENERATED/vouchers/gen_tickets.html (overwritten on every run -- grab it before generating a different batch).';
+
             foreach (collect($vouchers)->pluck('profile')->unique() as $profileName) {
                 $comment = $this->voucherBatchComment($this->profileIdentifier($profileName));
                 $lines[] = '/user-manager user generate-voucher voucher-template=printable_vouchers.html [find comment="'.$comment.'"]';
             }
         }
 
+        $lines = array_merge($lines, $this->voucherUtilityScriptLines($profiles, $vouchers, $hotspotHost));
+
         return $lines;
+    }
+
+    /**
+     * Two small, persistent /system script objects left on the router after
+     * pasting -- so generating a later batch (a new voucher print run, or a
+     * new tier entirely) never again needs a trip back to this wizard and a
+     * full re-paste. Each one's "parameters" are just :local variables at the
+     * top of its own source, since RouterOS scripts don't take named
+     * arguments the way a function call would -- the intended workflow is
+     * editing that one value (Winbox > System > Scripts > double-click >
+     * Source, or "/system script edit <name> source"), then
+     * "/system script run <name>".
+     *
+     * @param  list<array{name: string, download_mbps: int, upload_mbps: int, session_minutes: int}>  $profiles
+     * @param  list<array{profile: string, username: string, password: string}>  $vouchers
+     * @return list<string>
+     */
+    private function voucherUtilityScriptLines(array $profiles, array $vouchers, string $hotspotHost): array
+    {
+        $defaultComment = $vouchers !== []
+            ? $this->voucherBatchComment($this->profileIdentifier($vouchers[0]['profile']))
+            : 'voucher-batch:change-me';
+
+        $defaultProfile = $profiles[0] ?? ['name' => 'new-profile', 'download_mbps' => 5, 'upload_mbps' => 5, 'session_minutes' => 60];
+        $defaultProfileName = $this->profileIdentifier($defaultProfile['name']);
+
+        return [
+            '',
+            '# Two reusable scripts, saved on the router -- edit the variable(s) at the top',
+            '# (Winbox > System > Scripts > double-click > Source), then run with',
+            '# "/system script run <name>". No need to come back to this generator for',
+            '# every new voucher batch or tier.',
+            '/system script add name=generate-voucher-sheet source={',
+            '    :local voucherComment "'.$defaultComment.'"',
+            '    /user-manager user generate-voucher voucher-template=printable_vouchers.html [find comment=$voucherComment]',
+            '    :put ("Voucher sheet generated for batch: ".$voucherComment)',
+            '    :put "Download/print at: http://'.$hotspotHost.'/um/PRIVATE/GENERATED/vouchers/gen_tickets.html"',
+            '    :put "Note: this file is overwritten every run -- download or print before generating a different batch."',
+            '}',
+            '',
+            '/system script add name=create-voucher-profile source={',
+            '    :local profileName "'.$defaultProfileName.'"',
+            '    :local downloadMbps '.(int) $defaultProfile['download_mbps'],
+            '    :local uploadMbps '.(int) $defaultProfile['upload_mbps'],
+            '    :local validityMinutes '.max(1, (int) $defaultProfile['session_minutes']),
+            '    /user-manager limitation add name=($profileName."-limit") rate-limit-rx=($uploadMbps."M") rate-limit-tx=($downloadMbps."M")',
+            '    /user-manager profile add name=$profileName validity=($validityMinutes."m") starts-when=first-auth',
+            '    /user-manager profile-limitation add profile=$profileName limitation=($profileName."-limit")',
+            '    :put ("Created profile: ".$profileName." (".$downloadMbps."M down / ".$uploadMbps."M up, ".$validityMinutes." min validity)")',
+            '}',
+            '',
+        ];
     }
 
     /**

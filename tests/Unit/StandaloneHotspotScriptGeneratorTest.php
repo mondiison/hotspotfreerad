@@ -96,6 +96,65 @@ class StandaloneHotspotScriptGeneratorTest extends TestCase
             '/user-manager user generate-voucher voucher-template=printable_vouchers.html [find comment="voucher-batch:daily"]',
             $result['script']
         );
+
+        // 2026-10-18, confirmed live: the generated voucher sheet is served at a
+        // fixed path on the router's own web server, overwritten on every run.
+        $this->assertStringContainsString(
+            'http://10.10.10.1/um/PRIVATE/GENERATED/vouchers/gen_tickets.html',
+            $result['script']
+        );
+    }
+
+    /**
+     * 2026-10-18, direct request: generating a later voucher batch, or a new
+     * tier entirely, shouldn't need a trip back to this wizard every time --
+     * two small, persistent /system script objects are left on the router so
+     * an admin can just edit one variable and re-run.
+     */
+    public function test_ros7_leaves_reusable_scripts_for_future_batches_and_profiles(): void
+    {
+        $result = (new StandaloneHotspotScriptGenerator)->generate($this->config([
+            'ros_version' => '7',
+            'profiles' => [
+                ['name' => 'Daily', 'download_mbps' => 10, 'upload_mbps' => 2, 'session_minutes' => 1440, 'shared_users' => 1, 'voucher_count' => 1, 'voucher_prefix' => '', 'voucher_code_length' => 8],
+            ],
+        ]));
+
+        $this->assertStringContainsString('/system script add name=generate-voucher-sheet source={', $result['script']);
+        $this->assertStringContainsString(':local voucherComment "voucher-batch:daily"', $result['script']);
+        $this->assertStringContainsString('/user-manager user generate-voucher voucher-template=printable_vouchers.html [find comment=$voucherComment]', $result['script']);
+        $this->assertStringContainsString('http://10.10.10.1/um/PRIVATE/GENERATED/vouchers/gen_tickets.html', $result['script']);
+
+        $this->assertStringContainsString('/system script add name=create-voucher-profile source={', $result['script']);
+        $this->assertStringContainsString(':local profileName "daily"', $result['script']);
+        $this->assertStringContainsString(':local downloadMbps 10', $result['script']);
+        $this->assertStringContainsString(':local uploadMbps 2', $result['script']);
+        $this->assertStringContainsString(':local validityMinutes 1440', $result['script']);
+        $this->assertStringContainsString('/user-manager limitation add name=($profileName."-limit") rate-limit-rx=($uploadMbps."M") rate-limit-tx=($downloadMbps."M")', $result['script']);
+        $this->assertStringContainsString('/user-manager profile add name=$profileName validity=($validityMinutes."m") starts-when=first-auth', $result['script']);
+        $this->assertStringContainsString('/user-manager profile-limitation add profile=$profileName limitation=($profileName."-limit")', $result['script']);
+    }
+
+    public function test_ros7_reusable_scripts_use_generic_defaults_with_no_profiles_or_vouchers(): void
+    {
+        $result = (new StandaloneHotspotScriptGenerator)->generate($this->config([
+            'ros_version' => '7',
+            'profiles' => [],
+        ]));
+
+        $this->assertStringContainsString(':local voucherComment "voucher-batch:change-me"', $result['script']);
+        $this->assertStringContainsString(':local profileName "new-profile"', $result['script']);
+        $this->assertStringContainsString(':local downloadMbps 5', $result['script']);
+        $this->assertStringContainsString(':local uploadMbps 5', $result['script']);
+        $this->assertStringContainsString(':local validityMinutes 60', $result['script']);
+    }
+
+    public function test_ros6_never_gets_the_reusable_user_manager_scripts(): void
+    {
+        $result = (new StandaloneHotspotScriptGenerator)->generate($this->config(['ros_version' => '6']));
+
+        $this->assertStringNotContainsString('generate-voucher-sheet', $result['script']);
+        $this->assertStringNotContainsString('create-voucher-profile', $result['script']);
     }
 
     public function test_ros7_vouchers_from_different_profiles_get_separate_generate_voucher_batches(): void
