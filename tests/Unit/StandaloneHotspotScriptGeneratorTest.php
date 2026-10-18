@@ -100,7 +100,7 @@ class StandaloneHotspotScriptGeneratorTest extends TestCase
         // 2026-10-18, confirmed live: the generated voucher sheet is served at a
         // fixed path on the router's own web server, overwritten on every run.
         $this->assertStringContainsString(
-            'http://10.10.10.1/um5files/PRIVATE/GENERATED/vouchers/gen_printable_vouchers.html',
+            'http://10.10.10.1/um/PRIVATE/GENERATED/vouchers/gen_printable_vouchers.html',
             $result['script']
         );
     }
@@ -123,7 +123,7 @@ class StandaloneHotspotScriptGeneratorTest extends TestCase
         $this->assertStringContainsString('/system script add name=generate-voucher-sheet source={', $result['script']);
         $this->assertStringContainsString(':local voucherComment "voucher-batch:daily"', $result['script']);
         $this->assertStringContainsString('/user-manager user generate-voucher voucher-template=printable_vouchers.html [find comment=$voucherComment]', $result['script']);
-        $this->assertStringContainsString('http://10.10.10.1/um5files/PRIVATE/GENERATED/vouchers/gen_printable_vouchers.html', $result['script']);
+        $this->assertStringContainsString('http://10.10.10.1/um/PRIVATE/GENERATED/vouchers/gen_printable_vouchers.html', $result['script']);
 
         $this->assertStringContainsString('/system script add name=create-voucher-profile source={', $result['script']);
         $this->assertStringContainsString(':local profileName "daily"', $result['script']);

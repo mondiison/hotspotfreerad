@@ -478,18 +478,30 @@ class StandaloneHotspotScriptGenerator
     }
 
     /**
-     * 2026-10-18, confirmed live against a real router: generate-voucher's
-     * output lands under "um5files/PRIVATE/GENERATED/vouchers/", not "um/"
-     * as an earlier, unverified version of this generator assumed, and the
-     * filename is "gen_" plus the template's own name (VOUCHER_TEMPLATE),
-     * not a fixed "gen_tickets.html". Served over the router's own built-in
-     * web server on whatever port it listens on (plain http, port 80 by
-     * default) -- this assumes that default; a router with www moved to a
-     * non-standard port needs that port appended manually.
+     * 2026-10-18, confirmed live against a real router: the FILESYSTEM path
+     * generate-voucher actually writes to (what "/file print" shows) is
+     * "um5files/PRIVATE/GENERATED/vouchers/gen_<template>.html" -- but that's
+     * not the same as the URL a browser uses to fetch it. Per MikroTik's own
+     * documentation, the User Manager web interface's URL namespace is always
+     * "/um/" regardless of the on-disk folder's literal name ("um5files" is
+     * an internal storage path, a naming holdover from User Manager's earlier
+     * v5 incarnation) -- RouterOS's web server maps that whole storage area
+     * under the "/um/" URL prefix, not the on-disk "um5files" one. The
+     * filename itself is "gen_" plus the template's own name
+     * (VOUCHER_TEMPLATE), confirmed the same day against the earlier,
+     * unverified "gen_tickets.html" assumption. Served over the router's own
+     * built-in web server on whatever port it listens on (plain http, port 80
+     * by default) -- this assumes that default; a router with www moved to a
+     * non-standard port needs that port appended manually. Also note: this
+     * whole directory lives under "PRIVATE", so the www service will prompt
+     * for the router's own admin credentials before serving it -- and www
+     * itself may be address-restricted to a management subnet (this
+     * generator's own managementNetworkLines() does exactly that), in which
+     * case the browsing device has to actually be on that subnet first.
      */
     private function voucherSheetUrl(string $hotspotHost): string
     {
-        return 'http://'.$hotspotHost.'/um5files/PRIVATE/GENERATED/vouchers/gen_'.self::VOUCHER_TEMPLATE;
+        return 'http://'.$hotspotHost.'/um/PRIVATE/GENERATED/vouchers/gen_'.self::VOUCHER_TEMPLATE;
     }
 
     /**
