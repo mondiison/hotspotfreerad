@@ -74,6 +74,14 @@ class StandaloneHotspotScriptGenerator
      * deliberately not confirmed against real hardware yet, flagged in both
      * call sites' own comments.
      */
+    /**
+     * Binary MB -> bytes, matching this file's own existing byte-math
+     * convention (1GB = 1073741824, docs/roles-and-product-direction.md).
+     * Used to convert create-voucher-profile's user-friendly megabyte
+     * variable to the raw bytes RouterOS's own transfer-limit= expects.
+     */
+    public const BYTES_PER_MB = 1048576;
+
     public const DATA_LIMIT_PRESETS = [
         'Unlimited' => null,
         '200 MB' => 209715200,
@@ -511,7 +519,13 @@ class StandaloneHotspotScriptGenerator
 
         $defaultProfile = $profiles[0] ?? ['name' => 'new-profile', 'download_mbps' => 5, 'upload_mbps' => 5, 'session_minutes' => 60, 'data_limit_bytes' => null];
         $defaultProfileName = $this->profileIdentifier($defaultProfile['name']);
-        $defaultDataLimitBytes = (int) ($defaultProfile['data_limit_bytes'] ?? 0);
+        // 2026-10-18, direct request: a human editing this script by hand
+        // shouldn't have to compute/type a raw byte count -- every preset in
+        // DATA_LIMIT_PRESETS is already a whole-MB multiple, so this always
+        // divides back cleanly. The script itself converts back to bytes
+        // (see the :local dataLimitBytes line below) so transfer-limit= still
+        // gets what RouterOS actually expects.
+        $defaultDataLimitMegabyte = (int) round(((int) ($defaultProfile['data_limit_bytes'] ?? 0)) / self::BYTES_PER_MB);
 
         return [
             '',
@@ -532,11 +546,12 @@ class StandaloneHotspotScriptGenerator
             '    :local downloadMbps '.(int) $defaultProfile['download_mbps'],
             '    :local uploadMbps '.(int) $defaultProfile['upload_mbps'],
             '    :local validityMinutes '.max(1, (int) $defaultProfile['session_minutes']),
-            '    :local dataLimitBytes '.$defaultDataLimitBytes.' ;# total transfer cap in bytes, 0 = unlimited',
+            '    :local dataLimitMegabyte '.$defaultDataLimitMegabyte.' ;# total transfer cap in MB, 0 = unlimited -- edit this, not a raw byte count',
+            '    :local dataLimitBytes ($dataLimitMegabyte * '.self::BYTES_PER_MB.')',
             '    /user-manager limitation add name=($profileName."-limit") rate-limit-rx=($uploadMbps."M") rate-limit-tx=($downloadMbps."M") transfer-limit=$dataLimitBytes',
             '    /user-manager profile add name=$profileName validity=($validityMinutes."m") starts-when=first-auth',
             '    /user-manager profile-limitation add profile=$profileName limitation=($profileName."-limit")',
-            '    :put ("Created profile: ".$profileName." (".$downloadMbps."M down / ".$uploadMbps."M up, ".$validityMinutes." min validity, data cap ".$dataLimitBytes." bytes -- 0 = unlimited)")',
+            '    :put ("Created profile: ".$profileName." (".$downloadMbps."M down / ".$uploadMbps."M up, ".$validityMinutes." min validity, data cap ".$dataLimitMegabyte."MB -- 0 = unlimited)")',
             '}',
             '',
         ];

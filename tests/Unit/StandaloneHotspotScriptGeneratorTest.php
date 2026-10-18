@@ -159,7 +159,13 @@ class StandaloneHotspotScriptGeneratorTest extends TestCase
         );
     }
 
-    public function test_create_voucher_profile_script_includes_the_data_cap_variable(): void
+    /**
+     * 2026-10-18, direct follow-up request: a human editing this script by
+     * hand shouldn't have to compute/type a raw byte count -- the editable
+     * variable is in MB (every preset divides back to a whole number), with
+     * the script itself converting back to bytes for transfer-limit=.
+     */
+    public function test_create_voucher_profile_script_uses_a_user_friendly_megabyte_variable(): void
     {
         $result = (new StandaloneHotspotScriptGenerator)->generate($this->config([
             'ros_version' => '7',
@@ -168,7 +174,9 @@ class StandaloneHotspotScriptGeneratorTest extends TestCase
             ],
         ]));
 
-        $this->assertStringContainsString(':local dataLimitBytes 5368709120', $result['script']);
+        // 5368709120 bytes (the 5 GB preset) divides back to exactly 5120 MB.
+        $this->assertStringContainsString(':local dataLimitMegabyte 5120', $result['script']);
+        $this->assertStringContainsString(':local dataLimitBytes ($dataLimitMegabyte * 1048576)', $result['script']);
         $this->assertStringContainsString(
             '/user-manager limitation add name=($profileName."-limit") rate-limit-rx=($uploadMbps."M") rate-limit-tx=($downloadMbps."M") transfer-limit=$dataLimitBytes',
             $result['script']
