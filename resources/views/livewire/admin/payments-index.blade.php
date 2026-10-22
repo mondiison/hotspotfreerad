@@ -127,7 +127,7 @@
                         <td class="px-4 py-3">
                             <p class="font-mono text-xs font-medium">{{ $payment->tx_ref }}</p>
                             <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $payment->provider_reference ?: 'No provider ref' }}</p>
-                            <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $payment->created_at->diffForHumans() }}</p>
+                            <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $payment->created_at->diffForHumans() }} ({{ $payment->created_at->format('M j, Y g:i A') }})</p>
                         </td>
                         <td class="px-4 py-3">
                             <p class="font-mono text-xs">{{ $payment->customer?->mac_address ?? data_get($payment->payload, 'mac', 'No MAC') }}</p>
@@ -162,7 +162,7 @@
                                 {{ str_replace('_', ' ', $payment->status) }}
                             </flux:badge>
                             @if ($payment->paid_at)
-                                <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Paid {{ $payment->paid_at->diffForHumans() }}</p>
+                                <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Paid {{ $payment->paid_at->diffForHumans() }} ({{ $payment->paid_at->format('M j, Y g:i A') }})</p>
                             @endif
                         </td>
                         <td class="px-4 py-3 text-right font-medium">{{ $payment->currency }} {{ number_format($payment->gross_amount ?: $payment->amount, 2) }}</td>

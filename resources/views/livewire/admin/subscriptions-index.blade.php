@@ -147,7 +147,7 @@
                             @if ($subscription->device_hostname)
                                 <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $subscription->device_hostname }}</p>
                             @endif
-                            <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Created {{ $subscription->created_at->diffForHumans() }}</p>
+                            <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Created {{ $subscription->created_at->diffForHumans() }} ({{ $subscription->created_at->format('M j, Y g:i A') }})</p>
                         </td>
                         <td class="px-4 py-3">
                             <p class="font-medium">{{ $subscription->package?->name ?? 'Deleted package' }}</p>
@@ -247,7 +247,7 @@
                             --}}
                             @if ($selectedSubscription->mac_auto_recovered_at)
                                 <p class="mt-1 text-xs text-amber-700 dark:text-amber-500">
-                                    Auto-recovered from {{ $selectedSubscription->mac_recovered_from }} {{ $selectedSubscription->mac_auto_recovered_at->diffForHumans() }}
+                                    Auto-recovered from {{ $selectedSubscription->mac_recovered_from }} {{ $selectedSubscription->mac_auto_recovered_at->diffForHumans() }} ({{ $selectedSubscription->mac_auto_recovered_at->format('M j, Y g:i A') }})
                                 </p>
                             @endif
                         @else
