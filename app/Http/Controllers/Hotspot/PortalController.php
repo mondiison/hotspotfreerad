@@ -711,6 +711,20 @@ class PortalController extends Controller
             ->where('is_active', true)
             ->findOrFail($validated['package_id']);
 
+        // require_customer_phone can only be checked once the shop is known --
+        // the initial validate() above runs before the router/shop lookup, so
+        // this is a second, shop-aware pass rather than a rule in that array.
+        // Also gated on collect_customer_phone itself (normally kept in sync by
+        // ShopManagementService::normalize(), but checked again here too) so a
+        // row where the two have drifted never blocks checkout on a field the
+        // customer was never even shown.
+        $shop = $router->shop;
+        if ((bool) $shop?->collect_customer_phone && (bool) $shop?->require_customer_phone && blank($validated['phone'] ?? null)) {
+            throw ValidationException::withMessages([
+                'phone' => 'Please enter a phone number to continue.',
+            ]);
+        }
+
         $payment = DB::transaction(function () use ($router, $package, $validated) {
             $customer = Customer::updateOrCreate(
                 [

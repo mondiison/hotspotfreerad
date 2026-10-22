@@ -31,6 +31,7 @@ class Shop extends Model
             'auto_recover_mac_changes' => 'boolean',
             'collect_customer_phone' => 'boolean',
             'collect_customer_email' => 'boolean',
+            'require_customer_phone' => 'boolean',
             'trial_enabled' => 'boolean',
             'trial_duration_minutes' => 'integer',
             'trial_max_uses_per_day' => 'integer',

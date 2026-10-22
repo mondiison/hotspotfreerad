@@ -161,11 +161,21 @@
                     <div class="md:col-span-2 grid gap-4 rounded-lg border border-zinc-200 dark:border-zinc-700 p-4 sm:grid-cols-2">
                         <flux:field>
                             <flux:checkbox wire:model.live="collect_customer_phone" label="Ask for phone number at checkout" />
-                            <flux:description>Shown as an optional field on the payment form -- never required, a customer can still pay without filling it in. Useful for following up with a customer struggling to pay online. Off by default.</flux:description>
+                            <flux:description>Shown as a field on the payment form. Useful for following up with a customer struggling to pay online. Off by default.</flux:description>
                         </flux:field>
                         <flux:field>
                             <flux:checkbox wire:model.live="collect_customer_email" label="Ask for email at checkout" />
-                            <flux:description>Same as phone above -- optional, shown on the payment form only, never blocks checkout. Off by default.</flux:description>
+                            <flux:description>Same as phone above -- shown on the payment form only, never blocks checkout. Off by default.</flux:description>
+                        </flux:field>
+                        <flux:field class="sm:col-span-2">
+                            <flux:checkbox wire:model.live="require_customer_phone" :disabled="! $collect_customer_phone" label="Require phone number before checkout" />
+                            <flux:description>
+                                @if ($collect_customer_phone)
+                                    Blocks checkout until a phone number is entered -- use this if failed/abandoned payments are hard to follow up on without one.
+                                @else
+                                    Turn on "Ask for phone number at checkout" above first -- requiring a field that isn't shown doesn't do anything.
+                                @endif
+                            </flux:description>
                         </flux:field>
                     </div>
 

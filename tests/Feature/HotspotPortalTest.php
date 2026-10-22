@@ -170,6 +170,104 @@ class HotspotPortalTest extends TestCase
     }
 
     /**
+     * 2026-10-22, direct request: "can i make phone number compulsory toogle
+     * settings... some shops have lots of failed transactions and want to
+     * follow up." A second, independent toggle (require_customer_phone) on
+     * top of the opt-in-but-optional collect_customer_phone above -- blocks
+     * checkout outright when phone is blank, enforced server-side in
+     * PortalController::pay() (not just the form's own `required` attribute,
+     * which a direct POST would skip).
+     */
+    public function test_portal_marks_phone_field_as_required_and_shows_it_without_optional_label(): void
+    {
+        [$router, $package] = $this->routerWithPackage();
+        $router->shop->update([
+            'collect_customer_phone' => true,
+            'require_customer_phone' => true,
+        ]);
+
+        $this->get('/hotspot/portal?mac=AA:BB:CC:DD:EE:FF&nasid='.$router->nas_identifier)
+            ->assertOk()
+            ->assertSee('Phone number</label>', false)
+            ->assertDontSee('Phone number (optional)');
+    }
+
+    public function test_checkout_fails_with_a_clear_error_when_phone_is_required_but_blank(): void
+    {
+        [$router, $package] = $this->routerWithPackage();
+        $router->shop->update([
+            'collect_customer_phone' => true,
+            'require_customer_phone' => true,
+        ]);
+
+        $this->from('/hotspot/portal?mac=AA:BB:CC:DD:EE:FF&nasid='.$router->nas_identifier)
+            ->post(route('hotspot.pay'), [
+                'mac' => 'AA:BB:CC:DD:EE:FF',
+                'nasid' => $router->nas_identifier,
+                'package_id' => $package->id,
+            ])
+            ->assertRedirect()
+            ->assertSessionHasErrors('phone');
+
+        $this->assertDatabaseMissing('payments', [
+            'shop_id' => $router->shop_id,
+            'package_id' => $package->id,
+        ]);
+    }
+
+    public function test_checkout_succeeds_when_required_phone_is_provided(): void
+    {
+        [$router, $package] = $this->routerWithPackage();
+        $router->shop->update([
+            'collect_customer_phone' => true,
+            'require_customer_phone' => true,
+        ]);
+
+        $this->post(route('hotspot.pay'), [
+            'mac' => 'AA:BB:CC:DD:EE:FF',
+            'nasid' => $router->nas_identifier,
+            'package_id' => $package->id,
+            'phone' => '08000000000',
+        ])->assertOk();
+
+        $this->assertDatabaseHas('payments', [
+            'shop_id' => $router->shop_id,
+            'package_id' => $package->id,
+        ]);
+        $this->assertDatabaseHas('customers', [
+            'shop_id' => $router->shop_id,
+            'mac_address' => 'AA:BB:CC:DD:EE:FF',
+            'phone' => '08000000000',
+        ]);
+    }
+
+    /**
+     * require_customer_phone should never block checkout on a field the
+     * customer was never even shown -- self-healed server-side by
+     * ShopManagementService::normalize() on every save, but the controller
+     * guards against a drifted row too (e.g. one updated directly, as here).
+     */
+    public function test_requiring_phone_has_no_effect_when_the_field_is_not_collected(): void
+    {
+        [$router, $package] = $this->routerWithPackage();
+        $router->shop->update([
+            'collect_customer_phone' => false,
+            'require_customer_phone' => true,
+        ]);
+
+        $this->post(route('hotspot.pay'), [
+            'mac' => 'AA:BB:CC:DD:EE:FF',
+            'nasid' => $router->nas_identifier,
+            'package_id' => $package->id,
+        ])->assertOk();
+
+        $this->assertDatabaseHas('payments', [
+            'shop_id' => $router->shop_id,
+            'package_id' => $package->id,
+        ]);
+    }
+
+    /**
      * 2026-09-27, direct follow-up: a tenant with several shops may staff
      * each one with a different attendant, so the "call to get a voucher"
      * number needs a per-shop override rather than always using the

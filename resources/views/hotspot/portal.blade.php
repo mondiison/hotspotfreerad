@@ -150,7 +150,7 @@
                 </flux:accordion.item>
 
                 @forelse ($packages as $package)
-                    <flux:accordion.item heading="{{ $package->name }} — {{ $package->currency }} {{ number_format($package->price, 0) }}">
+                    <flux:accordion.item heading="{{ $package->name }} — {{ $package->currency }} {{ number_format($package->price, 0) }}" :expanded="$errors->has('phone') && (int) old('package_id') === $package->id">
                         <div x-data="{ paying: false, testing: false }">
                             <p class="text-xs text-zinc-500">{{ $formatDuration($package->limit_uptime_seconds) }} / {{ $formatData($package->data_limit_bytes) }} / {{ $package->speed_limit_profile }}</p>
 
@@ -204,14 +204,21 @@
                                     view (2026-09-25), only the inputs themselves were, so
                                     re-adding them here needed no controller change at all.
                                     Per-shop opt-in (collect_customer_phone/email, both off
-                                    by default) and always optional regardless -- neither
-                                    field is ever `required`, matching how the controller's
-                                    own validation has always treated both.
+                                    by default) and optional by default. 2026-10-22: a
+                                    separate require_customer_phone toggle can make phone
+                                    specifically block checkout when blank -- enforced in
+                                    PortalController::pay() itself (the only way to catch a
+                                    direct POST, not just this form's own `required`
+                                    attribute), with the HTML `required` here as the
+                                    friendlier first line of defense.
                                 --}}
                                 @if ($shop->collect_customer_phone)
                                     <div>
-                                        <label for="phone-{{ $package->id }}" class="mb-1 block text-xs font-medium text-zinc-500">Phone number (optional)</label>
-                                        <input type="tel" name="phone" id="phone-{{ $package->id }}" value="{{ old('phone') }}" placeholder="In case we need to follow up" class="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-700">
+                                        <label for="phone-{{ $package->id }}" class="mb-1 block text-xs font-medium text-zinc-500">Phone number{{ $shop->require_customer_phone ? '' : ' (optional)' }}</label>
+                                        <input type="tel" name="phone" id="phone-{{ $package->id }}" value="{{ old('phone') }}" placeholder="In case we need to follow up" class="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-700" @if ($shop->require_customer_phone) required @endif>
+                                        @error('phone')
+                                            <p class="mt-2 text-xs text-red-600">{{ $message }}</p>
+                                        @enderror
                                     </div>
                                 @endif
                                 @if ($shop->collect_customer_email)

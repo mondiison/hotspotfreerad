@@ -22,6 +22,7 @@ class ShopManagementService
             'auto_recover_mac_changes' => ['nullable', 'boolean'],
             'collect_customer_phone' => ['nullable', 'boolean'],
             'collect_customer_email' => ['nullable', 'boolean'],
+            'require_customer_phone' => ['nullable', 'boolean'],
             'trial_enabled' => ['nullable', 'boolean'],
             'trial_duration_minutes' => ['nullable', 'integer', 'min:1', 'max:1440'],
             'trial_max_uses_per_day' => ['nullable', 'integer', 'min:1', 'max:255'],
@@ -73,6 +74,11 @@ class ShopManagementService
         $data['auto_recover_mac_changes'] = (bool) ($data['auto_recover_mac_changes'] ?? false);
         $data['collect_customer_phone'] = (bool) ($data['collect_customer_phone'] ?? false);
         $data['collect_customer_email'] = (bool) ($data['collect_customer_email'] ?? false);
+        // Requiring a field that isn't even shown makes no sense -- self-heal the
+        // same way RouterNetworkSettingsCard force-blanks POS's extra-ports field
+        // whenever its own prerequisite toggle is off, rather than trust a disabled
+        // checkbox's submitted value.
+        $data['require_customer_phone'] = $data['collect_customer_phone'] && (bool) ($data['require_customer_phone'] ?? false);
         $data['trial_enabled'] = (bool) ($data['trial_enabled'] ?? false);
         $data['trial_duration_minutes'] = (int) ($data['trial_duration_minutes'] ?? 15);
         $data['trial_max_uses_per_day'] = (int) ($data['trial_max_uses_per_day'] ?? 1);
