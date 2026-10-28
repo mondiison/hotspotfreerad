@@ -111,7 +111,7 @@ class StandaloneHotspotScriptGenerator
      *     mgmt_password: string,
      *     profiles: list<array{name: string, download_mbps: int, upload_mbps: int, session_minutes: int, shared_users: int, data_limit_bytes?: ?int, voucher_count: int, voucher_prefix: string, voucher_code_length: int, voucher_username_password_same: bool, voucher_character_set: string}>,
      * } $config
-     * @return array{script: string, vouchers: list<array{profile: string, username: string, password: string}>}
+     * @return array{script: string, vouchers: list<array{profile: string, username: string, password: string}>, user_manager_voucher_template: ?string}
      */
     public function generate(array $config): array
     {
@@ -133,7 +133,29 @@ class StandaloneHotspotScriptGenerator
         return [
             'script' => implode("\n", array_filter($lines, fn ($line) => $line !== null)),
             'vouchers' => $vouchers,
+            'user_manager_voucher_template' => $config['ros_version'] === '6' ? $this->userManagerV6VoucherTemplate($config['hotspot_name']) : null,
         ];
+    }
+
+    /**
+     * The operator's standard RouterOS 6 User Manager voucher template, with
+     * the vendor name set to the hotspot SSID. It is pasted into /userman
+     * (Settings > Templates) by hand -- v6 User Manager has no command-line
+     * way to set a voucher template. %u_...% are User Manager's own placeholders.
+     */
+    public function userManagerV6VoucherTemplate(string $ssid): string
+    {
+        $vendor = htmlspecialchars(trim($ssid), ENT_QUOTES, 'UTF-8');
+
+        return '<table style="display: inline-block; width: 240px; border: 1px solid #ccc; line-height: 110%; font-family: arial; font-size: 9px; margin: 1px;">'
+            .'<tbody>'
+            .'<tr><td style="text-align: center; color: red; font-size: 12px; border-bottom: 1px #ccc solid;"><b>'.$vendor.' | %u_actualProfileName%</b></td></tr>'
+            .'<tr><td><table style="text-align: center; width: 100%; background-color: #fff; line-height: 110%; font-size: 8px;"><tbody><tr style="background-color: #eee;"></tr></tbody></table></td></tr>'
+            .'<tr><td><table style="text-align: center; width: 240px; background-color: #fff; line-height: 110%; font-size: 14px; border-top: 1px solid #ccc;"><tbody>'
+            .'<tr style="background-color: #fff;"><td style="color: #888; border: 2px #ccc solid;">%u_username%</td><td style="color: #888; border: 2px #ccc solid;">%u_password%</td></tr>'
+            .'</tbody></table></td></tr>'
+            .'</tbody>'
+            .'</table>';
     }
 
     /**

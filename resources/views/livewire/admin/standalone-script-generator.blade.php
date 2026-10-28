@@ -338,6 +338,28 @@
                     <p class="mt-2 text-xs text-zinc-500 dark:text-zinc-400">Paste this into a RouterOS terminal (Winbox &gt; New Terminal, or SSH) on a fresh or lightly-configured router. Review port names against your hardware first.</p>
                 </div>
 
+                @if ($generatedUserManagerTemplate)
+                    <div x-data="{ copied: false }">
+                        <div class="mb-2 flex items-center justify-between">
+                            <flux:label>User Manager voucher template</flux:label>
+                            <flux:button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                icon="clipboard"
+                                x-on:click="navigator.clipboard.writeText(@js($generatedUserManagerTemplate)); copied = true; setTimeout(() => copied = false, 2000)"
+                            ><span x-text="copied ? 'Copied' : 'Copy template'"></span></flux:button>
+                        </div>
+                        <div class="rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-700">
+                            {!! str_replace(['%u_actualProfileName%', '%u_username%', '%u_password%'], ['1 Hour', 'AB12CD34', 'AB12CD34'], $generatedUserManagerTemplate) !!}
+                        </div>
+                        <div class="mt-2 overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm">
+                            <x-script-block>{{ $generatedUserManagerTemplate }}</x-script-block>
+                        </div>
+                        <p class="mt-2 text-xs text-zinc-500 dark:text-zinc-400">After running the script, open <code>http://&lt;router-ip&gt;/userman</code>, go to Settings &gt; Templates, and paste this as the voucher template. The preview above uses sample values; User Manager fills in each voucher's profile, username and password.</p>
+                    </div>
+                @endif
+
                 @if ($generatedVouchers !== [])
                     <div>
                         <div class="mb-2 flex items-center justify-between">

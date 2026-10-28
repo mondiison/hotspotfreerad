@@ -659,6 +659,28 @@ class StandaloneHotspotScriptGeneratorTest extends TestCase
         }
     }
 
+    /**
+     * 2026-10-28, direct request: every RouterOS 6 router gets the operator's
+     * standard User Manager voucher template, branded with the hotspot SSID.
+     */
+    public function test_ros6_returns_the_user_manager_voucher_template_branded_with_the_ssid(): void
+    {
+        $result = (new StandaloneHotspotScriptGenerator)->generate($this->config(['ros_version' => '6', 'hotspot_name' => 'Mama & Sons WiFi']));
+
+        $template = $result['user_manager_voucher_template'];
+        $this->assertStringContainsString('<b>Mama &amp; Sons WiFi | %u_actualProfileName%</b>', $template);
+        $this->assertStringContainsString('%u_username%', $template);
+        $this->assertStringContainsString('%u_password%', $template);
+        $this->assertStringNotContainsString('VENDOR NAME', $template);
+    }
+
+    public function test_ros7_has_no_user_manager_v6_voucher_template(): void
+    {
+        $result = (new StandaloneHotspotScriptGenerator)->generate($this->config(['ros_version' => '7']));
+
+        $this->assertNull($result['user_manager_voucher_template']);
+    }
+
     private function config(array $overrides = []): array
     {
         return array_merge([

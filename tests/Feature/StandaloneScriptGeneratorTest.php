@@ -125,7 +125,9 @@ class StandaloneScriptGeneratorTest extends TestCase
             ->call('generate')
             ->assertHasNoErrors()
             ->assertSet('generatedVouchers', [])
-            ->assertSee('/tool user-manager router add');
+            ->assertSee('/tool user-manager router add')
+            ->assertSee('Copy template')
+            ->assertSee('Corner Shop Wi-Fi | %u_actualProfileName%', false);
     }
 
     /**

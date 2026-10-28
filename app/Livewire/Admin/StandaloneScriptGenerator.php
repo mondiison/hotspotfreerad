@@ -53,6 +53,8 @@ class StandaloneScriptGenerator extends Component
 
     public array $generatedVouchers = [];
 
+    public ?string $generatedUserManagerTemplate = null;
+
     public function mount(): void
     {
         abort_unless(Auth::user()?->isSuperAdmin(), 403);
@@ -155,6 +157,7 @@ class StandaloneScriptGenerator extends Component
 
         $this->generatedScript = $result['script'];
         $this->generatedVouchers = $result['vouchers'];
+        $this->generatedUserManagerTemplate = $result['user_manager_voucher_template'];
         $this->step = 5;
     }
 
@@ -162,6 +165,7 @@ class StandaloneScriptGenerator extends Component
     {
         $this->generatedScript = null;
         $this->generatedVouchers = [];
+        $this->generatedUserManagerTemplate = null;
         $this->step = 1;
     }
 
