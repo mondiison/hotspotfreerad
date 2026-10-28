@@ -58,7 +58,7 @@
                         <flux:select.option value="7">RouterOS 7</flux:select.option>
                         <flux:select.option value="6">RouterOS 6</flux:select.option>
                     </flux:select>
-                    <flux:description>RouterOS 7 uses User Manager with the profiles and vouchers set up here (validity starts at first login). RouterOS 6 connects the hotspot to User Manager; you create its users, profiles and limitations in the /userman web interface.</flux:description>
+                    <flux:description>RouterOS 7 uses User Manager with the profiles and vouchers set up here (validity starts at first login). RouterOS 6 sets up User Manager with these profiles and limitations; you add users in the /userman web interface.</flux:description>
                     <flux:error name="ros_version" />
                 </flux:field>
 
@@ -167,10 +167,10 @@
 
                 @if ($ros_version === '6')
                     <div class="rounded-lg border border-sky-200 bg-sky-50 p-4 text-sm text-sky-900 dark:border-sky-900/60 dark:bg-sky-950/30 dark:text-sky-100">
-                        <div class="font-semibold">Profiles and users are managed in User Manager</div>
-                        <p class="mt-1">On RouterOS 6 the script only connects the hotspot to User Manager. After running it, open <code>http://&lt;router-ip&gt;/userman</code> and create your profiles, limitations and users there. Give each user an active profile, or their logins are rejected.</p>
+                        <div class="font-semibold">Users are added in User Manager</div>
+                        <p class="mt-1">On RouterOS 6 the script creates these profiles and their limitations in User Manager. Add users afterwards at <code>http://&lt;router-ip&gt;/userman</code> and give each one a profile, or their logins are rejected.</p>
                     </div>
-                @else
+                @endif
                 <div>
                     <div class="mb-2 flex items-center justify-between">
                         <flux:label>Profiles &amp; limits</flux:label>
@@ -214,11 +214,10 @@
                                                 <flux:select.option value="{{ $bytes }}">{{ $label }}</flux:select.option>
                                             @endforeach
                                         </flux:select>
-                                        {{-- 2026-10-18: RouterOS 7 (User Manager) only -- classic RouterOS 6 hotspot has no per-profile data-cap equivalent, see classicHotspotLines()'s own note in the generated script for that case. --}}
-                                        <flux:description>RouterOS 7 only.</flux:description>
                                         <flux:error name="profiles.{{ $index }}.data_limit_bytes" />
                                     </flux:field>
                                 </div>
+                                @if ($ros_version === '7')
                                 <div class="mt-3 grid gap-3 md:grid-cols-4">
                                     <flux:field>
                                         <flux:label size="sm">Vouchers to generate</flux:label>
@@ -246,11 +245,16 @@
                                         <flux:error name="profiles.{{ $index }}.voucher_character_set" />
                                     </flux:field>
                                 </div>
+                                @endif
                                 <div class="mt-3 flex items-end justify-between gap-3">
+                                    @if ($ros_version === '7')
                                     <flux:field>
                                         <flux:checkbox wire:model.blur="profiles.{{ $index }}.voucher_username_password_same" label="Username and password are the same" />
                                         <flux:description>Turn off to generate a different, independent password for each voucher.</flux:description>
                                     </flux:field>
+                                    @else
+                                    <span></span>
+                                    @endif
                                     @if (count($profiles) > 1)
                                         <flux:button type="button" size="sm" variant="danger" icon="trash" wire:click="removeProfile({{ $index }})">Remove</flux:button>
                                     @endif
@@ -259,7 +263,6 @@
                         @endforeach
                     </div>
                 </div>
-                @endif
 
                 <div class="flex justify-between">
                     <flux:button type="button" variant="outline" wire:click="previousStep">Back</flux:button>

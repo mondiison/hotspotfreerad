@@ -59,12 +59,42 @@ class StandaloneHotspotScriptGeneratorTest extends TestCase
         $result = (new StandaloneHotspotScriptGenerator)->generate($this->config(['ros_version' => '6']));
         $script = $result['script'];
 
-        $this->assertStringContainsString('login-by=http-pap,cookie use-radius=yes', $script);
+        $this->assertStringContainsString('login-by=http-chap,http-pap,cookie use-radius=yes', $script);
         $this->assertMatchesRegularExpression('/\/tool user-manager router add name=this-router ip-address=127\.0\.0\.1 shared-secret="([0-9a-f]+)" customer=admin/', $script);
         preg_match('/shared-secret="([0-9a-f]+)"/', $script, $routerSecret);
         $this->assertStringContainsString('/radius add address=127.0.0.1 secret="'.$routerSecret[1].'" service=hotspot timeout=3s', $script);
-        $this->assertStringContainsString('/tool user-manager customer find login="admin"', $script);
+        $this->assertStringContainsString('/radius incoming set accept=yes', $script);
         $this->assertStringNotContainsString('/user-manager set enabled=yes', $script);
+    }
+
+    /**
+     * 2026-10-28, direct request: the User Manager admin login is "admin" with
+     * the management network password, set even when "admin" already exists.
+     */
+    public function test_ros6_user_manager_admin_uses_the_management_password(): void
+    {
+        $script = (new StandaloneHotspotScriptGenerator)->generate($this->config(['ros_version' => '6', 'mgmt_password' => 'Salam@2026$BG2']))['script'];
+
+        $this->assertStringContainsString(
+            ':if ([:len [/tool user-manager customer find login="admin"]] > 0) do={ /tool user-manager customer set [find login="admin"] password="Salam@2026\$BG2" } else={ /tool user-manager customer add login="admin" password="Salam@2026\$BG2" permissions=owner }',
+            $script
+        );
+        $this->assertStringContainsString('# User Manager login: admin with the management network password.', $script);
+    }
+
+    public function test_ros6_user_manager_admin_falls_back_to_a_generated_password_without_a_management_password(): void
+    {
+        $script = (new StandaloneHotspotScriptGenerator)->generate($this->config(['ros_version' => '6', 'enable_mgmt_network' => false, 'mgmt_password' => '']))['script'];
+
+        $this->assertMatchesRegularExpression('/# User Manager login: admin \/ [0-9a-f]{12} \(no management password was set\)/', $script);
+    }
+
+    public function test_ros7_also_accepts_incoming_radius_and_offers_chap(): void
+    {
+        $script = (new StandaloneHotspotScriptGenerator)->generate($this->config(['ros_version' => '7']))['script'];
+
+        $this->assertStringContainsString('login-by=http-chap,http-pap,cookie use-radius=yes', $script);
+        $this->assertStringContainsString('/radius incoming set accept=yes', $script);
     }
 
     /**
@@ -234,16 +264,18 @@ class StandaloneHotspotScriptGeneratorTest extends TestCase
         );
     }
 
-    public function test_ros6_never_emits_wizard_data_caps(): void
+    public function test_ros6_data_cap_becomes_a_user_manager_transfer_limit(): void
     {
         $result = (new StandaloneHotspotScriptGenerator)->generate($this->config([
             'ros_version' => '6',
             'profiles' => [
                 ['name' => 'Daily', 'download_mbps' => 10, 'upload_mbps' => 2, 'session_minutes' => 1440, 'shared_users' => 2, 'data_limit_bytes' => 1073741824, 'voucher_count' => 0, 'voucher_prefix' => '', 'voucher_code_length' => 8],
+                ['name' => 'Unlimited', 'download_mbps' => 5, 'upload_mbps' => 5, 'session_minutes' => 60, 'shared_users' => 1, 'data_limit_bytes' => null, 'voucher_count' => 0, 'voucher_prefix' => '', 'voucher_code_length' => 8],
             ],
         ]));
 
-        $this->assertStringNotContainsString('transfer-limit', $result['script']);
+        $this->assertStringContainsString('/tool user-manager profile limitation add name="Daily limit" owner=admin rate-limit-rx=2M rate-limit-tx=10M transfer-limit=1073741824', $result['script']);
+        $this->assertStringContainsString('/tool user-manager profile limitation add name="Unlimited limit" owner=admin rate-limit-rx=5M rate-limit-tx=5M }', $result['script']);
     }
 
     public function test_ros7_vouchers_become_user_manager_users(): void
@@ -349,25 +381,37 @@ class StandaloneHotspotScriptGeneratorTest extends TestCase
     }
 
     /**
-     * 2026-10-28: on RouterOS 6, users, profiles and limitations are created in
-     * the /userman web interface, so the script must not create any hotspot
-     * users, profiles, or vouchers of its own.
+     * 2026-10-28, direct request: on RouterOS 6 the script creates the wizard's
+     * profiles and limitations in User Manager, linked together, but users are
+     * still added in /userman -- so no hotspot users or vouchers.
      */
-    public function test_ros6_leaves_users_and_profiles_to_the_user_manager_web_interface(): void
+    public function test_ros6_creates_user_manager_profiles_and_limitations_but_no_users(): void
     {
         $result = (new StandaloneHotspotScriptGenerator)->generate($this->config([
             'ros_version' => '6',
             'profiles' => [
-                ['name' => 'Daily', 'download_mbps' => 5, 'upload_mbps' => 5, 'session_minutes' => 60, 'shared_users' => 1, 'voucher_count' => 2, 'voucher_prefix' => '', 'voucher_code_length' => 8],
+                ['name' => '1 Hour', 'download_mbps' => 5, 'upload_mbps' => 2, 'session_minutes' => 60, 'shared_users' => 1, 'voucher_count' => 2, 'voucher_prefix' => '', 'voucher_code_length' => 8],
             ],
         ]));
+        $script = $result['script'];
 
         $this->assertSame([], $result['vouchers']);
-        $this->assertStringNotContainsString('/ip hotspot user ', $result['script']);
-        $this->assertStringNotContainsString('/tool user-manager user ', $result['script']);
-        $this->assertStringNotContainsString('/tool user-manager profile ', $result['script']);
-        $this->assertStringNotContainsString('on-login=', $result['script']);
-        $this->assertStringContainsString('http://<router-ip>/userman', $result['script']);
+        $this->assertStringContainsString(
+            ':if ([:len [/tool user-manager profile limitation find name="1 Hour limit"]] > 0) do={ /tool user-manager profile limitation set [find name="1 Hour limit"] rate-limit-rx=2M rate-limit-tx=5M } else={ /tool user-manager profile limitation add name="1 Hour limit" owner=admin rate-limit-rx=2M rate-limit-tx=5M }',
+            $script
+        );
+        $this->assertStringContainsString(
+            ':if ([:len [/tool user-manager profile find name="1 Hour"]] > 0) do={ /tool user-manager profile set [find name="1 Hour"] validity=60m starts-at=logon override-shared-users=1 } else={ /tool user-manager profile add name="1 Hour" name-for-users="1 Hour" owner=admin validity=60m starts-at=logon override-shared-users=1 }',
+            $script
+        );
+        $this->assertStringContainsString(
+            ':if ([:len [/tool user-manager profile profile-limitation find profile="1 Hour" limitation="1 Hour limit"]] = 0) do={ /tool user-manager profile profile-limitation add profile="1 Hour" limitation="1 Hour limit" }',
+            $script
+        );
+        $this->assertStringNotContainsString('/ip hotspot user ', $script);
+        $this->assertStringNotContainsString('/tool user-manager user ', $script);
+        $this->assertStringNotContainsString('on-login=', $script);
+        $this->assertStringContainsString('http://<router-ip>/userman', $script);
     }
 
     public function test_ros7_wireless_uses_wifiwave2_syntax(): void

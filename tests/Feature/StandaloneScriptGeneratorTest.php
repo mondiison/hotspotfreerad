@@ -105,10 +105,10 @@ class StandaloneScriptGeneratorTest extends TestCase
     }
 
     /**
-     * 2026-10-28: RouterOS 6 profiles and users are created in /userman, so the
-     * wizard hides its profile fields for v6 and must not require them.
+     * 2026-10-28: RouterOS 6 profiles are created in User Manager by the script
+     * and users are added in /userman, so the wizard hides its voucher fields.
      */
-    public function test_ros6_wizard_skips_profiles_and_generates_a_user_manager_hookup(): void
+    public function test_ros6_wizard_creates_profiles_without_voucher_fields(): void
     {
         $this->actingAs($this->superAdmin());
 
@@ -119,13 +119,15 @@ class StandaloneScriptGeneratorTest extends TestCase
             ->set('hotspot_network', '10.10.10.1/24')
             ->set('mgmt_network', '10.10.20.1/24')
             ->set('mgmt_password', 'a-strong-password')
-            ->set('profiles.0.name', '')
+            ->set('profiles.0.name', 'Daily')
             ->set('step', 3)
-            ->assertSee('Profiles and users are managed in User Manager')
+            ->assertSee('Users are added in User Manager')
+            ->assertDontSee('Vouchers to generate')
             ->call('generate')
             ->assertHasNoErrors()
             ->assertSet('generatedVouchers', [])
             ->assertSee('/tool user-manager router add')
+            ->assertSee('/tool user-manager profile add name=&quot;Daily&quot;', false)
             ->assertSee('Copy template')
             ->assertSee('Corner Shop Wi-Fi | %u_actualProfileName%', false);
     }

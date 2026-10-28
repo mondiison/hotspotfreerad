@@ -242,7 +242,7 @@ class StandaloneHotspotScriptGenerator
             '/ip dhcp-server add name=dhcp-hotspot interface=bridge-hotspot address-pool=pool-hotspot lease-time=30m disabled=no',
             '/ip dhcp-server network add address='.$network['cidr'].' gateway='.$network['host'].' dns-server=1.1.1.1,8.8.8.8',
             '/ip dns set allow-remote-requests=yes servers=1.1.1.1,8.8.8.8',
-            '/ip hotspot profile add name=hotspot-profile hotspot-address='.$network['host'].' dns-name=hotspot.local login-by=http-pap,cookie use-radius=yes',
+            '/ip hotspot profile add name=hotspot-profile hotspot-address='.$network['host'].' dns-name=hotspot.local login-by=http-chap,http-pap,cookie use-radius=yes',
             '/ip hotspot add name=hotspot1 interface=bridge-hotspot address-pool=pool-hotspot profile=hotspot-profile disabled=no',
             '/ip firewall nat add chain=srcnat out-interface='.$config['wan_port'].' action=masquerade',
             '',
@@ -432,7 +432,7 @@ class StandaloneHotspotScriptGenerator
     {
         return $config['ros_version'] === '7'
             ? $this->userManagerLines($config['profiles'], $vouchers, $this->networkParts($config['hotspot_network'])['host'])
-            : $this->userManagerV6Lines();
+            : $this->userManagerV6Lines($config['profiles'], (string) ($config['mgmt_password'] ?? ''));
     }
 
     /**
@@ -443,18 +443,27 @@ class StandaloneHotspotScriptGenerator
      * "radius server not responding". Targets RouterOS 6.40+ (customer=);
      * older routers are upgraded first rather than supported here.
      *
+     * Profiles and their limitations come from the wizard and are written
+     * set-if-exists/add-if-missing, so re-running a script updates them
+     * instead of failing. Users are still created in /userman.
+     *
+     * @param  list<array{name: string, download_mbps: int, upload_mbps: int, session_minutes: int, shared_users: int, data_limit_bytes?: ?int}>  $profiles
      * @return list<string>
      */
-    private function userManagerV6Lines(): array
+    private function userManagerV6Lines(array $profiles, string $mgmtPassword): array
     {
         $secret = bin2hex(random_bytes(12));
-        $ownerPassword = bin2hex(random_bytes(6));
+        // The User Manager admin login uses the management password, so one password opens the router's admin side.
+        $ownerPassword = trim($mgmtPassword) !== '' ? $this->quote($mgmtPassword) : bin2hex(random_bytes(6));
+        $passwordNote = trim($mgmtPassword) !== ''
+            ? '# User Manager login: admin with the management network password.'
+            : '# User Manager login: admin / '.$ownerPassword.' (no management password was set) -- change it after first login.';
 
-        return [
+        $lines = [
             '# RouterOS 6 User Manager -- a local, self-hosted RADIUS server (127.0.0.1 only, never leaves the router).',
             '# If every line below fails with "bad command name user-manager", the User Manager package is not installed -- see the note at the top of this script.',
-            '# Creates the "admin" owner only if it does not exist yet; change its password at http://<router-ip>/userman after first login.',
-            ':if ([:len [/tool user-manager customer find login="admin"]] = 0) do={ /tool user-manager customer add login="admin" password="'.$ownerPassword.'" permissions=owner }',
+            $passwordNote,
+            ':if ([:len [/tool user-manager customer find login="admin"]] > 0) do={ /tool user-manager customer set [find login="admin"] password="'.$ownerPassword.'" } else={ /tool user-manager customer add login="admin" password="'.$ownerPassword.'" permissions=owner }',
             // 2026-10-28, confirmed live: User Manager's database survives a router
             // configuration reset, so a 127.0.0.1 router entry can already exist
             // ("failure: ip address is already used") with an old secret that no
@@ -464,11 +473,36 @@ class StandaloneHotspotScriptGenerator
             '/radius remove [find address=127.0.0.1]',
             // The default 300ms RADIUS timeout is often too short for User Manager on small v6 routers.
             '/radius add address=127.0.0.1 secret="'.$secret.'" service=hotspot timeout=3s',
-            '',
-            '# Next: open http://<router-ip>/userman, log in as admin, then create profiles, limitations and users there.',
-            '# Each user needs an active profile, or logins are rejected.',
+            // Lets User Manager disconnect a session when its time or data runs out.
+            '/radius incoming set accept=yes',
             '',
         ];
+
+        if ($profiles !== []) {
+            $lines[] = '# Profiles and limitations. Validity starts at the first login (starts-at=logon).';
+        }
+
+        foreach ($profiles as $profile) {
+            // v6 vouchers print the real profile name (%u_actualProfileName%), so keep it readable rather than slugged.
+            $name = $this->quote(trim($profile['name']));
+            $limitation = $this->quote(trim($profile['name']).' limit');
+            $limitationValues = 'rate-limit-rx='.$profile['upload_mbps'].'M rate-limit-tx='.$profile['download_mbps'].'M';
+            $dataLimitBytes = (int) ($profile['data_limit_bytes'] ?? 0);
+            if ($dataLimitBytes > 0) {
+                $limitationValues .= ' transfer-limit='.$dataLimitBytes;
+            }
+            $profileValues = 'validity='.max(1, (int) $profile['session_minutes']).'m starts-at=logon override-shared-users='.max(1, (int) $profile['shared_users']);
+
+            $lines[] = ':if ([:len [/tool user-manager profile limitation find name="'.$limitation.'"]] > 0) do={ /tool user-manager profile limitation set [find name="'.$limitation.'"] '.$limitationValues.' } else={ /tool user-manager profile limitation add name="'.$limitation.'" owner=admin '.$limitationValues.' }';
+            $lines[] = ':if ([:len [/tool user-manager profile find name="'.$name.'"]] > 0) do={ /tool user-manager profile set [find name="'.$name.'"] '.$profileValues.' } else={ /tool user-manager profile add name="'.$name.'" name-for-users="'.$name.'" owner=admin '.$profileValues.' }';
+            $lines[] = ':if ([:len [/tool user-manager profile profile-limitation find profile="'.$name.'" limitation="'.$limitation.'"]] = 0) do={ /tool user-manager profile profile-limitation add profile="'.$name.'" limitation="'.$limitation.'" }';
+        }
+
+        $lines[] = '';
+        $lines[] = '# Next: open http://<router-ip>/userman, log in as admin, and add users. Give each user one of the profiles above, or their logins are rejected.';
+        $lines[] = '';
+
+        return $lines;
     }
 
     /**
@@ -500,6 +534,8 @@ class StandaloneHotspotScriptGenerator
             '/user-manager set enabled=yes use-profiles=yes',
             '/user-manager router add address=127.0.0.1 name=this-router shared-secret="'.$secret.'"',
             '/radius add address=127.0.0.1 secret="'.$secret.'" service=hotspot',
+            // Lets User Manager disconnect a session when its time or data runs out.
+            '/radius incoming set accept=yes',
             '',
         ];
 
@@ -789,8 +825,11 @@ class StandaloneHotspotScriptGenerator
         return (string) str($name)->slug('-');
     }
 
+    /**
+     * Escapes a value for a RouterOS double-quoted string, where \, " and $ are all special.
+     */
     private function quote(?string $value): string
     {
-        return str_replace('"', '\"', (string) $value);
+        return str_replace(['\\', '"', '$'], ['\\\\', '\"', '\$'], (string) $value);
     }
 }
