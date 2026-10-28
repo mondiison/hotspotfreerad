@@ -173,7 +173,7 @@ class StandaloneHotspotScriptGeneratorTest extends TestCase
         ]));
 
         $this->assertStringContainsString('/user-manager limitation add name="daily-limit" rate-limit-rx=2M rate-limit-tx=10M', $result['script']);
-        $this->assertStringContainsString('/user-manager profile add name="daily" validity=1440m starts-when=first-auth', $result['script']);
+        $this->assertStringContainsString('/user-manager profile add name="daily" validity=1d starts-when=first-auth', $result['script']);
         $this->assertStringContainsString('/user-manager profile-limitation add profile="daily" limitation="daily-limit"', $result['script']);
 
         // No data_limit_bytes key at all on this profile -- confirms the
@@ -262,6 +262,51 @@ class StandaloneHotspotScriptGeneratorTest extends TestCase
             '/user-manager limitation add name=($profileName."-limit") rate-limit-rx=($uploadMbps."M") rate-limit-tx=($downloadMbps."M") transfer-limit=$dataLimitBytes',
             $result['script']
         );
+    }
+
+    /**
+     * 2026-10-28, direct request: "Valid for" (profile validity) is how long
+     * the account lasts; "Usage time" (limitation uptime-limit) is total time
+     * online -- e.g. 12 hours of use within 1 month. A month is written 30d,
+     * never 1m, which RouterOS reads as one minute.
+     */
+    public function test_ros6_usage_time_is_an_uptime_limit_and_validity_uses_whole_units(): void
+    {
+        $script = (new StandaloneHotspotScriptGenerator)->generate($this->config([
+            'ros_version' => '6',
+            'profiles' => [
+                ['name' => '12 Hour', 'download_mbps' => 5, 'upload_mbps' => 5, 'session_minutes' => 43200, 'uptime_minutes' => 720, 'shared_users' => 1, 'data_limit_bytes' => null, 'voucher_count' => 0, 'voucher_prefix' => '', 'voucher_code_length' => 8],
+            ],
+        ]))['script'];
+
+        $this->assertStringContainsString('/tool user-manager profile limitation add name="12 Hour limit" owner=admin rate-limit-rx=5M rate-limit-tx=5M uptime-limit=12h }', $script);
+        $this->assertStringContainsString('owner=admin validity=30d starts-at=logon', $script);
+        $this->assertStringNotContainsString('validity=1m', $script);
+    }
+
+    public function test_ros7_usage_time_is_an_uptime_limit(): void
+    {
+        $script = (new StandaloneHotspotScriptGenerator)->generate($this->config([
+            'profiles' => [
+                ['name' => 'Monthly', 'download_mbps' => 5, 'upload_mbps' => 5, 'session_minutes' => 43200, 'uptime_minutes' => 720, 'shared_users' => 1, 'data_limit_bytes' => null, 'voucher_count' => 0, 'voucher_prefix' => '', 'voucher_code_length' => 8],
+            ],
+        ]))['script'];
+
+        $this->assertStringContainsString('/user-manager limitation add name="monthly-limit" rate-limit-rx=5M rate-limit-tx=5M transfer-limit=0 uptime-limit=12h', $script);
+        $this->assertStringContainsString('/user-manager profile add name="monthly" validity=30d starts-when=first-auth', $script);
+    }
+
+    public function test_unlimited_usage_time_emits_no_uptime_limit(): void
+    {
+        $script = (new StandaloneHotspotScriptGenerator)->generate($this->config([
+            'ros_version' => '6',
+            'profiles' => [
+                ['name' => 'Daily', 'download_mbps' => 5, 'upload_mbps' => 5, 'session_minutes' => 1440, 'uptime_minutes' => '', 'shared_users' => 1, 'data_limit_bytes' => null, 'voucher_count' => 0, 'voucher_prefix' => '', 'voucher_code_length' => 8],
+            ],
+        ]))['script'];
+
+        $this->assertStringNotContainsString('uptime-limit', $script);
+        $this->assertStringContainsString('validity=1d', $script);
     }
 
     public function test_ros6_data_cap_becomes_a_user_manager_transfer_limit(): void
@@ -401,7 +446,7 @@ class StandaloneHotspotScriptGeneratorTest extends TestCase
             $script
         );
         $this->assertStringContainsString(
-            ':if ([:len [/tool user-manager profile find name="1 Hour"]] > 0) do={ /tool user-manager profile set [find name="1 Hour"] validity=60m starts-at=logon override-shared-users=1 } else={ /tool user-manager profile add name="1 Hour" name-for-users="1 Hour" owner=admin validity=60m starts-at=logon override-shared-users=1 }',
+            ':if ([:len [/tool user-manager profile find name="1 Hour"]] > 0) do={ /tool user-manager profile set [find name="1 Hour"] validity=1h starts-at=logon override-shared-users=1 } else={ /tool user-manager profile add name="1 Hour" name-for-users="1 Hour" owner=admin validity=1h starts-at=logon override-shared-users=1 }',
             $script
         );
         $this->assertStringContainsString(

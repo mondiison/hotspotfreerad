@@ -96,6 +96,38 @@ class StandaloneHotspotScriptGenerator
     ];
 
     /**
+     * "Valid for" choices (profile validity: how long the account stays usable),
+     * in minutes. Picked from a list so nobody has to convert days to minutes.
+     */
+    public const VALIDITY_PRESETS = [
+        '1 hour' => 60,
+        '3 hours' => 180,
+        '6 hours' => 360,
+        '12 hours' => 720,
+        '1 day' => 1440,
+        '3 days' => 4320,
+        '7 days' => 10080,
+        '14 days' => 20160,
+        '1 month (30 days)' => 43200,
+    ];
+
+    /**
+     * "Usage time" choices (limitation uptime-limit: total time online), in
+     * minutes. Blank/null means unlimited online time within the validity.
+     */
+    public const UPTIME_PRESETS = [
+        'Unlimited' => null,
+        '1 hour' => 60,
+        '3 hours' => 180,
+        '6 hours' => 360,
+        '12 hours' => 720,
+        '1 day' => 1440,
+        '3 days' => 4320,
+        '7 days' => 10080,
+        '1 month (30 days)' => 43200,
+    ];
+
+    /**
      * @param  array{
      *     router_identity: string,
      *     hotspot_name: string,
@@ -491,7 +523,12 @@ class StandaloneHotspotScriptGenerator
             if ($dataLimitBytes > 0) {
                 $limitationValues .= ' transfer-limit='.$dataLimitBytes;
             }
-            $profileValues = 'validity='.max(1, (int) $profile['session_minutes']).'m starts-at=logon override-shared-users='.max(1, (int) $profile['shared_users']);
+            // Usage time (total online time) is the limitation's uptime-limit; validity below is how long the account lasts.
+            $uptimeMinutes = (int) ($profile['uptime_minutes'] ?? 0);
+            if ($uptimeMinutes > 0) {
+                $limitationValues .= ' uptime-limit='.$this->routerOsDuration($uptimeMinutes);
+            }
+            $profileValues = 'validity='.$this->routerOsDuration((int) $profile['session_minutes']).' starts-at=logon override-shared-users='.max(1, (int) $profile['shared_users']);
 
             $lines[] = ':if ([:len [/tool user-manager profile limitation find name="'.$limitation.'"]] > 0) do={ /tool user-manager profile limitation set [find name="'.$limitation.'"] '.$limitationValues.' } else={ /tool user-manager profile limitation add name="'.$limitation.'" owner=admin '.$limitationValues.' }';
             $lines[] = ':if ([:len [/tool user-manager profile find name="'.$name.'"]] > 0) do={ /tool user-manager profile set [find name="'.$name.'"] '.$profileValues.' } else={ /tool user-manager profile add name="'.$name.'" name-for-users="'.$name.'" owner=admin '.$profileValues.' }';
@@ -542,7 +579,7 @@ class StandaloneHotspotScriptGenerator
 
         foreach ($profiles as $profile) {
             $slug = $this->profileIdentifier($profile['name']);
-            $validityMinutes = max(1, (int) $profile['session_minutes']);
+            $uptimeMinutes = (int) ($profile['uptime_minutes'] ?? 0);
             // See DATA_LIMIT_PRESETS's own docblock: blank/null ("Unlimited")
             // is treated the same as 0, transfer-limit's own documented
             // default -- not yet confirmed live that an explicit 0 behaves
@@ -554,8 +591,9 @@ class StandaloneHotspotScriptGenerator
             // Profile (validity/starts-when), and Profile-Limitation (the link
             // between the two -- MikroTik's docs note a profile with no
             // profile-limitation entry simply has no limitation applied at all).
-            $lines[] = '/user-manager limitation add name="'.$slug.'-limit" rate-limit-rx='.$profile['upload_mbps'].'M rate-limit-tx='.$profile['download_mbps'].'M transfer-limit='.$dataLimitBytes;
-            $lines[] = '/user-manager profile add name="'.$slug.'" validity='.$validityMinutes.'m starts-when=first-auth';
+            $lines[] = '/user-manager limitation add name="'.$slug.'-limit" rate-limit-rx='.$profile['upload_mbps'].'M rate-limit-tx='.$profile['download_mbps'].'M transfer-limit='.$dataLimitBytes
+                .($uptimeMinutes > 0 ? ' uptime-limit='.$this->routerOsDuration($uptimeMinutes) : '');
+            $lines[] = '/user-manager profile add name="'.$slug.'" validity='.$this->routerOsDuration((int) $profile['session_minutes']).' starts-when=first-auth';
             $lines[] = '/user-manager profile-limitation add profile="'.$slug.'" limitation="'.$slug.'-limit"';
         }
 
@@ -819,6 +857,22 @@ class StandaloneHotspotScriptGenerator
             'cidr' => $base.'.0/24',
             'range' => $base.'.10-'.$base.'.254',
         ];
+    }
+
+    /**
+     * Minutes as a RouterOS duration in the largest whole unit (1440 -> 1d,
+     * 720 -> 12h, 90 -> 90m). Never emits "1m" for a month: RouterOS reads
+     * m as minutes, so 30 days is written 30d.
+     */
+    private function routerOsDuration(int $minutes): string
+    {
+        $minutes = max(1, $minutes);
+
+        return match (true) {
+            $minutes % 1440 === 0 => intdiv($minutes, 1440).'d',
+            $minutes % 60 === 0 => intdiv($minutes, 60).'h',
+            default => $minutes.'m',
+        };
     }
 
     private function profileIdentifier(string $name): string

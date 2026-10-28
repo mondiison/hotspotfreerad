@@ -181,7 +181,7 @@
                     <div class="space-y-4">
                         @foreach ($profiles as $index => $profile)
                             <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 p-4" wire:key="profile-{{ $index }}">
-                                <div class="grid gap-3 md:grid-cols-7">
+                                <div class="grid gap-3 md:grid-cols-8">
                                     <flux:field class="md:col-span-2">
                                         <flux:label size="sm">Name</flux:label>
                                         <flux:input wire:model.blur="profiles.{{ $index }}.name" placeholder="1 Hour" />
@@ -198,9 +198,24 @@
                                         <flux:error name="profiles.{{ $index }}.upload_mbps" />
                                     </flux:field>
                                     <flux:field>
-                                        <flux:label size="sm">Validity (minutes)</flux:label>
-                                        <flux:input type="number" min="1" wire:model.blur="profiles.{{ $index }}.session_minutes" />
+                                        <flux:label size="sm">Valid for</flux:label>
+                                        <flux:select wire:model.blur="profiles.{{ $index }}.session_minutes">
+                                            @foreach (\App\Services\StandaloneHotspotScriptGenerator::VALIDITY_PRESETS as $label => $minutes)
+                                                <flux:select.option value="{{ $minutes }}">{{ $label }}</flux:select.option>
+                                            @endforeach
+                                        </flux:select>
+                                        <flux:description>How long the account lasts after first login.</flux:description>
                                         <flux:error name="profiles.{{ $index }}.session_minutes" />
+                                    </flux:field>
+                                    <flux:field>
+                                        <flux:label size="sm">Usage time</flux:label>
+                                        <flux:select wire:model.blur="profiles.{{ $index }}.uptime_minutes">
+                                            @foreach (\App\Services\StandaloneHotspotScriptGenerator::UPTIME_PRESETS as $label => $minutes)
+                                                <flux:select.option value="{{ $minutes }}">{{ $label }}</flux:select.option>
+                                            @endforeach
+                                        </flux:select>
+                                        <flux:description>Total time online within that period.</flux:description>
+                                        <flux:error name="profiles.{{ $index }}.uptime_minutes" />
                                     </flux:field>
                                     <flux:field>
                                         <flux:label size="sm">Shared devices</flux:label>

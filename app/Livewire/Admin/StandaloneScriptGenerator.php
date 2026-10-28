@@ -44,7 +44,7 @@ class StandaloneScriptGenerator extends Component
     public string $hotspot_network = '10.10.10.1/24';
 
     public array $profiles = [
-        ['name' => '1 Hour', 'download_mbps' => 5, 'upload_mbps' => 5, 'session_minutes' => 60, 'shared_users' => 1, 'data_limit_bytes' => null, 'voucher_count' => 10, 'voucher_prefix' => '', 'voucher_code_length' => 8, 'voucher_username_password_same' => true, 'voucher_character_set' => 'alnum_safe'],
+        ['name' => '1 Hour', 'download_mbps' => 5, 'upload_mbps' => 5, 'session_minutes' => 60, 'uptime_minutes' => null, 'shared_users' => 1, 'data_limit_bytes' => null, 'voucher_count' => 10, 'voucher_prefix' => '', 'voucher_code_length' => 8, 'voucher_username_password_same' => true, 'voucher_character_set' => 'alnum_safe'],
     ];
 
     public string $voucher_template = 'grid';
@@ -101,7 +101,7 @@ class StandaloneScriptGenerator extends Component
 
     public function addProfile(): void
     {
-        $this->profiles[] = ['name' => '', 'download_mbps' => 5, 'upload_mbps' => 5, 'session_minutes' => 60, 'shared_users' => 1, 'data_limit_bytes' => null, 'voucher_count' => 10, 'voucher_prefix' => '', 'voucher_code_length' => 8, 'voucher_username_password_same' => true, 'voucher_character_set' => 'alnum_safe'];
+        $this->profiles[] = ['name' => '', 'download_mbps' => 5, 'upload_mbps' => 5, 'session_minutes' => 60, 'uptime_minutes' => null, 'shared_users' => 1, 'data_limit_bytes' => null, 'voucher_count' => 10, 'voucher_prefix' => '', 'voucher_code_length' => 8, 'voucher_username_password_same' => true, 'voucher_character_set' => 'alnum_safe'];
     }
 
     public function removeProfile(int $index): void
@@ -204,7 +204,9 @@ class StandaloneScriptGenerator extends Component
                 'profiles.*.name' => ['required', 'string', 'max:32'],
                 'profiles.*.download_mbps' => ['required', 'integer', 'min:1', 'max:1000'],
                 'profiles.*.upload_mbps' => ['required', 'integer', 'min:1', 'max:1000'],
-                'profiles.*.session_minutes' => ['required', 'integer', 'min:1', 'max:43200'],
+                'profiles.*.session_minutes' => ['required', Rule::in(array_values(StandaloneHotspotScriptGenerator::VALIDITY_PRESETS))],
+                // Same blank-means-unlimited handling as data_limit_bytes below.
+                'profiles.*.uptime_minutes' => ['nullable', Rule::in(['', ...array_filter(array_values(StandaloneHotspotScriptGenerator::UPTIME_PRESETS))])],
                 'profiles.*.shared_users' => ['required', 'integer', 'min:1', 'max:50'],
                 // Deliberately loose (not 'integer') -- the <select> binds this
                 // to a plain HTML value, so "Unlimited" arrives as an empty
