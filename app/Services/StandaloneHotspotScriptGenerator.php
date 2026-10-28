@@ -455,7 +455,13 @@ class StandaloneHotspotScriptGenerator
             '# If every line below fails with "bad command name user-manager", the User Manager package is not installed -- see the note at the top of this script.',
             '# Creates the "admin" owner only if it does not exist yet; change its password at http://<router-ip>/userman after first login.',
             ':if ([:len [/tool user-manager customer find login="admin"]] = 0) do={ /tool user-manager customer add login="admin" password="'.$ownerPassword.'" permissions=owner }',
-            '/tool user-manager router add name=this-router ip-address=127.0.0.1 shared-secret="'.$secret.'" customer=admin',
+            // 2026-10-28, confirmed live: User Manager's database survives a router
+            // configuration reset, so a 127.0.0.1 router entry can already exist
+            // ("failure: ip address is already used") with an old secret that no
+            // longer matches /radius. Update it in place instead of adding.
+            ':if ([:len [/tool user-manager router find ip-address=127.0.0.1]] > 0) do={ /tool user-manager router set [find ip-address=127.0.0.1] shared-secret="'.$secret.'" customer=admin } else={ /tool user-manager router add name=this-router ip-address=127.0.0.1 shared-secret="'.$secret.'" customer=admin }',
+            // Replace any older 127.0.0.1 RADIUS client so re-running the script never leaves a stale secret behind.
+            '/radius remove [find address=127.0.0.1]',
             // The default 300ms RADIUS timeout is often too short for User Manager on small v6 routers.
             '/radius add address=127.0.0.1 secret="'.$secret.'" service=hotspot timeout=3s',
             '',

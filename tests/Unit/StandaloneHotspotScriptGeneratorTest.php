@@ -68,6 +68,31 @@ class StandaloneHotspotScriptGeneratorTest extends TestCase
     }
 
     /**
+     * 2026-10-28, confirmed live: after a router configuration reset, User
+     * Manager still had a 127.0.0.1 router entry ("failure: ip address is
+     * already used"), left with an old secret that no longer matched /radius.
+     * The script must update that entry, and replace any old 127.0.0.1 RADIUS
+     * client, with the same new secret.
+     */
+    public function test_ros6_updates_an_existing_user_manager_router_entry_with_the_new_secret(): void
+    {
+        $script = (new StandaloneHotspotScriptGenerator)->generate($this->config(['ros_version' => '6']))['script'];
+
+        preg_match('/\/radius add address=127\.0\.0\.1 secret="([0-9a-f]+)"/', $script, $radiusSecret);
+        $this->assertNotEmpty($radiusSecret);
+
+        $this->assertStringContainsString(
+            ':if ([:len [/tool user-manager router find ip-address=127.0.0.1]] > 0) do={ /tool user-manager router set [find ip-address=127.0.0.1] shared-secret="'.$radiusSecret[1].'" customer=admin } else={ /tool user-manager router add name=this-router ip-address=127.0.0.1 shared-secret="'.$radiusSecret[1].'" customer=admin }',
+            $script
+        );
+
+        $removePos = strpos($script, '/radius remove [find address=127.0.0.1]');
+        $addPos = strpos($script, '/radius add address=127.0.0.1');
+        $this->assertNotFalse($removePos);
+        $this->assertLessThan($addPos, $removePos);
+    }
+
+    /**
      * 2026-10-18, confirmed live: every /user-manager line failed with "bad
      * command name user-manager" on a real router that simply never had the
      * separate User Manager package installed -- RouterOS 7's base install
