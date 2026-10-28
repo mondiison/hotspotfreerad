@@ -16,12 +16,11 @@ namespace App\Services;
  *    object model than classic hotspot users (profile / limitation /
  *    profile-limitation / user-profile / user are five distinct objects),
  *    and it's what RouterOS 7 is designed for.
- *  - RouterOS 6 has no equivalent, so classic `/ip hotspot user` accounts
- *    are used instead, with an `on-login` script bound to the hotspot server
- *    profile that creates a one-time scheduler on a user's first login and
- *    removes the account when their validity window elapses. This is a
- *    well-established community pattern, not an official feature -- verify
- *    against real hardware before relying on it in production.
+ *  - RouterOS 6 uses its own User Manager package (`/tool user-manager`) as
+ *    the local RADIUS server too, but the script only connects the hotspot
+ *    to it (owner, router entry, /radius). Users, profiles and limitations
+ *    are created by the operator in the /userman web interface, so the
+ *    wizard's profiles and vouchers don't apply on v6.
  *
  * Meant for the standalone "Script Generator" tool (super admin only) so
  * operators can configure any MikroTik -- with or without built-in
@@ -116,7 +115,9 @@ class StandaloneHotspotScriptGenerator
      */
     public function generate(array $config): array
     {
-        $vouchers = $this->generateVoucherCodes($config['profiles']);
+        // RouterOS 6 users, profiles and limitations are created by the operator in
+        // the User Manager web interface (/userman), so no vouchers are generated.
+        $vouchers = $config['ros_version'] === '7' ? $this->generateVoucherCodes($config['profiles']) : [];
 
         $lines = array_merge(
             $this->headerLines($config),
@@ -158,6 +159,14 @@ class StandaloneHotspotScriptGenerator
             // below -- otherwise every /user-manager line in this script fails.
             $lines[] = '# RouterOS 7 User Manager voucher section below REQUIRES the separate "user-manager" package to be installed first --';
             $lines[] = '# check with "/system package print"; if it is missing, install it from mikrotik.com/download and reboot before pasting.';
+        } else {
+            // RouterOS 6 User Manager is also a separate package
+            // (user-manager-<version>-<arch>.npk); /tool user-manager lines fail
+            // with "bad command name" without it.
+            $lines[] = '# Requires RouterOS 6.40 or newer -- check with "/system resource print" and upgrade older routers first.';
+            $lines[] = '# RouterOS 6 User Manager section below REQUIRES the separate "user-manager" package to be installed first --';
+            $lines[] = '# check with "/system package print"; if it is missing, install it from mikrotik.com/download and reboot before pasting.';
+            $lines[] = '# Create users, profiles and limitations afterwards in the User Manager web interface: http://<router-ip>/userman';
         }
 
         $lines[] = '';
@@ -204,7 +213,6 @@ class StandaloneHotspotScriptGenerator
     private function hotspotNetworkLines(array $config): array
     {
         $network = $this->networkParts($config['hotspot_network']);
-        $useRadius = $config['ros_version'] === '7';
 
         return [
             '/ip address add address='.$network['gateway'].'/24 interface=bridge-hotspot',
@@ -212,8 +220,7 @@ class StandaloneHotspotScriptGenerator
             '/ip dhcp-server add name=dhcp-hotspot interface=bridge-hotspot address-pool=pool-hotspot lease-time=30m disabled=no',
             '/ip dhcp-server network add address='.$network['cidr'].' gateway='.$network['host'].' dns-server=1.1.1.1,8.8.8.8',
             '/ip dns set allow-remote-requests=yes servers=1.1.1.1,8.8.8.8',
-            '/ip hotspot profile add name=hotspot-profile hotspot-address='.$network['host'].' dns-name=hotspot.local login-by=http-pap,cookie'
-                .($useRadius ? ' use-radius=yes' : ''),
+            '/ip hotspot profile add name=hotspot-profile hotspot-address='.$network['host'].' dns-name=hotspot.local login-by=http-pap,cookie use-radius=yes',
             '/ip hotspot add name=hotspot1 interface=bridge-hotspot address-pool=pool-hotspot profile=hotspot-profile disabled=no',
             '/ip firewall nat add chain=srcnat out-interface='.$config['wan_port'].' action=masquerade',
             '',
@@ -350,7 +357,10 @@ class StandaloneHotspotScriptGenerator
             // specifically) since loopback traffic is inherently trusted
             // (it originates from the router itself) and any other local-only
             // service added later would hit the identical gap otherwise.
-            '/ip firewall filter add chain=input in-interface=lo action=accept comment="Allow local loopback traffic (e.g. User Manager RADIUS)"',
+            // 2026-10-28: matched by address rather than in-interface=lo -- RouterOS 6
+            // has no "lo" interface, so that rule failed there and a v6 /import
+            // stopped at it, never reaching the rest of the script.
+            '/ip firewall filter add chain=input src-address=127.0.0.1 dst-address=127.0.0.1 action=accept comment="Allow local loopback traffic (e.g. User Manager RADIUS)"',
             '/ip firewall filter add chain=input connection-state=invalid action=drop',
             '/ip firewall filter add chain=input in-interface=bridge-hotspot protocol=tcp dst-port=80,443,8080 action=accept comment="Hotspot captive portal ports"',
         ];
@@ -388,12 +398,11 @@ class StandaloneHotspotScriptGenerator
     }
 
     /**
-     * Branches on RouterOS version: v7 gets User Manager (profile.starts-when
-     * = first-auth is the documented way to make validity start on first
-     * login); v6 gets classic hotspot users plus an on-login scheduler script
-     * that approximates the same behaviour.
+     * Branches on RouterOS version: v7 gets User Manager with the wizard's
+     * profiles and vouchers (profile.starts-when = first-auth makes validity
+     * start on first login); v6 only connects the hotspot to User Manager,
+     * since its users, profiles and limitations are created in /userman.
      *
-     * @param  list<array{name: string, download_mbps: int, upload_mbps: int, session_minutes: int, shared_users: int, voucher_count: int}>  $profiles
      * @param  list<array{profile: string, username: string, password: string}>  $vouchers
      * @return list<string>
      */
@@ -401,7 +410,37 @@ class StandaloneHotspotScriptGenerator
     {
         return $config['ros_version'] === '7'
             ? $this->userManagerLines($config['profiles'], $vouchers, $this->networkParts($config['hotspot_network'])['host'])
-            : $this->classicHotspotLines($config['profiles'], $vouchers);
+            : $this->userManagerV6Lines();
+    }
+
+    /**
+     * RouterOS 6 User Manager (/tool user-manager) as a local RADIUS server on
+     * 127.0.0.1. The hotspot's RADIUS requests come from 127.0.0.1, so the
+     * User Manager router entry must use that address and the same secret as
+     * /radius, or User Manager drops the request and the hotspot reports
+     * "radius server not responding". Targets RouterOS 6.40+ (customer=);
+     * older routers are upgraded first rather than supported here.
+     *
+     * @return list<string>
+     */
+    private function userManagerV6Lines(): array
+    {
+        $secret = bin2hex(random_bytes(12));
+        $ownerPassword = bin2hex(random_bytes(6));
+
+        return [
+            '# RouterOS 6 User Manager -- a local, self-hosted RADIUS server (127.0.0.1 only, never leaves the router).',
+            '# If every line below fails with "bad command name user-manager", the User Manager package is not installed -- see the note at the top of this script.',
+            '# Creates the "admin" owner only if it does not exist yet; change its password at http://<router-ip>/userman after first login.',
+            ':if ([:len [/tool user-manager customer find login="admin"]] = 0) do={ /tool user-manager customer add login="admin" password="'.$ownerPassword.'" permissions=owner }',
+            '/tool user-manager router add name=this-router ip-address=127.0.0.1 shared-secret="'.$secret.'" customer=admin',
+            // The default 300ms RADIUS timeout is often too short for User Manager on small v6 routers.
+            '/radius add address=127.0.0.1 secret="'.$secret.'" service=hotspot timeout=3s',
+            '',
+            '# Next: open http://<router-ip>/userman, log in as admin, then create profiles, limitations and users there.',
+            '# Each user needs an active profile, or logins are rejected.',
+            '',
+        ];
     }
 
     /**
@@ -628,66 +667,6 @@ class StandaloneHotspotScriptGenerator
     private function voucherSheetUrl(string $hotspotHost): string
     {
         return 'http://'.$hotspotHost.'/um/PRIVATE/GENERATED/vouchers/gen_'.self::VOUCHER_TEMPLATE;
-    }
-
-    /**
-     * @param  list<array{name: string, download_mbps: int, upload_mbps: int, session_minutes: int, shared_users: int}>  $profiles
-     * @param  list<array{profile: string, username: string, password: string}>  $vouchers
-     * @return list<string>
-     */
-    private function classicHotspotLines(array $profiles, array $vouchers): array
-    {
-        $lines = [
-            '# Classic hotspot users (RouterOS 6 has no User Manager v7). The on-login script below',
-            '# starts each voucher\'s validity countdown at first login rather than at creation --',
-            '# a well-established community pattern, not an official feature. Verify on real hardware.',
-            // 2026-10-18: classic /ip hotspot user profile has no built-in total-
-            // transfer-cap property the way User Manager's limitation object does
-            // -- a per-profile data cap set in the wizard is only ever applied on
-            // RouterOS 7 (userManagerLines()). Enforcing one here would need a
-            // separate scheduler-script mechanism (polling /ip hotspot active
-            // byte counters), the same shape as the on-login expiry script above
-            // but for data instead of time -- not built in this pass.
-            '# Note: RouterOS 6 classic hotspot has no per-profile data-cap equivalent -- any data cap set in the wizard only applies on RouterOS 7 (User Manager).',
-            '/ip hotspot profile set hotspot-profile on-login="'.$this->onLoginExpiryScript().'"',
-            '',
-        ];
-
-        foreach ($profiles as $profile) {
-            $slug = $this->profileIdentifier($profile['name']);
-            $rateLimit = $profile['upload_mbps'].'M/'.$profile['download_mbps'].'M';
-            $sessionTimeout = max(1, (int) $profile['session_minutes']) * 60;
-
-            $lines[] = '/ip hotspot user profile add name="'.$slug.'" rate-limit='.$rateLimit.' session-timeout='.$sessionTimeout.'s shared-users='.max(1, (int) $profile['shared_users']);
-        }
-
-        if ($vouchers !== []) {
-            $lines[] = '';
-            $lines[] = '# Voucher codes -- also listed on the printable sheet';
-
-            foreach ($vouchers as $voucher) {
-                $lines[] = '/ip hotspot user add name="'.$voucher['username'].'" password="'.$voucher['password'].'" profile="'.$this->profileIdentifier($voucher['profile']).'"';
-            }
-        }
-
-        return $lines;
-    }
-
-    /**
-     * On a user's first login, schedules a one-time job (named after the
-     * user) that removes their account once their profile's session-timeout
-     * has elapsed -- so a voucher's clock starts at first use, not creation,
-     * and doesn't reset just because the customer reconnects.
-     */
-    private function onLoginExpiryScript(): string
-    {
-        // RouterOS interpolates $variables directly inside double-quoted strings, so no
-        // manual concatenation is needed there -- but since this whole script becomes the
-        // value of the outer on-login="..." property, every literal " below is pre-escaped
-        // as \" for that outer quoting.
-        return ':local u $user; :local sn (\"expire-\".$u); :if ([/system scheduler find name=$sn] = \"\") do={ '
-            .':local p [/ip hotspot user get [find name=$u] profile]; :local st [/ip hotspot user profile get $p session-timeout]; '
-            .':if ($st > 0s) do={ /system scheduler add name=$sn interval=$st on-event=\"/ip hotspot user remove [find name=$u]; /ip hotspot active remove [find user=$u]; /system scheduler remove [find name=$sn]\" } }';
     }
 
     /**

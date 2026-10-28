@@ -194,7 +194,10 @@ class StandaloneScriptGenerator extends Component
                     'string', 'min:8', 'max:63',
                 ],
             ],
-            3 => [
+            // RouterOS 6 profiles and users are created in the User Manager web interface, not here.
+            3 => $this->ros_version === '6' ? [
+                'hotspot_network' => ['required', 'regex:/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\/24$/'],
+            ] : [
                 'hotspot_network' => ['required', 'regex:/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\/24$/'],
                 'profiles' => ['required', 'array', 'min:1'],
                 'profiles.*.name' => ['required', 'string', 'max:32'],

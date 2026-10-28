@@ -105,6 +105,30 @@ class StandaloneScriptGeneratorTest extends TestCase
     }
 
     /**
+     * 2026-10-28: RouterOS 6 profiles and users are created in /userman, so the
+     * wizard hides its profile fields for v6 and must not require them.
+     */
+    public function test_ros6_wizard_skips_profiles_and_generates_a_user_manager_hookup(): void
+    {
+        $this->actingAs($this->superAdmin());
+
+        Livewire::test(StandaloneScriptGenerator::class)
+            ->set('router_identity', 'Corner Shop Router')
+            ->set('hotspot_name', 'Corner Shop Wi-Fi')
+            ->set('ros_version', '6')
+            ->set('hotspot_network', '10.10.10.1/24')
+            ->set('mgmt_network', '10.10.20.1/24')
+            ->set('mgmt_password', 'a-strong-password')
+            ->set('profiles.0.name', '')
+            ->set('step', 3)
+            ->assertSee('Profiles and users are managed in User Manager')
+            ->call('generate')
+            ->assertHasNoErrors()
+            ->assertSet('generatedVouchers', [])
+            ->assertSee('/tool user-manager router add');
+    }
+
+    /**
      * 2026-10-18, direct request: a per-profile data cap selected from a
      * closed preset list, blank meaning unlimited.
      */

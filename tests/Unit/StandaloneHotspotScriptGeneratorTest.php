@@ -29,18 +29,42 @@ class StandaloneHotspotScriptGeneratorTest extends TestCase
     {
         $result = (new StandaloneHotspotScriptGenerator)->generate($this->config());
 
-        $loopbackPos = strpos($result['script'], 'chain=input in-interface=lo action=accept');
+        $loopbackPos = strpos($result['script'], 'chain=input src-address=127.0.0.1 dst-address=127.0.0.1 action=accept');
         $catchAllDropPos = strpos($result['script'], 'in-interface-list=!WAN action=drop');
         $this->assertNotFalse($loopbackPos);
         $this->assertNotFalse($catchAllDropPos);
         $this->assertLessThan($catchAllDropPos, $loopbackPos);
     }
 
-    public function test_ros6_never_emits_radius_at_all(): void
+    /**
+     * 2026-10-28: RouterOS 6 has no "lo" interface, so an in-interface=lo rule
+     * fails there and a v6 /import stops at that line.
+     */
+    public function test_loopback_rule_never_names_an_interface_missing_on_ros6(): void
     {
         $result = (new StandaloneHotspotScriptGenerator)->generate($this->config(['ros_version' => '6']));
 
-        $this->assertStringNotContainsString('/radius add', $result['script']);
+        $this->assertStringNotContainsString('in-interface=lo ', $result['script']);
+        $this->assertStringContainsString('chain=input src-address=127.0.0.1 dst-address=127.0.0.1 action=accept', $result['script']);
+    }
+
+    /**
+     * 2026-10-28, reported live: on RouterOS 6 the hotspot never asked User
+     * Manager at all, and a hand-added setup answered "radius server not
+     * responding". The hotspot sends RADIUS from 127.0.0.1, so User Manager's
+     * router entry must use that address and the same secret as /radius.
+     */
+    public function test_ros6_connects_the_hotspot_to_user_manager_on_localhost(): void
+    {
+        $result = (new StandaloneHotspotScriptGenerator)->generate($this->config(['ros_version' => '6']));
+        $script = $result['script'];
+
+        $this->assertStringContainsString('login-by=http-pap,cookie use-radius=yes', $script);
+        $this->assertMatchesRegularExpression('/\/tool user-manager router add name=this-router ip-address=127\.0\.0\.1 shared-secret="([0-9a-f]+)" customer=admin/', $script);
+        preg_match('/shared-secret="([0-9a-f]+)"/', $script, $routerSecret);
+        $this->assertStringContainsString('/radius add address=127.0.0.1 secret="'.$routerSecret[1].'" service=hotspot timeout=3s', $script);
+        $this->assertStringContainsString('/tool user-manager customer find login="admin"', $script);
+        $this->assertStringNotContainsString('/user-manager set enabled=yes', $script);
     }
 
     /**
@@ -61,11 +85,13 @@ class StandaloneHotspotScriptGeneratorTest extends TestCase
         $this->assertStringContainsString('bad command name user-manager', $result['script']);
     }
 
-    public function test_ros6_never_mentions_the_user_manager_package(): void
+    public function test_ros6_warns_that_user_manager_is_a_separate_package(): void
     {
         $result = (new StandaloneHotspotScriptGenerator)->generate($this->config(['ros_version' => '6']));
 
-        $this->assertStringNotContainsString('user-manager', $result['script']);
+        $this->assertStringContainsString('RouterOS 6 User Manager section below REQUIRES the separate "user-manager" package', $result['script']);
+        $this->assertStringContainsString('/system package print', $result['script']);
+        $this->assertStringContainsString('Requires RouterOS 6.40 or newer', $result['script']);
     }
 
     public function test_ros7_uses_user_manager_as_a_self_hosted_radius_server_only(): void
@@ -183,7 +209,7 @@ class StandaloneHotspotScriptGeneratorTest extends TestCase
         );
     }
 
-    public function test_ros6_classic_hotspot_notes_data_caps_are_not_supported(): void
+    public function test_ros6_never_emits_wizard_data_caps(): void
     {
         $result = (new StandaloneHotspotScriptGenerator)->generate($this->config([
             'ros_version' => '6',
@@ -192,7 +218,6 @@ class StandaloneHotspotScriptGeneratorTest extends TestCase
             ],
         ]));
 
-        $this->assertStringContainsString('RouterOS 6 classic hotspot has no per-profile data-cap equivalent', $result['script']);
         $this->assertStringNotContainsString('transfer-limit', $result['script']);
     }
 
@@ -298,25 +323,12 @@ class StandaloneHotspotScriptGeneratorTest extends TestCase
         );
     }
 
-    public function test_ros6_classic_hotspot_gets_an_on_login_expiry_script(): void
-    {
-        $result = (new StandaloneHotspotScriptGenerator)->generate($this->config([
-            'ros_version' => '6',
-            'profiles' => [
-                ['name' => 'Daily', 'download_mbps' => 10, 'upload_mbps' => 2, 'session_minutes' => 1440, 'shared_users' => 2, 'voucher_count' => 0, 'voucher_prefix' => '', 'voucher_code_length' => 8],
-            ],
-        ]));
-
-        $this->assertStringContainsString('/ip hotspot profile set hotspot-profile on-login=', $result['script']);
-        $this->assertStringContainsString('/system scheduler add name=$sn interval=$st', $result['script']);
-        $this->assertStringContainsString(
-            '/ip hotspot user profile add name="daily" rate-limit=2M/10M session-timeout=86400s shared-users=2',
-            $result['script']
-        );
-        $this->assertStringNotContainsString('starts-when', $result['script']);
-    }
-
-    public function test_ros6_vouchers_become_classic_hotspot_users(): void
+    /**
+     * 2026-10-28: on RouterOS 6, users, profiles and limitations are created in
+     * the /userman web interface, so the script must not create any hotspot
+     * users, profiles, or vouchers of its own.
+     */
+    public function test_ros6_leaves_users_and_profiles_to_the_user_manager_web_interface(): void
     {
         $result = (new StandaloneHotspotScriptGenerator)->generate($this->config([
             'ros_version' => '6',
@@ -325,9 +337,12 @@ class StandaloneHotspotScriptGeneratorTest extends TestCase
             ],
         ]));
 
-        foreach ($result['vouchers'] as $voucher) {
-            $this->assertStringContainsString('/ip hotspot user add name="'.$voucher['username'].'" password="'.$voucher['password'].'" profile="daily"', $result['script']);
-        }
+        $this->assertSame([], $result['vouchers']);
+        $this->assertStringNotContainsString('/ip hotspot user ', $result['script']);
+        $this->assertStringNotContainsString('/tool user-manager user ', $result['script']);
+        $this->assertStringNotContainsString('/tool user-manager profile ', $result['script']);
+        $this->assertStringNotContainsString('on-login=', $result['script']);
+        $this->assertStringContainsString('http://<router-ip>/userman', $result['script']);
     }
 
     public function test_ros7_wireless_uses_wifiwave2_syntax(): void

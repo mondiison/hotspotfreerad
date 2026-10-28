@@ -58,7 +58,7 @@
                         <flux:select.option value="7">RouterOS 7</flux:select.option>
                         <flux:select.option value="6">RouterOS 6</flux:select.option>
                     </flux:select>
-                    <flux:description>RouterOS 7 uses the built-in User Manager for vouchers (validity starts at first login). RouterOS 6 approximates this with an on-login script.</flux:description>
+                    <flux:description>RouterOS 7 uses User Manager with the profiles and vouchers set up here (validity starts at first login). RouterOS 6 connects the hotspot to User Manager; you create its users, profiles and limitations in the /userman web interface.</flux:description>
                     <flux:error name="ros_version" />
                 </flux:field>
 
@@ -165,6 +165,12 @@
                     <flux:error name="hotspot_network" />
                 </flux:field>
 
+                @if ($ros_version === '6')
+                    <div class="rounded-lg border border-sky-200 bg-sky-50 p-4 text-sm text-sky-900 dark:border-sky-900/60 dark:bg-sky-950/30 dark:text-sky-100">
+                        <div class="font-semibold">Profiles and users are managed in User Manager</div>
+                        <p class="mt-1">On RouterOS 6 the script only connects the hotspot to User Manager. After running it, open <code>http://&lt;router-ip&gt;/userman</code> and create your profiles, limitations and users there. Give each user an active profile, or their logins are rejected.</p>
+                    </div>
+                @else
                 <div>
                     <div class="mb-2 flex items-center justify-between">
                         <flux:label>Profiles &amp; limits</flux:label>
@@ -253,6 +259,7 @@
                         @endforeach
                     </div>
                 </div>
+                @endif
 
                 <div class="flex justify-between">
                     <flux:button type="button" variant="outline" wire:click="previousStep">Back</flux:button>
