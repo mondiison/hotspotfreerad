@@ -405,7 +405,7 @@ class StandaloneHotspotScriptGeneratorTest extends TestCase
             $script
         );
         $this->assertStringContainsString(
-            ':if ([:len [/tool user-manager profile profile-limitation find profile="1 Hour" limitation="1 Hour limit"]] = 0) do={ /tool user-manager profile profile-limitation add profile="1 Hour" limitation="1 Hour limit" }',
+            ':if ([:len [/tool user-manager profile profile-limitation find profile="1 Hour" limitation="1 Hour limit"]] = 0) do={ /tool user-manager profile profile-limitation add profile="1 Hour" limitation="1 Hour limit" from-time=0s till-time=23h59m59s weekdays=sunday,monday,tuesday,wednesday,thursday,friday,saturday }',
             $script
         );
         $this->assertStringNotContainsString('/ip hotspot user ', $script);

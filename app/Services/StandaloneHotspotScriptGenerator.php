@@ -495,7 +495,8 @@ class StandaloneHotspotScriptGenerator
 
             $lines[] = ':if ([:len [/tool user-manager profile limitation find name="'.$limitation.'"]] > 0) do={ /tool user-manager profile limitation set [find name="'.$limitation.'"] '.$limitationValues.' } else={ /tool user-manager profile limitation add name="'.$limitation.'" owner=admin '.$limitationValues.' }';
             $lines[] = ':if ([:len [/tool user-manager profile find name="'.$name.'"]] > 0) do={ /tool user-manager profile set [find name="'.$name.'"] '.$profileValues.' } else={ /tool user-manager profile add name="'.$name.'" name-for-users="'.$name.'" owner=admin '.$profileValues.' }';
-            $lines[] = ':if ([:len [/tool user-manager profile profile-limitation find profile="'.$name.'" limitation="'.$limitation.'"]] = 0) do={ /tool user-manager profile profile-limitation add profile="'.$name.'" limitation="'.$limitation.'" }';
+            // Explicit all-day, every-day window so the limitation always applies, whatever this build's defaults are.
+            $lines[] = ':if ([:len [/tool user-manager profile profile-limitation find profile="'.$name.'" limitation="'.$limitation.'"]] = 0) do={ /tool user-manager profile profile-limitation add profile="'.$name.'" limitation="'.$limitation.'" from-time=0s till-time=23h59m59s weekdays=sunday,monday,tuesday,wednesday,thursday,friday,saturday }';
         }
 
         $lines[] = '';
