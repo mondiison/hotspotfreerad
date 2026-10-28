@@ -188,7 +188,7 @@ class StandaloneHotspotScriptGenerator
             $lines[] = '# Requires RouterOS 6.40 or newer -- check with "/system resource print" and upgrade older routers first.';
             $lines[] = '# RouterOS 6 User Manager section below REQUIRES the separate "user-manager" package to be installed first --';
             $lines[] = '# check with "/system package print"; if it is missing, install it from mikrotik.com/download and reboot before pasting.';
-            $lines[] = '# Create users, profiles and limitations afterwards in the User Manager web interface: http://<router-ip>/userman';
+            $lines[] = '# This script creates the User Manager profiles and limitations. Add users afterwards in the User Manager web interface: http://<router-ip>/userman';
         }
 
         $lines[] = '';
