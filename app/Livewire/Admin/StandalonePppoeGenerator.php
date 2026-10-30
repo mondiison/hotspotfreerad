@@ -17,12 +17,15 @@ class StandalonePppoeGenerator extends Component
 
     public string $wan_upload_mbps = '15';
 
+    /** The Starlink router's own network, where the operator's PC sits on the Starlink Wi-Fi. */
+    public string $admin_network = '192.168.1.0/24';
+
     /** @var array<string, string> */
     public array $port_roles = [
         'ether2' => 'pppoe',
         'ether3' => 'pppoe',
         'ether4' => 'pppoe',
-        'ether5' => 'mgmt',
+        'ether5' => 'pppoe',
     ];
 
     public string $pppoe_network = '10.20.0.1/24';
@@ -34,8 +37,6 @@ class StandalonePppoeGenerator extends Component
     public string $lan_device_download_mbps = '10';
 
     public string $lan_device_upload_mbps = '3';
-
-    public string $mgmt_network = '10.10.20.1/24';
 
     public array $plans = [
         ['name' => 'Basic 5M', 'download_mbps' => '5', 'upload_mbps' => '2'],
@@ -87,13 +88,13 @@ class StandalonePppoeGenerator extends Component
             'wan_port' => 'ether1',
             'wan_download_mbps' => (float) $this->wan_download_mbps,
             'wan_upload_mbps' => (float) $this->wan_upload_mbps,
+            'admin_network' => $this->admin_network,
             'port_roles' => $this->port_roles,
             'pppoe_network' => $this->pppoe_network,
             'pppoe_service_name' => $this->pppoe_service_name,
             'lan_network' => $this->lan_network,
             'lan_device_download_mbps' => (float) $this->lan_device_download_mbps,
             'lan_device_upload_mbps' => (float) $this->lan_device_upload_mbps,
-            'mgmt_network' => $this->mgmt_network,
             'plans' => $this->plans,
         ]);
 
@@ -121,6 +122,7 @@ class StandalonePppoeGenerator extends Component
                 'router_identity' => ['required', 'string', 'max:64'],
                 'wan_download_mbps' => $speed,
                 'wan_upload_mbps' => $speed,
+                'admin_network' => ['required', 'regex:/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\/\d{1,2}$/'],
             ],
             2 => [
                 'port_roles' => ['required', 'array', function ($attribute, $value, $fail) {
@@ -132,7 +134,6 @@ class StandalonePppoeGenerator extends Component
                 'pppoe_network' => $this->usesRole('pppoe') ? $network : ['nullable'],
                 'pppoe_service_name' => $this->usesRole('pppoe') ? ['required', 'string', 'max:32', 'regex:/^[A-Za-z0-9._-]+$/'] : ['nullable'],
                 'lan_network' => $this->usesRole('lan') ? $network : ['nullable'],
-                'mgmt_network' => $this->usesRole('mgmt') ? $network : ['nullable'],
             ],
             3 => [
                 'plans' => $this->usesRole('pppoe') ? ['required', 'array', 'min:1'] : ['array'],

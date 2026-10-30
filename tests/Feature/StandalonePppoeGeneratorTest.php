@@ -62,7 +62,7 @@ class StandalonePppoeGeneratorTest extends TestCase
 
         Livewire::test(StandalonePppoeGenerator::class)
             ->set('step', 2)
-            ->set('port_roles', ['ether2' => 'mgmt', 'ether3' => 'unused', 'ether4' => 'unused', 'ether5' => 'unused'])
+            ->set('port_roles', ['ether2' => 'unused', 'ether3' => 'unused', 'ether4' => 'unused', 'ether5' => 'unused'])
             ->call('nextStep')
             ->assertHasErrors('port_roles')
             ->assertSet('step', 2);

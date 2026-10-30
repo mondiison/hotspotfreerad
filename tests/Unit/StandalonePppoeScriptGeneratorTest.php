@@ -68,7 +68,7 @@ class StandalonePppoeScriptGeneratorTest extends TestCase
     public function test_plain_lan_devices_share_fairly_with_a_per_device_cap(): void
     {
         $script = $this->generate([
-            'port_roles' => ['ether2' => 'pppoe', 'ether3' => 'lan', 'ether4' => 'lan', 'ether5' => 'mgmt'],
+            'port_roles' => ['ether2' => 'pppoe', 'ether3' => 'lan', 'ether4' => 'lan', 'ether5' => 'unused'],
             'lan_device_download_mbps' => 10,
             'lan_device_upload_mbps' => 2.5,
         ]);
@@ -80,23 +80,32 @@ class StandalonePppoeScriptGeneratorTest extends TestCase
         $this->assertStringContainsString('target=10.20.0.0/24,192.168.88.0/24', $script);
     }
 
-    public function test_management_port_locks_admin_services_and_is_unreachable_from_clients(): void
+    /**
+     * 2026-10-30, direct request: no management port. The operator's PC is on
+     * the Starlink Wi-Fi, so router admin is allowed only from the Starlink
+     * network through ether1 -- and clients cannot reach that network.
+     */
+    public function test_router_admin_is_allowed_only_from_the_starlink_network(): void
+    {
+        $script = $this->generate(['admin_network' => '192.168.1.0/24']);
+
+        $this->assertStringContainsString('/ip service set winbox address=192.168.1.0/24', $script);
+        $this->assertStringContainsString('/ip service set ssh address=192.168.1.0/24', $script);
+        $this->assertStringContainsString('/ip firewall filter add chain=input in-interface=ether1 src-address=192.168.1.0/24 action=accept', $script);
+        $this->assertLessThan(
+            strpos($script, 'chain=input action=drop comment="Drop all other'),
+            strpos($script, 'chain=input in-interface=ether1 src-address=192.168.1.0/24 action=accept')
+        );
+        $this->assertStringContainsString('/ip firewall filter add chain=forward src-address=10.20.0.0/24 dst-address=192.168.1.0/24 action=drop', $script);
+    }
+
+    public function test_there_is_no_management_port_or_client_admin_access(): void
     {
         $script = $this->generate();
 
-        $this->assertStringContainsString('/interface bridge port add bridge=bridge-mgmt interface=ether5', $script);
-        $this->assertStringContainsString('/ip service set winbox address=10.10.20.0/24', $script);
-        $this->assertStringContainsString('/ip firewall filter add chain=forward src-address=10.20.0.0/24 dst-address=10.10.20.0/24 action=drop', $script);
-        $this->assertStringNotContainsString('No management port', $script);
-    }
-
-    public function test_without_a_management_port_admin_is_allowed_from_client_networks_only(): void
-    {
-        $script = $this->generate(['port_roles' => ['ether2' => 'pppoe', 'ether3' => 'pppoe', 'ether4' => 'pppoe', 'ether5' => 'pppoe']]);
-
         $this->assertStringNotContainsString('bridge-mgmt', $script);
-        $this->assertStringNotContainsString('/ip service set', $script);
-        $this->assertStringContainsString('/ip firewall filter add chain=input in-interface-list=!WAN action=accept comment="No management port', $script);
+        $this->assertStringNotContainsString('chain=input in-interface-list=!WAN action=accept', $script);
+        $this->assertArrayNotHasKey('mgmt', StandalonePppoeScriptGenerator::PORT_ROLES);
     }
 
     public function test_router_drops_other_input_and_unsolicited_starlink_traffic(): void
@@ -114,7 +123,7 @@ class StandalonePppoeScriptGeneratorTest extends TestCase
 
     public function test_unused_ports_are_left_alone(): void
     {
-        $script = $this->generate(['port_roles' => ['ether2' => 'pppoe', 'ether3' => 'unused', 'ether4' => 'unused', 'ether5' => 'mgmt']]);
+        $script = $this->generate(['port_roles' => ['ether2' => 'pppoe', 'ether3' => 'unused', 'ether4' => 'unused', 'ether5' => 'pppoe']]);
 
         $this->assertStringNotContainsString('interface=ether3', $script);
         $this->assertStringNotContainsString('interface=ether4', $script);
@@ -127,13 +136,13 @@ class StandalonePppoeScriptGeneratorTest extends TestCase
             'wan_port' => 'ether1',
             'wan_download_mbps' => 100,
             'wan_upload_mbps' => 15,
-            'port_roles' => ['ether2' => 'pppoe', 'ether3' => 'pppoe', 'ether4' => 'pppoe', 'ether5' => 'mgmt'],
+            'port_roles' => ['ether2' => 'pppoe', 'ether3' => 'pppoe', 'ether4' => 'pppoe', 'ether5' => 'pppoe'],
             'pppoe_network' => '10.20.0.1/24',
             'pppoe_service_name' => 'internet',
             'lan_network' => '192.168.88.1/24',
             'lan_device_download_mbps' => 10,
             'lan_device_upload_mbps' => 3,
-            'mgmt_network' => '10.10.20.1/24',
+            'admin_network' => '192.168.1.0/24',
             'plans' => [
                 ['name' => 'Basic 5M', 'download_mbps' => 5, 'upload_mbps' => 2],
                 ['name' => 'Standard 10M', 'download_mbps' => 10, 'upload_mbps' => 3],

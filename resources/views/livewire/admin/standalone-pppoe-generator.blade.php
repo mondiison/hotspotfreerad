@@ -39,6 +39,13 @@
                 </flux:field>
             </div>
 
+            <flux:field>
+                <flux:label>Starlink network (where your PC is)</flux:label>
+                <flux:input wire:model.blur="admin_network" placeholder="192.168.1.0/24" />
+                <flux:description>Your PC on the Starlink Wi-Fi manages the router from this network (Winbox, SSH, web). Clients can't manage the router or reach this network. The Starlink router's default is 192.168.1.0/24.</flux:description>
+                <flux:error name="admin_network" />
+            </flux:field>
+
             <div class="flex justify-end">
                 <flux:button type="button" variant="primary" wire:click="nextStep">Next: Ports &amp; networks</flux:button>
             </div>
@@ -87,19 +94,6 @@
                     <flux:input wire:model.blur="lan_network" placeholder="192.168.88.1/24" />
                     <flux:error name="lan_network" />
                 </flux:field>
-            @endif
-
-            @if ($this->usesRole('mgmt'))
-                <flux:field>
-                    <flux:label>Management network</flux:label>
-                    <flux:input wire:model.blur="mgmt_network" placeholder="10.10.20.1/24" />
-                    <flux:description>Winbox, SSH and the web interface only answer on this network.</flux:description>
-                    <flux:error name="mgmt_network" />
-                </flux:field>
-            @else
-                <div class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100">
-                    No management port: the router can be administered from client networks. Set one port to Management to keep clients out of Winbox.
-                </div>
             @endif
 
             <div class="flex justify-between">
