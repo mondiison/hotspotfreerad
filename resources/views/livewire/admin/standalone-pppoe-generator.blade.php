@@ -111,12 +111,12 @@
                         <flux:label>PPPoE plans</flux:label>
                         <flux:button type="button" size="sm" variant="outline" icon="plus" wire:click="addPlan">Add plan</flux:button>
                     </div>
-                    <flux:description>Each client is capped at their plan. When Starlink is full, active clients share it evenly. The first plan is the default.</flux:description>
+                    <flux:description>The plan speed is what each client is guaranteed. Add a boost to let clients borrow spare Starlink capacity when the network is quiet; they drop back towards the plan speed as it gets busy. The first plan is the default.</flux:description>
                     <flux:error name="plans" />
 
                     <div class="mt-3 space-y-3">
                         @foreach ($plans as $index => $plan)
-                            <div class="grid items-end gap-3 rounded-lg border border-zinc-200 dark:border-zinc-700 p-3 md:grid-cols-4" wire:key="plan-{{ $index }}">
+                            <div class="grid items-end gap-3 rounded-lg border border-zinc-200 dark:border-zinc-700 p-3 md:grid-cols-6" wire:key="plan-{{ $index }}">
                                 <flux:field class="md:col-span-2">
                                     <flux:label size="sm">Plan name</flux:label>
                                     <flux:input wire:model.blur="plans.{{ $index }}.name" placeholder="Basic 5M" />
@@ -127,11 +127,21 @@
                                     <flux:input type="number" step="0.1" min="0.1" wire:model.blur="plans.{{ $index }}.download_mbps" />
                                     <flux:error name="plans.{{ $index }}.download_mbps" />
                                 </flux:field>
+                                <flux:field>
+                                    <flux:label size="sm">Upload (Mbps)</flux:label>
+                                    <flux:input type="number" step="0.1" min="0.1" wire:model.blur="plans.{{ $index }}.upload_mbps" />
+                                    <flux:error name="plans.{{ $index }}.upload_mbps" />
+                                </flux:field>
+                                <flux:field>
+                                    <flux:label size="sm">Boost down (optional)</flux:label>
+                                    <flux:input type="number" step="0.1" min="0.1" wire:model.blur="plans.{{ $index }}.boost_download_mbps" placeholder="e.g. 20" />
+                                    <flux:error name="plans.{{ $index }}.boost_download_mbps" />
+                                </flux:field>
                                 <div class="flex items-end gap-2">
                                     <flux:field class="flex-1">
-                                        <flux:label size="sm">Upload (Mbps)</flux:label>
-                                        <flux:input type="number" step="0.1" min="0.1" wire:model.blur="plans.{{ $index }}.upload_mbps" />
-                                        <flux:error name="plans.{{ $index }}.upload_mbps" />
+                                        <flux:label size="sm">Boost up (optional)</flux:label>
+                                        <flux:input type="number" step="0.1" min="0.1" wire:model.blur="plans.{{ $index }}.boost_upload_mbps" placeholder="e.g. 5" />
+                                        <flux:error name="plans.{{ $index }}.boost_upload_mbps" />
                                     </flux:field>
                                     @if (count($plans) > 1)
                                         <flux:button type="button" size="sm" variant="danger" icon="trash" wire:click="removePlan({{ $index }})" />

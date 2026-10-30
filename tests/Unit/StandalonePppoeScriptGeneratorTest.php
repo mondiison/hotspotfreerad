@@ -42,6 +42,38 @@ class StandalonePppoeScriptGeneratorTest extends TestCase
         $this->assertLessThan(strpos($script, '/ppp profile add'), strpos($script, '/queue simple add name=starlink-total'));
     }
 
+    /**
+     * 2026-10-30, direct request: let clients go faster when few are online.
+     * The plan speed becomes the guaranteed minimum (limit-at) and the boost
+     * the ceiling (max-limit), so idle Starlink capacity can be borrowed.
+     */
+    public function test_a_boosted_plan_guarantees_the_plan_speed_and_borrows_up_to_the_boost(): void
+    {
+        $script = $this->generate(['plans' => [
+            ['name' => 'Basic 5M', 'download_mbps' => 5, 'upload_mbps' => 2, 'boost_download_mbps' => 20, 'boost_upload_mbps' => 8],
+        ]]);
+
+        $this->assertStringContainsString('rate-limit="8M/20M 0/0 0/0 0/0 8 2M/5M" parent-queue=starlink-total', $script);
+    }
+
+    public function test_a_one_sided_boost_keeps_the_other_side_at_the_plan_speed(): void
+    {
+        $script = $this->generate(['plans' => [
+            ['name' => 'Basic 5M', 'download_mbps' => 5, 'upload_mbps' => 2, 'boost_download_mbps' => 20, 'boost_upload_mbps' => ''],
+        ]]);
+
+        $this->assertStringContainsString('rate-limit="2M/20M 0/0 0/0 0/0 8 2M/5M"', $script);
+    }
+
+    public function test_a_plan_without_a_boost_stays_a_flat_cap(): void
+    {
+        $script = $this->generate(['plans' => [
+            ['name' => 'Basic 5M', 'download_mbps' => 5, 'upload_mbps' => 2, 'boost_download_mbps' => '', 'boost_upload_mbps' => ''],
+        ]]);
+
+        $this->assertStringContainsString(' rate-limit=2M/5M parent-queue=starlink-total', $script);
+    }
+
     public function test_pppoe_server_runs_on_a_bridge_of_the_pppoe_ports_with_the_first_plan_as_default(): void
     {
         $script = $this->generate();

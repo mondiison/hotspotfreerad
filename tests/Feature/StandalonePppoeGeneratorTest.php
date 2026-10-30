@@ -56,6 +56,23 @@ class StandalonePppoeGeneratorTest extends TestCase
             ->assertSee('/queue simple add name=lan-devices');
     }
 
+    public function test_boost_must_be_at_least_the_plan_speed_and_within_starlink(): void
+    {
+        $this->actingAs($this->superAdmin());
+
+        Livewire::test(StandalonePppoeGenerator::class)
+            ->set('step', 3)
+            ->set('plans.0.boost_download_mbps', '3')
+            ->set('plans.1.boost_download_mbps', '500')
+            ->call('nextStep')
+            ->assertHasErrors(['plans.0.boost_download_mbps', 'plans.1.boost_download_mbps'])
+            ->set('plans.0.boost_download_mbps', '20')
+            ->set('plans.1.boost_download_mbps', '')
+            ->call('generate')
+            ->assertHasNoErrors()
+            ->assertSee('rate-limit=&quot;2M/20M 0/0 0/0 0/0 8 2M/5M&quot;', false);
+    }
+
     public function test_at_least_one_client_port_is_required(): void
     {
         $this->actingAs($this->superAdmin());

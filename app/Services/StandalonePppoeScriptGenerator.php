@@ -193,7 +193,7 @@ class StandalonePppoeScriptGenerator
 
         foreach ($config['plans'] as $plan) {
             $lines[] = '/ppp profile add name="'.$this->quote(trim($plan['name'])).'" local-address='.$network['host'].' remote-address=pool-pppoe dns-server='.$network['host']
-                .' rate-limit='.$this->rate($plan['upload_mbps']).'/'.$this->rate($plan['download_mbps'])
+                .' rate-limit='.$this->planRateLimit($plan)
                 .' parent-queue=starlink-total only-one=yes change-tcp-mss=yes';
         }
 
@@ -251,6 +251,31 @@ class StandalonePppoeScriptGenerator
             '# Next: add each PPPoE client in Winbox (PPP > Secrets) with one of the plans above, e.g.:',
             '# /ppp secret add name=client1 password=ChangeMe service=pppoe profile="'.$examplePlan.'"',
         ];
+    }
+
+    /**
+     * A plan's PPP rate-limit (upload/download as seen from the client).
+     *
+     * Without a boost it is a flat cap. With one, RouterOS's extended form
+     * "max 0/0 0/0 0/0 priority min" makes the plan speed the guaranteed
+     * minimum (limit-at) and the boost the ceiling (max-limit): a client can
+     * borrow idle Starlink capacity up to the boost, and is pulled back
+     * towards the plan speed as other clients get busy.
+     */
+    private function planRateLimit(array $plan): string
+    {
+        $plain = $this->rate($plan['upload_mbps']).'/'.$this->rate($plan['download_mbps']);
+        $boostDown = (float) ($plan['boost_download_mbps'] ?? 0);
+        $boostUp = (float) ($plan['boost_upload_mbps'] ?? 0);
+
+        if ($boostDown <= 0 && $boostUp <= 0) {
+            return $plain;
+        }
+
+        // A blank boost on one side keeps that side at the plan speed.
+        $ceiling = $this->rate(max($boostUp, (float) $plan['upload_mbps'])).'/'.$this->rate(max($boostDown, (float) $plan['download_mbps']));
+
+        return '"'.$ceiling.' 0/0 0/0 0/0 8 '.$plain.'"';
     }
 
     /**

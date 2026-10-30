@@ -38,9 +38,10 @@ class StandalonePppoeGenerator extends Component
 
     public string $lan_device_upload_mbps = '3';
 
+    /** Boost fields are optional: blank means the plan speed is a flat cap. */
     public array $plans = [
-        ['name' => 'Basic 5M', 'download_mbps' => '5', 'upload_mbps' => '2'],
-        ['name' => 'Standard 10M', 'download_mbps' => '10', 'upload_mbps' => '3'],
+        ['name' => 'Basic 5M', 'download_mbps' => '5', 'upload_mbps' => '2', 'boost_download_mbps' => '', 'boost_upload_mbps' => ''],
+        ['name' => 'Standard 10M', 'download_mbps' => '10', 'upload_mbps' => '3', 'boost_download_mbps' => '', 'boost_upload_mbps' => ''],
     ];
 
     public ?string $generatedScript = null;
@@ -52,7 +53,7 @@ class StandalonePppoeGenerator extends Component
 
     public function addPlan(): void
     {
-        $this->plans[] = ['name' => '', 'download_mbps' => '5', 'upload_mbps' => '2'];
+        $this->plans[] = ['name' => '', 'download_mbps' => '5', 'upload_mbps' => '2', 'boost_download_mbps' => '', 'boost_upload_mbps' => ''];
     }
 
     public function removePlan(int $index): void
@@ -140,11 +141,29 @@ class StandalonePppoeGenerator extends Component
                 'plans.*.name' => ['required', 'string', 'max:32'],
                 'plans.*.download_mbps' => $speed,
                 'plans.*.upload_mbps' => $speed,
+                'plans.*.boost_download_mbps' => $this->boostRule('download_mbps', $this->wan_download_mbps),
+                'plans.*.boost_upload_mbps' => $this->boostRule('upload_mbps', $this->wan_upload_mbps),
                 'lan_device_download_mbps' => $this->usesRole('lan') ? $speed : ['nullable'],
                 'lan_device_upload_mbps' => $this->usesRole('lan') ? $speed : ['nullable'],
             ],
             default => [],
         };
+    }
+
+    /**
+     * A boost is optional, but when set it must be at least the plan speed
+     * (it is the ceiling over a guaranteed plan speed) and no more than Starlink.
+     */
+    private function boostRule(string $planField, string $starlinkMbps): array
+    {
+        return ['nullable', 'numeric', 'max:'.(float) $starlinkMbps, function ($attribute, $value, $fail) use ($planField) {
+            $index = (int) explode('.', $attribute)[1];
+            $planSpeed = (float) ($this->plans[$index][$planField] ?? 0);
+
+            if ($value !== null && $value !== '' && (float) $value < $planSpeed) {
+                $fail('Boost must be at least the plan speed ('.$planSpeed.' Mbps).');
+            }
+        }];
     }
 
     public function render()
