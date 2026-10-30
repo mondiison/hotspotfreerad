@@ -553,6 +553,29 @@ class StandaloneHotspotScriptGeneratorTest extends TestCase
         $this->assertLessThan($bridgePortPos, $delayPos);
     }
 
+    /**
+     * 2026-10-30, direct request: save the script on the router so a reset
+     * with no default configuration runs it. It waits for the WAN, LAN and
+     * wireless interfaces, which appear late during boot, before configuring.
+     */
+    public function test_script_can_run_as_a_bootstrap_after_reset(): void
+    {
+        $script = (new StandaloneHotspotScriptGenerator)->generate($this->config([
+            'ros_version' => '6',
+            'has_wireless' => true,
+            'wireless_interface' => 'wlan1',
+            'wan_port' => 'ether1',
+            'ethernet_port_count' => 3,
+        ]))['script'];
+
+        $this->assertStringContainsString('# /system reset-configuration no-defaults=yes skip-backup=yes run-after-reset=hotspot-bootstrap.rsc', $script);
+        $this->assertStringContainsString(
+            ':while (([:len [/interface find name="ether1"]] = 0 || [:len [/interface find name="ether2"]] = 0 || [:len [/interface find name="ether3"]] = 0 || [:len [/interface find name="wlan1"]] = 0) && $tries < 60)',
+            $script
+        );
+        $this->assertLessThan(strpos($script, '/system identity set'), strpos($script, ':local tries 0'));
+    }
+
     public function test_wired_only_router_skips_wireless_and_notes_external_ap(): void
     {
         $result = (new StandaloneHotspotScriptGenerator)->generate($this->config([

@@ -346,7 +346,7 @@
                                 type="button"
                                 size="sm"
                                 variant="outline"
-                                x-on:click="const blob = new Blob([@js($generatedScript)], {type: 'text/plain'}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'standalone-hotspot.rsc'; a.click(); URL.revokeObjectURL(url);"
+                                x-on:click="const blob = new Blob([@js($generatedScript)], {type: 'text/plain'}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = @js(\App\Services\StandaloneHotspotScriptGenerator::BOOTSTRAP_FILE); a.click(); URL.revokeObjectURL(url);"
                             >Download .rsc</flux:button>
                         </div>
                     </div>
@@ -355,6 +355,8 @@
                     </div>
                     <p class="mt-2 text-xs text-zinc-500 dark:text-zinc-400">Paste this into a RouterOS terminal (Winbox &gt; New Terminal, or SSH) on a fresh or lightly-configured router. Review port names against your hardware first.</p>
                 </div>
+
+                <x-router-bootstrap :file="\App\Services\StandaloneHotspotScriptGenerator::BOOTSTRAP_FILE" />
 
                 @if ($generatedUserManagerTemplate)
                     <div x-data="{ copied: false }">

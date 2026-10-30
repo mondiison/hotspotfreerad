@@ -53,6 +53,9 @@ class StandaloneHotspotScriptGenerator
      */
     public const VOUCHER_TEMPLATE = 'printable_vouchers.html';
 
+    /** Name the script is saved under on the router, for reset-configuration run-after-reset. */
+    public const BOOTSTRAP_FILE = 'hotspot-bootstrap.rsc';
+
     /**
      * 2026-10-18, direct request: a per-profile total-transfer cap (RouterOS
      * 7 User Manager's /user-manager limitation `transfer-limit`, bytes),
@@ -223,9 +226,15 @@ class StandaloneHotspotScriptGenerator
             $lines[] = '# This script creates the User Manager profiles and limitations. Add users afterwards in the User Manager web interface: http://<router-ip>/userman';
         }
 
+        $lines[] = '# Save it as '.self::BOOTSTRAP_FILE.' in Files to re-run it after every reset with:';
+        $lines[] = '# '.RouterOsBootstrap::resetCommand(self::BOOTSTRAP_FILE);
         $lines[] = '';
 
-        return $lines;
+        return array_merge($lines, RouterOsBootstrap::waitLines(array_merge(
+            [$config['wan_port']],
+            $this->lanPorts($config['wan_port'], (int) $config['ethernet_port_count']),
+            $config['has_wireless'] ? [$config['wireless_interface']] : [],
+        )));
     }
 
     /**

@@ -197,7 +197,7 @@
                             type="button"
                             size="sm"
                             variant="outline"
-                            x-on:click="const blob = new Blob([@js($generatedScript)], {type: 'text/plain'}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'pppoe-fair-bandwidth.rsc'; a.click(); URL.revokeObjectURL(url);"
+                            x-on:click="const blob = new Blob([@js($generatedScript)], {type: 'text/plain'}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = @js(\App\Services\StandalonePppoeScriptGenerator::BOOTSTRAP_FILE); a.click(); URL.revokeObjectURL(url);"
                         >Download .rsc</flux:button>
                     </div>
                 </div>
@@ -206,6 +206,8 @@
                 </div>
                 <p class="mt-2 text-xs text-zinc-500 dark:text-zinc-400">Paste into a RouterOS terminal on a router reset with no default configuration (connect with MAC Winbox). Then add each client in PPP &gt; Secrets with one of the plans.</p>
             </div>
+
+            <x-router-bootstrap :file="\App\Services\StandalonePppoeScriptGenerator::BOOTSTRAP_FILE" />
         </div>
     @endif
 </div>

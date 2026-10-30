@@ -153,6 +153,24 @@ class StandalonePppoeScriptGeneratorTest extends TestCase
         );
     }
 
+    /**
+     * 2026-10-30, direct request: save the script on the router so a reset
+     * with no default configuration runs it. A run-after-reset script starts
+     * before the interfaces exist, so it waits for the ports it configures.
+     */
+    public function test_script_can_run_as_a_bootstrap_after_reset(): void
+    {
+        $script = $this->generate(['port_roles' => ['ether2' => 'pppoe', 'ether3' => 'lan', 'ether4' => 'unused', 'ether5' => 'unused']]);
+
+        $this->assertStringContainsString('# /system reset-configuration no-defaults=yes skip-backup=yes run-after-reset=pppoe-bootstrap.rsc', $script);
+        $this->assertStringContainsString(
+            '{ :local tries 0; :while (([:len [/interface find name="ether1"]] = 0 || [:len [/interface find name="ether2"]] = 0 || [:len [/interface find name="ether3"]] = 0) && $tries < 60) do={ :delay 1s; :set tries ($tries + 1) } }',
+            $script
+        );
+        $this->assertStringNotContainsString('name="ether4"', $script);
+        $this->assertLessThan(strpos($script, '/system identity set'), strpos($script, ':local tries 0'));
+    }
+
     public function test_unused_ports_are_left_alone(): void
     {
         $script = $this->generate(['port_roles' => ['ether2' => 'pppoe', 'ether3' => 'unused', 'ether4' => 'unused', 'ether5' => 'pppoe']]);

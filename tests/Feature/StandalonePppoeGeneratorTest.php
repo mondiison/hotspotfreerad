@@ -53,7 +53,9 @@ class StandalonePppoeGeneratorTest extends TestCase
             ->assertSet('step', 4)
             ->assertSee('max-limit=18M/108M')
             ->assertSee('rate-limit=2M/8M')
-            ->assertSee('/queue simple add name=lan-devices');
+            ->assertSee('/queue simple add name=lan-devices')
+            ->assertSee('Save on the router as a bootstrap script')
+            ->assertSee('run-after-reset=pppoe-bootstrap.rsc');
     }
 
     public function test_boost_must_be_at_least_the_plan_speed_and_within_starlink(): void
