@@ -4,6 +4,7 @@
     @foreach ([
         'hotspot' => ['label' => 'Hotspot', 'route' => 'admin.tools.script-generator'],
         'ptp' => ['label' => 'PTP', 'route' => 'admin.tools.ptp-generator'],
+        'pppoe' => ['label' => 'PPPoE', 'route' => 'admin.tools.pppoe-generator'],
     ] as $key => $tab)
         <a
             href="{{ route($tab['route']) }}"
