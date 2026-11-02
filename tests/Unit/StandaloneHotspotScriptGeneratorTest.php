@@ -576,6 +576,21 @@ class StandaloneHotspotScriptGeneratorTest extends TestCase
         $this->assertLessThan(strpos($script, '/system identity set'), strpos($script, ':local tries 0'));
     }
 
+    /**
+     * 2026-11-02, confirmed live on 6.49.19: User Manager v6 accepted the login
+     * but the router dropped the reply for missing Message-Authenticator.
+     */
+    public function test_ros6_does_not_require_message_auth_from_user_manager(): void
+    {
+        $script = (new StandaloneHotspotScriptGenerator)->generate($this->config(['ros_version' => '6', 'wireless_interface' => 'wlan1']))['script'];
+
+        $this->assertStringContainsString(
+            ':do { :local apply [:parse "/radius set [find address=127.0.0.1] require-message-auth=no"]; $apply } on-error={}',
+            $script
+        );
+        $this->assertLessThan(strpos($script, 'require-message-auth=no'), strpos($script, '/radius add address=127.0.0.1'));
+    }
+
     public function test_wired_only_router_skips_wireless_and_notes_external_ap(): void
     {
         $result = (new StandaloneHotspotScriptGenerator)->generate($this->config([

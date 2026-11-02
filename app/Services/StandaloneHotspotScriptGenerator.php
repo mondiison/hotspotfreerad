@@ -514,6 +514,13 @@ class StandaloneHotspotScriptGenerator
             '/radius remove [find address=127.0.0.1]',
             // The default 300ms RADIUS timeout is often too short for User Manager on small v6 routers.
             '/radius add address=127.0.0.1 secret="'.$secret.'" service=hotspot timeout=3s',
+            // 2026-11-02, confirmed live on 6.49.19: "received packet for ... with missing
+            // message auth, dropping" -- newer v6 requires Message-Authenticator on replies,
+            // which User Manager v6 never sends, so every Access-Accept was discarded and the
+            // login reported "RADIUS server is not responding". Older v6 lacks this property,
+            // so it is parsed at runtime to keep the line harmless there.
+            '# User Manager v6 does not sign its replies, so newer v6 must not require that for this local RADIUS server.',
+            ':do { :local apply [:parse "/radius set [find address=127.0.0.1] require-message-auth=no"]; $apply } on-error={}',
             // Lets User Manager disconnect a session when its time or data runs out.
             '/radius incoming set accept=yes',
             '',
