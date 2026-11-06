@@ -933,6 +933,196 @@ class RouterOsConnectionService
     }
 
     /**
+     * The "pure LAN" port (2026-11-06, direct request): a plain routed
+     * network other routers/devices plug directly into, no RADIUS/MAC-auth/
+     * login page at all -- trusted because it's a physical cable into a
+     * dedicated port/VLAN, unlike POS/Staff's registered-device model. Only
+     * ensureLanInfrastructure() (VLAN/address/pool/DHCP, mirroring
+     * ensurePosInfrastructure() exactly) plus the PCQ bandwidth-cap sync are
+     * needed here -- there's no hotspot profile/server step the way POS/
+     * Staff need, since there's nothing to authenticate.
+     */
+    public function provisionLan(Router $router): array
+    {
+        if (! $this->isConfigured($router)) {
+            return [
+                'success' => false,
+                'steps' => [['label' => 'Pure LAN port', 'success' => false, 'error' => 'No RouterOS API credentials generated for this router yet.']],
+            ];
+        }
+
+        if (! (bool) (((array) $router->provisioning_settings)['enable_lan'] ?? false)) {
+            return ['success' => true, 'steps' => []];
+        }
+
+        $infraResult = $this->ensureLanInfrastructure($router);
+        $queueResult = $this->syncLanBandwidthQueue($router);
+
+        return [
+            'success' => $infraResult['success'] && $queueResult['success'],
+            'steps' => array_merge($infraResult['steps'], $queueResult['steps']),
+        ];
+    }
+
+    /**
+     * Mirrors ensurePosInfrastructure() exactly (VLAN interface, its IP
+     * address, the address pool, the DHCP server/network) -- the same four
+     * "does an object with this name/interface already exist" checks, safe
+     * to run on every provisionLan() call including the unconditional one
+     * every 5-minute auto-provisioning cycle makes. No hotspot profile/
+     * server step, since there's nothing to authenticate on this network.
+     *
+     * @return array{success: bool, steps: list<array{label: string, success: bool, error: ?string}>}
+     */
+    private function ensureLanInfrastructure(Router $router): array
+    {
+        $settings = $this->provisioning->provisioningSettings($router, (string) (((array) $router->provisioning_settings)['profile'] ?? 'starlink_plaza'));
+
+        $lanVlan = (string) $settings['lan_vlan'];
+        $lanGateway = (string) $settings['lan_gateway'];
+        $lanNetwork = (string) $settings['lan_network'];
+        $lanPool = (string) $settings['lan_pool'];
+        $lanGatewayIp = str($lanGateway)->before('/')->toString();
+
+        try {
+            $client = $this->client($router, 8);
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'steps' => [['label' => 'Check LAN VLAN infrastructure', 'success' => false, 'error' => $e->getMessage()]],
+            ];
+        }
+
+        $steps = [];
+
+        $vlanExists = collect($client->query(new Query('/interface/vlan/print'))->read())
+            ->contains(fn ($row) => is_array($row) && ($row['name'] ?? null) === 'vlan-lan');
+
+        if (! $vlanExists) {
+            $steps['Create LAN VLAN interface'] = (new Query('/interface/vlan/add'))
+                ->equal('interface', 'bridge-lan')
+                ->equal('name', 'vlan-lan')
+                ->equal('vlan-id', $lanVlan);
+        }
+
+        $addressExists = collect($client->query(new Query('/ip/address/print'))->read())
+            ->contains(fn ($row) => is_array($row) && ($row['interface'] ?? null) === 'vlan-lan');
+
+        if (! $addressExists) {
+            $steps['Create LAN VLAN IP address'] = (new Query('/ip/address/add'))
+                ->equal('address', $lanGateway)
+                ->equal('interface', 'vlan-lan');
+        }
+
+        $poolExists = collect($client->query(new Query('/ip/pool/print'))->read())
+            ->contains(fn ($row) => is_array($row) && ($row['name'] ?? null) === 'pool-lan');
+
+        if (! $poolExists) {
+            $steps['Create LAN address pool'] = (new Query('/ip/pool/add'))
+                ->equal('name', 'pool-lan')
+                ->equal('ranges', $lanPool);
+        }
+
+        $dhcpServerExists = collect($client->query(new Query('/ip/dhcp-server/print'))->read())
+            ->contains(fn ($row) => is_array($row) && ($row['name'] ?? null) === 'dhcp-lan');
+
+        if (! $dhcpServerExists) {
+            $steps['Create LAN DHCP server'] = (new Query('/ip/dhcp-server/add'))
+                ->equal('name', 'dhcp-lan')
+                ->equal('interface', 'vlan-lan')
+                ->equal('address-pool', 'pool-lan')
+                ->equal('lease-time', '12h')
+                ->equal('disabled', 'no');
+        }
+
+        $dhcpNetworkExists = collect($client->query(new Query('/ip/dhcp-server/network/print'))->read())
+            ->contains(fn ($row) => is_array($row) && ($row['address'] ?? null) === $lanNetwork);
+
+        if (! $dhcpNetworkExists) {
+            $steps['Create LAN DHCP network'] = (new Query('/ip/dhcp-server/network/add'))
+                ->equal('address', $lanNetwork)
+                ->equal('gateway', $lanGatewayIp)
+                ->equal('dns-server', $lanGatewayIp);
+        }
+
+        if ($steps === []) {
+            return ['success' => true, 'steps' => []];
+        }
+
+        return $this->runSteps($router, $steps);
+    }
+
+    /**
+     * Idempotent add-or-set of the two PCQ queue types plus the simple queue
+     * that targets the whole LAN subnet with them -- the same MikroTik-
+     * documented "cap each user on a shared network independently" pattern
+     * generateLanScript() emits for the paste-by-hand path. Re-running this
+     * (every auto-provisioning cycle, or a manual re-click after the admin
+     * changes lan_download_limit/lan_upload_limit) updates an existing
+     * queue's pcq-rate in place rather than leaving it stale, and repoints
+     * the simple queue's target if lan_network itself ever changes.
+     */
+    private function syncLanBandwidthQueue(Router $router): array
+    {
+        $settings = $this->provisioning->provisioningSettings($router, (string) (((array) $router->provisioning_settings)['profile'] ?? 'starlink_plaza'));
+
+        $downloadLimit = (string) $settings['lan_download_limit'];
+        $uploadLimit = (string) $settings['lan_upload_limit'];
+        $lanNetwork = (string) $settings['lan_network'];
+
+        try {
+            $client = $this->client($router, 8);
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'steps' => [['label' => 'Sync LAN per-device bandwidth cap', 'success' => false, 'error' => $e->getMessage()]],
+            ];
+        }
+
+        $steps = [];
+        $queueTypes = collect($client->query(new Query('/queue/type/print'))->read())->filter(fn ($row) => is_array($row));
+
+        foreach ([
+            'lan-pcq-download' => ['rate' => $downloadLimit, 'classifier' => 'dst-address'],
+            'lan-pcq-upload' => ['rate' => $uploadLimit, 'classifier' => 'src-address'],
+        ] as $name => $config) {
+            $existing = $queueTypes->first(fn ($row) => ($row['name'] ?? null) === $name);
+
+            if ($existing === null) {
+                $steps["Create {$name} queue type"] = (new Query('/queue/type/add'))
+                    ->equal('name', $name)
+                    ->equal('kind', 'pcq')
+                    ->equal('pcq-rate', $config['rate'])
+                    ->equal('pcq-classifier', $config['classifier']);
+            } elseif (($existing['pcq-rate'] ?? null) !== $config['rate']) {
+                $steps["Update {$name} queue type rate"] = (new Query('/queue/type/set'))
+                    ->equal('numbers', $existing['.id'])
+                    ->equal('pcq-rate', $config['rate']);
+            }
+        }
+
+        $simpleQueue = collect($client->query(new Query('/queue/simple/print'))->read())
+            ->first(fn ($row) => is_array($row) && ($row['name'] ?? null) === 'mms-lan-throttle');
+
+        if ($simpleQueue === null) {
+            $steps['Create LAN per-device bandwidth queue'] = (new Query('/queue/simple/add'))
+                ->equal('name', 'mms-lan-throttle')
+                ->equal('target', $lanNetwork)
+                ->equal('queue', 'lan-pcq-upload/lan-pcq-download');
+        } elseif (($simpleQueue['target'] ?? null) !== $lanNetwork) {
+            $steps['Repoint LAN per-device bandwidth queue'] = (new Query('/queue/simple/set'))
+                ->equal('numbers', $simpleQueue['.id'])
+                ->equal('target', $lanNetwork);
+        }
+
+        if ($steps === []) {
+            return ['success' => true, 'steps' => []];
+        }
+
+        return $this->runSteps($router, $steps);
+    }
+
+    /**
      * Mirrors ensurePosInfrastructure()/ensureStaffInfrastructure() exactly
      * for the Management and customer Hotspot VLANs -- added 2026-10-16
      * after a live report of a freshly re-provisioned router having no

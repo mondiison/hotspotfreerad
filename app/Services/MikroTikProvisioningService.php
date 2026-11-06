@@ -212,6 +212,81 @@ SCRIPT;
     }
 
     /**
+     * The "pure LAN" port (2026-11-06, direct request): a plain routed
+     * network for other routers/devices to plug directly into -- open and
+     * plug-and-go (no MAC registration, no captive portal, unlike POS/Staff),
+     * trusted because it's a physical cable into a dedicated port/VLAN.
+     * Each connected device is throttled INDEPENDENTLY to the same cap via a
+     * PCQ (Per-Connection Queue) targeting the whole LAN subnet -- MikroTik's
+     * own documented "limit each user on a shared network" pattern, not
+     * something invented for this app: pcq-rate on each of the two queue
+     * types (one classified by src-address for upload, one by dst-address
+     * for download) is the per-device ceiling, so three downstream routers
+     * each get up to the configured rate independently rather than splitting
+     * one shared pipe three ways.
+     *
+     * Mirrors generatePosScript()'s self-sufficiency and NOT-idempotent
+     * caveats exactly, minus everything POS needs that LAN doesn't: no
+     * RADIUS client, no hotspot profile/server, no MAC-auth, no virtual
+     * Wi-Fi SSID (wired-only, like PPPoE) -- this is plain DHCP + routed
+     * internet access with a bandwidth cap, nothing else.
+     */
+    public function generateLanScript(Router $router, string $profile = 'starlink_plaza'): string
+    {
+        $nasIdentifier = $router->nas_identifier;
+        $tunnelLines = implode("\n", array_merge($this->wireguardProvisioningLines($router), $this->zeroTierLines($router)));
+        $apiUserLines = implode("\n", $this->apiUserProvisioningLines($router));
+        $settings = $this->provisioningSettings($router, $profile);
+        $lanBridgeName = 'bridge-lan';
+        $taggedPorts = $lanBridgeName.','.$this->trunkPortsCsv($settings);
+        $extraLanPorts = $this->extraPortInterfaces($settings, 'extra_lan_ports');
+
+        $extraPortLines = array_map(
+            fn (string $port): string => '/interface bridge port add bridge='.$lanBridgeName.' interface='.$port.' pvid='.$settings['lan_vlan'].' comment="Extra LAN access port"',
+            $extraLanPorts
+        );
+
+        $bridgeVlanLine = $extraLanPorts !== []
+            ? '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' untagged='.implode(',', $extraLanPorts).' vlan-ids='.$settings['lan_vlan']
+            : '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' vlan-ids='.$settings['lan_vlan'];
+
+        $infraLines = implode("\n", array_merge(
+            ['/interface vlan add interface='.$lanBridgeName.' name=vlan-lan vlan-id='.$settings['lan_vlan']],
+            $extraPortLines,
+            [$bridgeVlanLine],
+            [
+                '/ip address add address='.$settings['lan_gateway'].' interface=vlan-lan comment="Routed LAN -- other routers/devices plug in here for shared, throttled internet access"',
+                '/ip pool add name=pool-lan ranges='.$settings['lan_pool'],
+                '/ip dhcp-server add name=dhcp-lan interface=vlan-lan address-pool=pool-lan lease-time=12h disabled=no',
+                '/ip dhcp-server network add address='.$settings['lan_network'].' gateway='.str($settings['lan_gateway'])->before('/').' dns-server='.str($settings['lan_gateway'])->before('/'),
+            ]
+        ));
+
+        return <<<SCRIPT
+/system identity set name="{$nasIdentifier}"
+{$tunnelLines}
+{$apiUserLines}
+# Creates the LAN VLAN/ports/addressing -- NOT idempotent, same as the Fresh
+# Infrastructure Script itself. Do not paste this twice, or if this router's
+# Fresh Infrastructure Script has already included the LAN port (enable_lan
+# was already on when it was last generated/applied).
+{$infraLines}
+# PCQ caps each connected device independently to the rate below -- e.g.
+# three downstream routers each get up to {$settings['lan_download_limit']}/{$settings['lan_upload_limit']},
+# not one shared pipe split three ways. This is MikroTik's own documented
+# "limit each user on a shared network" pattern (queue type=pcq, classified
+# by src/dst address), not something invented for this app.
+/queue type add name=lan-pcq-download kind=pcq pcq-rate={$settings['lan_download_limit']} pcq-classifier=dst-address
+/queue type add name=lan-pcq-upload kind=pcq pcq-rate={$settings['lan_upload_limit']} pcq-classifier=src-address
+/queue simple add name=mms-lan-throttle target={$settings['lan_network']} queue=lan-pcq-upload/lan-pcq-download comment="Per-device bandwidth cap for the routed LAN port"
+# Open/plug-and-go by design -- no RADIUS, no MAC-auth, no login page.
+# Trusted because it's a physical cable into a dedicated port/VLAN.
+/ip firewall address-list add list=mms-lan-subnets address={$settings['lan_network']}
+/ip firewall filter add chain=forward src-address={$settings['lan_network']} dst-address=192.168.0.0/16 action=drop comment="LAN clients cannot reach private management/hotspot/staff/POS networks"
+SCRIPT;
+    }
+
+    /**
      * Mirrors generatePosScript()'s self-sufficiency reasoning, for the same
      * reason: enable_staff can be flipped on after Fresh Infrastructure
      * Script was last applied, leaving vlan-staff/pool-staff/dhcp-staff
@@ -530,6 +605,7 @@ SCRIPT;
             $settings['enable_staff'] ? $settings['staff_vlan'] : null,
             $settings['enable_pppoe'] ? $settings['pppoe_vlan'] : null,
             $settings['enable_pos'] ? $settings['pos_vlan'] : null,
+            $settings['enable_lan'] ? $settings['lan_vlan'] : null,
         ]);
 
         $lanBridgeName = 'bridge-lan';
@@ -541,13 +617,14 @@ SCRIPT;
         $extraStaffPorts = $settings['enable_staff'] ? $this->extraPortInterfaces($settings, 'extra_staff_ports') : [];
         $extraPosPorts = $settings['enable_pos'] ? $this->extraPortInterfaces($settings, 'extra_pos_ports') : [];
         $extraPppoePorts = $settings['enable_pppoe'] ? $this->extraPortInterfaces($settings, 'extra_pppoe_ports') : [];
+        $extraLanPorts = $settings['enable_lan'] ? $this->extraPortInterfaces($settings, 'extra_lan_ports') : [];
 
         // Every VLAN below normally rides tagged-only on the shared catch-all line (no
         // dedicated untagged member) -- pulling a VLAN's ID OUT of that shared line only
         // when it actually has extra untagged ports keeps this byte-identical to the old
         // output whenever no extras are configured, and avoids ever emitting the same
         // "vlan-ids=" value on two separate bridge-vlan-table lines in the same script.
-        $taggedVlans = implode(',', array_filter($allVlans, function ($vlan) use ($settings, $extraHotspotPorts, $extraStaffPorts, $extraPosPorts, $extraPppoePorts): bool {
+        $taggedVlans = implode(',', array_filter($allVlans, function ($vlan) use ($settings, $extraHotspotPorts, $extraStaffPorts, $extraPosPorts, $extraPppoePorts, $extraLanPorts): bool {
             if ((string) $vlan === (string) $settings['mgmt_vlan']) {
                 return false;
             }
@@ -561,6 +638,9 @@ SCRIPT;
                 return false;
             }
             if ($extraPppoePorts !== [] && (string) $vlan === (string) $settings['pppoe_vlan']) {
+                return false;
+            }
+            if ($extraLanPorts !== [] && (string) $vlan === (string) $settings['lan_vlan']) {
                 return false;
             }
 
@@ -578,6 +658,7 @@ SCRIPT;
                 ($settings['enable_staff'] && $extraStaffPorts !== []) ? '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' untagged='.implode(',', $extraStaffPorts).' vlan-ids='.$settings['staff_vlan'] : null,
                 ($settings['enable_pos'] && $extraPosPorts !== []) ? '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' untagged='.implode(',', $extraPosPorts).' vlan-ids='.$settings['pos_vlan'] : null,
                 ($settings['enable_pppoe'] && $extraPppoePorts !== []) ? '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' untagged='.implode(',', $extraPppoePorts).' vlan-ids='.$settings['pppoe_vlan'] : null,
+                ($settings['enable_lan'] && $extraLanPorts !== []) ? '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' untagged='.implode(',', $extraLanPorts).' vlan-ids='.$settings['lan_vlan'] : null,
             ]);
 
         // Confirmed live 2026-10-15, in the exact same diagnostic session as
@@ -687,6 +768,25 @@ SCRIPT;
             '# PPPoE is disabled for this router profile. Enable it for CPE/subscriber deployments.',
         ];
 
+        // Pure LAN port (2026-11-06): open/plug-and-go routed access for other
+        // routers/devices, no RADIUS/MAC-auth/login page -- trusted because
+        // it's a physical cable. PCQ (the same documented MikroTik "limit
+        // each user" pattern generateLanScript() uses) caps each connected
+        // device independently to lan_download_limit/lan_upload_limit.
+        $lanLines = $settings['enable_lan'] ? [
+            '',
+            '/ip address add address=$lanGateway interface=vlan-lan comment="Routed LAN -- other routers/devices plug in here for shared, throttled internet access"',
+            '/ip pool add name=pool-lan ranges=$lanPool',
+            '/ip dhcp-server add name=dhcp-lan interface=vlan-lan address-pool=pool-lan lease-time=12h disabled=no',
+            '/ip dhcp-server network add address=$lanNetwork gateway='.str($settings['lan_gateway'])->before('/').' dns-server='.str($settings['lan_gateway'])->before('/'),
+            '/queue type add name=lan-pcq-download kind=pcq pcq-rate=$lanDownloadLimit pcq-classifier=dst-address',
+            '/queue type add name=lan-pcq-upload kind=pcq pcq-rate=$lanUploadLimit pcq-classifier=src-address',
+            '/queue simple add name=mms-lan-throttle target=$lanNetwork queue=lan-pcq-upload/lan-pcq-download comment="Per-device bandwidth cap for the routed LAN port"',
+        ] : [
+            '',
+            '# Pure LAN port is disabled for this router profile. Enable it to let other routers/devices plug in for shared, per-device-throttled internet access.',
+        ];
+
         $qosLines = $settings['enable_realtime_qos'] ? [
             '',
             '/queue type add name=pcq-hotspot-down kind=pcq pcq-classifier=dst-address pcq-rate=0 pcq-limit=50KiB pcq-total-limit=4000KiB',
@@ -776,6 +876,12 @@ SCRIPT;
             ':global posPool "'.$settings['pos_pool'].'"',
             ':global pppoeGateway "'.$settings['pppoe_gateway'].'"',
             ':global pppoePool "'.$settings['pppoe_pool'].'"',
+            ':global lanVlan "'.$settings['lan_vlan'].'"',
+            ':global lanGateway "'.$settings['lan_gateway'].'"',
+            ':global lanNetwork "'.$settings['lan_network'].'"',
+            ':global lanPool "'.$settings['lan_pool'].'"',
+            ':global lanDownloadLimit "'.$settings['lan_download_limit'].'"',
+            ':global lanUploadLimit "'.$settings['lan_upload_limit'].'"',
             ':global downloadLimit "'.$settings['download_limit'].'"',
             ':global uploadLimit "'.$settings['upload_limit'].'"',
             '',
@@ -820,11 +926,13 @@ SCRIPT;
             ...array_map(fn (string $p): string => $this->guardedAdd('/interface bridge port find interface='.$p, '/interface bridge port add bridge=$lanBridge interface='.$p.' pvid=$hotspotVlan comment="Extra hotspot access port"'), $extraHotspotPorts),
             ...array_map(fn (string $p): string => $this->guardedAdd('/interface bridge port find interface='.$p, '/interface bridge port add bridge=$lanBridge interface='.$p.' pvid=$staffVlan comment="Extra staff access port"'), $extraStaffPorts),
             ...array_map(fn (string $p): string => $this->guardedAdd('/interface bridge port find interface='.$p, '/interface bridge port add bridge=$lanBridge interface='.$p.' pvid=$posVlan comment="Extra POS access port"'), $extraPosPorts),
+            ...array_map(fn (string $p): string => $this->guardedAdd('/interface bridge port find interface='.$p, '/interface bridge port add bridge=$lanBridge interface='.$p.' pvid=$lanVlan comment="Extra LAN access port"'), $extraLanPorts),
             '/interface vlan add interface=$lanBridge name=vlan-mgmt vlan-id=$mgmtVlan',
             '/interface vlan add interface=$lanBridge name=vlan-hotspot vlan-id=$hotspotVlan',
             $settings['enable_staff'] ? '/interface vlan add interface=$lanBridge name=vlan-staff vlan-id=$staffVlan' : '# Staff VLAN interface disabled',
             $settings['enable_pppoe'] ? '/interface vlan add interface=$lanBridge name=vlan-pppoe vlan-id=$pppoeVlan' : '# PPPoE VLAN interface disabled',
             $settings['enable_pos'] ? '/interface vlan add interface=$lanBridge name=vlan-pos vlan-id=$posVlan' : '# POS VLAN interface disabled',
+            $settings['enable_lan'] ? '/interface vlan add interface=$lanBridge name=vlan-lan vlan-id=$lanVlan' : '# Pure LAN VLAN interface disabled',
         ], $builtinWifiLines, $bridgeVlanLines, [
             '/interface bridge set $lanBridge vlan-filtering=yes',
             '',
@@ -851,7 +959,7 @@ SCRIPT;
             '/ip hotspot profile add name=mms-hotspot-profile use-radius=yes login-by=http-pap,http-chap,cookie,mac-cookie html-directory='.$this->hotspotLoginDirectory($router).' dns-name='.$hotspotDnsName.' radius-accounting=yes',
             '/ip hotspot add name=mms-hotspot interface=vlan-hotspot address-pool=pool-hotspot profile=mms-hotspot-profile disabled=no',
             ...$this->walledGardenLines($router, $portalHost),
-        ], $staffLines, $posLines, $pppoeLines, [
+        ], $staffLines, $posLines, $pppoeLines, $lanLines, [
             '',
             '# /ip firewall filter only ever sees IP traffic -- MAC-level access (Winbox\'s',
             '# "Neighbors" discovery, and MAC-Telnet) is a separate Layer 2 mechanism that',
@@ -878,6 +986,7 @@ SCRIPT;
             '',
             '/ip firewall address-list add list=mms-hotspot-subnets address=$hotspotNetwork',
             $settings['enable_pos'] ? '/ip firewall address-list add list=mms-pos-subnets address=$posNetwork' : '# POS firewall list disabled',
+            $settings['enable_lan'] ? '/ip firewall address-list add list=mms-lan-subnets address=$lanNetwork' : '# LAN firewall list disabled',
             // Confirmed live 2026-09-21: this always accepted "wg-saas" but never had a
             // ZeroTier equivalent, so a ZeroTier-only router applying this script cut off
             // its own RouterOS API access -- the catch-all "drop everything not WAN" rule
@@ -898,6 +1007,7 @@ SCRIPT;
             '/ip firewall filter add chain=forward connection-state=invalid action=drop',
             $settings['enable_pos'] ? '/ip firewall filter add chain=forward src-address=$posNetwork dst-address=10.0.0.0/8 action=drop comment="POS cannot reach private client/management networks"' : '# POS isolation disabled',
             '/ip firewall filter add chain=forward src-address=$hotspotNetwork dst-address=192.168.0.0/16 action=drop comment="Hotspot clients cannot reach LAN/private networks"',
+            $settings['enable_lan'] ? '/ip firewall filter add chain=forward src-address=$lanNetwork dst-address=192.168.0.0/16 action=drop comment="LAN clients cannot reach private management/hotspot/staff/POS networks"' : '# LAN isolation disabled',
             '/ip firewall nat add chain=srcnat out-interface=$wan1 action=masquerade',
             $secondWanNat,
         ], $qosLines, [
@@ -1186,12 +1296,19 @@ HTML;
             'pppoe_gateway' => '172.16.40.1/24',
             'pppoe_network' => '172.16.40.0/24',
             'pppoe_pool' => '172.16.40.10-172.16.40.250',
+            'lan_vlan' => 60,
+            'lan_gateway' => '172.16.60.1/24',
+            'lan_network' => '172.16.60.0/24',
+            'lan_pool' => '172.16.60.10-172.16.60.250',
+            'lan_download_limit' => '10M',
+            'lan_upload_limit' => '10M',
             'enable_builtin_wifi' => false,
             'enable_staff' => true,
             'enable_mgmt_wifi' => false,
             'enable_mgmt_mac_auth' => false,
             'enable_pos' => true,
             'enable_pppoe' => $profile !== 'small_hotspot',
+            'enable_lan' => false,
             'enable_realtime_qos' => true,
             'enable_second_wan' => false,
         ];
@@ -1223,13 +1340,25 @@ HTML;
                 : $this->taggedVlanLine($lanBridgeName, $taggedPorts, $settings['pppoe_vlan']))
             : null;
 
+        // The pure LAN port has no virtual Wi-Fi SSID at all -- wired-only,
+        // the same reasoning as PPPoE just above -- so it's tagged-only
+        // unless it has extra untagged access ports configured.
+        $lanExtraPorts = $this->extraPortInterfaces($settings, 'extra_lan_ports');
+        $lanUntagged = implode(',', $lanExtraPorts);
+        $lanLine = $settings['enable_lan']
+            ? ($lanUntagged !== ''
+                ? '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' untagged='.$lanUntagged.' vlan-ids='.$settings['lan_vlan']
+                : $this->taggedVlanLine($lanBridgeName, $taggedPorts, $settings['lan_vlan']))
+            : null;
+
         return array_filter([
             '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' untagged='.$mgmtUntagged.' vlan-ids='.$settings['mgmt_vlan'],
             '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' untagged='.$hotspotUntagged.' vlan-ids='.$settings['hotspot_vlan'],
             $settings['enable_staff'] ? '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' untagged='.$staffUntagged.' vlan-ids='.$settings['staff_vlan'] : null,
             $settings['enable_pos'] ? '/interface bridge vlan add bridge='.$lanBridgeName.' tagged='.$taggedPorts.' untagged='.$posUntagged.' vlan-ids='.$settings['pos_vlan'] : null,
             $pppoeLine,
-            '# If your AP/switch also needs tagged Staff/PPPoE/POS VLANs, keep the tagged ports above and use these virtual SSIDs only for MikroTik built-in Wi-Fi testing.',
+            $lanLine,
+            '# If your AP/switch also needs tagged Staff/PPPoE/POS/LAN VLANs, keep the tagged ports above and use these virtual SSIDs only for MikroTik built-in Wi-Fi testing.',
         ]);
     }
 

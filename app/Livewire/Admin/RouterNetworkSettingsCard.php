@@ -60,6 +60,10 @@ class RouterNetworkSettingsCard extends Component
 
     public string $wifiPassword = '';
 
+    public string $downloadLimit = '';
+
+    public string $uploadLimit = '';
+
     public function mount(Router $router, string $network): void
     {
         $this->routerId = $router->id;
@@ -116,6 +120,11 @@ class RouterNetworkSettingsCard extends Component
             $rules['wifiPassword'] = ['nullable', 'string', 'min:8', 'max:63'];
         }
 
+        if ($this->supportsBandwidthLimit()) {
+            $rules['downloadLimit'] = ['nullable', 'string', 'max:20'];
+            $rules['uploadLimit'] = ['nullable', 'string', 'max:20'];
+        }
+
         $validated = $this->validate($rules);
 
         $updated = $existing;
@@ -166,6 +175,11 @@ class RouterNetworkSettingsCard extends Component
                 : ($existing["{$prefix}_wifi_password"] ?? '');
         }
 
+        if ($this->supportsBandwidthLimit()) {
+            $updated["{$prefix}_download_limit"] = $validated['downloadLimit'] ?? '';
+            $updated["{$prefix}_upload_limit"] = $validated['uploadLimit'] ?? '';
+        }
+
         if ($extraPortsEditable) {
             // Reuses the exact same cross-field conflict check the full wizard
             // runs (RouterManagementService::portConflictRule(), now public
@@ -214,6 +228,7 @@ class RouterNetworkSettingsCard extends Component
         return match ($this->network) {
             'pos' => 'POS',
             'pppoe' => 'PPPoE',
+            'lan' => 'LAN',
             default => 'Hotspot',
         };
     }
@@ -225,17 +240,28 @@ class RouterNetworkSettingsCard extends Component
 
     public function supportsAddressPool(): bool
     {
-        return in_array($this->network, ['hotspot', 'pos', 'pppoe'], true);
+        return in_array($this->network, ['hotspot', 'pos', 'pppoe', 'lan'], true);
     }
 
     public function supportsExtraPorts(): bool
     {
-        return in_array($this->network, ['hotspot', 'pos', 'pppoe'], true);
+        return in_array($this->network, ['hotspot', 'pos', 'pppoe', 'lan'], true);
     }
 
     public function supportsWifiPassword(): bool
     {
         return $this->network === 'pos';
+    }
+
+    /**
+     * Per-device PCQ bandwidth cap -- lan only. No other network this card
+     * covers is throttled per-device this way (hotspot/pos/pppoe all get
+     * their bandwidth from the global download_limit/upload_limit or a
+     * package's own Mikrotik-Rate-Limit instead).
+     */
+    public function supportsBandwidthLimit(): bool
+    {
+        return $this->network === 'lan';
     }
 
     /**
@@ -261,6 +287,10 @@ class RouterNetworkSettingsCard extends Component
             return (bool) ($settings['enable_pppoe'] ?? false);
         }
 
+        if ($this->network === 'lan') {
+            return (bool) ($settings['enable_lan'] ?? false);
+        }
+
         return true;
     }
 
@@ -271,6 +301,7 @@ class RouterNetworkSettingsCard extends Component
         $defaultVlan = match ($prefix) {
             'pos' => 50,
             'pppoe' => 40,
+            'lan' => 60,
             default => 20,
         };
 
@@ -293,6 +324,11 @@ class RouterNetworkSettingsCard extends Component
             $this->extraPorts = $advanced
                 ? (string) ($settings["extra_{$prefix}_ports"] ?? '')
                 : (string) ($settings["extra_{$prefix}_port_numbers"] ?? '');
+        }
+
+        if ($this->supportsBandwidthLimit()) {
+            $this->downloadLimit = (string) ($settings["{$prefix}_download_limit"] ?? '10M');
+            $this->uploadLimit = (string) ($settings["{$prefix}_upload_limit"] ?? '10M');
         }
     }
 

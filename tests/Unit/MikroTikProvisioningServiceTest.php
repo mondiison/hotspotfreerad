@@ -402,6 +402,66 @@ class MikroTikProvisioningServiceTest extends TestCase
         $this->assertStringContainsString('/interface bridge vlan add bridge=bridge-lan tagged=bridge-lan,'.'ether2 vlan-ids=50', $script);
     }
 
+    /**
+     * 2026-11-06, direct request: a "pure LAN" port other routers/devices
+     * plug directly into -- open/plug-and-go (no RADIUS, no MAC-auth, no
+     * login page, unlike POS/Staff), with each connected device throttled
+     * independently via PCQ. Mirrors generatePosScript()'s own test above,
+     * minus everything POS needs that LAN deliberately doesn't.
+     */
+    public function test_it_generates_a_routeros_lan_script(): void
+    {
+        config([
+            'services.wireguard.endpoint_host' => 'vpn.example.com',
+            'services.wireguard.endpoint_port' => 13231,
+            'services.wireguard.public_key' => 'server-public-key',
+        ]);
+
+        $router = new Router([
+            'nas_identifier' => 'shop-main-router',
+            'wireguard_internal_ip' => '10.8.0.10',
+            'wireguard_private_key' => 'client-private-key',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        $script = app(MikroTikProvisioningService::class)->generateLanScript($router);
+
+        $this->assertStringContainsString('/interface vlan add interface=bridge-lan name=vlan-lan vlan-id=60', $script);
+        $this->assertStringContainsString('/ip address add address=172.16.60.1/24 interface=vlan-lan', $script);
+        $this->assertStringContainsString('/ip pool add name=pool-lan ranges=172.16.60.10-172.16.60.250', $script);
+        $this->assertStringContainsString('/ip dhcp-server add name=dhcp-lan interface=vlan-lan address-pool=pool-lan', $script);
+        $this->assertStringContainsString('/queue type add name=lan-pcq-download kind=pcq pcq-rate=10M pcq-classifier=dst-address', $script);
+        $this->assertStringContainsString('/queue type add name=lan-pcq-upload kind=pcq pcq-rate=10M pcq-classifier=src-address', $script);
+        $this->assertStringContainsString('/queue simple add name=mms-lan-throttle target=172.16.60.0/24 queue=lan-pcq-upload/lan-pcq-download', $script);
+        $this->assertStringContainsString('/ip firewall filter add chain=forward src-address=172.16.60.0/24 dst-address=192.168.0.0/16 action=drop', $script);
+        // No RADIUS, no hotspot profile/server, no MAC-auth -- open/plug-and-go.
+        $this->assertStringNotContainsString('/radius add', $script);
+        $this->assertStringNotContainsString('/ip hotspot', $script);
+    }
+
+    public function test_lan_script_includes_extra_ports_and_custom_bandwidth_when_configured(): void
+    {
+        $router = new Router([
+            'nas_identifier' => 'lan-router',
+            'wireguard_internal_ip' => '10.8.0.13',
+            'shared_secret' => 'radius-secret',
+            'provisioning_settings' => [
+                'trunk_port' => 'ether4',
+                'extra_lan_ports' => 'ether12',
+                'enable_lan' => true,
+                'lan_download_limit' => '25M',
+                'lan_upload_limit' => '5M',
+            ],
+        ]);
+
+        $script = app(MikroTikProvisioningService::class)->generateLanScript($router);
+
+        $this->assertStringContainsString('/interface bridge port add bridge=bridge-lan interface=ether12 pvid=60 comment="Extra LAN access port"', $script);
+        $this->assertStringContainsString('/interface bridge vlan add bridge=bridge-lan tagged=bridge-lan,ether4 untagged=ether12 vlan-ids=60', $script);
+        $this->assertStringContainsString('/queue type add name=lan-pcq-download kind=pcq pcq-rate=25M pcq-classifier=dst-address', $script);
+        $this->assertStringContainsString('/queue type add name=lan-pcq-upload kind=pcq pcq-rate=5M pcq-classifier=src-address', $script);
+    }
+
     public function test_staff_script_creates_staff_and_management_wifi_with_ports_and_access_list(): void
     {
         config([
@@ -689,6 +749,81 @@ class MikroTikProvisioningServiceTest extends TestCase
         $this->assertStringContainsString('vlan-ids=20,30,50', $script);
         $this->assertStringContainsString('/ip pool add name=pool-pppoe ranges=$pppoePool', $script);
         $this->assertStringContainsString('/ppp profile add name=mms-pppoe-profile only-one=yes change-tcp-mss=yes local-address=172.16.40.1 remote-address=pool-pppoe', $script);
+    }
+
+    /**
+     * 2026-11-06: the pure LAN port, disabled by default (enable_lan => false),
+     * so lan_vlan (60) must never appear anywhere in a default-settings script
+     * -- mirrors test_fresh_infrastructure_script_gives_pppoe_extra_ports_and_a_client_pool()'s
+     * own shape exactly, minus RADIUS/hotspot-profile concerns LAN doesn't have.
+     */
+    public function test_fresh_infrastructure_script_gives_lan_extra_ports_and_a_bandwidth_cap(): void
+    {
+        config([
+            'app.url' => 'https://mmsradius.com',
+            'services.radius.server_ip' => '10.8.0.1',
+            'services.wireguard.endpoint_host' => 'vpn.example.com',
+            'services.wireguard.endpoint_port' => 13231,
+            'services.wireguard.public_key' => 'server-public-key',
+            'services.mikrotik.hotspot_dns_name' => 'hotspot.local',
+        ]);
+
+        $router = new Router([
+            'nas_identifier' => 'lan-extra-ports-router',
+            'wireguard_internal_ip' => '10.8.0.32',
+            'shared_secret' => 'radius-secret',
+            'provisioning_settings' => [
+                'extra_lan_ports' => 'ether12',
+                'enable_lan' => true,
+                'lan_download_limit' => '15M',
+                'lan_upload_limit' => '8M',
+            ],
+        ]);
+
+        $script = app(MikroTikProvisioningService::class)->generateFreshInfrastructureScript($router);
+
+        $this->assertStringContainsString(
+            '/interface bridge vlan add bridge=bridge-lan tagged=bridge-lan,ether2 untagged=ether12 vlan-ids=60',
+            $script
+        );
+        $this->assertStringContainsString('/interface bridge port add bridge=$lanBridge interface=ether12 pvid=$lanVlan comment="Extra LAN access port"', $script);
+        $this->assertStringContainsString('/interface vlan add interface=$lanBridge name=vlan-lan vlan-id=$lanVlan', $script);
+        $this->assertStringContainsString('/ip pool add name=pool-lan ranges=$lanPool', $script);
+        $this->assertStringContainsString(':global lanDownloadLimit "15M"', $script);
+        $this->assertStringContainsString(':global lanUploadLimit "8M"', $script);
+        $this->assertStringContainsString('/queue type add name=lan-pcq-download kind=pcq pcq-rate=$lanDownloadLimit pcq-classifier=dst-address', $script);
+        $this->assertStringContainsString('/ip firewall filter add chain=forward src-address=$lanNetwork dst-address=192.168.0.0/16 action=drop', $script);
+    }
+
+    /**
+     * A router that never turns the LAN port on must generate a byte-
+     * identical script to before this feature existed -- vlan 60 should
+     * never appear anywhere, matching defaultProvisioningSettings()'s own
+     * enable_lan => false default.
+     */
+    public function test_fresh_infrastructure_script_omits_lan_entirely_when_disabled(): void
+    {
+        config([
+            'app.url' => 'https://mmsradius.com',
+            'services.radius.server_ip' => '10.8.0.1',
+            'services.wireguard.endpoint_host' => 'vpn.example.com',
+            'services.wireguard.endpoint_port' => 13231,
+            'services.wireguard.public_key' => 'server-public-key',
+            'services.mikrotik.hotspot_dns_name' => 'hotspot.local',
+        ]);
+
+        $router = new Router([
+            'nas_identifier' => 'no-lan-router',
+            'wireguard_internal_ip' => '10.8.0.33',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        $script = app(MikroTikProvisioningService::class)->generateFreshInfrastructureScript($router);
+
+        $this->assertStringNotContainsString('vlan-lan', $script);
+        $this->assertStringNotContainsString('vlan-ids=60', $script);
+        $this->assertStringNotContainsString('lan-pcq', $script);
+        $this->assertStringNotContainsString('mms-lan-throttle', $script);
     }
 
     public function test_extra_mgmt_ports_merge_into_the_existing_mgmt_untagged_line(): void

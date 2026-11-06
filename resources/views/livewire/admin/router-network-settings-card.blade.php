@@ -35,6 +35,22 @@
                     </flux:field>
                 @endif
 
+                @if ($this->supportsBandwidthLimit())
+                    <flux:field>
+                        <flux:label>Per-device download limit</flux:label>
+                        <flux:input wire:model="downloadLimit" placeholder="10M" />
+                        <flux:description>Each connected device gets up to this much, independently.</flux:description>
+                        <flux:error name="downloadLimit" />
+                    </flux:field>
+
+                    <flux:field>
+                        <flux:label>Per-device upload limit</flux:label>
+                        <flux:input wire:model="uploadLimit" placeholder="10M" />
+                        <flux:description>Each connected device gets up to this much, independently.</flux:description>
+                        <flux:error name="uploadLimit" />
+                    </flux:field>
+                @endif
+
                 <flux:field>
                     <flux:label>VLAN</flux:label>
                     <flux:input type="number" wire:model="vlan" min="1" max="4094" />

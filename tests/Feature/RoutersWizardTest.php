@@ -153,6 +153,50 @@ class RoutersWizardTest extends TestCase
     }
 
     /**
+     * 2026-11-06, direct request: a "pure LAN" port for other routers/devices
+     * to plug directly into, open/plug-and-go, each throttled independently
+     * via a per-device bandwidth cap. Confirms the fields stay hidden until
+     * enabled (same pattern as POS/PPPoE above) and persist correctly once
+     * saved.
+     */
+    public function test_lan_fields_appear_only_once_enabled_and_save_correctly(): void
+    {
+        $shop = $this->shop();
+
+        Livewire::actingAs($this->superAdmin())
+            ->test(RoutersIndex::class)
+            ->call('create')
+            ->set('shop_id', (string) $shop->id)
+            ->set('name', 'Lan Router')
+            ->set('nas_identifier', 'lan-wizard-router')
+            ->set('wireguard_internal_ip', '10.8.0.87')
+            ->set('shared_secret', 'radius-secret')
+            ->call('nextStep')
+            ->call('nextStep')
+            ->assertDontSee('Per-device download limit')
+            ->set('provisioning_settings.enable_lan', true)
+            ->assertSee('Per-device download limit')
+            ->set('provisioning_settings.lan_download_limit', '15M')
+            ->set('provisioning_settings.lan_upload_limit', '5M')
+            ->call('nextStep')
+            ->assertSee('LAN gateway')
+            ->set('provisioning_settings.lan_vlan', 70)
+            ->set('provisioning_settings.lan_gateway', '172.16.70.1/24')
+            ->set('provisioning_settings.lan_network', '172.16.70.0/24')
+            ->set('provisioning_settings.lan_pool', '172.16.70.10-172.16.70.250')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $router = Router::where('nas_identifier', 'lan-wizard-router')->firstOrFail();
+
+        $this->assertTrue($router->provisioning_settings['enable_lan']);
+        $this->assertSame('15M', $router->provisioning_settings['lan_download_limit']);
+        $this->assertSame('5M', $router->provisioning_settings['lan_upload_limit']);
+        $this->assertSame(70, $router->provisioning_settings['lan_vlan']);
+        $this->assertSame('172.16.70.1/24', $router->provisioning_settings['lan_gateway']);
+    }
+
+    /**
      * Regression/feature test for the 2026-09-24 fix: Management MAC-auth
      * enforcement is opt-in (enable_mgmt_mac_auth, default false), unlike
      * Staff's -- confirmed live that forcing it on by default locked an

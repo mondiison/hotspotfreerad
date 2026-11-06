@@ -60,6 +60,7 @@ class RouterAutoProvisioningServiceTest extends TestCase
             $mock->shouldNotReceive('provisionPppoe');
             $mock->shouldNotReceive('provisionPos');
             $mock->shouldNotReceive('provisionStaffWifi');
+            $mock->shouldNotReceive('provisionLan');
         });
 
         app(RouterAutoProvisioningService::class)->reconcile();
@@ -92,6 +93,7 @@ class RouterAutoProvisioningServiceTest extends TestCase
             ]);
             $mock->shouldReceive('provisionPos')->once()->andReturn(['success' => true, 'steps' => []]);
             $mock->shouldReceive('provisionStaffWifi')->once()->andReturn(['success' => true, 'steps' => []]);
+            $mock->shouldReceive('provisionLan')->once()->andReturn(['success' => true, 'steps' => []]);
         });
 
         $result = app(RouterAutoProvisioningService::class)->reconcile();
@@ -113,6 +115,7 @@ class RouterAutoProvisioningServiceTest extends TestCase
             $mock->shouldReceive('provisionHotspot')->once()->andReturn(['success' => true, 'steps' => []]);
             $mock->shouldReceive('provisionPos')->once()->andReturn(['success' => true, 'steps' => []]);
             $mock->shouldReceive('provisionStaffWifi')->once()->andReturn(['success' => true, 'steps' => []]);
+            $mock->shouldReceive('provisionLan')->once()->andReturn(['success' => true, 'steps' => []]);
         });
 
         $result = app(RouterAutoProvisioningService::class)->reconcile();
@@ -134,6 +137,7 @@ class RouterAutoProvisioningServiceTest extends TestCase
             $mock->shouldReceive('provisionPppoe')->once()->andReturn(['success' => true, 'steps' => []]);
             $mock->shouldReceive('provisionPos')->once()->andReturn(['success' => true, 'steps' => []]);
             $mock->shouldReceive('provisionStaffWifi')->once()->andReturn(['success' => true, 'steps' => []]);
+            $mock->shouldReceive('provisionLan')->once()->andReturn(['success' => true, 'steps' => []]);
         });
 
         app(RouterAutoProvisioningService::class)->reconcile();
@@ -149,18 +153,20 @@ class RouterAutoProvisioningServiceTest extends TestCase
             $mock->shouldNotReceive('provisionPppoe');
             $mock->shouldReceive('provisionPos')->once()->andReturn(['success' => true, 'steps' => []]);
             $mock->shouldReceive('provisionStaffWifi')->once()->andReturn(['success' => true, 'steps' => []]);
+            $mock->shouldReceive('provisionLan')->once()->andReturn(['success' => true, 'steps' => []]);
         });
 
         app(RouterAutoProvisioningService::class)->reconcile();
     }
 
     /**
-     * Unlike PPPoE, provisionPos() and provisionStaffWifi() are always called
-     * regardless of enable_pos/enable_builtin_wifi -- both already no-op
-     * internally for a disabled router (see RouterOsConnectionService::
-     * provisionPos()'s own default-true fallback and provisionStaffWifi()'s
-     * enable_builtin_wifi check), so this service deliberately doesn't
-     * duplicate either check itself.
+     * Unlike PPPoE, provisionPos()/provisionStaffWifi()/provisionLan() are
+     * always called regardless of enable_pos/enable_builtin_wifi/enable_lan
+     * -- all three already no-op internally for a disabled router (see
+     * RouterOsConnectionService::provisionPos()'s own default-true fallback,
+     * provisionStaffWifi()'s enable_builtin_wifi check, and provisionLan()'s
+     * own enable_lan check), so this service deliberately doesn't duplicate
+     * any of those checks itself.
      */
     public function test_pos_is_always_provisioned_regardless_of_enable_pos(): void
     {
@@ -171,6 +177,22 @@ class RouterAutoProvisioningServiceTest extends TestCase
             $mock->shouldReceive('provisionHotspot')->once()->andReturn(['success' => true, 'steps' => []]);
             $mock->shouldReceive('provisionPos')->once()->andReturn(['success' => true, 'steps' => []]);
             $mock->shouldReceive('provisionStaffWifi')->once()->andReturn(['success' => true, 'steps' => []]);
+            $mock->shouldReceive('provisionLan')->once()->andReturn(['success' => true, 'steps' => []]);
+        });
+
+        app(RouterAutoProvisioningService::class)->reconcile();
+    }
+
+    public function test_lan_is_always_provisioned_regardless_of_enable_lan(): void
+    {
+        config(['services.mikrotik.auto_provision_routers' => true]);
+        $this->makeRouter(['provisioning_settings' => ['enable_lan' => false]]);
+
+        $this->mock(RouterOsConnectionService::class, function ($mock): void {
+            $mock->shouldReceive('provisionHotspot')->once()->andReturn(['success' => true, 'steps' => []]);
+            $mock->shouldReceive('provisionPos')->once()->andReturn(['success' => true, 'steps' => []]);
+            $mock->shouldReceive('provisionStaffWifi')->once()->andReturn(['success' => true, 'steps' => []]);
+            $mock->shouldReceive('provisionLan')->once()->andReturn(['success' => true, 'steps' => []]);
         });
 
         app(RouterAutoProvisioningService::class)->reconcile();
@@ -187,6 +209,7 @@ class RouterAutoProvisioningServiceTest extends TestCase
             $mock->shouldNotReceive('provisionPppoe');
             $mock->shouldNotReceive('provisionPos');
             $mock->shouldNotReceive('provisionStaffWifi');
+            $mock->shouldNotReceive('provisionLan');
         });
 
         $result = app(RouterAutoProvisioningService::class)->reconcile(dryRun: true);

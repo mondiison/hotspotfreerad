@@ -254,4 +254,24 @@ class RouterPortLayoutTest extends TestCase
 
         $this->assertSame([5], $assignments['extra_pppoe']);
     }
+
+    public function test_extra_lan_bucket_is_empty_when_lan_is_not_enabled(): void
+    {
+        $assignments = RouterPortLayout::bucketAssignments([
+            'extra_lan_port_numbers' => '5',
+            'enable_lan' => false,
+        ]);
+
+        $this->assertSame([], $assignments['extra_lan']);
+    }
+
+    public function test_extra_lan_bucket_holds_its_port_once_lan_is_enabled(): void
+    {
+        $assignments = RouterPortLayout::bucketAssignments([
+            'extra_lan_port_numbers' => '5',
+            'enable_lan' => true,
+        ]);
+
+        $this->assertSame([5], $assignments['extra_lan']);
+    }
 }

@@ -436,7 +436,7 @@ class RoutersIndex extends Component
             RouterPortLayout::interfaceName(...), array_slice($trunk, 1)
         ));
 
-        foreach (['extra_mgmt', 'extra_hotspot', 'extra_staff', 'extra_pos', 'extra_pppoe'] as $key) {
+        foreach (['extra_mgmt', 'extra_hotspot', 'extra_staff', 'extra_pos', 'extra_pppoe', 'extra_lan'] as $key) {
             $this->provisioning_settings["{$key}_port_numbers"] = implode(',', $assignments[$key]);
             $this->provisioning_settings["{$key}_ports"] = implode(',', array_map(
                 RouterPortLayout::interfaceName(...), $assignments[$key]
@@ -687,6 +687,7 @@ class RoutersIndex extends Component
             'extra_staff_port_numbers' => 'extra_staff_ports',
             'extra_pos_port_numbers' => 'extra_pos_ports',
             'extra_pppoe_port_numbers' => 'extra_pppoe_ports',
+            'extra_lan_port_numbers' => 'extra_lan_ports',
         ];
 
         $parsedExtraPortNumbers = [];
@@ -746,30 +747,33 @@ class RoutersIndex extends Component
                 'provisioning_settings.extra_mgmt_port_numbers', 'provisioning_settings.extra_trunk_port_numbers',
                 'provisioning_settings.extra_hotspot_port_numbers',
                 'provisioning_settings.extra_staff_port_numbers', 'provisioning_settings.extra_pos_port_numbers',
-                'provisioning_settings.extra_pppoe_port_numbers',
+                'provisioning_settings.extra_pppoe_port_numbers', 'provisioning_settings.extra_lan_port_numbers',
                 'provisioning_settings.extra_mgmt_ports', 'provisioning_settings.extra_trunk_ports',
                 'provisioning_settings.extra_hotspot_ports',
                 'provisioning_settings.extra_staff_ports', 'provisioning_settings.extra_pos_ports',
-                'provisioning_settings.extra_pppoe_ports',
+                'provisioning_settings.extra_pppoe_ports', 'provisioning_settings.extra_lan_ports',
             ],
             3 => [
                 'provisioning_settings.enable_staff', 'provisioning_settings.enable_pos',
                 'provisioning_settings.enable_mgmt_wifi', 'provisioning_settings.enable_mgmt_mac_auth',
-                'provisioning_settings.enable_pppoe',
+                'provisioning_settings.enable_pppoe', 'provisioning_settings.enable_lan',
                 'provisioning_settings.enable_realtime_qos', 'provisioning_settings.download_limit',
                 'provisioning_settings.upload_limit', 'provisioning_settings.builtin_wifi_interface',
                 'provisioning_settings.staff_wifi_password', 'provisioning_settings.pos_wifi_password',
                 'provisioning_settings.mgmt_wifi_password',
+                'provisioning_settings.lan_download_limit', 'provisioning_settings.lan_upload_limit',
             ],
             4 => [
                 'provisioning_settings.profile',
                 'provisioning_settings.mgmt_vlan', 'provisioning_settings.hotspot_vlan',
                 'provisioning_settings.staff_vlan', 'provisioning_settings.pppoe_vlan', 'provisioning_settings.pos_vlan',
+                'provisioning_settings.lan_vlan',
                 'provisioning_settings.mgmt_gateway', 'provisioning_settings.mgmt_network', 'provisioning_settings.mgmt_pool',
                 'provisioning_settings.hotspot_gateway', 'provisioning_settings.hotspot_network', 'provisioning_settings.hotspot_pool',
                 'provisioning_settings.staff_gateway', 'provisioning_settings.staff_network', 'provisioning_settings.staff_pool',
                 'provisioning_settings.pos_gateway', 'provisioning_settings.pos_network', 'provisioning_settings.pos_pool',
                 'provisioning_settings.pppoe_gateway', 'provisioning_settings.pppoe_network', 'provisioning_settings.pppoe_pool',
+                'provisioning_settings.lan_gateway', 'provisioning_settings.lan_network', 'provisioning_settings.lan_pool',
                 'provisioning_settings.route_lan_through_tunnel',
             ],
             default => [],

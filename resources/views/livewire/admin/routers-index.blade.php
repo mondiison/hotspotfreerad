@@ -379,6 +379,15 @@
                                         <flux:error name="provisioning_settings.extra_pppoe_ports" />
                                     </flux:field>
                                 @endif
+
+                                @if ($provisioning_settings['enable_lan'] ?? false)
+                                    <flux:field>
+                                        <flux:label>Extra LAN ports</flux:label>
+                                        <flux:input wire:model.blur="provisioning_settings.extra_lan_ports" placeholder="e.g. ether12" />
+                                        <flux:description>Other routers/devices plug in here for shared, per-device-throttled internet access.</flux:description>
+                                        <flux:error name="provisioning_settings.extra_lan_ports" />
+                                    </flux:field>
+                                @endif
                             </div>
                         @else
                             @php($portOptions = \App\Support\RouterPortLayout::portOptions((int) ($provisioning_settings['port_count'] ?? 8)))
@@ -389,6 +398,7 @@
                                 'Extra staff port' => ($provisioning_settings['enable_staff'] ?? false) ? ($provisioning_settings['extra_staff_port_numbers'] ?? '') : '',
                                 'Extra POS port' => ($provisioning_settings['enable_pos'] ?? false) ? ($provisioning_settings['extra_pos_port_numbers'] ?? '') : '',
                                 'Extra PPPoE port' => ($provisioning_settings['enable_pppoe'] ?? false) ? ($provisioning_settings['extra_pppoe_port_numbers'] ?? '') : '',
+                                'Extra LAN port' => ($provisioning_settings['enable_lan'] ?? false) ? ($provisioning_settings['extra_lan_port_numbers'] ?? '') : '',
                             ])
                             @php($extraPortConflictRoles = [])
                             @foreach ($extraPortRoles as $roleLabel => $csv)
@@ -432,6 +442,7 @@
                                 'extra_staff' => ($provisioning_settings['enable_staff'] ?? false) ? 'Extra staff' : null,
                                 'extra_pos' => ($provisioning_settings['enable_pos'] ?? false) ? 'Extra POS' : null,
                                 'extra_pppoe' => ($provisioning_settings['enable_pppoe'] ?? false) ? 'Extra PPPoE' : null,
+                                'extra_lan' => ($provisioning_settings['enable_lan'] ?? false) ? 'Extra LAN' : null,
                             ]))
                             <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4">
                                 <p class="text-sm font-medium">Visual port mapping</p>
@@ -560,6 +571,15 @@
                                         <flux:error name="provisioning_settings.extra_pppoe_port_numbers" />
                                     </flux:field>
                                 @endif
+
+                                @if ($provisioning_settings['enable_lan'] ?? false)
+                                    <flux:field>
+                                        <flux:label>Extra LAN ports</flux:label>
+                                        <flux:input wire:model.blur="provisioning_settings.extra_lan_port_numbers" placeholder="e.g. 12" />
+                                        <flux:description>Other routers/devices plug in here for shared, per-device-throttled internet access.</flux:description>
+                                        <flux:error name="provisioning_settings.extra_lan_port_numbers" />
+                                    </flux:field>
+                                @endif
                             </div>
                         @endif
                     </div>
@@ -579,7 +599,33 @@
                             <flux:checkbox wire:model.live="provisioning_settings.enable_pppoe" label="PPPoE/CPE VLAN" />
                             <flux:checkbox wire:model.live="provisioning_settings.enable_realtime_qos" label="Realtime voice/video QoS" />
                             <flux:checkbox wire:model.live="provisioning_settings.enable_mgmt_mac_auth" label="Require Trusted Wi-Fi Device on management VLAN" />
+                            <flux:checkbox wire:model.live="provisioning_settings.enable_lan" label="Pure LAN port (other routers/devices)" />
                         </div>
+
+                        @if ($provisioning_settings['enable_lan'] ?? false)
+                            <div class="space-y-4 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4">
+                                <div>
+                                    <p class="text-sm font-semibold text-zinc-950 dark:text-zinc-100">Pure LAN port</p>
+                                    <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">A plain routed network for other routers or devices to plug into directly -- open/plug-and-go (no registration, no captive portal), DHCP-assigned, with every connected device throttled independently to the same cap below rather than sharing one pipe.</p>
+                                </div>
+
+                                <div class="grid gap-5 md:grid-cols-2">
+                                    <flux:field>
+                                        <flux:label>Per-device download limit</flux:label>
+                                        <flux:input wire:model.blur="provisioning_settings.lan_download_limit" placeholder="10M" />
+                                        <flux:description>Each connected device gets up to this much, independently. Example: <code>10M</code>.</flux:description>
+                                        <flux:error name="provisioning_settings.lan_download_limit" />
+                                    </flux:field>
+
+                                    <flux:field>
+                                        <flux:label>Per-device upload limit</flux:label>
+                                        <flux:input wire:model.blur="provisioning_settings.lan_upload_limit" placeholder="10M" />
+                                        <flux:description>Each connected device gets up to this much, independently. Example: <code>10M</code>.</flux:description>
+                                        <flux:error name="provisioning_settings.lan_upload_limit" />
+                                    </flux:field>
+                                </div>
+                            </div>
+                        @endif
 
                         @if ($provisioning_settings['enable_mgmt_mac_auth'] ?? false)
                             <div class="rounded-md border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950 p-3 text-sm text-amber-800 dark:text-amber-200">
@@ -710,6 +756,14 @@
                                     <flux:error name="provisioning_settings.pos_vlan" />
                                 </flux:field>
                             @endif
+
+                            @if ($provisioning_settings['enable_lan'] ?? false)
+                                <flux:field>
+                                    <flux:label>LAN VLAN</flux:label>
+                                    <flux:input type="number" wire:model.blur="provisioning_settings.lan_vlan" placeholder="60" />
+                                    <flux:error name="provisioning_settings.lan_vlan" />
+                                </flux:field>
+                            @endif
                         </div>
 
                         <div class="grid gap-4 md:grid-cols-3">
@@ -807,6 +861,26 @@
                                     <flux:input wire:model.blur="provisioning_settings.pppoe_pool" placeholder="172.16.40.10-172.16.40.250" />
                                     <flux:description>Assigned to PPP sessions via remote-address, not DHCP.</flux:description>
                                     <flux:error name="provisioning_settings.pppoe_pool" />
+                                </flux:field>
+                            @endif
+
+                            @if ($provisioning_settings['enable_lan'] ?? false)
+                                <flux:field>
+                                    <flux:label>LAN gateway</flux:label>
+                                    <flux:input wire:model.blur="provisioning_settings.lan_gateway" placeholder="172.16.60.1/24" />
+                                    <flux:error name="provisioning_settings.lan_gateway" />
+                                </flux:field>
+
+                                <flux:field>
+                                    <flux:label>LAN network</flux:label>
+                                    <flux:input wire:model.blur="provisioning_settings.lan_network" placeholder="172.16.60.0/24" />
+                                    <flux:error name="provisioning_settings.lan_network" />
+                                </flux:field>
+
+                                <flux:field>
+                                    <flux:label>LAN DHCP pool</flux:label>
+                                    <flux:input wire:model.blur="provisioning_settings.lan_pool" placeholder="172.16.60.10-172.16.60.250" />
+                                    <flux:error name="provisioning_settings.lan_pool" />
                                 </flux:field>
                             @endif
 

@@ -99,8 +99,13 @@ class RouterAutoProvisioningService
         // mechanism that already keeps WireGuard peers/ZeroTier membership/POS
         // MAC-auth in sync without a manual click.
         $staffWifiResult = $this->routerOs->provisionStaffWifi($router);
+        // provisionLan() already no-ops internally for a router with the pure
+        // LAN port disabled (enable_lan defaults to false), the same
+        // "already no-ops, don't duplicate the check here" pattern
+        // provisionPos() established above.
+        $lanResult = $this->routerOs->provisionLan($router);
 
-        if ($hotspotResult['success'] && $pppoeResult['success'] && $posResult['success'] && $staffWifiResult['success']) {
+        if ($hotspotResult['success'] && $pppoeResult['success'] && $posResult['success'] && $staffWifiResult['success'] && $lanResult['success']) {
             $router->forceFill(['auto_provisioned_at' => now()])->save();
             $result['provisioned'][] = $router->name;
 
@@ -117,7 +122,7 @@ class RouterAutoProvisioningService
         // from "reachable but a step genuinely failed" by inspecting error text --
         // that kind of string-matching has been a real source of bugs in this
         // codebase before, so every failed step is just reported plainly.
-        foreach (array_merge($hotspotResult['steps'], $pppoeResult['steps'], $posResult['steps'], $staffWifiResult['steps']) as $step) {
+        foreach (array_merge($hotspotResult['steps'], $pppoeResult['steps'], $posResult['steps'], $staffWifiResult['steps'], $lanResult['steps']) as $step) {
             if (! $step['success'] && $step['error'] !== null) {
                 $result['errors'][] = "{$router->name}: {$step['label']} - {$step['error']}";
             }

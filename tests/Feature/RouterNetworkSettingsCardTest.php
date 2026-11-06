@@ -358,4 +358,94 @@ class RouterNetworkSettingsCardTest extends TestCase
             ->call('save')
             ->assertHasNoErrors();
     }
+
+    /**
+     * 2026-11-06: the pure LAN port -- no SSID/Wi-Fi password at all (wired-
+     * only, like PPPoE), but it gets its own address pool/extra-ports
+     * support like PPPoE did, plus a per-device PCQ bandwidth cap no other
+     * network this card covers has.
+     */
+    public function test_it_loads_existing_settings_for_the_lan_network(): void
+    {
+        $router = $this->makeRouter([
+            'enable_lan' => true,
+            'lan_vlan' => 65,
+            'lan_gateway' => '172.16.65.1/24',
+            'lan_network' => '172.16.65.0/24',
+            'lan_pool' => '172.16.65.10-172.16.65.250',
+            'extra_lan_port_numbers' => '12,13',
+            'lan_download_limit' => '20M',
+            'lan_upload_limit' => '8M',
+        ]);
+
+        Livewire::test(RouterNetworkSettingsCard::class, ['router' => $router, 'network' => 'lan'])
+            ->assertSet('vlan', 65)
+            ->assertSet('gateway', '172.16.65.1/24')
+            ->assertSet('networkCidr', '172.16.65.0/24')
+            ->assertSet('pool', '172.16.65.10-172.16.65.250')
+            ->assertSet('extraPorts', '12,13')
+            ->assertSet('downloadLimit', '20M')
+            ->assertSet('uploadLimit', '8M');
+    }
+
+    public function test_lan_card_does_not_expose_ssid_or_password_fields(): void
+    {
+        $router = $this->makeRouter();
+
+        $component = Livewire::test(RouterNetworkSettingsCard::class, ['router' => $router, 'network' => 'lan']);
+
+        $this->assertFalse($component->instance()->supportsSsid());
+        $this->assertFalse($component->instance()->supportsWifiPassword());
+        $this->assertTrue($component->instance()->supportsBandwidthLimit());
+    }
+
+    public function test_saving_lan_settings_updates_only_lan_keys(): void
+    {
+        $router = $this->makeRouter([
+            'enable_lan' => true,
+            'hotspot_ssid' => 'MMS Hotspot',
+            'hotspot_vlan' => 20,
+            'lan_vlan' => 60,
+        ]);
+
+        Livewire::test(RouterNetworkSettingsCard::class, ['router' => $router, 'network' => 'lan'])
+            ->set('vlan', 65)
+            ->set('gateway', '172.16.65.1/24')
+            ->set('networkCidr', '172.16.65.0/24')
+            ->set('pool', '172.16.65.10-172.16.65.250')
+            ->set('extraPorts', '12')
+            ->set('downloadLimit', '20M')
+            ->set('uploadLimit', '8M')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $settings = $router->fresh()->provisioning_settings;
+
+        $this->assertSame(65, $settings['lan_vlan']);
+        $this->assertSame('172.16.65.1/24', $settings['lan_gateway']);
+        $this->assertSame('172.16.65.0/24', $settings['lan_network']);
+        $this->assertSame('172.16.65.10-172.16.65.250', $settings['lan_pool']);
+        $this->assertSame('12', $settings['extra_lan_port_numbers']);
+        $this->assertSame('20M', $settings['lan_download_limit']);
+        $this->assertSame('8M', $settings['lan_upload_limit']);
+        // Hotspot's own settings are untouched by a LAN-scoped save.
+        $this->assertSame('MMS Hotspot', $settings['hotspot_ssid']);
+        $this->assertSame(20, $settings['hotspot_vlan']);
+    }
+
+    public function test_saving_lan_settings_never_poisons_extra_ports_while_lan_is_disabled(): void
+    {
+        $router = $this->makeRouter(['enable_lan' => false]);
+
+        Livewire::test(RouterNetworkSettingsCard::class, ['router' => $router, 'network' => 'lan'])
+            ->set('vlan', 60)
+            ->set('extraPorts', '12')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $settings = $router->fresh()->provisioning_settings;
+
+        $this->assertSame('', $settings['extra_lan_port_numbers']);
+        $this->assertSame('', $settings['extra_lan_ports']);
+    }
 }

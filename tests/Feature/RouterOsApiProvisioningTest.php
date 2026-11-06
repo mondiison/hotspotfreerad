@@ -504,6 +504,51 @@ class RouterOsApiProvisioningTest extends TestCase
         $this->assertSame(['success' => true, 'steps' => []], $result);
     }
 
+    /**
+     * 2026-11-06: the pure LAN port has no hotspot profile/server/login-page
+     * steps at all (open/plug-and-go, no RADIUS/MAC-auth) -- just the
+     * idempotent infrastructure check and the PCQ bandwidth-queue sync, both
+     * of which make their own separate connection attempt against an
+     * unreachable router.
+     */
+    public function test_provision_lan_reports_a_clear_error_when_router_is_unreachable(): void
+    {
+        $router = Router::create([
+            'shop_id' => $this->makeShop()->id,
+            'name' => 'Unreachable LAN Router',
+            'nas_identifier' => 'unreachable-lan-router',
+            'wireguard_internal_ip' => '192.0.2.9',
+            'shared_secret' => 'radius-secret',
+            'provisioning_settings' => ['enable_lan' => true],
+        ]);
+
+        $result = app(RouterOsConnectionService::class)->provisionLan($router);
+
+        $this->assertFalse($result['success']);
+        $this->assertCount(2, $result['steps']);
+        $labels = array_column($result['steps'], 'label');
+        $this->assertContains('Check LAN VLAN infrastructure', $labels);
+        $this->assertContains('Sync LAN per-device bandwidth cap', $labels);
+        $this->assertFalse($result['steps'][0]['success']);
+        $this->assertNotEmpty($result['steps'][0]['error']);
+    }
+
+    public function test_provision_lan_is_a_no_op_when_a_router_has_lan_disabled(): void
+    {
+        $router = Router::create([
+            'shop_id' => $this->makeShop()->id,
+            'name' => 'No LAN Router',
+            'nas_identifier' => 'no-lan-router',
+            'wireguard_internal_ip' => '192.0.2.10',
+            'shared_secret' => 'radius-secret',
+            'provisioning_settings' => ['enable_lan' => false],
+        ]);
+
+        $result = app(RouterOsConnectionService::class)->provisionLan($router);
+
+        $this->assertSame(['success' => true, 'steps' => []], $result);
+    }
+
     public function test_provision_staff_wifi_reports_a_clear_error_when_router_is_unreachable(): void
     {
         $router = Router::create([

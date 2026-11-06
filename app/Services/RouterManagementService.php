@@ -78,12 +78,17 @@ class RouterManagementService
                 'nullable', 'string', 'max:120', 'regex:/^\d+(,\s*\d+)*$/',
                 Rule::prohibitedIf(fn () => ! (bool) data_get($provisioningSettings, 'enable_pppoe')),
             ],
+            'provisioning_settings.extra_lan_port_numbers' => [
+                'nullable', 'string', 'max:120', 'regex:/^\d+(,\s*\d+)*$/',
+                Rule::prohibitedIf(fn () => ! (bool) data_get($provisioningSettings, 'enable_lan')),
+            ],
             'provisioning_settings.extra_mgmt_ports' => ['nullable', 'string', 'max:200'],
             'provisioning_settings.extra_trunk_ports' => ['nullable', 'string', 'max:200'],
             'provisioning_settings.extra_hotspot_ports' => ['nullable', 'string', 'max:200'],
             'provisioning_settings.extra_staff_ports' => ['nullable', 'string', 'max:200'],
             'provisioning_settings.extra_pos_ports' => ['nullable', 'string', 'max:200'],
             'provisioning_settings.extra_pppoe_ports' => ['nullable', 'string', 'max:200'],
+            'provisioning_settings.extra_lan_ports' => ['nullable', 'string', 'max:200'],
             'provisioning_settings.builtin_wifi_interface' => ['required_if:provisioning_settings.enable_builtin_wifi,true', 'nullable', 'string', 'max:40'],
             'provisioning_settings.hotspot_ssid' => ['nullable', 'string', 'max:32'],
             'provisioning_settings.pos_ssid' => ['nullable', 'string', 'max:32'],
@@ -121,12 +126,19 @@ class RouterManagementService
             'provisioning_settings.pppoe_gateway' => ['nullable', 'string', 'max:32'],
             'provisioning_settings.pppoe_network' => ['nullable', 'string', 'max:32'],
             'provisioning_settings.pppoe_pool' => ['nullable', 'string', 'max:64'],
+            'provisioning_settings.lan_vlan' => ['nullable', 'integer', 'min:1', 'max:4094'],
+            'provisioning_settings.lan_gateway' => ['nullable', 'string', 'max:32'],
+            'provisioning_settings.lan_network' => ['nullable', 'string', 'max:32'],
+            'provisioning_settings.lan_pool' => ['nullable', 'string', 'max:64'],
+            'provisioning_settings.lan_download_limit' => ['nullable', 'string', 'max:20'],
+            'provisioning_settings.lan_upload_limit' => ['nullable', 'string', 'max:20'],
             'provisioning_settings.enable_builtin_wifi' => ['nullable', 'boolean'],
             'provisioning_settings.enable_staff' => ['nullable', 'boolean'],
             'provisioning_settings.enable_mgmt_wifi' => ['nullable', 'boolean'],
             'provisioning_settings.enable_mgmt_mac_auth' => ['nullable', 'boolean'],
             'provisioning_settings.enable_pos' => ['nullable', 'boolean'],
             'provisioning_settings.enable_pppoe' => ['nullable', 'boolean'],
+            'provisioning_settings.enable_lan' => ['nullable', 'boolean'],
             'provisioning_settings.enable_realtime_qos' => ['nullable', 'boolean'],
             'provisioning_settings.enable_second_wan' => ['nullable', 'boolean'],
             'provisioning_settings.route_lan_through_tunnel' => [
@@ -369,12 +381,14 @@ class RouterManagementService
             'extra_staff_port_numbers' => '',
             'extra_pos_port_numbers' => '',
             'extra_pppoe_port_numbers' => '',
+            'extra_lan_port_numbers' => '',
             'extra_mgmt_ports' => '',
             'extra_trunk_ports' => '',
             'extra_hotspot_ports' => '',
             'extra_staff_ports' => '',
             'extra_pos_ports' => '',
             'extra_pppoe_ports' => '',
+            'extra_lan_ports' => '',
             'builtin_wifi_interface' => 'wifi1',
             'hotspot_ssid' => 'MMS Hotspot',
             'pos_ssid' => 'MMS POS',
@@ -411,12 +425,19 @@ class RouterManagementService
             'pppoe_gateway' => '172.16.40.1/24',
             'pppoe_network' => '172.16.40.0/24',
             'pppoe_pool' => '172.16.40.10-172.16.40.250',
+            'lan_vlan' => 60,
+            'lan_gateway' => '172.16.60.1/24',
+            'lan_network' => '172.16.60.0/24',
+            'lan_pool' => '172.16.60.10-172.16.60.250',
+            'lan_download_limit' => '10M',
+            'lan_upload_limit' => '10M',
             'enable_builtin_wifi' => false,
             'enable_staff' => true,
             'enable_mgmt_wifi' => false,
             'enable_mgmt_mac_auth' => false,
             'enable_pos' => true,
             'enable_pppoe' => $profile !== 'small_hotspot',
+            'enable_lan' => false,
             'enable_realtime_qos' => true,
             'enable_second_wan' => false,
             'route_lan_through_tunnel' => false,
@@ -445,11 +466,11 @@ class RouterManagementService
         $settings = $settings + ['profile' => 'starlink_plaza'];
         $settings = array_replace($this->defaultProvisioningSettings((string) $settings['profile']), $settings);
 
-        foreach (['enable_builtin_wifi', 'enable_staff', 'enable_mgmt_wifi', 'enable_mgmt_mac_auth', 'enable_pos', 'enable_pppoe', 'enable_realtime_qos', 'enable_second_wan', 'route_lan_through_tunnel', 'ports_advanced_mode'] as $field) {
+        foreach (['enable_builtin_wifi', 'enable_staff', 'enable_mgmt_wifi', 'enable_mgmt_mac_auth', 'enable_pos', 'enable_pppoe', 'enable_lan', 'enable_realtime_qos', 'enable_second_wan', 'route_lan_through_tunnel', 'ports_advanced_mode'] as $field) {
             $settings[$field] = (bool) ($settings[$field] ?? false);
         }
 
-        foreach (['mgmt_vlan', 'hotspot_vlan', 'staff_vlan', 'pppoe_vlan', 'pos_vlan'] as $field) {
+        foreach (['mgmt_vlan', 'hotspot_vlan', 'staff_vlan', 'pppoe_vlan', 'pos_vlan', 'lan_vlan'] as $field) {
             $settings[$field] = (int) $settings[$field];
         }
 
@@ -500,6 +521,7 @@ class RouterManagementService
             'extra_staff_ports' => 'extra_staff_port_numbers',
             'extra_pos_ports' => 'extra_pos_port_numbers',
             'extra_pppoe_ports' => 'extra_pppoe_port_numbers',
+            'extra_lan_ports' => 'extra_lan_port_numbers',
         ] as $stringKey => $numberKey) {
             if (array_key_exists($numberKey, $settings)) {
                 $settings[$stringKey] = implode(',', RouterPortLayout::interfaceNamesFromNumberList((string) ($settings[$numberKey] ?? '')));
@@ -567,6 +589,7 @@ class RouterManagementService
                 'Extra staff port' => ($provisioningSettings['enable_staff'] ?? false) ? ($provisioningSettings['extra_staff_port_numbers'] ?? null) : null,
                 'Extra POS port' => ($provisioningSettings['enable_pos'] ?? false) ? ($provisioningSettings['extra_pos_port_numbers'] ?? null) : null,
                 'Extra PPPoE port' => ($provisioningSettings['enable_pppoe'] ?? false) ? ($provisioningSettings['extra_pppoe_port_numbers'] ?? null) : null,
+                'Extra LAN port' => ($provisioningSettings['enable_lan'] ?? false) ? ($provisioningSettings['extra_lan_port_numbers'] ?? null) : null,
             ] as $roleLabel => $csv) {
                 $numbers = array_values(array_filter(array_map('trim', explode(',', (string) $csv)), fn (string $piece): bool => $piece !== ''));
 
@@ -616,6 +639,7 @@ class RouterManagementService
             'Extra staff port' => ($provisioningSettings['enable_staff'] ?? false) ? ($provisioningSettings['extra_staff_ports'] ?? null) : null,
             'Extra POS port' => ($provisioningSettings['enable_pos'] ?? false) ? ($provisioningSettings['extra_pos_ports'] ?? null) : null,
             'Extra PPPoE port' => ($provisioningSettings['enable_pppoe'] ?? false) ? ($provisioningSettings['extra_pppoe_ports'] ?? null) : null,
+            'Extra LAN port' => ($provisioningSettings['enable_lan'] ?? false) ? ($provisioningSettings['extra_lan_ports'] ?? null) : null,
         ] as $roleLabel => $csv) {
             $names = array_values(array_filter(array_map('trim', explode(',', (string) $csv)), fn (string $piece): bool => $piece !== ''));
 

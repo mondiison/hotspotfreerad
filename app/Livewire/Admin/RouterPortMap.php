@@ -166,6 +166,12 @@ class RouterPortMap extends Component
                 'vlan_label' => 'VLAN '.($settings['pppoe_vlan'] ?? 40).' (untagged)',
                 'detail' => 'Untagged PPPoE/CPE VLAN access for a wired subscriber.',
             ],
+            'extra_lan' => [
+                'label' => 'LAN',
+                'color' => 'lime',
+                'vlan_label' => 'VLAN '.($settings['lan_vlan'] ?? 60).' (untagged)',
+                'detail' => 'Untagged pure LAN VLAN access -- open/plug-and-go for other routers/devices, each throttled independently via PCQ.',
+            ],
             'unassigned' => [
                 'label' => 'Unassigned',
                 'color' => 'zinc',

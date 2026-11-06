@@ -70,6 +70,7 @@
                     <flux:tab name="pppoe" icon="signal">PPPoE Script</flux:tab>
                     <flux:tab name="pos" icon="credit-card">POS Script</flux:tab>
                     <flux:tab name="staff" icon="shield-check">Staff Script</flux:tab>
+                    <flux:tab name="lan" icon="server-stack">LAN Script</flux:tab>
                     <flux:tab name="ap-guide" icon="book-open">AP / SSID Guide</flux:tab>
                     <flux:tab name="live" icon="bolt">Live</flux:tab>
                     <flux:tab name="insight" icon="cpu-chip">Insight</flux:tab>
@@ -589,6 +590,54 @@ sudo freeradius -X</code></pre>
                             <li>If no devices are registered yet for a network, its wifi access-list is left open (no default-deny) so a brand-new setup can't accidentally lock out the admin's own device before anything has been registered. The MAC-auth hotspot has no such exception -- it always requires a registered MAC.</li>
                             <li>"Provision via API" syncs the MAC-auth hotspot and (when built-in Wi-Fi is on) the wifi access-list -- it does not create the Staff/Management SSID itself if it doesn't exist yet. Paste this script by hand first (or re-run Fresh Infrastructure Script) if a wireless SSID is missing.</li>
                             <li>Requires a RADIUS client for the "hotspot" service already added (Hotspot Script tab, or the Bootstrap/Fresh Infrastructure scripts) -- Staff/Management share that RADIUS client rather than adding their own.</li>
+                        </ul>
+                    </section>
+                </flux:tab.panel>
+
+                <flux:tab.panel name="lan" class="space-y-6">
+                    <livewire:admin.router-network-settings-card :router="$router" network="lan" :key="'lan-settings-'.$router->id" />
+
+                    <section class="min-w-0 overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm">
+                        <div class="border-b border-zinc-200 dark:border-zinc-700 px-5 py-4">
+                            <div class="flex flex-col justify-between gap-3 md:flex-row md:items-start">
+                                <div>
+                                    <h2 class="text-base font-semibold">RouterOS LAN Script</h2>
+                                    <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">A plain routed network for other routers/devices to plug into directly -- open and plug-and-go (no registration, no captive portal), trusted because it's a physical cable into a dedicated port/VLAN. Each connected device is throttled independently to the same cap via PCQ, so it never shares one pipe with the others. Apply live over the API independently of the other scripts, or paste by hand.</p>
+                                </div>
+                                @if ($router->api_username)
+                                    <flux:modal.trigger name="provision-lan-confirm">
+                                        <button type="button" class="rounded-md border border-zinc-200 dark:border-zinc-700 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-zinc-50 dark:hover:bg-zinc-800">Provision via API</button>
+                                    </flux:modal.trigger>
+                                    <flux:modal name="provision-lan-confirm" class="md:w-lg" :dismissible="true">
+                                        <div class="space-y-5">
+                                            <div>
+                                                <flux:heading size="lg">Provision LAN port via API</flux:heading>
+                                                <flux:text class="mt-2">This pushes only the LAN VLAN/addressing and its per-device bandwidth cap to the router live over the API -- it does not touch the customer hotspot, PPPoE, POS, or Staff/Management.</flux:text>
+                                            </div>
+                                            <div class="flex justify-end gap-3">
+                                                <flux:modal.close>
+                                                    <flux:button type="button" variant="ghost">Cancel</flux:button>
+                                                </flux:modal.close>
+                                                <form method="POST" action="{{ route('admin.routers.provision-lan', $router) }}">
+                                                    @csrf
+                                                    <flux:button type="submit" variant="primary">Provision via API</flux:button>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </flux:modal>
+                                @endif
+                            </div>
+                        </div>
+                        <x-script-block>{{ $lanScript }}</x-script-block>
+                    </section>
+
+                    <section class="min-w-0 overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
+                        <h2 class="text-base font-semibold">LAN Notes</h2>
+                        <ul class="mt-4 space-y-3 text-sm text-zinc-600 dark:text-zinc-400">
+                            <li>No registration and no login page -- any device plugged into this port (or an extra LAN port) gets a DHCP lease and routed internet access automatically. Trusted because it's a physical cable into a dedicated port/VLAN, the same reasoning the Pi/management port already relies on.</li>
+                            <li>Per-device download/upload limits (Features step of the wizard, or the "Edit LAN settings" button above) cap each connected device independently via PCQ -- three downstream routers each get up to the configured rate, not one shared pipe split three ways.</li>
+                            <li>Isolated from the management/hotspot/staff/POS networks the same way POS is isolated from them -- a LAN client cannot reach those private subnets, only the internet.</li>
+                            <li>This script is NOT idempotent, same as the Fresh Infrastructure Script -- do not paste it twice on a router that already has the LAN VLAN/addressing, whether from an earlier paste of this script or from Fresh Infrastructure Script having already included it.</li>
                         </ul>
                     </section>
                 </flux:tab.panel>

@@ -110,6 +110,7 @@ final class RouterPortLayout
             'extra_staff' => ($settings['enable_staff'] ?? false) ? $plural('extra_staff_port_numbers', 'extra_staff_ports') : [],
             'extra_pos' => ($settings['enable_pos'] ?? false) ? $plural('extra_pos_port_numbers', 'extra_pos_ports') : [],
             'extra_pppoe' => ($settings['enable_pppoe'] ?? false) ? $plural('extra_pppoe_port_numbers', 'extra_pppoe_ports') : [],
+            'extra_lan' => ($settings['enable_lan'] ?? false) ? $plural('extra_lan_port_numbers', 'extra_lan_ports') : [],
         ];
     }
 

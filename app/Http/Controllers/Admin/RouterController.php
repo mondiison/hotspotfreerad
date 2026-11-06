@@ -64,6 +64,7 @@ class RouterController extends Controller
             'pppoeScript' => $mikroTik->generatePppoeScript($router),
             'posScript' => $mikroTik->generatePosScript($router),
             'staffScript' => $mikroTik->generateStaffScript($router),
+            'lanScript' => $mikroTik->generateLanScript($router),
             'freshInfrastructureScript' => $mikroTik->generateFreshInfrastructureScript($router),
             'accessPointGuide' => $mikroTik->generateAccessPointGuide(),
             'infrastructureProfiles' => $mikroTik->infrastructureProfiles(),
@@ -180,6 +181,17 @@ class RouterController extends Controller
         TenantAccess::assertRouter($router, $request->user());
 
         $result = $routerOs->provisionStaffWifi($router);
+        $this->markAutoProvisionedIfSuccessful($router, $result);
+
+        return redirect()->route('admin.routers.show', $router)
+            ->with('status', $this->summarizeProvisioningResult($result));
+    }
+
+    public function provisionLan(Request $request, Router $router, RouterOsConnectionService $routerOs): RedirectResponse
+    {
+        TenantAccess::assertRouter($router, $request->user());
+
+        $result = $routerOs->provisionLan($router);
         $this->markAutoProvisionedIfSuccessful($router, $result);
 
         return redirect()->route('admin.routers.show', $router)
