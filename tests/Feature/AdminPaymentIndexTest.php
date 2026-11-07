@@ -688,6 +688,32 @@ class AdminPaymentIndexTest extends TestCase
         $this->assertDatabaseMissing('radcheck', ['username' => $oldMac]);
     }
 
+    /**
+     * 2026-11-07, direct request: clean "No reference" checkouts from the
+     * Payments list instead of waiting for the scheduled cleanup.
+     */
+    public function test_tenant_admin_can_clean_no_reference_checkouts_from_the_list(): void
+    {
+        [$single, $tenant] = $this->paymentFixture('Own Tenant', 'own@example.com', 'Own Shop', 'NO-REF-ONE', 'pending', [], 'monnify');
+        [$bulk] = $this->paymentFixture('Own Tenant B', 'ownb@example.com', 'Own Shop B', 'NO-REF-TWO', 'pending', [], 'monnify');
+        $bulk->update(['shop_id' => $single->shop_id]);
+        [$otherTenants] = $this->paymentFixture('Other Tenant', 'other@example.com', 'Other Shop', 'NO-REF-OTHER', 'pending', [], 'monnify');
+        foreach ([$single, $bulk, $otherTenants] as $payment) {
+            $payment->forceFill(['provider_reference' => null, 'created_at' => now()->subHour()])->save();
+        }
+        $user = User::factory()->create(['tenant_id' => $tenant->id, 'role' => 'tenant_admin', 'is_active' => true]);
+
+        $component = Livewire::actingAs($user)->test(PaymentsIndex::class)
+            ->assertSee('Clean 2 no-reference')
+            ->call('cleanAbandonedPayment', $single->id);
+        $this->assertSame('abandoned', $single->refresh()->status);
+
+        $component->call('cleanAllAbandonedPayments');
+        $this->assertSame('abandoned', $bulk->refresh()->status);
+        // Another tenant's checkout is outside this admin's scope.
+        $this->assertSame('pending', $otherTenants->refresh()->status);
+    }
+
     private function paymentFixture(string $tenantName, string $ownerEmail, string $shopName, string $txRef, string $status, array $tenantOverrides = [], string $provider = 'flutterwave'): array
     {
         $tenant = Tenant::create(array_merge([

@@ -1,5 +1,20 @@
 <div>
-    <div class="mb-4 flex justify-end">
+    <div class="mb-4 flex flex-wrap justify-end gap-2">
+        @if ($noReferenceCount > 0)
+            <flux:button
+                type="button"
+                variant="outline"
+                icon="trash"
+                tooltip="Mark every pending checkout with no provider reference (older than 10 minutes) as abandoned"
+                wire:click="cleanAllAbandonedPayments"
+                wire:confirm="Mark {{ $noReferenceCount }} checkout(s) with no reference as abandoned? Flutterwave card payments are checked first and granted if they were actually paid."
+                wire:loading.attr="disabled"
+                wire:target="cleanAllAbandonedPayments"
+            >
+                <span wire:loading.remove wire:target="cleanAllAbandonedPayments">Clean {{ $noReferenceCount }} no-reference</span>
+                <span wire:loading wire:target="cleanAllAbandonedPayments">Cleaning...</span>
+            </flux:button>
+        @endif
         <flux:button href="{{ route('admin.payments.export', $exportQuery) }}" variant="outline" icon="arrow-down-tray">Export CSV</flux:button>
     </div>
 
@@ -209,7 +224,24 @@
                                         <span wire:loading wire:target="verifyPayment({{ $payment->id }})">Verifying...</span>
                                     </flux:button>
                                 @else
-                                    <span class="text-xs text-zinc-400 dark:text-zinc-500" title="No provider reference yet">No reference</span>
+                                    @if ($payment->status === 'pending')
+                                        <flux:button
+                                            type="button"
+                                            size="xs"
+                                            variant="outline"
+                                            icon="trash"
+                                            tooltip="No provider reference: the checkout never reached the gateway"
+                                            wire:click="cleanAbandonedPayment({{ $payment->id }})"
+                                            wire:confirm="Mark this checkout as abandoned? It never reached the payment gateway. (A Flutterwave card payment is checked first and granted if it was actually paid.)"
+                                            wire:loading.attr="disabled"
+                                            wire:target="cleanAbandonedPayment({{ $payment->id }})"
+                                        >
+                                            <span wire:loading.remove wire:target="cleanAbandonedPayment({{ $payment->id }})">Clean</span>
+                                            <span wire:loading wire:target="cleanAbandonedPayment({{ $payment->id }})">Cleaning...</span>
+                                        </flux:button>
+                                    @else
+                                        <span class="text-xs text-zinc-400 dark:text-zinc-500" title="No provider reference yet">No reference</span>
+                                    @endif
                                 @endif
                             @elseif ($payment->status === 'successful' && $payment->subscription && $payment->subscription->expires_at->isFuture() && blank($payment->voucher_id))
                                 <flux:button

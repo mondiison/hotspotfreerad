@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Payment;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Log;
 
@@ -26,16 +27,25 @@ class AbandonedPaymentCleanupService
     ) {}
 
     /**
-     * @return array{candidates:int, abandoned:int, recovered:int, skipped:int}
+     * Pending payments with no provider reference, optionally narrowed by a
+     * caller's own scope (the Payments page passes the signed-in user's
+     * tenant scope).
      */
-    public function run(int $olderThanMinutes = 60, bool $dryRun = false): array
+    public function candidates(?Builder $query = null, int $olderThanMinutes = 0): Builder
     {
-        $candidates = Payment::query()
+        return ($query ?? Payment::query())
             ->with(['shop.tenant', 'package', 'customer'])
             ->where('status', 'pending')
-            ->where(fn ($query) => $query->whereNull('provider_reference')->orWhere('provider_reference', ''))
-            ->where('created_at', '<=', now()->subMinutes(max(1, $olderThanMinutes)))
-            ->get();
+            ->where(fn ($inner) => $inner->whereNull('provider_reference')->orWhere('provider_reference', ''))
+            ->when($olderThanMinutes > 0, fn ($inner) => $inner->where('created_at', '<=', now()->subMinutes($olderThanMinutes)));
+    }
+
+    /**
+     * @return array{candidates:int, abandoned:int, recovered:int, skipped:int}
+     */
+    public function run(int $olderThanMinutes = 60, bool $dryRun = false, ?Builder $query = null): array
+    {
+        $candidates = $this->candidates($query, max(1, $olderThanMinutes))->get();
 
         $result = ['candidates' => $candidates->count(), 'abandoned' => 0, 'recovered' => 0, 'skipped' => 0];
 
@@ -44,44 +54,57 @@ class AbandonedPaymentCleanupService
         }
 
         foreach ($candidates as $payment) {
-            if ($this->isStandardCardCheckout($payment)) {
-                try {
-                    $verification = $this->flutterwave->verifyStandardCheckoutByTxRef($payment);
-                } catch (RequestException $e) {
-                    // 404 = Flutterwave never saw this tx_ref, so nothing was paid.
-                    if ($e->response?->status() !== 404) {
-                        Log::warning('Could not check abandoned Flutterwave checkout; will retry next run', [
-                            'payment_id' => $payment->id,
-                            'tx_ref' => $payment->tx_ref,
-                            'status' => $e->response?->status(),
-                        ]);
-                        $result['skipped']++;
-
-                        continue;
-                    }
-
-                    $verification = null;
-                }
-
-                if ($verification && $this->confirmation->verificationMatchesPayment($verification, $payment)) {
-                    $this->confirmation->markPaidAndGrantAccess($payment, $verification);
-                    $result['recovered']++;
-
-                    continue;
-                }
-            }
-
-            $payment->update([
-                'status' => self::STATUS,
-                'payload' => array_merge($payment->payload ?? [], [
-                    'abandoned_at' => now()->toIso8601String(),
-                    'abandoned_reason' => 'Checkout never reached the payment gateway (no provider reference).',
-                ]),
-            ]);
-            $result['abandoned']++;
+            $result[$this->clean($payment)]++;
         }
 
         return $result;
+    }
+
+    /**
+     * Close one checkout that has no reference.
+     *
+     * @return 'abandoned'|'recovered'|'skipped'
+     */
+    public function clean(Payment $payment): string
+    {
+        if ($payment->status !== 'pending' || filled($payment->provider_reference)) {
+            return 'skipped';
+        }
+
+        if ($this->isStandardCardCheckout($payment)) {
+            try {
+                $verification = $this->flutterwave->verifyStandardCheckoutByTxRef($payment);
+            } catch (RequestException $e) {
+                // 404 = Flutterwave never saw this tx_ref, so nothing was paid.
+                if ($e->response?->status() !== 404) {
+                    Log::warning('Could not check abandoned Flutterwave checkout; will retry next run', [
+                        'payment_id' => $payment->id,
+                        'tx_ref' => $payment->tx_ref,
+                        'status' => $e->response?->status(),
+                    ]);
+
+                    return 'skipped';
+                }
+
+                $verification = null;
+            }
+
+            if ($verification && $this->confirmation->verificationMatchesPayment($verification, $payment)) {
+                $this->confirmation->markPaidAndGrantAccess($payment, $verification);
+
+                return 'recovered';
+            }
+        }
+
+        $payment->update([
+            'status' => self::STATUS,
+            'payload' => array_merge($payment->payload ?? [], [
+                'abandoned_at' => now()->toIso8601String(),
+                'abandoned_reason' => 'Checkout never reached the payment gateway (no provider reference).',
+            ]),
+        ]);
+
+        return 'abandoned';
     }
 
     private function isStandardCardCheckout(Payment $payment): bool

@@ -4,6 +4,7 @@ namespace App\Livewire\Admin;
 
 use App\Livewire\Concerns\SortsTable;
 use App\Models\Payment;
+use App\Services\AbandonedPaymentCleanupService;
 use App\Services\HotspotPaymentConfirmationService;
 use App\Services\PaymentReportService;
 use App\Services\VoucherManagementService;
@@ -231,6 +232,36 @@ class PaymentsIndex extends Component
         $this->showRecoveryVoucherModal = true;
     }
 
+    /**
+     * 2026-11-07, direct request: clean a "No reference" checkout from the
+     * list right away instead of waiting for the scheduled cleanup.
+     */
+    public function cleanAbandonedPayment(int $paymentId, AbandonedPaymentCleanupService $cleanup): void
+    {
+        $payment = TenantAccess::scopePayments(Payment::query(), auth()->user())->findOrFail($paymentId);
+
+        $this->dispatch('notify', ...match ($cleanup->clean($payment)) {
+            'abandoned' => ['type' => 'success', 'message' => 'Checkout marked as abandoned.'],
+            'recovered' => ['type' => 'success', 'message' => 'This checkout was actually paid. Access has been granted.'],
+            default => ['type' => 'warning', 'message' => 'Could not clean this payment right now. Try again in a moment.'],
+        });
+    }
+
+    /**
+     * Clean every visible "No reference" checkout older than 10 minutes, so a
+     * customer who is still on the payment page right now is left alone.
+     */
+    public function cleanAllAbandonedPayments(AbandonedPaymentCleanupService $cleanup): void
+    {
+        $result = $cleanup->run(10, false, TenantAccess::scopePayments(Payment::query(), auth()->user()));
+
+        $message = $result['candidates'] === 0
+            ? 'No checkouts without a reference to clean.'
+            : "Cleaned {$result['abandoned']} checkout(s)".($result['recovered'] ? ", {$result['recovered']} found paid and granted" : '').($result['skipped'] ? ", {$result['skipped']} left for later" : '').'.';
+
+        $this->dispatch('notify', type: 'success', message: $message);
+    }
+
     public function closeRecoveryVoucherModal(): void
     {
         $this->showRecoveryVoucherModal = false;
@@ -273,6 +304,9 @@ class PaymentsIndex extends Component
             'presets' => $reports->presets(),
             'exportQuery' => $reports->queryParams($filters),
             'paymentMethods' => PaymentGatewayCatalog::paymentMethods(),
+            'noReferenceCount' => app(AbandonedPaymentCleanupService::class)
+                ->candidates(TenantAccess::scopePayments(Payment::query(), auth()->user()), 10)
+                ->count(),
         ]);
     }
 }
