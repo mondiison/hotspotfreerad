@@ -179,6 +179,8 @@ class HotspotHostedCheckoutManager
         $credentialSource = $this->credentialSourceFor($payment, $gateway, $credentials, $gatewayLabel);
 
         if (! $gateway->isConfigured($credentials)) {
+            $this->recordCheckoutFailure($payment, 'missing_gateway_secret_key', $gatewayLabel.' keys are not set for this shop.');
+
             return $this->result($credentialSource, null, 'missing_gateway_secret_key');
         }
 
@@ -203,22 +205,53 @@ class HotspotHostedCheckoutManager
                 'tx_ref' => $payment->tx_ref,
                 'response_body' => $result->response,
             ]);
+            $this->recordCheckoutFailure($payment, 'missing_checkout_url', $gatewayLabel.' did not return a checkout link.');
 
             return $this->result($credentialSource, null, 'missing_checkout_url');
         } catch (Throwable $exception) {
             $reason = $this->checkoutFailureReason($exception);
+            $responseBody = $exception instanceof RequestException
+                ? $exception->response->json() ?: $exception->response->body()
+                : null;
 
             Log::warning($gatewayLabel.' checkout initialization failed', [
                 'payment_id' => $payment->id,
                 'tx_ref' => $payment->tx_ref,
                 'message' => $exception->getMessage(),
-                'response_body' => $exception instanceof RequestException
-                    ? $exception->response->json() ?: $exception->response->body()
-                    : null,
+                'response_body' => $responseBody,
             ]);
+            $this->recordCheckoutFailure($payment, $reason, $gatewayLabel.': '.$this->gatewayErrorMessage($responseBody, $exception));
 
             return $this->result($credentialSource, null, $reason);
         }
+    }
+
+    /**
+     * Keep why a checkout never started on the payment itself, so the Payments
+     * list can show it instead of a bare "No reference" (2026-11-07: Monnify
+     * checkouts failing with nothing visible outside the server log).
+     */
+    private function recordCheckoutFailure(Payment $payment, string $reason, string $message): void
+    {
+        $payment->update([
+            'payload' => array_merge($payment->payload ?? [], [
+                'checkout_failure' => [
+                    'reason' => $reason,
+                    'message' => mb_substr($message, 0, 300),
+                    'at' => now()->toIso8601String(),
+                ],
+            ]),
+        ]);
+    }
+
+    private function gatewayErrorMessage(mixed $responseBody, Throwable $exception): string
+    {
+        // Monnify: responseMessage; Paystack/Squad: message; Stripe: error.message.
+        $message = is_array($responseBody)
+            ? (data_get($responseBody, 'responseMessage') ?: data_get($responseBody, 'message') ?: data_get($responseBody, 'error.message'))
+            : null;
+
+        return (string) ($message ?: $exception->getMessage());
     }
 
     /**

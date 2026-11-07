@@ -119,6 +119,7 @@ class PaymentReportService
             'successful' => 'Successful',
             'pending' => 'Pending',
             'failed' => 'Failed',
+            'abandoned' => 'Abandoned',
             default => 'All',
         };
     }

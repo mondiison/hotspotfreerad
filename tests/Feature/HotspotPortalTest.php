@@ -2164,6 +2164,54 @@ class HotspotPortalTest extends TestCase
     }
 
     /**
+     * 2026-11-07, live report: Monnify checkouts stayed "pending" with "No
+     * reference" and nothing explained why. The gateway's error is now saved
+     * on the payment so the Payments list can show it.
+     */
+    public function test_a_failed_monnify_checkout_records_the_gateway_error_on_the_payment(): void
+    {
+        PlatformSetting::query()->updateOrCreate(
+            ['key' => 'payments.platform.general'],
+            ['value' => ['active_gateway' => 'monnify']]
+        );
+        PlatformSetting::query()->updateOrCreate(
+            ['key' => 'payments.platform.gateway.monnify'],
+            ['value' => [
+                'public_key' => Crypt::encryptString('platform-monnify-api-key'),
+                'secret_key' => Crypt::encryptString('platform-monnify-secret-key'),
+                'contract_code' => Crypt::encryptString('platform-contract-code'),
+            ]]
+        );
+        Cache::flush();
+
+        [$router, $package] = $this->routerWithPackage([
+            'wallet_enabled' => true,
+            'billing_model' => 'commission',
+            'commission_rate' => 10,
+            'wallet_commission_bearer' => 'tenant',
+        ]);
+
+        Http::fake([
+            'sandbox.monnify.com/api/v1/auth/login' => Http::response(['responseBody' => ['accessToken' => 'WALLET_MONNIFY_TOKEN']]),
+            'sandbox.monnify.com/api/v1/merchant/transactions/init-transaction' => Http::response([
+                'requestSuccessful' => false,
+                'responseMessage' => 'Invalid contract code',
+            ], 400),
+        ]);
+
+        $this->post(route('hotspot.pay'), [
+            'mac' => 'AA:BB:CC:DD:EE:FF',
+            'nasid' => $router->nas_identifier,
+            'package_id' => $package->id,
+        ]);
+
+        $payment = Payment::firstOrFail();
+        $this->assertSame('pending', $payment->status);
+        $this->assertNull($payment->provider_reference);
+        $this->assertSame('Monnify: Invalid contract code', data_get($payment->payload, 'checkout_failure.message'));
+    }
+
+    /**
      * Regression coverage for the same live 2026-09-27 report the fallback
      * test below documents: PaymentGatewayCatalog::walletCapableGatewayKeys()
      * used to exclude Paystack, so setting the platform's "Active gateway" to

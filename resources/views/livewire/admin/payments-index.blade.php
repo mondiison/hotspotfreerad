@@ -81,7 +81,7 @@
         <flux:select wire:model.live="status">
             <flux:select.option value="">All statuses</flux:select.option>
             <flux:select.option value="attention">Needs attention</flux:select.option>
-            @foreach (['pending', 'successful', 'failed', 'verification_failed'] as $statusOption)
+            @foreach (['pending', 'successful', 'failed', 'verification_failed', 'abandoned'] as $statusOption)
                 <flux:select.option value="{{ $statusOption }}">{{ str_replace('_', ' ', ucfirst($statusOption)) }}</flux:select.option>
             @endforeach
         </flux:select>
@@ -127,6 +127,9 @@
                         <td class="px-4 py-3">
                             <p class="font-mono text-xs font-medium">{{ $payment->tx_ref }}</p>
                             <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $payment->provider_reference ?: 'No provider ref' }}</p>
+                            @if (! $payment->provider_reference && data_get($payment->payload, 'checkout_failure.message'))
+                                <p class="mt-1 max-w-xs text-xs text-red-600 dark:text-red-400">Checkout failed: {{ data_get($payment->payload, 'checkout_failure.message') }}</p>
+                            @endif
                             <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $payment->created_at->diffForHumans() }} ({{ $payment->created_at->format('M j, Y g:i A') }})</p>
                         </td>
                         <td class="px-4 py-3">
@@ -158,7 +161,7 @@
                             <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ \App\Support\PaymentGatewayCatalog::isOnlineProvider($payment->provider) ? 'Online checkout' : 'Offline sale' }}</p>
                         </td>
                         <td class="px-4 py-3">
-                            <flux:badge :color="$payment->status === 'successful' ? 'green' : ($payment->status === 'pending' ? 'amber' : 'red')">
+                            <flux:badge :color="match ($payment->status) { 'successful' => 'green', 'pending' => 'amber', 'abandoned' => 'zinc', default => 'red' }">
                                 {{ str_replace('_', ' ', $payment->status) }}
                             </flux:badge>
                             @if ($payment->paid_at)

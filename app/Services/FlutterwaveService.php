@@ -183,6 +183,22 @@ class FlutterwaveService
             ->json();
     }
 
+    /**
+     * Look a v3 card checkout up by our own tx_ref. Its provider reference only
+     * arrives on the redirect/webhook, so a customer who paid but never came
+     * back leaves a payment with no reference; this is the only way to find it.
+     *
+     * @throws RequestException
+     */
+    public function verifyStandardCheckoutByTxRef(Payment $payment): array
+    {
+        return Http::withToken($this->hostedCheckoutSecretKey($payment))
+            ->acceptJson()
+            ->get($this->standardBaseUrl().'/transactions/verify_by_reference', ['tx_ref' => $payment->tx_ref])
+            ->throw()
+            ->json();
+    }
+
     public function webhookIsValid(?string $signature, ?Payment $payment = null): bool
     {
         $secretHash = $this->usesWalletCredentials($payment)

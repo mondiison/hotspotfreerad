@@ -409,6 +409,26 @@ Artisan::command('hotspot:retry-pending-payments {--dry-run}', function (Hotspot
     return Command::SUCCESS;
 })->purpose('Automatically re-check pending/unconfirmed online payments at escalating intervals, up to 3 attempts');
 
+/**
+ * 2026-11-07, direct report: "pending transaction with no reference, stuck
+ * some devices". Checkouts that never reached the gateway stay "pending"
+ * forever because the retry job above needs a provider reference. See
+ * AbandonedPaymentCleanupService for the Flutterwave card exception.
+ */
+Artisan::command('hotspot:expire-abandoned-payments {--minutes=60 : Only payments older than this} {--dry-run}', function (App\Services\AbandonedPaymentCleanupService $cleanup): int {
+    $result = $cleanup->run((int) $this->option('minutes'), (bool) $this->option('dry-run'));
+
+    if ($this->option('dry-run')) {
+        $this->info("{$result['candidates']} pending payment(s) with no reference would be checked.");
+
+        return Command::SUCCESS;
+    }
+
+    $this->info("Checked {$result['candidates']}: {$result['abandoned']} marked abandoned, {$result['recovered']} found paid and granted, {$result['skipped']} left for the next run.");
+
+    return Command::SUCCESS;
+})->purpose('Mark pending payments that never got a gateway reference as abandoned (after a final Flutterwave tx_ref check)');
+
 Schedule::command('hotspot:prune-security-activity')
     ->dailyAt('02:15')
     ->withoutOverlapping();
@@ -435,6 +455,10 @@ Schedule::command('hotspot:sync-expired-pos')
 
 Schedule::command('hotspot:retry-pending-payments')
     ->everyFiveMinutes()
+    ->withoutOverlapping();
+
+Schedule::command('hotspot:expire-abandoned-payments')
+    ->everyFifteenMinutes()
     ->withoutOverlapping();
 
 Artisan::command('hotspot:sync-wireguard-peers {--dry-run}', function (WireGuardPeerSyncService $wireguard): int {
