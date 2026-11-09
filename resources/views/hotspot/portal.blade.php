@@ -146,12 +146,41 @@
                                 Don't have a code? Call {{ $shop->contactPhone() }} to get one.
                             </a>
                         @endif
+
+                        {{--
+                            2026-11-09, direct request: a display-only fallback
+                            for customers who can't finish online checkout, or
+                            prefer to pay by transfer and message in afterward --
+                            independent of whichever gateway is actually active,
+                            per-shop opt-in (show_bank_transfer_fallback, off by
+                            default). No automated payment-to-voucher linking in
+                            this first pass: the customer still messages the
+                            tenant their reference after transferring, who then
+                            issues a voucher by hand from the admin panel.
+                        --}}
+                        @if ($shop->show_bank_transfer_fallback && filled($bankTransferFallback['account_number'] ?? null))
+                            <div class="mt-4 rounded-md border border-zinc-200 bg-zinc-50 p-3">
+                                <p class="text-xs font-medium text-zinc-700">Prefer to pay by transfer?</p>
+                                <dl class="mt-2 space-y-1 text-xs text-zinc-600">
+                                    @if (filled($bankTransferFallback['bank_name'] ?? null))
+                                        <div class="flex justify-between gap-3"><dt>Bank</dt><dd class="font-medium text-zinc-950">{{ $bankTransferFallback['bank_name'] }}</dd></div>
+                                    @endif
+                                    @if (filled($bankTransferFallback['account_name'] ?? null))
+                                        <div class="flex justify-between gap-3"><dt>Account name</dt><dd class="font-medium text-zinc-950">{{ $bankTransferFallback['account_name'] }}</dd></div>
+                                    @endif
+                                    <div class="flex justify-between gap-3"><dt>Account number</dt><dd class="font-mono font-medium text-zinc-950">{{ $bankTransferFallback['account_number'] }}</dd></div>
+                                </dl>
+                                <p class="mt-2 text-xs leading-5 text-zinc-500">
+                                    {{ filled($bankTransferFallback['instructions'] ?? null) ? $bankTransferFallback['instructions'] : 'Send to this account, then message us your reference'.($shop->contactPhone() ? ' at '.$shop->contactPhone() : '').' for a voucher code.' }}
+                                </p>
+                            </div>
+                        @endif
                     </div>
                 </flux:accordion.item>
 
                 @forelse ($packages as $package)
                     <flux:accordion.item heading="{{ $package->name }} — {{ $package->currency }} {{ number_format($package->price, 0) }}" :expanded="$errors->has('phone') && (int) old('package_id') === $package->id">
-                        <div x-data="{ paying: false, testing: false }">
+                        <div x-data="{ paying: false, testing: false, asVoucher: false }">
                             <p class="text-xs text-zinc-500">{{ $formatDuration($package->limit_uptime_seconds) }} / {{ $formatData($package->data_limit_bytes) }} / {{ $package->speed_limit_profile }}</p>
 
                             <dl class="mt-3 grid grid-cols-3 gap-2 text-xs text-zinc-600 sm:block sm:space-y-2 sm:text-sm">
@@ -233,9 +262,25 @@
                                 @if ($originalUrl)
                                     <input type="hidden" name="link-orig" value="{{ $originalUrl }}">
                                 @endif
+
+                                {{--
+                                    2026-11-09, direct request: some customers
+                                    can't finish online checkout on this
+                                    device, or want to buy access for another
+                                    device/person to use later -- this issues
+                                    a voucher code instead of granting this
+                                    device access (see PortalController::pay()
+                                    and HotspotPaymentConfirmationService's
+                                    as_voucher branch).
+                                --}}
+                                <label class="flex items-start gap-2 rounded-md bg-zinc-50 px-3 py-2">
+                                    <input type="checkbox" name="as_voucher" value="1" x-model="asVoucher" class="mt-0.5 h-4 w-4 rounded border-zinc-300">
+                                    <span class="text-xs text-zinc-600">Buy as a voucher code instead — use it later, or give it to another device/person.</span>
+                                </label>
+
                                 <button class="flex w-full items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-white disabled:cursor-wait disabled:opacity-75" style="background-color: var(--brand)" :disabled="paying">
                                     <span x-show="paying" class="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"></span>
-                                    <span x-text="paying ? 'Opening payment...' : 'Continue to payment'">Continue to payment</span>
+                                    <span x-text="paying ? (asVoucher ? 'Generating code...' : 'Opening payment...') : (asVoucher ? 'Buy voucher code' : 'Continue to payment')">Continue to payment</span>
                                 </button>
                             </form>
 

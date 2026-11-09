@@ -12,6 +12,7 @@ use App\Models\Router;
 use App\Models\Subscription;
 use App\Models\TrialRedemption;
 use App\Models\TrustedWifiDevice;
+use App\Models\Voucher;
 use App\Services\FlutterwaveService;
 use App\Services\HotspotPaymentConfirmationService;
 use App\Services\ManualBankTransferService;
@@ -350,6 +351,12 @@ class PortalController extends Controller
                 : null,
             'activeTrialSubscription' => $activeTrialSubscription,
             'poweredByText' => config('app.name'),
+            // 2026-11-09, direct request: a display-only fallback shown under
+            // "Don't have a code?" -- paymentGatewaySettings() reads straight
+            // off the TENANT, independent of this shop's own active gateway
+            // column, since the fallback toggle is deliberately decoupled from
+            // which gateway real checkout uses.
+            'bankTransferFallback' => (array) ($router->shop->paymentGatewaySettings()[PaymentGatewayCatalog::MANUAL_BANK] ?? []),
         ]);
     }
 
@@ -689,6 +696,14 @@ class PortalController extends Controller
             'email' => ['nullable', 'email', 'max:255'],
             'phone' => ['nullable', 'string', 'max:255'],
             'payment_method' => ['nullable', 'string', 'in:opay,bank_transfer,card'],
+            // 2026-11-09, direct request: a customer can buy a package as a
+            // voucher code instead of granting access to the current device --
+            // for use later, or to hand to another device/person. Carried
+            // through Payment.payload (the same spot flutterwave_checkout_version
+            // etc. already live) so it survives the full gateway redirect +
+            // callback/webhook round trip; branched on in
+            // HotspotPaymentConfirmationService::markPaidAndGrantAccess().
+            'as_voucher' => ['nullable', 'boolean'],
             'link-login' => ['nullable', 'string', 'max:2048'],
             'link-login-only' => ['nullable', 'string', 'max:2048'],
             'link-orig' => ['nullable', 'string', 'max:2048'],
@@ -766,6 +781,7 @@ class PortalController extends Controller
                     'payment_method' => $validated['payment_method'] ?? null,
                     'payment_gateway' => $router->shop->paymentGateway(),
                     'payment_gateway_name' => $router->shop->paymentGatewayName(),
+                    'as_voucher' => (bool) ($validated['as_voucher'] ?? false),
                     'link_login' => $this->mikrotikLoginUrl($validated),
                     'link_login_page' => $validated['link-login'] ?? null,
                     'link_orig' => $validated['link-orig'] ?? null,
@@ -996,21 +1012,16 @@ class PortalController extends Controller
                 && (data_get($charge, 'reference') === $payment->tx_ref || (float) data_get($charge, 'amount') >= (float) $payment->amount));
 
             if ($charge) {
-                $subscription = $payments->verifyAndGrant($payment, (string) data_get($charge, 'id'), 'charge');
+                $result = $payments->verifyAndGrant($payment, (string) data_get($charge, 'id'), 'charge');
 
-                if ($subscription) {
+                if ($result) {
                     $payment->refresh();
 
-                    return view('hotspot.access-granted', [
-                        'router' => Router::with('shop.tenant')->where('shop_id', $payment->shop_id)->first(),
-                        'package' => $payment->package,
-                        'subscription' => $subscription,
-                        'macAddress' => $payment->payload['mac'],
-                        'username' => $payment->payload['mac'],
-                        'password' => self::TEST_ACCESS_PASSWORD,
-                        'loginUrl' => $payment->payload['link_login'] ?? null,
-                        'originalUrl' => $payment->payload['link_orig'] ?? null,
-                    ]);
+                    return $this->confirmationView(
+                        Router::with('shop.tenant')->where('shop_id', $payment->shop_id)->first(),
+                        $payment,
+                        $result
+                    );
                 }
             }
         } catch (Throwable $exception) {
@@ -1054,7 +1065,7 @@ class PortalController extends Controller
         }
 
         try {
-            $subscription = $payments->verifyAndGrant(
+            $result = $payments->verifyAndGrant(
                 $payment,
                 (string) $providerReference,
                 $this->paymentResourceType((string) $providerReference)
@@ -1073,7 +1084,7 @@ class PortalController extends Controller
             ]);
         }
 
-        if (! $subscription) {
+        if (! $result) {
             return view('hotspot.payment-failed', [
                 'payment' => $payment->fresh(['shop.tenant', 'package']),
                 'statusMessage' => 'We checked '.PaymentGatewayCatalog::gatewayName($payment->provider).' again, but this payment is still not confirmed.',
@@ -1082,16 +1093,11 @@ class PortalController extends Controller
 
         $payment->refresh();
 
-        return view('hotspot.access-granted', [
-            'router' => Router::with('shop.tenant')->where('shop_id', $payment->shop_id)->first(),
-            'package' => $payment->package,
-            'subscription' => $subscription,
-            'macAddress' => $payment->payload['mac'],
-            'username' => $payment->payload['mac'],
-            'password' => self::TEST_ACCESS_PASSWORD,
-            'loginUrl' => $payment->payload['link_login'] ?? null,
-            'originalUrl' => $payment->payload['link_orig'] ?? null,
-        ]);
+        return $this->confirmationView(
+            Router::with('shop.tenant')->where('shop_id', $payment->shop_id)->first(),
+            $payment,
+            $result
+        );
     }
 
     public function callback(Request $request, HotspotPaymentConfirmationService $payments): View
@@ -1130,7 +1136,7 @@ class PortalController extends Controller
         }
 
         try {
-            $subscription = $payments->verifyAndGrant(
+            $result = $payments->verifyAndGrant(
                 $payment,
                 (string) $providerReference,
                 $this->paymentResourceType((string) $providerReference, $request->query('type'))
@@ -1146,16 +1152,42 @@ class PortalController extends Controller
             return view('hotspot.payment-failed', compact('payment'));
         }
 
-        if (! $subscription) {
+        if (! $result) {
             return view('hotspot.payment-failed', compact('payment'));
         }
 
         $payment->refresh();
 
+        return $this->confirmationView(
+            Router::with('shop.tenant')->where('shop_id', $payment->shop_id)->first(),
+            $payment,
+            $result
+        );
+    }
+
+    /**
+     * Shared by checkBankTransfer()/verify()/callback() -- each calls
+     * HotspotPaymentConfirmationService::verifyAndGrant(), which returns a
+     * Voucher instead of a Subscription for a payment flagged as_voucher at
+     * checkout (see pay() above and markPaidAndGrantAccess()). Keeps the
+     * branching in one place rather than tripling it.
+     */
+    private function confirmationView(?Router $router, Payment $payment, Subscription|Voucher $result): View
+    {
+        if ($result instanceof Voucher) {
+            return view('hotspot.voucher-purchased', [
+                'router' => $router,
+                'package' => $payment->package,
+                'voucher' => $result,
+                'macAddress' => $payment->payload['mac'] ?? null,
+                'originalUrl' => $payment->payload['link_orig'] ?? null,
+            ]);
+        }
+
         return view('hotspot.access-granted', [
-            'router' => Router::with('shop.tenant')->where('shop_id', $payment->shop_id)->first(),
+            'router' => $router,
             'package' => $payment->package,
-            'subscription' => $subscription,
+            'subscription' => $result,
             'macAddress' => $payment->payload['mac'],
             'username' => $payment->payload['mac'],
             'password' => self::TEST_ACCESS_PASSWORD,

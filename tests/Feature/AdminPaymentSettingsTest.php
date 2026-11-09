@@ -230,6 +230,77 @@ class AdminPaymentSettingsTest extends TestCase
     }
 
     /**
+     * 2026-11-09, direct request: a tenant can show bank transfer details
+     * on the hotspot portal (under "Don't have a code?") as a fallback for
+     * customers who can't finish online checkout, without that choice
+     * changing which gateway real checkout actually uses -- the form above
+     * (payment_gateway/gateway_settings) stays completely untouched by
+     * this independent save.
+     */
+    public function test_livewire_payment_settings_card_saves_bank_transfer_fallback_independently_of_the_active_gateway(): void
+    {
+        [$tenant] = $this->tenants();
+        $shop = $this->shop($tenant, 'Fallback Shop', false)->load('tenant');
+        $shop->update(['payment_gateway' => 'monnify']);
+        $shop->payments_count = 0;
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user);
+
+        Livewire::test(PaymentSettingsCard::class, ['shop' => $shop])
+            ->set('show_bank_transfer_fallback', true)
+            ->set('bank_transfer_fallback.bank_name', 'GTBank')
+            ->set('bank_transfer_fallback.account_name', 'Fallback Shop')
+            ->set('bank_transfer_fallback.account_number', '0123456789')
+            ->set('bank_transfer_fallback.instructions', 'Message us your reference after paying.')
+            ->call('saveBankTransferFallback')
+            ->assertHasNoErrors()
+            ->assertSee('Bank transfer fallback updated for Fallback Shop.');
+
+        $shop->refresh();
+        $shop->load('tenant');
+
+        $this->assertTrue((bool) $shop->show_bank_transfer_fallback);
+        $this->assertSame('monnify', $shop->payment_gateway);
+        $this->assertSame([
+            'bank_name' => 'GTBank',
+            'account_name' => 'Fallback Shop',
+            'account_number' => '0123456789',
+            'instructions' => 'Message us your reference after paying.',
+        ], $shop->paymentGatewaySettings()[PaymentGatewayCatalog::MANUAL_BANK]);
+    }
+
+    public function test_livewire_payment_settings_card_bank_transfer_fallback_prefills_saved_values(): void
+    {
+        [$tenant] = $this->tenants();
+        $shop = $this->shop($tenant, 'Prefill Shop', false)->load('tenant');
+        $shop->payments_count = 0;
+        $tenant->update([
+            'payment_gateway_settings' => [
+                PaymentGatewayCatalog::MANUAL_BANK => [
+                    'bank_name' => 'Zenith Bank',
+                    'account_number' => '9988776655',
+                ],
+            ],
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user);
+
+        Livewire::test(PaymentSettingsCard::class, ['shop' => $shop->refresh()])
+            ->assertSet('bank_transfer_fallback.bank_name', 'Zenith Bank')
+            ->assertSet('bank_transfer_fallback.account_number', '9988776655');
+    }
+
+    /**
      * Regression test for a 2026-09-24 live report: the rendered form's
      * Flutterwave credential inputs are bound to gateway_settings.{field}
      * (PaymentSettingsCard's generic per-gateway field loop -- the same

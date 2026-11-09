@@ -365,6 +365,55 @@ class AdminPaymentIndexTest extends TestCase
         ]);
     }
 
+    /**
+     * 2026-11-09, direct request: a customer who buys as a voucher
+     * (PortalController::pay()'s as_voucher flag) via manual bank transfer
+     * gets a voucher code instead of hotspot access provisioned to any
+     * device once the admin confirms the transfer -- shown in the same
+     * copyable modal generateRecoveryVoucher() already uses.
+     */
+    public function test_confirming_a_voucher_purchase_manual_transfer_shows_the_code_instead_of_provisioning_access(): void
+    {
+        $this->createRadiusTables();
+        [$payment, $tenant] = $this->paymentFixture('Voucher Buy Tenant', 'voucherbuy@example.com', 'Voucher Buy Shop', 'VOUCHER-BUY-PENDING', 'pending');
+        $payment->update([
+            'provider' => 'manual_bank',
+            'provider_reference' => $payment->tx_ref,
+            'payload' => array_merge($payment->payload ?? [], [
+                'as_voucher' => true,
+                'manual_bank_transfer' => [
+                    'bank_name' => 'MMS Microfinance Bank',
+                    'account_name' => 'Voucher Buy Shop',
+                    'account_number' => '1234567890',
+                ],
+            ]),
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $component = Livewire::actingAs($user)
+            ->test(PaymentsIndex::class)
+            ->call('confirmManualTransfer', $payment->id);
+
+        $component->assertSet('showRecoveryVoucherModal', true)
+            ->assertSet('voucherModalMode', 'purchase');
+
+        $this->assertDatabaseHas('payments', [
+            'id' => $payment->id,
+            'status' => 'successful',
+        ]);
+        $this->assertDatabaseMissing('subscriptions', [
+            'payment_id' => $payment->id,
+        ]);
+
+        $payment->refresh();
+        $this->assertNotNull($payment->voucher_id);
+        $this->assertSame($component->get('recoveryVoucherCode'), $payment->voucher->code);
+    }
+
     public function test_tenant_admin_cannot_confirm_other_tenant_manual_transfer(): void
     {
         [$payment] = $this->paymentFixture('Other Manual Tenant', 'other-manual@example.com', 'Other Manual Shop', 'OTHER-MANUAL', 'pending');

@@ -1,3 +1,4 @@
+<div class="space-y-6">
 <form wire:submit="save" class="relative rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
     <div wire:loading.flex wire:target="save" class="absolute inset-0 z-10 hidden items-center justify-center rounded-lg bg-white/70 backdrop-blur-[1px]">
         <div class="rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-4 py-3 text-sm font-medium text-zinc-700 dark:text-zinc-300 shadow-sm">
@@ -206,3 +207,70 @@
                                 <flux:button href="{{ route('admin.shops.edit', $shop) }}" wire:navigate variant="outline" icon="arrow-top-right-on-square">Open shop</flux:button>
     </div>
 </form>
+
+{{--
+    2026-11-09, direct request: deliberately its own separate <form>, not
+    nested inside the one above (Livewire's own wire:submit inside another
+    wire:submit form is invalid HTML, same reason PaymentSettingsCard itself
+    is embedded as a sibling of the shop-details form rather than inside
+    it) -- saving this never changes which gateway is active, it's purely
+    a display-only fallback shown under "Don't have a code?" on the
+    hotspot portal, for customers who can't finish online checkout or
+    prefer to pay by transfer.
+--}}
+<form wire:submit="saveBankTransferFallback" class="relative rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5 shadow-sm">
+    <div wire:loading.flex wire:target="saveBankTransferFallback" class="absolute inset-0 z-10 hidden items-center justify-center rounded-lg bg-white/70 backdrop-blur-[1px]">
+        <div class="rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-4 py-3 text-sm font-medium text-zinc-700 dark:text-zinc-300 shadow-sm">
+            Saving bank transfer fallback...
+        </div>
+    </div>
+
+    <div>
+        <h3 class="text-base font-semibold">Bank transfer fallback</h3>
+        <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+            Shown under "Don't have a code?" on the hotspot portal -- a fallback for customers who can't complete online checkout, or who'd rather pay by transfer and message you a reference. Independent of the active gateway above: turning this on never changes which gateway real checkout uses.
+        </p>
+    </div>
+
+    @if ($bankTransferSavedMessage)
+        <div class="mt-4 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+            {{ $bankTransferSavedMessage }}
+        </div>
+    @endif
+
+    <div class="mt-4 rounded-md border border-zinc-200 dark:border-zinc-700 p-3">
+        <flux:checkbox wire:model.live="show_bank_transfer_fallback" label="Show bank transfer details on the hotspot portal" />
+        <flux:error name="show_bank_transfer_fallback" />
+    </div>
+
+    <div class="mt-4 grid gap-4 md:grid-cols-2">
+        <flux:field>
+            <flux:label>Bank Name</flux:label>
+            <flux:input wire:model.blur="bank_transfer_fallback.bank_name" placeholder="e.g. GTBank" />
+            <flux:error name="bank_transfer_fallback.bank_name" />
+        </flux:field>
+        <flux:field>
+            <flux:label>Account Name</flux:label>
+            <flux:input wire:model.blur="bank_transfer_fallback.account_name" />
+            <flux:error name="bank_transfer_fallback.account_name" />
+        </flux:field>
+        <flux:field>
+            <flux:label>Account Number</flux:label>
+            <flux:input wire:model.blur="bank_transfer_fallback.account_number" />
+            <flux:error name="bank_transfer_fallback.account_number" />
+        </flux:field>
+        <flux:field>
+            <flux:label>Customer Instructions</flux:label>
+            <flux:input wire:model.blur="bank_transfer_fallback.instructions" placeholder="e.g. Message us your reference on WhatsApp after paying" />
+            <flux:error name="bank_transfer_fallback.instructions" />
+        </flux:field>
+    </div>
+
+    <div class="mt-5">
+        <flux:button type="submit" variant="primary" icon="check" wire:loading.attr="disabled" wire:target="saveBankTransferFallback">
+            <span wire:loading.remove wire:target="saveBankTransferFallback">Save bank transfer fallback</span>
+            <span wire:loading wire:target="saveBankTransferFallback">Saving...</span>
+        </flux:button>
+    </div>
+</form>
+</div>

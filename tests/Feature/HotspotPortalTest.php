@@ -1435,6 +1435,105 @@ class HotspotPortalTest extends TestCase
         ]);
     }
 
+    /**
+     * 2026-11-09, direct request: the portal's own "Buy as a voucher code"
+     * checkbox just needs to survive onto the Payment's payload --
+     * everything else (not granting this device, creating the voucher
+     * instead) is HotspotPaymentConfirmationService's job, covered by
+     * test_voucher_purchase_payment_shows_the_code_instead_of_access_granted
+     * above.
+     */
+    public function test_as_voucher_checkbox_is_saved_on_the_payment_payload(): void
+    {
+        [$router, $package] = $this->routerWithPackage();
+
+        $this->post(route('hotspot.pay'), [
+            'mac' => 'AA:BB:CC:DD:EE:FF',
+            'nasid' => $router->nas_identifier,
+            'package_id' => $package->id,
+            'as_voucher' => '1',
+        ])->assertOk();
+
+        $this->assertDatabaseHas('payments', [
+            'shop_id' => $router->shop_id,
+            'package_id' => $package->id,
+        ]);
+
+        $payment = Payment::firstOrFail();
+        $this->assertTrue((bool) data_get($payment->payload, 'as_voucher'));
+    }
+
+    public function test_as_voucher_defaults_to_false_when_not_checked(): void
+    {
+        [$router, $package] = $this->routerWithPackage();
+
+        $this->post(route('hotspot.pay'), [
+            'mac' => 'AA:BB:CC:DD:EE:FF',
+            'nasid' => $router->nas_identifier,
+            'package_id' => $package->id,
+        ])->assertOk();
+
+        $payment = Payment::firstOrFail();
+        $this->assertFalse((bool) data_get($payment->payload, 'as_voucher'));
+    }
+
+    /**
+     * 2026-11-09, direct request: the "Bank transfer fallback" settings
+     * (PaymentSettingsCard::saveBankTransferFallback()) show under "Don't
+     * have a code?" on the portal only once the toggle is on AND an
+     * account number is actually saved -- an admin turning the toggle on
+     * with nothing filled in yet shouldn't show a broken/empty affordance.
+     */
+    public function test_portal_shows_bank_transfer_fallback_when_enabled_and_filled_in(): void
+    {
+        [$router] = $this->routerWithPackage();
+        $router->shop->update(['show_bank_transfer_fallback' => true]);
+        $router->shop->tenant->update([
+            'payment_gateway_settings' => [
+                'manual_bank' => [
+                    'bank_name' => 'GTBank',
+                    'account_name' => 'Demo Shop',
+                    'account_number' => '0123456789',
+                    'instructions' => 'Message us your reference on WhatsApp.',
+                ],
+            ],
+        ]);
+
+        $this->get('/hotspot/portal?mac=AA:BB:CC:DD:EE:FF&nasid='.$router->nas_identifier)
+            ->assertOk()
+            ->assertSee('Prefer to pay by transfer?')
+            ->assertSee('GTBank')
+            ->assertSee('0123456789')
+            ->assertSee('Message us your reference on WhatsApp.');
+    }
+
+    public function test_portal_hides_bank_transfer_fallback_when_disabled(): void
+    {
+        [$router] = $this->routerWithPackage();
+        $router->shop->tenant->update([
+            'payment_gateway_settings' => [
+                'manual_bank' => [
+                    'bank_name' => 'GTBank',
+                    'account_number' => '0123456789',
+                ],
+            ],
+        ]);
+
+        $this->get('/hotspot/portal?mac=AA:BB:CC:DD:EE:FF&nasid='.$router->nas_identifier)
+            ->assertOk()
+            ->assertDontSee('Prefer to pay by transfer?');
+    }
+
+    public function test_portal_hides_bank_transfer_fallback_when_enabled_but_not_filled_in(): void
+    {
+        [$router] = $this->routerWithPackage();
+        $router->shop->update(['show_bank_transfer_fallback' => true]);
+
+        $this->get('/hotspot/portal?mac=AA:BB:CC:DD:EE:FF&nasid='.$router->nas_identifier)
+            ->assertOk()
+            ->assertDontSee('Prefer to pay by transfer?');
+    }
+
     public function test_payment_step_redirects_to_flutterwave_when_configured(): void
     {
         $this->configureFlutterwave();
@@ -2544,6 +2643,81 @@ class HotspotPortalTest extends TestCase
             'payment_id' => $payment->id,
             'mac_address' => 'AA:BB:CC:DD:EE:FF',
         ]);
+    }
+
+    /**
+     * 2026-11-09, direct request: "buy for another device or another
+     * person for later use" -- a payment flagged as_voucher at checkout
+     * (PortalController::pay()) gets a voucher code instead of
+     * provisioning access to the device that actually paid.
+     */
+    public function test_voucher_purchase_payment_shows_the_code_instead_of_access_granted(): void
+    {
+        [$router, $package] = $this->routerWithPackage();
+
+        $payment = Payment::create([
+            'shop_id' => $router->shop_id,
+            'package_id' => $package->id,
+            'provider' => 'flutterwave',
+            'tx_ref' => 'HSF-VOUCHER-BUY',
+            'provider_reference' => 'ord_voucher_buy_123',
+            'amount' => 500,
+            'gross_amount' => 500,
+            'platform_fee_amount' => 0,
+            'tenant_net_amount' => 500,
+            'currency' => 'NGN',
+            'status' => 'pending',
+            'payload' => [
+                'mac' => 'AA:BB:CC:DD:EE:FF',
+                'nasid' => $router->nas_identifier,
+                'as_voucher' => true,
+                'link_login' => 'http://10.5.50.1/login',
+                'link_orig' => 'http://example.com',
+            ],
+        ]);
+        $router->shop->update([
+            'flutterwave_client_id' => 'tenant-client-id',
+            'flutterwave_client_secret' => 'tenant-client-secret',
+        ]);
+        $this->configureFlutterwave();
+        Http::fake([
+            'idp.flutterwave.com/*' => Http::response([
+                'access_token' => 'FLW_V4_TOKEN',
+                'expires_in' => 600,
+            ]),
+            'developersandbox-api.flutterwave.com/orders/ord_voucher_buy_123' => Http::response([
+                'status' => 'success',
+                'data' => [
+                    'id' => 'ord_voucher_buy_123',
+                    'status' => 'succeeded',
+                    'reference' => $payment->tx_ref,
+                    'amount' => 500,
+                    'currency' => 'NGN',
+                ],
+            ]),
+        ]);
+
+        $response = $this->post(route('hotspot.payment.verify'), [
+            'tx_ref' => $payment->tx_ref,
+        ])
+            ->assertOk()
+            ->assertSee("Here's your voucher code.", false)
+            ->assertSee('One Hour Ultra')
+            ->assertDontSee('Access provisioned')
+            ->assertDontSee('id="mikrotik-login"', false);
+
+        $this->assertDatabaseHas('payments', [
+            'id' => $payment->id,
+            'status' => 'successful',
+        ]);
+        $this->assertDatabaseMissing('subscriptions', [
+            'payment_id' => $payment->id,
+        ]);
+
+        $payment->refresh();
+        $this->assertNotNull($payment->voucher_id);
+        $this->assertSame('unused', $payment->voucher->status);
+        $response->assertSee($payment->voucher->code);
     }
 
     public function test_successful_flutterwave_webhook_provisions_radius_access(): void

@@ -4,6 +4,7 @@ namespace App\Livewire\Admin;
 
 use App\Livewire\Concerns\SortsTable;
 use App\Models\Payment;
+use App\Models\Voucher;
 use App\Services\AbandonedPaymentCleanupService;
 use App\Services\HotspotPaymentConfirmationService;
 use App\Services\PaymentReportService;
@@ -41,6 +42,15 @@ class PaymentsIndex extends Component
     public ?string $recoveryVoucherCode = null;
 
     public ?string $recoveryVoucherTxRef = null;
+
+    /**
+     * 2026-11-09: the same modal/code/txref state above is reused for both
+     * generateRecoveryVoucher() (a stuck MAC) and confirmManualTransfer()
+     * confirming a manual-bank payment that turns out to be a "buy as
+     * voucher" purchase -- this just swaps the modal's heading/copy to
+     * match which one actually happened.
+     */
+    public string $voucherModalMode = 'recovery';
 
     protected $queryString = [
         'preset' => ['except' => ''],
@@ -132,7 +142,7 @@ class PaymentsIndex extends Component
             return;
         }
 
-        $payments->markPaidAndGrantAccess($payment, [
+        $result = $payments->markPaidAndGrantAccess($payment, [
             'status' => 'success',
             'data' => [
                 'reference' => $payment->tx_ref,
@@ -143,6 +153,21 @@ class PaymentsIndex extends Component
                 'confirmed_manually_at' => now()->toIso8601String(),
             ],
         ]);
+
+        // 2026-11-09: a manual transfer confirmed for a payment flagged
+        // as_voucher at checkout (see PortalController::pay()) gets a
+        // voucher instead of access provisioned to any device -- show the
+        // code in the same copyable modal generateRecoveryVoucher() below
+        // already uses, so it can be read/sent to the customer, rather than
+        // the generic "access provisioned" toast that would be wrong here.
+        if ($result instanceof Voucher) {
+            $this->voucherModalMode = 'purchase';
+            $this->recoveryVoucherCode = $result->code;
+            $this->recoveryVoucherTxRef = $payment->tx_ref;
+            $this->showRecoveryVoucherModal = true;
+
+            return;
+        }
 
         $this->dispatch('notify', type: 'success', message: 'Manual transfer confirmed and hotspot access provisioned.');
     }
@@ -227,6 +252,7 @@ class PaymentsIndex extends Component
             return;
         }
 
+        $this->voucherModalMode = 'recovery';
         $this->recoveryVoucherCode = $voucher->code;
         $this->recoveryVoucherTxRef = $payment->tx_ref;
         $this->showRecoveryVoucherModal = true;
@@ -267,6 +293,7 @@ class PaymentsIndex extends Component
         $this->showRecoveryVoucherModal = false;
         $this->recoveryVoucherCode = null;
         $this->recoveryVoucherTxRef = null;
+        $this->voucherModalMode = 'recovery';
     }
 
     /**

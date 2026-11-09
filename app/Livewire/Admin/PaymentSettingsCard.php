@@ -33,11 +33,19 @@ class PaymentSettingsCard extends Component
 
     public ?string $savedMessage = null;
 
+    public bool $show_bank_transfer_fallback = false;
+
+    public array $bank_transfer_fallback = [];
+
+    public ?string $bankTransferSavedMessage = null;
+
     public function mount(Shop $shop): void
     {
         $this->shop = $shop;
         $this->payment_gateway = $this->rawPaymentGateway($shop);
         $this->gateway_settings = $this->defaultGatewaySettings();
+        $this->show_bank_transfer_fallback = (bool) $shop->show_bank_transfer_fallback;
+        $this->bank_transfer_fallback = $this->currentBankTransferFallback();
     }
 
     public function updatedPaymentGateway(): void
@@ -121,6 +129,41 @@ class PaymentSettingsCard extends Component
             text: 'Customer checkout for this tenant now uses whichever gateway is configured below.',
             variant: 'success',
         );
+    }
+
+    /**
+     * 2026-11-09, direct request: an independent toggle+save path for
+     * showing bank transfer details on the hotspot portal as a fallback
+     * -- deliberately separate from save() above, since this never
+     * touches payment_gateway or which gateway is actually active.
+     */
+    public function saveBankTransferFallback(PaymentSettingsService $settings): void
+    {
+        $data = $this->validate($settings->bankTransferFallbackRules());
+
+        $settings->updateBankTransferFallback($this->shop, $data, auth()->user());
+
+        $this->shop->refresh();
+        $this->show_bank_transfer_fallback = (bool) $this->shop->show_bank_transfer_fallback;
+        $this->bank_transfer_fallback = $this->currentBankTransferFallback();
+
+        $this->bankTransferSavedMessage = 'Bank transfer fallback updated for '.$this->shop->name.'.';
+    }
+
+    /**
+     * Unlike the main gateway credential fields above, these are never
+     * secret (a bank name/account number/customer instructions are meant
+     * to be read out loud) -- pre-filled from storage so an admin can see
+     * and edit what's currently saved, rather than always starting blank.
+     */
+    private function currentBankTransferFallback(): array
+    {
+        $fields = array_keys(PaymentGatewayCatalog::credentialFields(PaymentGatewayCatalog::MANUAL_BANK));
+        $saved = (array) ($this->shop->paymentGatewaySettings()[PaymentGatewayCatalog::MANUAL_BANK] ?? []);
+
+        return collect($fields)
+            ->mapWithKeys(fn (string $field): array => [$field => (string) ($saved[$field] ?? '')])
+            ->all();
     }
 
     /**

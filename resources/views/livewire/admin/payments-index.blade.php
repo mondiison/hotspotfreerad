@@ -274,9 +274,13 @@
     <flux:modal wire:model.self="showRecoveryVoucherModal" class="max-w-md" :dismissible="true">
         <div class="space-y-4" x-data="{ copied: false }">
             <div>
-                <flux:heading size="lg">Recovery voucher generated</flux:heading>
+                <flux:heading size="lg">{{ $voucherModalMode === 'purchase' ? 'Voucher code generated' : 'Recovery voucher generated' }}</flux:heading>
                 <flux:subheading>
-                    For payment {{ $recoveryVoucherTxRef }}. Read this code out to the customer -- they enter it in the "Have a voucher?" box on the hotspot portal to get access under their current device, with nothing charged again.
+                    @if ($voucherModalMode === 'purchase')
+                        For payment {{ $recoveryVoucherTxRef }}. Give this code to the customer -- they (or whoever they're buying it for) can redeem it anytime from the portal's "Have a voucher?" box, on any device.
+                    @else
+                        For payment {{ $recoveryVoucherTxRef }}. Read this code out to the customer -- they enter it in the "Have a voucher?" box on the hotspot portal to get access under their current device, with nothing charged again.
+                    @endif
                 </flux:subheading>
             </div>
 

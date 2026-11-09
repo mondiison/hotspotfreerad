@@ -34,6 +34,57 @@ class PaymentSettingsService
         return $request->validate($this->rules());
     }
 
+    /**
+     * 2026-11-09, direct request: a tenant needs a way to show bank
+     * details on the hotspot portal as a fallback for customers who
+     * can't complete online checkout, or who'd rather pay by transfer --
+     * without that showing also forcing manual_bank to become the shop's
+     * live/active gateway (what the rest of this form controls). Kept as
+     * its own rule set/save path entirely, bound to a separate form in
+     * PaymentSettingsCard, so saving it never touches payment_gateway or
+     * triggers the walled-garden resync update() does above.
+     */
+    public function bankTransferFallbackRules(): array
+    {
+        return [
+            'show_bank_transfer_fallback' => ['nullable', 'boolean'],
+            'bank_transfer_fallback' => ['nullable', 'array'],
+            'bank_transfer_fallback.*' => ['nullable', 'string', 'max:1000'],
+        ];
+    }
+
+    /**
+     * Writes straight into tenant.payment_gateway_settings['manual_bank']
+     * (the same merge-only shape updates() already uses below) -- that
+     * sub-array already persists independently of whatever gateway is
+     * currently active, confirmed by reading updates()'s own merge logic,
+     * so no new storage shape was needed here, only a second, independent
+     * way to write to it that never touches shop.payment_gateway.
+     */
+    public function updateBankTransferFallback(Shop $shop, array $data, User $user): bool
+    {
+        TenantAccess::assertShop($shop, $user);
+        $shop->loadMissing('tenant');
+
+        $shopUpdated = $shop->update([
+            'show_bank_transfer_fallback' => (bool) ($data['show_bank_transfer_fallback'] ?? false),
+        ]);
+
+        $fields = $this->cleanGatewaySettings(PaymentGatewayCatalog::MANUAL_BANK, (array) ($data['bank_transfer_fallback'] ?? []));
+
+        if ($fields !== [] && $shop->tenant) {
+            $allSettings = (array) ($shop->tenant->payment_gateway_settings ?? []);
+            $allSettings[PaymentGatewayCatalog::MANUAL_BANK] = array_merge(
+                (array) ($allSettings[PaymentGatewayCatalog::MANUAL_BANK] ?? []),
+                $fields
+            );
+            $shop->tenant->update(['payment_gateway_settings' => $allSettings]);
+            $shopUpdated = true;
+        }
+
+        return $shopUpdated;
+    }
+
     public function update(Shop $shop, array $data, User $user): bool
     {
         TenantAccess::assertShop($shop, $user);

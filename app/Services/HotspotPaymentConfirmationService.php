@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Payment;
 use App\Models\Subscription;
+use App\Models\Voucher;
 use App\Services\Payments\GatewayCredentialResolver;
 use App\Services\Payments\Gateways\FlutterwaveGateway;
 use App\Services\Payments\Gateways\MonnifyGateway;
@@ -32,14 +33,29 @@ class HotspotPaymentConfirmationService
         private readonly FlutterwaveGateway $flutterwaveGateway,
         private readonly StripeGateway $stripeGateway,
         private readonly GatewayCredentialResolver $credentials,
+        private readonly VoucherManagementService $vouchers,
     ) {}
 
-    public function verifyAndGrant(Payment $payment, string $providerReference, string $resourceType = 'order'): ?Subscription
+    /**
+     * Return type widened to Subscription|Voucher|null 2026-11-09 -- a
+     * payment flagged as_voucher (see markPaidAndGrantAccess() below) never
+     * gets a Subscription at all, it gets a Voucher instead. Every caller
+     * that previously only null-checked the result (the webhook job, the
+     * retry command, the admin "Verify"/manual-confirm actions) is
+     * unaffected by this; only the customer-facing controller methods that
+     * render a specific "access granted" view need to branch on which type
+     * came back.
+     */
+    public function verifyAndGrant(Payment $payment, string $providerReference, string $resourceType = 'order'): Subscription|Voucher|null
     {
-        $payment->loadMissing(['shop.tenant', 'package', 'subscription']);
+        $payment->loadMissing(['shop.tenant', 'package', 'subscription', 'voucher']);
 
         if ($payment->status === 'successful' && $payment->subscription) {
             return $payment->subscription;
+        }
+
+        if ($payment->status === 'successful' && $payment->voucher) {
+            return $payment->voucher;
         }
 
         $verification = $this->verifyProviderPayment($payment, $providerReference, $resourceType);
@@ -62,15 +78,32 @@ class HotspotPaymentConfirmationService
         return $this->markPaidAndGrantAccess($payment, $verification);
     }
 
-    public function markPaidAndGrantAccess(Payment $payment, array $verification): Subscription
+    /**
+     * Branches on the payment's own as_voucher flag (set at checkout by
+     * PortalController::pay() -- 2026-11-09, "buy a voucher for another
+     * device or another person for later use") -- a voucher purchase skips
+     * creating a Subscription/granting RADIUS access to the paying device
+     * entirely, and instead creates a one-time voucher linked back to this
+     * exact payment via VoucherManagementService::createVoucherForPayment(),
+     * the same reusable core generateRecoveryVoucher() already uses. The
+     * wallet credit still applies either way -- it's a real sale regardless
+     * of which the customer actually walks away with.
+     */
+    public function markPaidAndGrantAccess(Payment $payment, array $verification): Subscription|Voucher
     {
-        return DB::transaction(function () use ($payment, $verification): Subscription {
+        return DB::transaction(function () use ($payment, $verification): Subscription|Voucher {
             $payment->refresh();
-            $payment->loadMissing(['package', 'subscription']);
+            $payment->loadMissing(['package', 'subscription', 'voucher']);
 
             if ($payment->status === 'successful' && $payment->subscription) {
                 return $payment->subscription;
             }
+
+            if ($payment->status === 'successful' && $payment->voucher) {
+                return $payment->voucher;
+            }
+
+            $asVoucher = (bool) data_get($payment->payload, 'as_voucher');
 
             $payment->update([
                 'status' => 'successful',
@@ -82,6 +115,21 @@ class HotspotPaymentConfirmationService
                 'paid_at' => now(),
                 'payload' => array_merge($payment->payload ?? [], ['verification' => $verification]),
             ]);
+
+            if ($asVoucher) {
+                $voucher = $this->vouchers->createVoucherForPayment(
+                    $payment,
+                    'Voucher purchase -- '.$payment->tx_ref,
+                    'BUY',
+                    'Purchased at checkout -- for later redemption, or for another device/person.'
+                );
+
+                if ($payment->shop->tenant?->wallet_enabled) {
+                    $this->wallet->creditForPayment($payment->fresh(['shop.tenant', 'package']));
+                }
+
+                return $voucher;
+            }
 
             $subscription = Subscription::updateOrCreate(
                 [
