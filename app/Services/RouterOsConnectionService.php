@@ -338,6 +338,55 @@ class RouterOsConnectionService
     }
 
     /**
+     * The PPPoE sibling of disconnectHotspotUser() above -- confirmed live
+     * 2026-11-10, direct report: an expired PPPoE subscriber's already-
+     * established PPP session kept passing traffic until the router was
+     * manually restarted, the exact same "RADIUS only gets checked at
+     * login/renewal, never mid-session" root cause the hotspot version was
+     * fixed for. Genuinely simpler than the hotspot case -- a PPP session
+     * is identified by its own username (`name` on `/ppp/active/print`),
+     * never a MAC address, so there's no DHCP lease to also remove (PPPoE
+     * addresses a session via IPCP, not DHCP) and no MAC-normalization
+     * matching needed at all.
+     *
+     * A no-op, not a failure, when this username isn't currently active on
+     * this router -- the common case, since most expiries happen well
+     * after a session already went idle/disconnected on its own.
+     *
+     * @return array{success: bool, steps: list<array{label: string, success: bool, error: ?string}>}
+     */
+    public function disconnectPppoeUser(Router $router, string $username): array
+    {
+        if (! $this->isConfigured($router)) {
+            return [
+                'success' => false,
+                'steps' => [['label' => 'Disconnect PPPoE session', 'success' => false, 'error' => 'No RouterOS API credentials generated for this router yet.']],
+            ];
+        }
+
+        try {
+            $client = $this->client($router, 8);
+
+            $activeRow = collect($client->query(new Query('/ppp/active/print'))->read())
+                ->first(fn ($row) => is_array($row) && (string) ($row['name'] ?? '') === $username);
+        } catch (\Throwable $e) {
+            return ['success' => false, 'steps' => [['label' => 'Disconnect PPPoE session', 'success' => false, 'error' => $e->getMessage()]]];
+        }
+
+        if ($activeRow === null) {
+            return [
+                'success' => true,
+                'steps' => [['label' => 'Disconnect PPPoE session', 'success' => true, 'error' => 'Session is not currently active on this router, skipped.']],
+            ];
+        }
+
+        return $this->runSteps($router, [
+            'Remove active PPPoE session' => (new Query('/ppp/active/remove'))
+                ->equal('numbers', (string) ($activeRow['.id'] ?? '')),
+        ]);
+    }
+
+    /**
      * Same shape as RadiusProvisioningService's own private mac-address
      * normalizer -- kept separate rather than shared, since that one lives
      * on a class this service doesn't otherwise depend on, and both are

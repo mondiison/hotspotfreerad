@@ -4,8 +4,10 @@ namespace Tests\Feature;
 
 use App\Models\Package;
 use App\Models\PppoeSubscriber;
+use App\Models\Router;
 use App\Models\Shop;
 use App\Models\Tenant;
+use App\Services\RouterOsConnectionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -71,7 +73,7 @@ class PppoeExpiryCommandTest extends TestCase
         $this->grantRadiusRows($active, $package);
 
         $this->artisan('hotspot:sync-expired-pppoe')
-            ->expectsOutput('Revoked 2 inactive or expired PPPoE subscriber(s) from RADIUS.')
+            ->expectsOutput('Revoked 2 inactive or expired PPPoE subscriber(s) from RADIUS; disconnected 0 active router session check(s).')
             ->assertExitCode(0);
 
         $this->assertDatabaseMissing('radcheck', ['username' => 'expired-user']);
@@ -80,6 +82,47 @@ class PppoeExpiryCommandTest extends TestCase
         $this->assertDatabaseMissing('radusergroup', ['username' => 'disabled-user']);
         $this->assertDatabaseHas('radcheck', ['username' => 'active-user']);
         $this->assertDatabaseHas('radusergroup', ['username' => 'active-user']);
+    }
+
+    /**
+     * 2026-11-10, direct report: an expired PPPoE subscriber's already-
+     * established PPP session kept passing traffic until the router was
+     * manually restarted -- revoking RADIUS alone never touches a session
+     * already up, since a PPP link only consults RADIUS at login/renewal
+     * time, never mid-session. This confirms the expiry sync now also
+     * attempts a live disconnect for every router on the subscriber's shop.
+     */
+    public function test_expired_pppoe_sync_command_disconnects_the_active_router_session(): void
+    {
+        [$shop, $package] = $this->fixture();
+        $router = Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'Main Router',
+            'nas_identifier' => 'main-router',
+            'wireguard_internal_ip' => '10.8.0.10',
+            'shared_secret' => 'radius-secret',
+        ]);
+        $subscriber = PppoeSubscriber::create([
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'username' => 'expired-user',
+            'password' => 'secret-pass',
+            'expires_at' => now()->subMinute(),
+            'last_provisioned_at' => now()->subDay(),
+            'is_active' => true,
+        ]);
+        $this->grantRadiusRows($subscriber, $package);
+
+        $this->mock(RouterOsConnectionService::class, function ($mock) use ($router): void {
+            $mock->shouldReceive('disconnectPppoeUser')
+                ->once()
+                ->with(\Mockery::on(fn ($r) => $r->is($router)), 'expired-user')
+                ->andReturn(['success' => true, 'steps' => []]);
+        });
+
+        $this->artisan('hotspot:sync-expired-pppoe')
+            ->expectsOutput('Revoked 1 inactive or expired PPPoE subscriber(s) from RADIUS; disconnected 1 active router session check(s).')
+            ->assertExitCode(0);
     }
 
     private function fixture(): array

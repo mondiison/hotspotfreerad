@@ -1086,6 +1086,49 @@ class RouterOsApiProvisioningTest extends TestCase
     }
 
     /**
+     * 2026-11-10, direct live report: an expired PPPoE subscriber's
+     * already-established PPP session kept passing traffic until the
+     * router was manually restarted -- disconnectPppoeUser() is what
+     * hotspot:sync-expired-pppoe now calls per router to force the
+     * session off, the PPPoE sibling of disconnectHotspotUser() above.
+     */
+    public function test_disconnect_pppoe_user_reports_a_clear_error_when_router_is_unreachable(): void
+    {
+        $router = Router::create([
+            'shop_id' => $this->makeShop()->id,
+            'name' => 'Unreachable PPPoE Disconnect Router',
+            'nas_identifier' => 'unreachable-pppoe-disconnect-router',
+            'wireguard_internal_ip' => '192.0.2.62',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        $result = app(RouterOsConnectionService::class)->disconnectPppoeUser($router, 'expired-user');
+
+        $this->assertFalse($result['success']);
+        $this->assertCount(1, $result['steps']);
+        $this->assertSame('Disconnect PPPoE session', $result['steps'][0]['label']);
+        $this->assertFalse($result['steps'][0]['success']);
+        $this->assertNotEmpty($result['steps'][0]['error']);
+    }
+
+    public function test_disconnect_pppoe_user_without_api_credentials_reports_a_clear_error(): void
+    {
+        $router = Router::create([
+            'shop_id' => $this->makeShop()->id,
+            'name' => 'No Credentials PPPoE Disconnect Router',
+            'nas_identifier' => 'no-credentials-pppoe-disconnect-router',
+            'wireguard_internal_ip' => '192.0.2.63',
+            'shared_secret' => 'radius-secret',
+        ]);
+        $router->forceFill(['api_username' => null, 'api_password' => null])->save();
+
+        $result = app(RouterOsConnectionService::class)->disconnectPppoeUser($router, 'expired-user');
+
+        $this->assertFalse($result['success']);
+        $this->assertSame('No RouterOS API credentials generated for this router yet.', $result['steps'][0]['error']);
+    }
+
+    /**
      * 2026-10-15, Phase 3 of the router-wizard request: syncTrunkPorts() is
      * the first live-API method in this codebase to ever touch
      * /interface bridge port or /interface bridge vlan -- the actual

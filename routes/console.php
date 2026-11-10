@@ -208,7 +208,7 @@ Artisan::command('hotspot:backfill-voucher-payments {--dry-run}', function (Vouc
     return Command::SUCCESS;
 })->purpose('Create internal payment records for existing sold vouchers');
 
-Artisan::command('hotspot:sync-expired-pppoe {--dry-run}', function (PppoeSubscriberManagementService $subscribers): int {
+Artisan::command('hotspot:sync-expired-pppoe {--dry-run}', function (PppoeSubscriberManagementService $subscribers, RouterOsConnectionService $routerOs): int {
     $query = PppoeSubscriber::query()
         ->with('package')
         ->where(function ($query): void {
@@ -225,18 +225,34 @@ Artisan::command('hotspot:sync-expired-pppoe {--dry-run}', function (PppoeSubscr
     }
 
     $revoked = 0;
+    $disconnected = 0;
 
-    $query->chunkById(100, function ($chunk) use ($subscribers, &$revoked): void {
+    $query->chunkById(100, function ($chunk) use ($subscribers, $routerOs, &$revoked, &$disconnected): void {
         foreach ($chunk as $subscriber) {
             $subscribers->syncSystem($subscriber);
             $revoked++;
+
+            // Confirmed live 2026-11-10, direct report: revoking RADIUS alone
+            // leaves an already-established PPPoE session completely
+            // untouched -- unlike the hotspot captive portal, a PPP link
+            // never re-checks RADIUS mid-session, so an expired subscriber
+            // kept passing traffic indefinitely until the router was
+            // manually restarted (which forces every session to
+            // re-authenticate). Best-effort across every router on this
+            // subscriber's shop -- a username not currently active on a
+            // given router is a normal no-op, not a failure.
+            Router::query()->where('shop_id', $subscriber->shop_id)->get()->each(function (Router $router) use ($routerOs, $subscriber, &$disconnected): void {
+                if ($routerOs->disconnectPppoeUser($router, $subscriber->username)['success']) {
+                    $disconnected++;
+                }
+            });
         }
     });
 
-    $this->info("Revoked {$revoked} inactive or expired PPPoE subscriber(s) from RADIUS.");
+    $this->info("Revoked {$revoked} inactive or expired PPPoE subscriber(s) from RADIUS; disconnected {$disconnected} active router session check(s).");
 
     return Command::SUCCESS;
-})->purpose('Revoke expired or disabled PPPoE subscribers from FreeRADIUS');
+})->purpose('Revoke expired or disabled PPPoE subscribers from FreeRADIUS and disconnect any already-active PPP session');
 
 Artisan::command('hotspot:sync-expired-hotspot {--dry-run}', function (RadiusProvisioningService $radius, RouterOsConnectionService $routerOs): int {
     // Grouped by mac_address (not a flat pluck) so each expired device keeps
