@@ -274,7 +274,7 @@
                                 @if ($shop->collect_customer_phone)
                                     <div>
                                         <label for="phone-{{ $package->id }}" class="mb-1 block text-xs font-medium text-zinc-500">Phone number{{ $shop->require_customer_phone ? '' : ' (optional)' }}</label>
-                                        <input type="tel" name="phone" id="phone-{{ $package->id }}" value="{{ old('phone') }}" placeholder="In case we need to follow up" class="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-700" @if ($shop->require_customer_phone) required @endif>
+                                        <input type="tel" name="phone" id="phone-{{ $package->id }}" value="{{ old('phone') }}" placeholder="e.g. 08012345678" maxlength="15" class="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-700" @if ($shop->require_customer_phone) required @endif>
                                         @error('phone')
                                             <p class="mt-2 text-xs text-red-600">{{ $message }}</p>
                                         @enderror

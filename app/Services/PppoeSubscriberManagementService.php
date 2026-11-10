@@ -7,6 +7,7 @@ use App\Models\Payment;
 use App\Models\PppoeSubscriber;
 use App\Models\Shop;
 use App\Models\User;
+use App\Rules\NigerianPhoneNumber;
 use App\Support\TenantAccess;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
@@ -44,7 +45,7 @@ class PppoeSubscriberManagementService
             'username' => ['required', 'string', 'max:64', Rule::unique('pppoe_subscribers')->ignore($subscriber)],
             'password' => [$subscriber ? 'nullable' : 'required', 'string', 'min:6', 'max:64'],
             'full_name' => ['nullable', 'string', 'max:255'],
-            'phone' => ['nullable', 'string', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:255', new NigerianPhoneNumber],
             'email' => ['nullable', 'email', 'max:255'],
             'starts_at' => ['nullable', 'date'],
             'expires_at' => ['nullable', 'date', 'after:starts_at'],
@@ -231,6 +232,10 @@ class PppoeSubscriberManagementService
             if (blank($data[$field] ?? null)) {
                 $data[$field] = null;
             }
+        }
+
+        if ($data['phone'] !== null) {
+            $data['phone'] = NigerianPhoneNumber::normalize($data['phone']);
         }
 
         if (blank($data['password'] ?? null) && $subscriber) {

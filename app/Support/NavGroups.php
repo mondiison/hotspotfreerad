@@ -83,6 +83,12 @@ class NavGroups
                 ],
             ],
             [
+                'label' => 'Customers',
+                'links' => [
+                    ['label' => 'Customer Contacts', 'route' => 'admin.customer-contacts.index', 'icon' => 'phone'],
+                ],
+            ],
+            [
                 'label' => 'Billing & Finance',
                 'links' => [
                     ['label' => 'Billing', 'route' => 'admin.billing.index', 'icon' => 'credit-card'],

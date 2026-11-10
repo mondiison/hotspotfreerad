@@ -66,6 +66,7 @@ class StaffPermissions
         'admin.pos-devices' => self::POS,
         'admin.pppoe-subscribers' => self::PPPOE,
         'admin.subscriptions' => self::CUSTOMERS,
+        'admin.customer-contacts' => self::CUSTOMERS,
         'admin.routers' => self::ROUTERS,
         'admin.topology' => self::ROUTERS,
         'admin.trusted-wifi-devices' => self::ROUTERS,

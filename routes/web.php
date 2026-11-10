@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\BillingController;
+use App\Http\Controllers\Admin\CustomerContactController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\DocsController;
 use App\Http\Controllers\Admin\ExpenseCategoryController;
@@ -139,6 +140,8 @@ Route::middleware(['auth', AuthorizeTenantStaff::class])->prefix('admin')->name(
     Route::get('voucher-batches/{voucherBatch}/print', [VoucherController::class, 'print'])->name('voucher-batches.print');
     Route::get('pos-devices', [PosDeviceController::class, 'index'])->name('pos-devices.index');
     Route::get('trusted-wifi-devices', [TrustedWifiDeviceController::class, 'index'])->name('trusted-wifi-devices.index');
+    Route::get('customer-contacts-export', [CustomerContactController::class, 'export'])->name('customer-contacts.export');
+    Route::get('customer-contacts', [CustomerContactController::class, 'index'])->name('customer-contacts.index');
     Route::get('pppoe-subscribers-export', [PppoeSubscriberController::class, 'export'])->name('pppoe-subscribers.export');
     Route::get('pppoe-subscribers', [PppoeSubscriberController::class, 'index'])->name('pppoe-subscribers.index');
     Route::get('payments-export', [PaymentController::class, 'export'])->name('payments.export');

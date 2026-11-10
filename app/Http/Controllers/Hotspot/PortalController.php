@@ -14,6 +14,7 @@ use App\Models\Subscription;
 use App\Models\TrialRedemption;
 use App\Models\TrustedWifiDevice;
 use App\Models\Voucher;
+use App\Rules\NigerianPhoneNumber;
 use App\Services\FlutterwaveService;
 use App\Services\HotspotPaymentConfirmationService;
 use App\Services\ManualBankTransferService;
@@ -695,7 +696,7 @@ class PortalController extends Controller
             'nasid' => ['required', 'string', 'max:255'],
             'package_id' => ['required', 'integer', 'exists:packages,id'],
             'email' => ['nullable', 'email', 'max:255'],
-            'phone' => ['nullable', 'string', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:255', new NigerianPhoneNumber],
             'payment_method' => ['nullable', 'string', 'in:opay,bank_transfer,card'],
             // 2026-11-09, direct request: a customer can buy a package as a
             // voucher code instead of granting access to the current device --
@@ -709,6 +710,14 @@ class PortalController extends Controller
             'link-login-only' => ['nullable', 'string', 'max:2048'],
             'link-orig' => ['nullable', 'string', 'max:2048'],
         ]);
+
+        // Normalized once here so every later use of $validated['phone'] (the
+        // stored Customer record, the gateway's own customer metadata) gets
+        // the same clean "0XXXXXXXXXX" form -- see NigerianPhoneNumber's own
+        // docblock for why this matters for the customer-contacts directory.
+        if (filled($validated['phone'] ?? null)) {
+            $validated['phone'] = NigerianPhoneNumber::normalize($validated['phone']);
+        }
 
         $router = Router::query()
             ->with('shop.tenant')

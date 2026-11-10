@@ -7,6 +7,7 @@ use App\Models\Payment;
 use App\Models\PosDevice;
 use App\Models\Shop;
 use App\Models\User;
+use App\Rules\NigerianPhoneNumber;
 use App\Support\TenantAccess;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
@@ -48,7 +49,7 @@ class PosDeviceManagementService
             'device_name' => ['required', 'string', 'max:255'],
             'mac_address' => ['required', 'string', 'max:32', 'regex:/^([A-Fa-f0-9]{2}[:-]?){5}[A-Fa-f0-9]{2}$/', Rule::unique('pos_devices')->ignore($device)],
             'owner_name' => ['nullable', 'string', 'max:255'],
-            'phone' => ['nullable', 'string', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:255', new NigerianPhoneNumber],
             'email' => ['nullable', 'email', 'max:255'],
             'starts_at' => ['nullable', 'date'],
             'expires_at' => ['nullable', 'date', 'after:starts_at'],
@@ -187,6 +188,10 @@ class PosDeviceManagementService
             if (blank($data[$field] ?? null)) {
                 $data[$field] = null;
             }
+        }
+
+        if ($data['phone'] !== null) {
+            $data['phone'] = NigerianPhoneNumber::normalize($data['phone']);
         }
 
         return $data;

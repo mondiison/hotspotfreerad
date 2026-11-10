@@ -71,6 +71,13 @@ class TenantAccess
             : $query->whereHas('shop', fn (Builder $shop) => $shop->where('tenant_id', $user->tenant_id));
     }
 
+    public static function scopeCustomers(Builder $query, User $user): Builder
+    {
+        return $user->isSuperAdmin()
+            ? $query
+            : $query->whereHas('shop', fn (Builder $shop) => $shop->where('tenant_id', $user->tenant_id));
+    }
+
     public static function scopePppoeSubscribers(Builder $query, User $user): Builder
     {
         return $user->isSuperAdmin()
