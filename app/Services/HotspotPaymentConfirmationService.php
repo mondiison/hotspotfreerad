@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Payment;
+use App\Models\PppoeSubscriber;
 use App\Models\Subscription;
 use App\Models\Voucher;
 use App\Services\Payments\GatewayCredentialResolver;
@@ -34,21 +35,24 @@ class HotspotPaymentConfirmationService
         private readonly StripeGateway $stripeGateway,
         private readonly GatewayCredentialResolver $credentials,
         private readonly VoucherManagementService $vouchers,
+        private readonly PppoeSubscriberManagementService $pppoeSubscribers,
     ) {}
 
     /**
-     * Return type widened to Subscription|Voucher|null 2026-11-09 -- a
-     * payment flagged as_voucher (see markPaidAndGrantAccess() below) never
-     * gets a Subscription at all, it gets a Voucher instead. Every caller
-     * that previously only null-checked the result (the webhook job, the
-     * retry command, the admin "Verify"/manual-confirm actions) is
-     * unaffected by this; only the customer-facing controller methods that
-     * render a specific "access granted" view need to branch on which type
+     * Return type widened to Subscription|Voucher|PppoeSubscriber|null --
+     * a payment flagged as_voucher (2026-11-09) never gets a Subscription
+     * at all, it gets a Voucher instead, and a payment carrying a
+     * pppoe_subscriber_id (2026-11-10, the "pay to renew" email link) gets
+     * that PppoeSubscriber renewed instead of either. Every caller that
+     * previously only null-checked the result (the webhook job, the retry
+     * command, the admin "Verify"/manual-confirm actions) is unaffected by
+     * either widening; only the customer-facing controller methods that
+     * render a specific confirmation view need to branch on which type
      * came back.
      */
-    public function verifyAndGrant(Payment $payment, string $providerReference, string $resourceType = 'order'): Subscription|Voucher|null
+    public function verifyAndGrant(Payment $payment, string $providerReference, string $resourceType = 'order'): Subscription|Voucher|PppoeSubscriber|null
     {
-        $payment->loadMissing(['shop.tenant', 'package', 'subscription', 'voucher']);
+        $payment->loadMissing(['shop.tenant', 'package', 'subscription', 'voucher', 'pppoeSubscriber']);
 
         if ($payment->status === 'successful' && $payment->subscription) {
             return $payment->subscription;
@@ -56,6 +60,10 @@ class HotspotPaymentConfirmationService
 
         if ($payment->status === 'successful' && $payment->voucher) {
             return $payment->voucher;
+        }
+
+        if ($payment->status === 'successful' && $payment->pppoeSubscriber) {
+            return $payment->pppoeSubscriber;
         }
 
         $verification = $this->verifyProviderPayment($payment, $providerReference, $resourceType);
@@ -89,11 +97,11 @@ class HotspotPaymentConfirmationService
      * wallet credit still applies either way -- it's a real sale regardless
      * of which the customer actually walks away with.
      */
-    public function markPaidAndGrantAccess(Payment $payment, array $verification): Subscription|Voucher
+    public function markPaidAndGrantAccess(Payment $payment, array $verification): Subscription|Voucher|PppoeSubscriber
     {
-        return DB::transaction(function () use ($payment, $verification): Subscription|Voucher {
+        return DB::transaction(function () use ($payment, $verification): Subscription|Voucher|PppoeSubscriber {
             $payment->refresh();
-            $payment->loadMissing(['package', 'subscription', 'voucher']);
+            $payment->loadMissing(['package', 'subscription', 'voucher', 'pppoeSubscriber']);
 
             if ($payment->status === 'successful' && $payment->subscription) {
                 return $payment->subscription;
@@ -101,6 +109,10 @@ class HotspotPaymentConfirmationService
 
             if ($payment->status === 'successful' && $payment->voucher) {
                 return $payment->voucher;
+            }
+
+            if ($payment->status === 'successful' && $payment->pppoeSubscriber) {
+                return $payment->pppoeSubscriber;
             }
 
             $asVoucher = (bool) data_get($payment->payload, 'as_voucher');
@@ -129,6 +141,25 @@ class HotspotPaymentConfirmationService
                 }
 
                 return $voucher;
+            }
+
+            // 2026-11-10, "pay to renew" email link -- the Payment carries
+            // pppoe_subscriber_id from the moment PppoeRenewalController::pay()
+            // created it, so no new flag is needed to detect this case.
+            // renewFromOnlinePayment() does the exact same expiry-extension +
+            // RADIUS re-provisioning renew() does for an admin-triggered
+            // manual renewal, just without creating a second, duplicate
+            // Payment row -- this Payment already IS that transaction.
+            if ($payment->pppoe_subscriber_id) {
+                $subscriber = $this->pppoeSubscribers->renewFromOnlinePayment(
+                    PppoeSubscriber::with(['shop.tenant', 'package'])->findOrFail($payment->pppoe_subscriber_id)
+                );
+
+                if ($payment->shop->tenant?->wallet_enabled) {
+                    $this->wallet->creditForPayment($payment->fresh(['shop.tenant', 'package']));
+                }
+
+                return $subscriber;
             }
 
             $subscription = Subscription::updateOrCreate(

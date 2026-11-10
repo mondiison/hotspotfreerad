@@ -8,6 +8,7 @@ use App\Models\Customer;
 use App\Models\Package;
 use App\Models\Payment;
 use App\Models\PosDevice;
+use App\Models\PppoeSubscriber;
 use App\Models\Router;
 use App\Models\Subscription;
 use App\Models\TrialRedemption;
@@ -1172,7 +1173,7 @@ class PortalController extends Controller
      * checkout (see pay() above and markPaidAndGrantAccess()). Keeps the
      * branching in one place rather than tripling it.
      */
-    private function confirmationView(?Router $router, Payment $payment, Subscription|Voucher $result): View
+    private function confirmationView(?Router $router, Payment $payment, Subscription|Voucher|PppoeSubscriber $result): View
     {
         if ($result instanceof Voucher) {
             return view('hotspot.voucher-purchased', [
@@ -1181,6 +1182,17 @@ class PortalController extends Controller
                 'voucher' => $result,
                 'macAddress' => $payment->payload['mac'] ?? null,
                 'originalUrl' => $payment->payload['link_orig'] ?? null,
+            ]);
+        }
+
+        // 2026-11-10: a "pay to renew" payment (PppoeRenewalController) --
+        // reached through the exact same /hotspot/payment/callback|verify
+        // routes hotspot checkout uses, since the confirmation plumbing is
+        // fully payment-row-generic. No router/mac/login-form context
+        // applies here at all, unlike the two branches above.
+        if ($result instanceof PppoeSubscriber) {
+            return view('pppoe.renewed', [
+                'subscriber' => $result,
             ]);
         }
 

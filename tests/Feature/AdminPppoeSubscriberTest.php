@@ -70,6 +70,112 @@ class AdminPppoeSubscriberTest extends TestCase
         ]);
     }
 
+    /**
+     * 2026-11-10, direct request ("find a way to track pppoe transaction"):
+     * creating a subscriber through the real admin form is a sale -- it
+     * should write a Payment row the same way POS device creation already
+     * does, zero commission, offline/manual, so it shows up in Sales/
+     * Payment reports.
+     */
+    public function test_creating_a_pppoe_subscriber_records_a_manual_payment(): void
+    {
+        [$tenant, $shop, $package] = $this->fixture();
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user);
+
+        Livewire::test(PppoeSubscribersIndex::class)
+            ->set('shop_id', (string) $shop->id)
+            ->set('package_id', (string) $package->id)
+            ->set('username', 'customer001')
+            ->set('password', 'secret-pass')
+            ->set('starts_at', now()->format('Y-m-d\TH:i'))
+            ->set('is_active', true)
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $subscriber = PppoeSubscriber::firstOrFail();
+
+        $this->assertDatabaseHas('payments', [
+            'pppoe_subscriber_id' => $subscriber->id,
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'provider' => 'pppoe_manual',
+            'status' => 'successful',
+            'amount' => '12000.00',
+            'gross_amount' => '12000.00',
+            'platform_fee_amount' => '0.00',
+            'tenant_net_amount' => '12000.00',
+            'commission_rate' => '0.00',
+            'billing_model' => 'manual',
+        ]);
+    }
+
+    public function test_renewing_a_pppoe_subscriber_records_a_second_manual_payment(): void
+    {
+        [$tenant, $shop, $package] = $this->fixture();
+        $subscriber = PppoeSubscriber::create([
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'username' => 'customer001',
+            'password' => 'secret-pass',
+            'starts_at' => now()->subMonth(),
+            'expires_at' => now()->addDays(5),
+            'is_active' => true,
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user);
+
+        Livewire::test(PppoeSubscribersIndex::class)
+            ->call('renew', $subscriber->id);
+
+        $this->assertSame(1, $subscriber->payments()->count());
+
+        Livewire::test(PppoeSubscribersIndex::class)
+            ->call('renew', $subscriber->id);
+
+        // Each renewal cycle gets its own payment row -- never a single
+        // mutable "current payment" field -- so a second renewal produces a
+        // second, distinct transaction rather than overwriting the first.
+        $this->assertSame(2, $subscriber->payments()->count());
+    }
+
+    public function test_inspect_modal_shows_payment_history(): void
+    {
+        [$tenant, $shop, $package] = $this->fixture();
+        $subscriber = PppoeSubscriber::create([
+            'shop_id' => $shop->id,
+            'package_id' => $package->id,
+            'username' => 'customer001',
+            'password' => 'secret-pass',
+            'starts_at' => now()->subMonth(),
+            'expires_at' => now()->addDays(5),
+            'is_active' => true,
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user);
+
+        Livewire::test(PppoeSubscribersIndex::class)
+            ->call('renew', $subscriber->id)
+            ->call('inspect', $subscriber->id)
+            ->assertSee('Payment history')
+            ->assertSee('NGN 12,000.00');
+    }
+
     public function test_tenant_admin_can_disable_pppoe_subscriber_and_revoke_radius(): void
     {
         [$tenant, $shop, $package] = $this->fixture();

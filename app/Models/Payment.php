@@ -44,6 +44,11 @@ class Payment extends Model
         return $this->belongsTo(PosDevice::class);
     }
 
+    public function pppoeSubscriber(): BelongsTo
+    {
+        return $this->belongsTo(PppoeSubscriber::class);
+    }
+
     public function voucher(): BelongsTo
     {
         return $this->belongsTo(Voucher::class);

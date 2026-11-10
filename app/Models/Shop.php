@@ -33,6 +33,7 @@ class Shop extends Model
             'collect_customer_email' => 'boolean',
             'require_customer_phone' => 'boolean',
             'show_bank_transfer_fallback' => 'boolean',
+            'pppoe_expiry_reminders_enabled' => 'boolean',
             'trial_enabled' => 'boolean',
             'trial_duration_minutes' => 'integer',
             'trial_max_uses_per_day' => 'integer',

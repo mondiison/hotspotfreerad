@@ -23,6 +23,7 @@ class ShopManagementService
             'collect_customer_phone' => ['nullable', 'boolean'],
             'collect_customer_email' => ['nullable', 'boolean'],
             'require_customer_phone' => ['nullable', 'boolean'],
+            'pppoe_expiry_reminders_enabled' => ['nullable', 'boolean'],
             'trial_enabled' => ['nullable', 'boolean'],
             'trial_duration_minutes' => ['nullable', 'integer', 'min:1', 'max:1440'],
             'trial_max_uses_per_day' => ['nullable', 'integer', 'min:1', 'max:255'],
@@ -79,6 +80,7 @@ class ShopManagementService
         // whenever its own prerequisite toggle is off, rather than trust a disabled
         // checkbox's submitted value.
         $data['require_customer_phone'] = $data['collect_customer_phone'] && (bool) ($data['require_customer_phone'] ?? false);
+        $data['pppoe_expiry_reminders_enabled'] = (bool) ($data['pppoe_expiry_reminders_enabled'] ?? false);
         $data['trial_enabled'] = (bool) ($data['trial_enabled'] ?? false);
         $data['trial_duration_minutes'] = (int) ($data['trial_duration_minutes'] ?? 15);
         $data['trial_max_uses_per_day'] = (int) ($data['trial_max_uses_per_day'] ?? 1);

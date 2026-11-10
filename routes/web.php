@@ -37,6 +37,7 @@ use App\Http\Controllers\Auth\ResetPasswordController;
 use App\Http\Controllers\Auth\TwoFactorChallengeController;
 use App\Http\Controllers\Hotspot\PortalController;
 use App\Http\Controllers\MarketingController;
+use App\Http\Controllers\PppoeRenewalController;
 use App\Http\Controllers\TenantPublicSiteController;
 use App\Http\Middleware\AuthorizeTenantStaff;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
@@ -75,6 +76,14 @@ Route::post('/hotspot/payment/webhook', [PortalController::class, 'webhook'])
 Route::post('/hotspot/grant', [PortalController::class, 'grant'])->name('hotspot.grant');
 Route::post('/hotspot/trial/start', [PortalController::class, 'startTrial'])->name('hotspot.trial.start');
 Route::post('/hotspot/voucher/redeem', [PortalController::class, 'redeemVoucher'])->name('hotspot.voucher.redeem');
+
+// 2026-11-10: the "pay to renew" email link -- deliberately NOT nested
+// under /hotspot, since PPPoE has no captive-portal/router-redirect
+// concept at all (see PppoeRenewalController's own docblock). Reuses the
+// existing /hotspot/payment/callback|verify|webhook routes for gateway
+// confirmation rather than duplicating them.
+Route::get('/pppoe/renew/{token}', [PppoeRenewalController::class, 'show'])->name('pppoe.renewal.show');
+Route::post('/pppoe/renew/{token}', [PppoeRenewalController::class, 'pay'])->name('pppoe.renewal.pay');
 Route::post('/billing/payment/webhook', [BillingController::class, 'webhook'])
     ->withoutMiddleware([ValidateCsrfToken::class])
     ->name('billing.payment.webhook');

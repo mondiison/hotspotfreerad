@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Package;
+use App\Models\Payment;
 use App\Models\PppoeSubscriber;
 use App\Models\Shop;
 use App\Models\User;
@@ -13,6 +14,21 @@ use Illuminate\Validation\Rule;
 
 class PppoeSubscriberManagementService
 {
+    /**
+     * 2026-11-10, direct request ("we also need to find a way to track
+     * pppoe transaction"): unlike hotspot/POS/vouchers, a PPPoE
+     * subscriber's creation and every renewal never wrote a Payment row at
+     * all -- it just extended expires_at and re-synced RADIUS, so none of
+     * it ever showed up in Sales/Payment reports. Mirrors
+     * PosDeviceManagementService::POS_PAYMENT_PROVIDER's exact shape: this
+     * is deliberately manual accounting (the tenant collects payment from
+     * the subscriber outside the app -- cash, bank transfer, etc., same as
+     * POS), not a real gateway charge, so it charges zero platform
+     * commission regardless of the tenant's billing_model, the same
+     * reasoning POS's own recordPayment() already documents.
+     */
+    public const PPPOE_PAYMENT_PROVIDER = 'pppoe_manual';
+
     public function __construct(private readonly RadiusProvisioningService $radius) {}
 
     public function rules(User $user, ?PppoeSubscriber $subscriber = null): array
@@ -40,6 +56,8 @@ class PppoeSubscriberManagementService
     {
         $data = $this->normalize($data, $user);
         $subscriber = PppoeSubscriber::create($data);
+        $subscriber->loadMissing('shop', 'package');
+        $this->recordPayment($subscriber, $user);
 
         if ($subscriber->isCurrentlyActive()) {
             $this->radius->provisionPppoeSubscriber($subscriber);
@@ -67,8 +85,47 @@ class PppoeSubscriberManagementService
     public function renew(PppoeSubscriber $subscriber, User $user): PppoeSubscriber
     {
         TenantAccess::assertPppoeSubscriber($subscriber, $user);
+        $subscriber->loadMissing('shop', 'package');
+
+        $this->extendExpiry($subscriber);
+        $this->recordPayment($subscriber, $user);
+        $this->radius->provisionPppoeSubscriber($subscriber);
+
+        return $subscriber;
+    }
+
+    /**
+     * 2026-11-10: the "pay to renew" email link's post-payment action --
+     * called from HotspotPaymentConfirmationService::markPaidAndGrantAccess()
+     * once a real gateway charge for this subscriber's renewal has already
+     * been verified. Deliberately has no TenantAccess check (there's no
+     * authenticated admin in this flow, just a customer who followed a
+     * link and paid) and deliberately does NOT call recordPayment() --
+     * the Payment that triggered this call already IS the transaction
+     * record, recording a second one here would double-count the sale.
+     */
+    public function renewFromOnlinePayment(PppoeSubscriber $subscriber): PppoeSubscriber
+    {
         $subscriber->loadMissing('package');
 
+        $this->extendExpiry($subscriber);
+        $this->radius->provisionPppoeSubscriber($subscriber);
+
+        return $subscriber;
+    }
+
+    /**
+     * Shared by renew() (admin-triggered, records its own manual payment)
+     * and renewFromOnlinePayment() (customer-triggered via a real gateway
+     * charge) -- both just need "push expires_at out by one more package
+     * cycle from wherever it currently stands, and reactivate." Also
+     * resets the three expiry-reminder dedup flags (2026-11-10) so the
+     * next billing cycle's reminders can fire again -- without this, a
+     * subscriber who renews after their "expired" email would never get
+     * another 3-day/1-day/expired reminder for their next cycle.
+     */
+    private function extendExpiry(PppoeSubscriber $subscriber): void
+    {
         $startsAt = now();
         $baseExpiry = $subscriber->expires_at?->isFuture() ? $subscriber->expires_at : $startsAt;
 
@@ -76,11 +133,40 @@ class PppoeSubscriberManagementService
             'starts_at' => $subscriber->starts_at ?: $startsAt,
             'expires_at' => $baseExpiry->copy()->addSeconds((int) $subscriber->package->limit_uptime_seconds),
             'is_active' => true,
+            'reminder_3day_sent_at' => null,
+            'reminder_1day_sent_at' => null,
+            'reminder_expired_sent_at' => null,
         ])->save();
+    }
 
-        $this->radius->provisionPppoeSubscriber($subscriber);
+    /**
+     * One row per creation/renewal cycle (never a single mutable "current
+     * payment" field), matching PosDeviceManagementService::recordPayment()'s
+     * exact shape and reasoning -- zero platform commission, since this app
+     * never actually touches the money (the tenant collects it directly from
+     * the subscriber, outside the app).
+     */
+    private function recordPayment(PppoeSubscriber $subscriber, User $user): Payment
+    {
+        $price = (float) $subscriber->package->price;
 
-        return $subscriber;
+        return Payment::create([
+            'shop_id' => $subscriber->shop_id,
+            'package_id' => $subscriber->package_id,
+            'pppoe_subscriber_id' => $subscriber->id,
+            'provider' => self::PPPOE_PAYMENT_PROVIDER,
+            'tx_ref' => 'PPPOE-'.$subscriber->id.'-'.now()->format('YmdHis').'-'.Str::upper(Str::random(6)),
+            'amount' => $price,
+            'currency' => $subscriber->package->currency,
+            'status' => 'successful',
+            'paid_at' => now(),
+            'gross_amount' => round($price, 2),
+            'platform_fee_amount' => 0,
+            'tenant_net_amount' => round($price, 2),
+            'commission_rate' => 0,
+            'billing_model' => 'manual',
+            'payload' => ['recorded_by_user_id' => $user->id, 'username' => $subscriber->username],
+        ]);
     }
 
     public function sync(PppoeSubscriber $subscriber, User $user): PppoeSubscriber

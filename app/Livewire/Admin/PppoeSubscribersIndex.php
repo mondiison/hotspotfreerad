@@ -278,7 +278,7 @@ class PppoeSubscribersIndex extends Component
             return null;
         }
 
-        $subscriber = PppoeSubscriber::with(['shop.tenant', 'package'])->find($this->selectedSubscriberId);
+        $subscriber = PppoeSubscriber::with(['shop.tenant', 'package', 'payments' => fn ($query) => $query->latest('paid_at')])->find($this->selectedSubscriberId);
 
         if (! $subscriber) {
             return null;

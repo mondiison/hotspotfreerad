@@ -1,6 +1,7 @@
 <?php
 
 use App\Mail\HotspotTestMail;
+use App\Mail\PppoeExpiryReminderMail;
 use App\Models\PosDevice;
 use App\Models\PppoeSubscriber;
 use App\Models\Payment;
@@ -13,6 +14,7 @@ use App\Models\User;
 use App\Models\Voucher;
 use App\Services\FreeRadiusClientSyncService;
 use App\Services\HotspotPaymentConfirmationService;
+use App\Services\MikroTikProvisioningService;
 use App\Services\PosDeviceManagementService;
 use App\Services\PppoeSubscriberManagementService;
 use App\Services\RadiusProvisioningService;
@@ -254,6 +256,73 @@ Artisan::command('hotspot:sync-expired-pppoe {--dry-run}', function (PppoeSubscr
     return Command::SUCCESS;
 })->purpose('Revoke expired or disabled PPPoE subscribers from FreeRADIUS and disconnect any already-active PPP session');
 
+/**
+ * 2026-11-10, direct request ("can we send cut off notification, 3 days
+ * to expiry, 1 day and expired email, is it possible to integrate payment
+ * link from the email... automated when they pay they get renewed
+ * automatically") -- per-shop opt-in (pppoe_expiry_reminders_enabled, off
+ * by default, the same "capability toggle, not forced on" pattern every
+ * other optional feature in this codebase uses). The automated-renewal
+ * half is already fully wired by the time this command exists: the link
+ * each email carries (MikroTikProvisioningService::pppoeRenewalUrl())
+ * leads to PppoeRenewalController, whose checkout flow reuses
+ * HotspotPaymentConfirmationService's existing, payment-row-generic
+ * confirmation plumbing -- a paid renewal link extends the subscriber's
+ * expiry with no further action here.
+ *
+ * Three independent, idempotent one-shot dedup flags (reminder_3day_sent_at/
+ * reminder_1day_sent_at/reminder_expired_sent_at) rather than one combined
+ * "last reminder" field -- a subscriber can legitimately cross all three
+ * thresholds over time within the same billing cycle, and each should only
+ * ever fire once per cycle. All three reset back to null the moment the
+ * subscriber actually renews (PppoeSubscriberManagementService::extendExpiry()),
+ * so the next cycle's reminders can fire again. Scheduled dailyAt('09:00')
+ * below -- these are billing reminders, not something that needs minute-
+ * level timeliness the way RADIUS expiry/session-disconnect syncs do.
+ */
+Artisan::command('hotspot:pppoe-expiry-reminders {--dry-run}', function (MikroTikProvisioningService $provisioning): int {
+    $sent = ['three_day' => 0, 'one_day' => 0, 'expired' => 0];
+
+    $eligible = fn () => PppoeSubscriber::query()
+        ->where('is_active', true)
+        ->whereNotNull('email')
+        ->whereNotNull('expires_at')
+        ->whereHas('shop', fn ($query) => $query->where('pppoe_expiry_reminders_enabled', true))
+        ->with(['shop.tenant', 'package']);
+
+    $threeDay = $eligible()->whereNull('reminder_3day_sent_at')->where('expires_at', '<=', now()->addDays(3))->get();
+    $oneDay = $eligible()->whereNull('reminder_1day_sent_at')->where('expires_at', '<=', now()->addDay())->get();
+    $expired = $eligible()->whereNull('reminder_expired_sent_at')->where('expires_at', '<=', now())->get();
+
+    if ($this->option('dry-run')) {
+        $this->info("{$threeDay->count()} three-day, {$oneDay->count()} one-day, and {$expired->count()} expired PPPoE reminder(s) would be sent.");
+
+        return Command::SUCCESS;
+    }
+
+    foreach ($threeDay as $subscriber) {
+        Mail::to($subscriber->email)->send(new PppoeExpiryReminderMail($subscriber, PppoeExpiryReminderMail::STAGE_THREE_DAY, $provisioning->pppoeRenewalUrl($subscriber)));
+        $subscriber->forceFill(['reminder_3day_sent_at' => now()])->save();
+        $sent['three_day']++;
+    }
+
+    foreach ($oneDay as $subscriber) {
+        Mail::to($subscriber->email)->send(new PppoeExpiryReminderMail($subscriber, PppoeExpiryReminderMail::STAGE_ONE_DAY, $provisioning->pppoeRenewalUrl($subscriber)));
+        $subscriber->forceFill(['reminder_1day_sent_at' => now()])->save();
+        $sent['one_day']++;
+    }
+
+    foreach ($expired as $subscriber) {
+        Mail::to($subscriber->email)->send(new PppoeExpiryReminderMail($subscriber, PppoeExpiryReminderMail::STAGE_EXPIRED, $provisioning->pppoeRenewalUrl($subscriber)));
+        $subscriber->forceFill(['reminder_expired_sent_at' => now()])->save();
+        $sent['expired']++;
+    }
+
+    $this->info("Sent {$sent['three_day']} three-day, {$sent['one_day']} one-day, and {$sent['expired']} expired PPPoE reminder email(s).");
+
+    return Command::SUCCESS;
+})->purpose('Email PPPoE subscribers nearing or past expiry a pay-to-renew link');
+
 Artisan::command('hotspot:sync-expired-hotspot {--dry-run}', function (RadiusProvisioningService $radius, RouterOsConnectionService $routerOs): int {
     // Grouped by mac_address (not a flat pluck) so each expired device keeps
     // its shop_id(s) -- needed below to know which router(s) to actively
@@ -459,6 +528,10 @@ Schedule::command('hotspot:scheduler-heartbeat')
 
 Schedule::command('hotspot:sync-expired-pppoe')
     ->everyFiveMinutes()
+    ->withoutOverlapping();
+
+Schedule::command('hotspot:pppoe-expiry-reminders')
+    ->dailyAt('09:00')
     ->withoutOverlapping();
 
 Schedule::command('hotspot:sync-expired-hotspot')

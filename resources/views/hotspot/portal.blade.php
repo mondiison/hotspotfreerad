@@ -157,22 +157,52 @@
                             this first pass: the customer still messages the
                             tenant their reference after transferring, who then
                             issues a voucher by hand from the admin panel.
+
+                            2026-11-10, direct follow-up: collapsed behind the
+                            info icon by default (click to reveal, not hover --
+                            this is a touch-first mobile page) rather than
+                            always shown, plus a copy button on the account
+                            number itself so it doesn't need to be retyped by
+                            hand into a banking app.
                         --}}
                         @if ($shop->show_bank_transfer_fallback && filled($bankTransferFallback['account_number'] ?? null))
-                            <div class="mt-4 rounded-md border border-zinc-200 bg-zinc-50 p-3">
-                                <p class="text-xs font-medium text-zinc-700">Prefer to pay by transfer?</p>
-                                <dl class="mt-2 space-y-1 text-xs text-zinc-600">
-                                    @if (filled($bankTransferFallback['bank_name'] ?? null))
-                                        <div class="flex justify-between gap-3"><dt>Bank</dt><dd class="font-medium text-zinc-950">{{ $bankTransferFallback['bank_name'] }}</dd></div>
-                                    @endif
-                                    @if (filled($bankTransferFallback['account_name'] ?? null))
-                                        <div class="flex justify-between gap-3"><dt>Account name</dt><dd class="font-medium text-zinc-950">{{ $bankTransferFallback['account_name'] }}</dd></div>
-                                    @endif
-                                    <div class="flex justify-between gap-3"><dt>Account number</dt><dd class="font-mono font-medium text-zinc-950">{{ $bankTransferFallback['account_number'] }}</dd></div>
-                                </dl>
-                                <p class="mt-2 text-xs leading-5 text-zinc-500">
-                                    {{ filled($bankTransferFallback['instructions'] ?? null) ? $bankTransferFallback['instructions'] : 'Send to this account, then message us your reference'.($shop->contactPhone() ? ' at '.$shop->contactPhone() : '').' for a voucher code.' }}
-                                </p>
+                            <div class="mt-4 rounded-md border border-zinc-200 bg-zinc-50" x-data="{ showBankDetails: false, copied: false }">
+                                <button type="button" @click="showBankDetails = ! showBankDetails" class="flex w-full items-center justify-between gap-2 p-3 text-left">
+                                    <span class="flex items-center gap-2 text-xs font-medium text-zinc-700">
+                                        <flux:icon.information-circle class="size-4 shrink-0 text-zinc-400" />
+                                        Prefer to pay by transfer?
+                                    </span>
+                                    <flux:icon.chevron-down class="size-4 shrink-0 text-zinc-400 transition-transform" x-bind:class="showBankDetails ? '-rotate-180' : ''" />
+                                </button>
+
+                                <div x-show="showBankDetails" x-collapse x-cloak class="px-3 pb-3">
+                                    <dl class="space-y-1 text-xs text-zinc-600">
+                                        @if (filled($bankTransferFallback['bank_name'] ?? null))
+                                            <div class="flex justify-between gap-3"><dt>Bank</dt><dd class="font-medium text-zinc-950">{{ $bankTransferFallback['bank_name'] }}</dd></div>
+                                        @endif
+                                        @if (filled($bankTransferFallback['account_name'] ?? null))
+                                            <div class="flex justify-between gap-3"><dt>Account name</dt><dd class="font-medium text-zinc-950">{{ $bankTransferFallback['account_name'] }}</dd></div>
+                                        @endif
+                                        <div class="flex items-center justify-between gap-3">
+                                            <dt>Account number</dt>
+                                            <dd class="flex items-center gap-2">
+                                                <span class="font-mono font-medium text-zinc-950">{{ $bankTransferFallback['account_number'] }}</span>
+                                                <button
+                                                    type="button"
+                                                    class="flex shrink-0 items-center gap-1 rounded-md border border-zinc-300 bg-white px-1.5 py-0.5 text-[11px] font-medium text-zinc-600"
+                                                    @click="copied = await window.copyText(@js($bankTransferFallback['account_number'])); setTimeout(() => copied = false, 1800)"
+                                                >
+                                                    <flux:icon.clipboard x-show="! copied" class="size-3" />
+                                                    <span x-show="! copied">Copy</span>
+                                                    <span x-cloak x-show="copied">Copied</span>
+                                                </button>
+                                            </dd>
+                                        </div>
+                                    </dl>
+                                    <p class="mt-2 text-xs leading-5 text-zinc-500">
+                                        {{ filled($bankTransferFallback['instructions'] ?? null) ? $bankTransferFallback['instructions'] : 'Send to this account, then message us your reference'.($shop->contactPhone() ? ' at '.$shop->contactPhone() : '').' for a voucher code.' }}
+                                    </p>
+                                </div>
                             </div>
                         @endif
                     </div>

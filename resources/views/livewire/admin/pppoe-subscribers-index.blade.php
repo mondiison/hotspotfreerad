@@ -419,6 +419,55 @@
                     </div>
                 </section>
 
+                {{--
+                    2026-11-10, direct request ("find a way to track pppoe
+                    transaction"): every subscriber creation and renewal now
+                    writes a real Payment row (PppoeSubscriberManagementService::
+                    recordPayment(), offline/manual provider "pppoe_manual" --
+                    the tenant collects this outside the app, the same POS
+                    convention) -- shown here so a transaction history is
+                    visible right where staff are already looking, on top of
+                    these rows also appearing in the normal Sales/Payment
+                    reports with no changes needed there.
+                --}}
+                <section class="overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900">
+                    <div class="border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-4 py-3">
+                        <h3 class="font-semibold">Payment history</h3>
+                        <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Every creation/renewal is recorded here as its own transaction, offline/manual -- it also shows up in the normal Payments and Sales Report pages.</p>
+                    </div>
+
+                    <div class="overflow-x-auto overflow-y-hidden">
+                        <table class="min-w-[560px] w-full text-left text-sm">
+                            <thead class="border-b border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400">
+                                <tr>
+                                    <th class="px-4 py-3 font-medium">Reference</th>
+                                    <th class="px-4 py-3 font-medium">Paid</th>
+                                    <th class="px-4 py-3 text-right font-medium">Amount</th>
+                                    <th class="px-4 py-3 font-medium">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
+                                @forelse ($selectedSubscriber->payments as $payment)
+                                    <tr>
+                                        <td class="px-4 py-3 font-mono text-xs">{{ $payment->tx_ref }}</td>
+                                        <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">{{ $payment->paid_at?->format('M j, Y g:i A') ?? 'Not paid yet' }}</td>
+                                        <td class="px-4 py-3 text-right font-medium">{{ $payment->currency }} {{ number_format($payment->gross_amount ?: $payment->amount, 2) }}</td>
+                                        <td class="px-4 py-3">
+                                            <flux:badge :color="$payment->status === 'successful' ? 'green' : 'amber'" size="sm">{{ str_replace('_', ' ', $payment->status) }}</flux:badge>
+                                        </td>
+                                    </tr>
+                                @empty
+                                    <tr>
+                                        <td colspan="4" class="px-4 py-8 text-center text-zinc-500 dark:text-zinc-400">
+                                            No payments have been recorded for this subscriber yet.
+                                        </td>
+                                    </tr>
+                                @endforelse
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
                 <div class="flex justify-end gap-3">
                     <flux:button type="button" variant="outline" wire:click="renew({{ $selectedSubscriber->id }})" wire:loading.attr="disabled" wire:target="renew({{ $selectedSubscriber->id }})" icon="arrow-path">
                         <span wire:loading.remove wire:target="renew({{ $selectedSubscriber->id }})">Renew Customer</span>

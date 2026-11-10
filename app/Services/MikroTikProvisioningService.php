@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\PppoeSubscriber;
 use App\Models\Router;
 use App\Models\TrustedWifiDevice;
 use App\Support\PaymentGatewayCatalog;
@@ -1145,6 +1146,26 @@ HTML;
             : $portalUrl;
 
         return rtrim($base, '/').'/hotspot/go/'.$router->public_token;
+    }
+
+    /**
+     * 2026-11-10: the "pay to renew" link emailed to a PPPoE subscriber
+     * nearing/past expiry (PppoeExpiryReminderMail/PppoeRenewalController)
+     * -- same base-host resolution and public_token precedent as
+     * connectUrl() above, just keyed to a PppoeSubscriber instead of a
+     * Router, since it has to resolve from an email client on any
+     * network, not a captive-portal redirect.
+     */
+    public function pppoeRenewalUrl(PppoeSubscriber $subscriber): string
+    {
+        $portalUrl = $this->portalUrl();
+        $suffix = '/hotspot/portal';
+
+        $base = str_ends_with($portalUrl, $suffix)
+            ? substr($portalUrl, 0, -strlen($suffix))
+            : $portalUrl;
+
+        return rtrim($base, '/').'/pppoe/renew/'.$subscriber->public_token;
     }
 
     /**

@@ -55,6 +55,8 @@ class ShopsIndex extends Component
 
     public bool $require_customer_phone = false;
 
+    public bool $pppoe_expiry_reminders_enabled = false;
+
     public bool $trial_enabled = false;
 
     public int $trial_duration_minutes = 15;
@@ -110,6 +112,7 @@ class ShopsIndex extends Component
         $this->collect_customer_phone = (bool) $shop->collect_customer_phone;
         $this->collect_customer_email = (bool) $shop->collect_customer_email;
         $this->require_customer_phone = (bool) $shop->require_customer_phone;
+        $this->pppoe_expiry_reminders_enabled = (bool) $shop->pppoe_expiry_reminders_enabled;
         $this->trial_enabled = (bool) $shop->trial_enabled;
         $this->trial_duration_minutes = (int) $shop->trial_duration_minutes;
         $this->trial_max_uses_per_day = (int) $shop->trial_max_uses_per_day;
@@ -231,6 +234,7 @@ class ShopsIndex extends Component
         $this->collect_customer_phone = false;
         $this->collect_customer_email = false;
         $this->require_customer_phone = false;
+        $this->pppoe_expiry_reminders_enabled = false;
         $this->trial_enabled = false;
         $this->trial_duration_minutes = 15;
         $this->trial_max_uses_per_day = 1;
