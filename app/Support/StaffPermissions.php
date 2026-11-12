@@ -63,6 +63,18 @@ class StaffPermissions
         'admin.security-activity' => true,
         'admin.vouchers' => self::VOUCHERS,
         'admin.voucher-batches' => self::VOUCHERS,
+        // 2026-11-11: the mobile app (api.*) reuses this exact same map --
+        // a staff member's access is governed by one source of truth on
+        // both the web admin and the Flutter app, see CLAUDE.md's "Android
+        // companion app" entry for the full reasoning. api.shops is scoped
+        // to VOUCHERS for now (the only reason Phase 1 reads a shop list at
+        // all is to power the voucher-creation picker) -- widen this the
+        // moment a second permission area starts needing it too.
+        'api.logout' => true,
+        'api.me' => true,
+        'api.shops' => self::VOUCHERS,
+        'api.voucher-batches' => self::VOUCHERS,
+        'api.vouchers' => self::VOUCHERS,
         'admin.pos-devices' => self::POS,
         'admin.pppoe-subscribers' => self::PPPOE,
         'admin.subscriptions' => self::CUSTOMERS,
