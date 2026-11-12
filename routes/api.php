@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\MeController;
+use App\Http\Controllers\Api\RouterProvisioningController;
 use App\Http\Controllers\Api\ShopController;
 use App\Http\Controllers\Api\VoucherBatchController;
 use App\Http\Middleware\AuthorizeTenantStaff;
@@ -27,4 +28,13 @@ Route::middleware(['auth:sanctum', AuthorizeTenantStaff::class])->group(function
     Route::get('/voucher-batches/{voucherBatch}', [VoucherBatchController::class, 'show'])->name('api.voucher-batches.show');
     Route::post('/voucher-batches/{voucherBatch}/void-unused', [VoucherBatchController::class, 'voidUnused'])->name('api.voucher-batches.void-unused');
     Route::post('/vouchers/{voucher}/mark-sold', [VoucherBatchController::class, 'markVoucherSold'])->name('api.vouchers.mark-sold');
+
+    // Reseller model Phase 3 (2026-11-14): zero-touch router provisioning.
+    // Deliberately NOT added to StaffPermissions::ROUTE_PERMISSIONS -- that
+    // omission is what makes these tenant_admin-only (super_admin too, both
+    // bypass the map entirely); tenant_staff is denied by default for any
+    // route missing from it, the same way admin.billing/admin.tenants are.
+    Route::post('/router-provisioning', [RouterProvisioningController::class, 'store'])->name('api.router-provisioning.store');
+    Route::post('/router-provisioning/{router}/mark-pushed', [RouterProvisioningController::class, 'markBootstrapPushed'])->name('api.router-provisioning.mark-pushed');
+    Route::get('/router-provisioning/{router}/status', [RouterProvisioningController::class, 'status'])->name('api.router-provisioning.status');
 });

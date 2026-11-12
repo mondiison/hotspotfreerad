@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../api/api_client.dart';
 import '../../auth/auth_controller.dart';
 import '../../models/voucher_batch.dart';
+import '../router_setup/add_router_screen.dart';
 import 'batch_detail_screen.dart';
 import 'create_voucher_screen.dart';
 import 'voucher_providers.dart';
@@ -20,11 +21,23 @@ class BatchListScreen extends ConsumerWidget {
     // just rejecting, an action a staff member's permissions don't cover --
     // see AppUser.canManageVouchers' own docblock.
     final canManageVouchers = auth.user?.canManageVouchers ?? false;
+    // Mirrors the same hide-not-just-reject habit as canManageVouchers above
+    // -- see AppUser.canProvisionRouters' own docblock for why tenant_staff
+    // never has this regardless of permissions.
+    final canProvisionRouters = auth.user?.canProvisionRouters ?? false;
 
     return Scaffold(
       appBar: AppBar(
         title: Text(auth.user?.tenant?.companyName ?? 'Voucher batches'),
         actions: [
+          if (canProvisionRouters)
+            IconButton(
+              icon: const Icon(Icons.router_outlined),
+              tooltip: 'Set up a new router',
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const AddRouterScreen()),
+              ),
+            ),
           IconButton(
             icon: const Icon(Icons.logout),
             tooltip: 'Sign out',

@@ -33,6 +33,13 @@ class AppUser {
   bool get canManageVouchers =>
       isSuperAdmin || isTenantAdmin || (permissions?.contains('vouchers') ?? false);
 
+  /// Mirrors the backend's own gate exactly -- the Phase 3 zero-touch
+  /// router-provisioning routes are deliberately never added to
+  /// StaffPermissions::ROUTE_PERMISSIONS, so tenant_staff is denied
+  /// outright no matter what permissions they hold (unlike vouchers
+  /// above, there's no permission key to check here at all).
+  bool get canProvisionRouters => isSuperAdmin || isTenantAdmin;
+
   factory AppUser.fromJson(Map<String, dynamic> json) {
     return AppUser(
       id: json['id'] as int,
