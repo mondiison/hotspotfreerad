@@ -39,8 +39,13 @@ use App\Http\Controllers\Auth\RedirectAfterLoginController;
 use App\Http\Controllers\Auth\ResetPasswordController;
 use App\Http\Controllers\Auth\TwoFactorChallengeController;
 use App\Http\Controllers\Client\BillingController as ClientBillingController;
+use App\Http\Controllers\Client\BrandingController as ClientBrandingController;
 use App\Http\Controllers\Client\DashboardController as ClientDashboardController;
+use App\Http\Controllers\Client\PackageController as ClientPackageController;
+use App\Http\Controllers\Client\ReportController as ClientReportController;
 use App\Http\Controllers\Client\RouterController as ClientRouterController;
+use App\Http\Controllers\Client\SupportController as ClientSupportController;
+use App\Http\Controllers\Client\VoucherController as ClientVoucherController;
 use App\Http\Controllers\Hotspot\PortalController;
 use App\Http\Controllers\MarketingController;
 use App\Http\Controllers\PppoeRenewalController;
@@ -115,6 +120,19 @@ Route::middleware(['auth', AuthorizeClient::class])->prefix('client')->name('cli
     Route::post('billing/checkout', [ClientBillingController::class, 'checkout'])->name('billing.checkout');
     Route::get('billing/callback', [ClientBillingController::class, 'callback'])->name('billing.callback');
     Route::get('routers/{router}', [ClientRouterController::class, 'show'])->name('routers.show');
+    Route::put('routers/{router}/ssid', [ClientRouterController::class, 'updateSsid'])->name('routers.update-ssid');
+
+    Route::get('packages', [ClientPackageController::class, 'index'])->name('packages.index');
+
+    Route::get('vouchers', [ClientVoucherController::class, 'index'])->name('vouchers.index');
+    Route::get('voucher-batches/{voucherBatch}/print', [ClientVoucherController::class, 'print'])->name('voucher-batches.print');
+
+    Route::get('branding', [ClientBrandingController::class, 'index'])->name('branding.index');
+    Route::put('branding/{shop}', [ClientBrandingController::class, 'update'])->name('branding.update');
+
+    Route::get('reports', [ClientReportController::class, 'index'])->name('reports.index');
+
+    Route::get('support', [ClientSupportController::class, 'index'])->name('support.index');
 });
 
 Route::middleware(['auth', AuthorizeTenantStaff::class])->prefix('admin')->name('admin.')->group(function () {

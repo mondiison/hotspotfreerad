@@ -36,4 +36,20 @@
             </div>
         @endif
     @endif
+
+    @if ($router->provisioning_settings['enable_builtin_wifi'] ?? false)
+        <h2 class="mt-6 mb-2 text-sm font-semibold tracking-wide text-zinc-500 uppercase">Wi-Fi name</h2>
+        <div class="rounded-lg border border-zinc-200 bg-white p-4">
+            <form method="POST" action="{{ route('client.routers.update-ssid', $router) }}" class="flex flex-wrap items-end gap-3">
+                @csrf
+                @method('PUT')
+                <flux:field class="min-w-[220px]">
+                    <flux:label>Customers see this SSID when connecting</flux:label>
+                    <flux:input name="hotspot_ssid" value="{{ old('hotspot_ssid', $router->provisioning_settings['hotspot_ssid'] ?? 'MMS Hotspot') }}" maxlength="32" required />
+                    <flux:error name="hotspot_ssid" />
+                </flux:field>
+                <flux:button type="submit" variant="primary">Save</flux:button>
+            </form>
+        </div>
+    @endif
 </x-layouts.client>

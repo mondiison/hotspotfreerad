@@ -12,7 +12,14 @@
 <body class="min-h-screen bg-zinc-950 text-white antialiased" style="--brand: {{ $shop->tenant->brand_color ?? '#10b981' }}">
     @php
         $tenant = $shop->tenant;
-        $heroImageUrl = $tenant->hero_image_path ? \Illuminate\Support\Facades\Storage::disk('public')->url($tenant->hero_image_path) : null;
+        // 2026-11-13: a shop's own Client-set portal banner (Phase 2 self-
+        // service branding) takes priority over the tenant-wide hero image
+        // when set, reusing the exact same hero slot below rather than a
+        // second image region -- the Client's own shop is what a customer
+        // standing in front of it should see first.
+        $heroImageUrl = $shop->portal_banner_path
+            ? \Illuminate\Support\Facades\Storage::disk('public')->url($shop->portal_banner_path)
+            : ($tenant->hero_image_path ? \Illuminate\Support\Facades\Storage::disk('public')->url($tenant->hero_image_path) : null);
         $flyerImageUrl = $tenant->flyer_image_path ? \Illuminate\Support\Facades\Storage::disk('public')->url($tenant->flyer_image_path) : null;
         $logoImageUrl = $tenant->logo_image_path ? \Illuminate\Support\Facades\Storage::disk('public')->url($tenant->logo_image_path) : null;
         $slideImageUrls = collect($tenant->public_site_slides ?? [])
@@ -64,7 +71,7 @@
                 <div class="min-w-0">
                     <p class="truncate text-sm font-medium" style="color: var(--brand)">{{ $tenant->company_name }}</p>
                     <h1 class="mt-1 truncate text-xl font-semibold sm:text-3xl">{{ $shop->name }}</h1>
-                    <p class="mt-1 max-w-2xl text-xs text-zinc-300 sm:mt-2 sm:text-sm">{{ $tenant->public_site_tagline ?: 'Choose an internet plan for this device.' }}</p>
+                    <p class="mt-1 max-w-2xl text-xs text-zinc-300 sm:mt-2 sm:text-sm">{{ $shop->portal_welcome_message ?: ($tenant->public_site_tagline ?: 'Choose an internet plan for this device.') }}</p>
                     <p class="mt-1 text-xs text-zinc-400 sm:mt-2 sm:text-sm">Device {{ $macAddress }}</p>
                 </div>
             </div>

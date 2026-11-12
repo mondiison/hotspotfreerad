@@ -8,17 +8,23 @@
     <link rel="preconnect" href="https://fonts.bunny.net">
     <link href="https://fonts.bunny.net/css?family=inter:400,500,600,700&display=swap" rel="stylesheet">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
+    @fluxAppearance
 </head>
 <body class="min-h-screen bg-zinc-50 text-zinc-900 antialiased">
     <header class="border-b border-zinc-200 bg-white">
-        <div class="mx-auto flex max-w-4xl items-center justify-between px-5 py-4">
+        <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-5 py-4">
             <div>
                 <p class="font-semibold">{{ auth()->user()->client?->name }}</p>
                 <p class="text-xs text-zinc-500">{{ auth()->user()->client?->tenant?->company_name }}</p>
             </div>
-            <nav class="flex items-center gap-4 text-sm">
+            <nav class="flex flex-wrap items-center gap-4 text-sm">
                 <a href="{{ route('client.dashboard') }}" class="hover:underline">Dashboard</a>
+                <a href="{{ route('client.packages.index') }}" class="hover:underline">Packages</a>
+                <a href="{{ route('client.vouchers.index') }}" class="hover:underline">Vouchers</a>
+                <a href="{{ route('client.reports.index') }}" class="hover:underline">Reports</a>
+                <a href="{{ route('client.branding.index') }}" class="hover:underline">Branding</a>
                 <a href="{{ route('client.billing.index') }}" class="hover:underline">Billing</a>
+                <a href="{{ route('client.support.index') }}" class="hover:underline">Support</a>
                 <form method="POST" action="{{ route('logout') }}">
                     @csrf
                     <button type="submit" class="text-zinc-500 hover:underline">Sign out</button>
@@ -27,7 +33,7 @@
         </div>
     </header>
 
-    <main class="mx-auto max-w-4xl px-5 py-8">
+    <main class="mx-auto max-w-6xl px-5 py-8">
         @if (session('status'))
             <div class="mb-4 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{{ session('status') }}</div>
         @endif
@@ -42,5 +48,7 @@
 
         {{ $slot }}
     </main>
+
+    @fluxScripts
 </body>
 </html>
