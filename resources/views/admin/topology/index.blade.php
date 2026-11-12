@@ -30,18 +30,34 @@
                             </div>
 
                             <div class="mt-3 space-y-2">
+                                @php $isSuperAdmin = auth()->user()->isSuperAdmin(); @endphp
                                 @foreach ($shopGroup['routers'] as $router)
-                                    <a
-                                        href="{{ route('admin.routers.show', $router) }}"
-                                        wire:navigate
-                                        class="flex items-center justify-between gap-2 rounded-md border border-zinc-200 dark:border-zinc-700 px-3 py-2 text-sm hover:border-zinc-400 dark:hover:border-zinc-500"
-                                    >
-                                        <span class="flex min-w-0 items-center gap-2">
-                                            <span class="h-2 w-2 shrink-0 rounded-full {{ $router->detected_status === 'Online' ? 'bg-emerald-500' : ($router->detected_status === 'Recently seen' ? 'bg-amber-500' : 'bg-zinc-300 dark:bg-zinc-600') }}"></span>
-                                            <span class="min-w-0 truncate">{{ $router->name }}</span>
-                                        </span>
-                                        <span class="shrink-0 font-mono text-xs text-zinc-500 dark:text-zinc-400">{{ $router->wireguard_internal_ip }}</span>
-                                    </a>
+                                    {{-- 2026-11-12: the router detail page this linked to is now
+                                         super-admin-only (generated scripts/live credentials/console --
+                                         see CLAUDE.md), so a tenant admin/staff viewer gets a plain,
+                                         non-clickable row instead of a link that would 403. The
+                                         WireGuard IP (infrastructure detail) is scrubbed for them too. --}}
+                                    @if ($isSuperAdmin)
+                                        <a
+                                            href="{{ route('admin.routers.show', $router) }}"
+                                            wire:navigate
+                                            class="flex items-center justify-between gap-2 rounded-md border border-zinc-200 dark:border-zinc-700 px-3 py-2 text-sm hover:border-zinc-400 dark:hover:border-zinc-500"
+                                        >
+                                            <span class="flex min-w-0 items-center gap-2">
+                                                <span class="h-2 w-2 shrink-0 rounded-full {{ $router->detected_status === 'Online' ? 'bg-emerald-500' : ($router->detected_status === 'Recently seen' ? 'bg-amber-500' : 'bg-zinc-300 dark:bg-zinc-600') }}"></span>
+                                                <span class="min-w-0 truncate">{{ $router->name }}</span>
+                                            </span>
+                                            <span class="shrink-0 font-mono text-xs text-zinc-500 dark:text-zinc-400">{{ $router->wireguard_internal_ip }}</span>
+                                        </a>
+                                    @else
+                                        <div class="flex items-center justify-between gap-2 rounded-md border border-zinc-200 dark:border-zinc-700 px-3 py-2 text-sm">
+                                            <span class="flex min-w-0 items-center gap-2">
+                                                <span class="h-2 w-2 shrink-0 rounded-full {{ $router->detected_status === 'Online' ? 'bg-emerald-500' : ($router->detected_status === 'Recently seen' ? 'bg-amber-500' : 'bg-zinc-300 dark:bg-zinc-600') }}"></span>
+                                                <span class="min-w-0 truncate">{{ $router->name }}</span>
+                                            </span>
+                                            <span class="shrink-0 text-xs text-zinc-500 dark:text-zinc-400">{{ $router->detected_status }}</span>
+                                        </div>
+                                    @endif
                                 @endforeach
                             </div>
                         </div>

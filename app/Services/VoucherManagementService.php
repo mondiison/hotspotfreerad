@@ -360,6 +360,24 @@ class VoucherManagementService
     {
         TenantAccess::assertVoucherBatch($batch, $user);
 
+        return $this->voidUnusedVouchersInBatch($batch);
+    }
+
+    /**
+     * 2026-11-12: the system-triggered equivalent of
+     * voidUnusedBatchVouchers() above, used by hotspot:enforce-client-billing
+     * -- that scheduled job has no acting admin to scope-check against, and
+     * doesn't need one, since it already derives $batch from an
+     * already-correctly-scoped Client -> Shop -> VoucherBatch chain of its
+     * own. Both callers share the exact same voiding logic below.
+     */
+    public function voidUnusedVouchersInBatchAsSystem(VoucherBatch $batch): int
+    {
+        return $this->voidUnusedVouchersInBatch($batch);
+    }
+
+    private function voidUnusedVouchersInBatch(VoucherBatch $batch): int
+    {
         return DB::transaction(function () use ($batch): int {
             $voided = $batch->vouchers()
                 ->where('status', 'unused')

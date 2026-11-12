@@ -76,6 +76,11 @@ class User extends Authenticatable implements PasskeyUser
         return $this->belongsTo(Tenant::class);
     }
 
+    public function client(): BelongsTo
+    {
+        return $this->belongsTo(Client::class);
+    }
+
     public function securityActivities(): HasMany
     {
         return $this->hasMany(SecurityActivity::class);
@@ -96,6 +101,11 @@ class User extends Authenticatable implements PasskeyUser
         return $this->role === 'tenant_staff';
     }
 
+    public function isClient(): bool
+    {
+        return $this->role === 'client';
+    }
+
     public function hasStaffPermission(string $permission): bool
     {
         return $this->isTenantStaff() && in_array($permission, $this->permissions ?? [], true);
@@ -105,12 +115,22 @@ class User extends Authenticatable implements PasskeyUser
      * Whether this user may reach the given named route. Super admins and
      * tenant admins always can; tenant staff are gated by StaffPermissions'
      * route map (deny by default -- a route missing from that map is
-     * unreachable for staff, not implicitly allowed).
+     * unreachable for staff, not implicitly allowed). A 'client'-role user
+     * is denied every admin.* route outright, including the ones the map
+     * marks `true` for "any authenticated tenant user" (admin.dashboard,
+     * admin.profile, etc.) -- that shorthand was written before the client
+     * role existed and means "any tenant_staff," not "any role at all." A
+     * Client reaches its own, completely separate client.* route group,
+     * gated by AuthorizeClient instead.
      */
     public function canAccessRoute(?string $routeName): bool
     {
         if ($this->isSuperAdmin() || $this->isTenantAdmin()) {
             return true;
+        }
+
+        if ($this->isClient()) {
+            return false;
         }
 
         $required = StaffPermissions::forRoute($routeName);

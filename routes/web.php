@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\Admin\BillingController;
+use App\Http\Controllers\Admin\ClientBillingPlanController;
+use App\Http\Controllers\Admin\ClientController;
 use App\Http\Controllers\Admin\CustomerContactController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\DocsController;
@@ -36,10 +38,14 @@ use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\RedirectAfterLoginController;
 use App\Http\Controllers\Auth\ResetPasswordController;
 use App\Http\Controllers\Auth\TwoFactorChallengeController;
+use App\Http\Controllers\Client\BillingController as ClientBillingController;
+use App\Http\Controllers\Client\DashboardController as ClientDashboardController;
+use App\Http\Controllers\Client\RouterController as ClientRouterController;
 use App\Http\Controllers\Hotspot\PortalController;
 use App\Http\Controllers\MarketingController;
 use App\Http\Controllers\PppoeRenewalController;
 use App\Http\Controllers\TenantPublicSiteController;
+use App\Http\Middleware\AuthorizeClient;
 use App\Http\Middleware\AuthorizeTenantStaff;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Support\Facades\Route;
@@ -89,6 +95,28 @@ Route::post('/billing/payment/webhook', [BillingController::class, 'webhook'])
     ->withoutMiddleware([ValidateCsrfToken::class])
     ->name('billing.payment.webhook');
 
+// 2026-11-12: a Client paying its Tenant -- the gateway POSTs here directly,
+// so this sits outside both the 'auth' and AuthorizeClient-gated client.*
+// group below, same shape as hotspot/billing's own webhook routes above.
+Route::post('/client/billing/webhook', [ClientBillingController::class, 'webhook'])
+    ->withoutMiddleware([ValidateCsrfToken::class])
+    ->name('client.billing.webhook');
+
+// The reseller model's Client tier (2026-11-12): a wholly separate route
+// group/middleware from admin.* -- a 'client'-role user is denied admin.*
+// entirely by the existing StaffPermissions fallback (hasStaffPermission()
+// is strictly tied to isTenantStaff()), so no change was needed there.
+// AuthorizeClient is the single checkpoint for the lapse-enforcement deny
+// (see hotspot:enforce-client-billing) -- every route below it is denied
+// outright the moment a Client's subscription is no longer active/trialing.
+Route::middleware(['auth', AuthorizeClient::class])->prefix('client')->name('client.')->group(function () {
+    Route::get('/', [ClientDashboardController::class, 'index'])->name('dashboard');
+    Route::get('billing', [ClientBillingController::class, 'index'])->name('billing.index');
+    Route::post('billing/checkout', [ClientBillingController::class, 'checkout'])->name('billing.checkout');
+    Route::get('billing/callback', [ClientBillingController::class, 'callback'])->name('billing.callback');
+    Route::get('routers/{router}', [ClientRouterController::class, 'show'])->name('routers.show');
+});
+
 Route::middleware(['auth', AuthorizeTenantStaff::class])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/', DashboardController::class)->name('dashboard');
     Route::view('settings', 'admin.settings.index')->name('settings.index');
@@ -119,6 +147,16 @@ Route::middleware(['auth', AuthorizeTenantStaff::class])->prefix('admin')->name(
     Route::post('tenants/{tenant}/owner-reset-link', [TenantController::class, 'sendOwnerResetLink'])->name('tenants.owner-reset-link');
     Route::resource('tenants', TenantController::class)->except('show');
     Route::resource('shops', ShopController::class)->except('show');
+    // The reseller model's Client tier (2026-11-12) -- tenant_admin's own
+    // CRUD for onboarding Clients and defining the plans sold to them. Not
+    // added to StaffPermissions' route map, so tenant_staff is denied by
+    // default (consistent with everything else not deliberately opened up
+    // to staff yet).
+    Route::resource('clients', ClientController::class)->except('show');
+    Route::post('clients/reselling/enable', [ClientController::class, 'enableReselling'])->name('clients.reselling.enable');
+    Route::post('clients/reselling/disable', [ClientController::class, 'disableReselling'])->name('clients.reselling.disable');
+    Route::post('clients/checkout-gateway', [ClientController::class, 'saveCheckoutGateway'])->name('clients.checkout-gateway');
+    Route::resource('client-billing-plans', ClientBillingPlanController::class)->except('show');
     Route::post('routers/{router}/regenerate-wireguard-key', [RouterController::class, 'regenerateWireguardKey'])->name('routers.regenerate-wireguard-key');
     Route::post('routers/{router}/regenerate-api-credentials', [RouterController::class, 'regenerateApiCredentials'])->name('routers.regenerate-api-credentials');
     Route::post('routers/{router}/test-api-connection', [RouterController::class, 'testApiConnection'])->name('routers.test-api-connection');

@@ -47,6 +47,9 @@
                 @if ($plan->supports_wallet)
                     <flux:badge color="blue" size="sm" class="mt-3">Wallet{{ $plan->wallet_commission_rate !== null ? ' · '.number_format((float) $plan->wallet_commission_rate, 2).'%' : '' }}</flux:badge>
                 @endif
+                @if ($plan->supports_client_reselling)
+                    <flux:badge color="purple" size="sm" class="mt-3">Client reselling{{ $plan->default_client_commission_rate !== null ? ' · '.number_format((float) $plan->default_client_commission_rate, 2).'%' : '' }}</flux:badge>
+                @endif
                 @if ($plan->features)
                     <ul class="mt-4 space-y-1 text-sm text-zinc-600 dark:text-zinc-400">
                         @foreach ($plan->features as $feature)
@@ -142,6 +145,31 @@
                                 <flux:input type="number" step="0.01" min="0" max="100" wire:model.blur="wallet_commission_rate" placeholder="e.g. 5" :disabled="! $supports_wallet" />
                                 <flux:description>The platform's cut of every wallet-routed payment for tenants on this plan.</flux:description>
                                 <flux:error name="wallet_commission_rate" />
+                            </flux:field>
+                        </div>
+                    </section>
+
+                    <section class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-4 md:col-span-2">
+                        <h2 class="text-sm font-semibold text-zinc-950 dark:text-zinc-100">Client reselling</h2>
+                        <p class="mt-1 text-sm leading-6 text-zinc-600 dark:text-zinc-400">Lets a tenant on this plan onboard their own paying Clients (each owning one or more shops), give each a free trial, and bill them through the tenant's own gateway. The platform takes a cut of what each Client pays.</p>
+
+                        <div class="mt-4 grid gap-5 md:grid-cols-2">
+                            <div class="md:col-span-2">
+                                <flux:checkbox wire:model.live="supports_client_reselling" label="Include client reselling feature on this plan" />
+                            </div>
+
+                            <flux:field>
+                                <flux:label>Default commission rate (%)</flux:label>
+                                <flux:input type="number" step="0.01" min="0" max="100" wire:model.blur="default_client_commission_rate" placeholder="e.g. 10" :disabled="! $supports_client_reselling" />
+                                <flux:description>The platform's cut of every payment a Client makes to a tenant on this plan. Copied onto the tenant when they enable reselling; a super admin can override it per tenant afterward.</flux:description>
+                                <flux:error name="default_client_commission_rate" />
+                            </flux:field>
+
+                            <flux:field>
+                                <flux:label>Default trial length (days)</flux:label>
+                                <flux:input type="number" min="0" max="365" wire:model.blur="default_client_trial_days" :disabled="! $supports_client_reselling" />
+                                <flux:description>How long a new Client's free trial lasts before they must pay to keep going.</flux:description>
+                                <flux:error name="default_client_trial_days" />
                             </flux:field>
                         </div>
                     </section>

@@ -86,6 +86,11 @@ class Shop extends Model
         return $this->belongsTo(Tenant::class);
     }
 
+    public function client(): BelongsTo
+    {
+        return $this->belongsTo(Client::class);
+    }
+
     public function routers(): HasMany
     {
         return $this->hasMany(Router::class);

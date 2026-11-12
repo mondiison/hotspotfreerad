@@ -89,6 +89,13 @@ class NavGroups
                 ],
             ],
             [
+                'label' => 'Reselling',
+                'links' => [
+                    ['label' => 'Clients', 'route' => 'admin.clients.index', 'icon' => 'user-group', 'tenant_admin' => true],
+                    ['label' => 'Client Plans', 'route' => 'admin.client-billing-plans.index', 'icon' => 'document-text', 'tenant_admin' => true],
+                ],
+            ],
+            [
                 'label' => 'Billing & Finance',
                 'links' => [
                     ['label' => 'Billing', 'route' => 'admin.billing.index', 'icon' => 'credit-card'],

@@ -49,6 +49,19 @@ class TenantsIndex extends Component
 
     public string $commission_rate = '0';
 
+    // 2026-11-12: per-tenant overrides for the Client-reselling program
+    // (see ClientResellingService::enable(), which copies the tenant's
+    // platform plan's defaults onto these same columns) -- directly
+    // super-admin-editable afterward, mirroring how commission_rate is
+    // already directly editable here today.
+    public string $client_commission_rate = '0';
+
+    public string $default_client_trial_days = '14';
+
+    public bool $auto_void_unused_vouchers_every_cycle = false;
+
+    public ?string $clientCommissionSubaccountError = null;
+
     public string $trial_ends_at = '';
 
     public bool $is_active = true;
@@ -136,6 +149,10 @@ class TenantsIndex extends Component
         $this->subscription_plan = (string) ($tenant->subscription_plan ?: 'basic');
         $this->form_billing_model = (string) ($tenant->billing_model ?: 'subscription');
         $this->commission_rate = (string) ($tenant->commission_rate ?? '0');
+        $this->client_commission_rate = (string) ($tenant->client_commission_rate ?? '0');
+        $this->default_client_trial_days = (string) ($tenant->default_client_trial_days ?? 14);
+        $this->auto_void_unused_vouchers_every_cycle = (bool) $tenant->auto_void_unused_vouchers_every_cycle;
+        $this->clientCommissionSubaccountError = null;
         $this->trial_ends_at = $tenant->trial_ends_at?->format('Y-m-d\TH:i') ?? '';
         $this->is_active = (bool) $tenant->is_active;
         $this->require_two_factor = (bool) $tenant->require_two_factor;
@@ -168,6 +185,24 @@ class TenantsIndex extends Component
             $this->commissionSubaccountError = $exception->errors()['commission_subaccount_gateway'][0] ?? 'Unable to create commission subaccount.';
         } catch (\Throwable $exception) {
             $this->commissionSubaccountError = 'Paystack request failed: '.$exception->getMessage();
+        }
+    }
+
+    public function createClientCommissionSubaccount(TenantManagementService $tenants): void
+    {
+        if (! $this->editingTenantId) {
+            return;
+        }
+
+        $this->clientCommissionSubaccountError = null;
+
+        try {
+            $tenants->createClientCommissionSubaccount(Tenant::findOrFail($this->editingTenantId), auth()->user());
+            $this->savedMessage = 'Client commission subaccount created.';
+        } catch (ValidationException $exception) {
+            $this->clientCommissionSubaccountError = $exception->errors()['client_commission_subaccount_gateway'][0] ?? 'Unable to create commission subaccount.';
+        } catch (\Throwable $exception) {
+            $this->clientCommissionSubaccountError = 'Paystack request failed: '.$exception->getMessage();
         }
     }
 
@@ -337,6 +372,9 @@ class TenantsIndex extends Component
             'subscription_plan' => $this->subscription_plan,
             'billing_model' => $this->form_billing_model,
             'commission_rate' => $this->commission_rate,
+            'client_commission_rate' => $this->client_commission_rate,
+            'default_client_trial_days' => $this->default_client_trial_days,
+            'auto_void_unused_vouchers_every_cycle' => $this->auto_void_unused_vouchers_every_cycle,
             'trial_ends_at' => $this->trial_ends_at,
             'is_active' => $this->is_active,
             'require_two_factor' => $this->require_two_factor,
@@ -358,6 +396,7 @@ class TenantsIndex extends Component
             'slug',
             'owner_email',
             'commission_rate',
+            'client_commission_rate',
             'trial_ends_at',
             'public_site_tagline',
             'public_site_about',
@@ -368,6 +407,9 @@ class TenantsIndex extends Component
         $this->subscription_plan = 'basic';
         $this->form_billing_model = 'subscription';
         $this->commission_rate = '0';
+        $this->default_client_trial_days = '14';
+        $this->auto_void_unused_vouchers_every_cycle = false;
+        $this->clientCommissionSubaccountError = null;
         $this->is_active = true;
         $this->require_two_factor = false;
         $this->public_site_enabled = true;

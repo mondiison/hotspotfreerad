@@ -24,6 +24,14 @@ class RedirectAfterLoginController extends Controller
             abort(403, 'No active tenant assigned to this account.');
         }
 
+        if ($user->isClient()) {
+            if (! $user->client || ! $user->client->is_active) {
+                abort(403, 'No active client account assigned to this login.');
+            }
+
+            return redirect()->route('client.dashboard');
+        }
+
         return redirect()->route('admin.dashboard');
     }
 }

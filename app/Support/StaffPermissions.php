@@ -30,7 +30,13 @@ class StaffPermissions
             self::POS => 'POS devices',
             self::PPPOE => 'PPPoE subscribers',
             self::CUSTOMERS => 'Customer access',
-            self::ROUTERS => 'Network (routers, topology, trusted Wi-Fi -- trusted Wi-Fi surfaces under Access, not Settings)',
+            // 2026-11-12: the router detail page (scripts, credentials,
+            // console, live provisioning) is now super_admin-only
+            // regardless of this permission -- RouterController's own
+            // abort_unless() guard is the real gate on that surface now.
+            // This permission's remaining reach is the router list/topology
+            // view and trusted Wi-Fi -- see CLAUDE.md's dated entry.
+            self::ROUTERS => 'Network (router list, topology, trusted Wi-Fi -- trusted Wi-Fi surfaces under Access, not Settings; technical router details are super-admin-only)',
             self::PAYMENTS => 'Payments',
             self::EXPENSES => 'Expenses',
             self::REPORTS => 'Reports',

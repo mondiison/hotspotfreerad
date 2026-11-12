@@ -2,6 +2,8 @@
 
 use App\Mail\HotspotTestMail;
 use App\Mail\PppoeExpiryReminderMail;
+use App\Models\Client;
+use App\Models\ClientBillingSubscription;
 use App\Models\PosDevice;
 use App\Models\PppoeSubscriber;
 use App\Models\Payment;
@@ -12,6 +14,7 @@ use App\Models\Subscription;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Models\Voucher;
+use App\Models\VoucherBatch;
 use App\Services\FreeRadiusClientSyncService;
 use App\Services\HotspotPaymentConfirmationService;
 use App\Services\MikroTikProvisioningService;
@@ -513,6 +516,117 @@ Artisan::command('hotspot:expire-abandoned-payments {--minutes=60 : Only payment
 
     return Command::SUCCESS;
 })->purpose('Mark pending payments that never got a gateway reference as abandoned (after a final Flutterwave tx_ref check)');
+
+/**
+ * 2026-11-12: the reseller-tier Client's trial-to-paywall lapse
+ * enforcement -- nothing in this codebase's billing code (BillingPlanLimits)
+ * ever cuts off EXISTING access, it only blocks creating new things, so this
+ * is genuinely new, not an extension of an existing job.
+ *
+ * Deliberately scoped to the Client's own admin access only -- a Client's
+ * real hotspot/PPPoE/POS customers have no dependency on
+ * client_billing_subscriptions.status at all (their RADIUS/Subscription
+ * flow never reads it), so nothing here can disrupt them.
+ *
+ * Voids every currently-UNUSED voucher across a lapsed Client's shop(s) --
+ * reusing VoucherManagementService's own existing void logic, which already
+ * leaves sold/redeemed codes alone -- specifically so a Client can't print
+ * an unlimited stash of vouchers right up to lockout and keep selling them
+ * forever without ever paying. That baseline void only ever fires once per
+ * lapse -- `$subscription->status` flips to `past_due` the same run, so
+ * tomorrow's `match()` falls through to `default => false` and nothing
+ * re-voids a batch that's already void.
+ *
+ * `auto_void_unused_vouchers_every_cycle` (the stricter, tenant-opt-in
+ * option) can't reuse that same status-flip guard at all -- a PAID/renewed
+ * subscription's `current_period_ends_at` gets pushed INTO THE FUTURE the
+ * moment it renews (see ClientBillingConfirmationService::activateSubscription()),
+ * which is exactly why that field can never be used to detect "has this
+ * Client's cycle genuinely ended" independent of whether they already
+ * paid -- by the time this command runs, a paying Client's boundary is
+ * never in the past at all. Deliberately decoupled from the subscription's
+ * own billing dates entirely: it fires at most once per real calendar
+ * month (`now()->format('Y-m')`, stamped into the subscription's own
+ * `payload.last_auto_voided_period` once applied), regardless of this
+ * Client's individual lapse/renewal status -- simple, predictable, and
+ * genuinely "every cycle, regardless of payment" for this codebase's
+ * monthly billing cadence, without risking a daily wipe.
+ */
+Artisan::command('hotspot:enforce-client-billing {--dry-run}', function (VoucherManagementService $vouchers): int {
+    $dryRun = (bool) $this->option('dry-run');
+    $currentPeriodKey = now()->format('Y-m');
+    $clients = Client::query()
+        ->where('is_active', true)
+        ->with(['tenant', 'currentBillingSubscription', 'shops.voucherBatches' => fn ($query) => $query->where('status', 'active')])
+        ->get();
+
+    $lapsedCount = 0;
+    $voidedBatches = 0;
+    $voidedVouchers = 0;
+
+    foreach ($clients as $client) {
+        $subscription = $client->currentBillingSubscription;
+
+        if (! $subscription) {
+            continue;
+        }
+
+        $lapsed = match ($subscription->status) {
+            'trialing' => (bool) ($subscription->trial_ends_at?->isPast()),
+            'active' => (bool) ($subscription->current_period_ends_at?->isPast()),
+            default => false,
+        };
+
+        $autoVoidDue = (bool) $client->tenant?->auto_void_unused_vouchers_every_cycle
+            && ($subscription->payload['last_auto_voided_period'] ?? null) !== $currentPeriodKey;
+
+        $shouldVoid = $lapsed || $autoVoidDue;
+
+        if (! $lapsed && ! $shouldVoid) {
+            continue;
+        }
+
+        if ($dryRun) {
+            $lapsed && $lapsedCount++;
+
+            continue;
+        }
+
+        if ($lapsed) {
+            $subscription->forceFill(['status' => 'past_due'])->save();
+            $lapsedCount++;
+        }
+
+        if ($shouldVoid) {
+            foreach ($client->shops as $shop) {
+                foreach ($shop->voucherBatches as $batch) {
+                    $voidedVouchers += $vouchers->voidUnusedVouchersInBatchAsSystem($batch);
+                    $voidedBatches++;
+                }
+            }
+
+            if ($autoVoidDue) {
+                $subscription->forceFill(['payload' => array_merge($subscription->payload ?? [], [
+                    'last_auto_voided_period' => $currentPeriodKey,
+                ])])->save();
+            }
+        }
+    }
+
+    if ($dryRun) {
+        $this->info("{$lapsedCount} Client subscription(s) would be flipped to past_due.");
+
+        return Command::SUCCESS;
+    }
+
+    $this->info("Flipped {$lapsedCount} Client subscription(s) to past_due. Voided {$voidedVouchers} unused voucher(s) across {$voidedBatches} batch(es).");
+
+    return Command::SUCCESS;
+})->purpose('Flip a Client subscription to past_due once its trial/cycle lapses unpaid, locking its own admin access and voiding its unused vouchers -- never touches its real hotspot/PPPoE/POS customers');
+
+Schedule::command('hotspot:enforce-client-billing')
+    ->dailyAt('03:00')
+    ->withoutOverlapping();
 
 Schedule::command('hotspot:prune-security-activity')
     ->dailyAt('02:15')

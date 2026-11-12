@@ -44,6 +44,9 @@ class TenantManagementService
             'subscription_plan' => ['required', 'string', 'max:50'],
             'billing_model' => ['nullable', 'string', Rule::in(['subscription', 'commission'])],
             'commission_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'client_commission_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'default_client_trial_days' => ['nullable', 'integer', 'min:0', 'max:365'],
+            'auto_void_unused_vouchers_every_cycle' => ['nullable', 'boolean'],
             'trial_ends_at' => ['nullable', 'date'],
             'is_active' => ['nullable', 'boolean'],
             'require_two_factor' => ['nullable', 'boolean'],
@@ -68,6 +71,7 @@ class TenantManagementService
             'brand_color' => '#0f766e',
             'billing_model' => 'subscription',
             'commission_rate' => 0,
+            'auto_void_unused_vouchers_every_cycle' => false,
         ]);
     }
 
@@ -347,6 +351,89 @@ class TenantManagementService
         return $tenant;
     }
 
+    /**
+     * 2026-11-12: the mirror image of createCommissionSubaccount() above,
+     * one layer deeper -- that one collects the platform's cut of a
+     * tenant's OWN hotspot customers; this collects it from what a Client
+     * pays THIS tenant instead. Same two inversions apply: the subaccount
+     * is created with the TENANT's own secret key (never the platform's),
+     * and percentage_charge is `100 - client_commission_rate` (the
+     * tenant's own share, since Paystack's percentage_charge is always
+     * "what the MAIN account keeps," and the tenant is the main account
+     * here too). Stored in its own, distinctly-named column pair -- a
+     * tenant can run both pilots at once, at two different rates, needing
+     * two independent Paystack subaccounts on the same tenant account.
+     *
+     * @throws RequestException
+     */
+    public function createClientCommissionSubaccount(Tenant $tenant, User $actor): Tenant
+    {
+        $this->assertSuperAdmin($actor);
+
+        if (! $tenant->client_reselling_enabled || (float) $tenant->client_commission_rate <= 0) {
+            throw ValidationException::withMessages([
+                'client_commission_subaccount_gateway' => 'Enable client reselling for this tenant with a commission rate above zero first.',
+            ]);
+        }
+
+        $tenantSecretKey = (string) ($tenant->paymentGatewaySettings()['paystack']['secret_key'] ?? '');
+
+        if (blank($tenantSecretKey)) {
+            throw ValidationException::withMessages([
+                'client_commission_subaccount_gateway' => 'This tenant has no saved Paystack secret key yet.',
+            ]);
+        }
+
+        $platformSettings = app(PlatformPaymentSettingsService::class);
+
+        if (! $platformSettings->hasVerifiedSettlementAccount()) {
+            throw ValidationException::withMessages([
+                'client_commission_subaccount_gateway' => "Set and verify the platform's own settlement account first.",
+            ]);
+        }
+
+        $platformAccount = $platformSettings->settlementAccount();
+
+        $result = app(PaystackGateway::class)->createSubaccount(
+            new GatewayCredentials(['secret_key' => $tenantSecretKey]),
+            (string) config('app.name'),
+            (string) $platformAccount['bank_code'],
+            (string) $platformAccount['account_number'],
+            round(100 - (float) $tenant->client_commission_rate, 2)
+        );
+
+        if (blank($result['subaccount_code'] ?? null)) {
+            Log::warning('Paystack client-commission-subaccount creation returned no subaccount_code', [
+                'tenant_id' => $tenant->id,
+                'response' => $result['response'] ?? null,
+            ]);
+
+            throw ValidationException::withMessages([
+                'client_commission_subaccount_gateway' => 'Paystack did not return a subaccount code -- check this tenant\'s Paystack secret key and try again.',
+            ]);
+        }
+
+        $tenant->forceFill([
+            'client_commission_subaccount_gateway' => 'paystack',
+            'client_commission_subaccount_code' => $result['subaccount_code'],
+            'client_commission_subaccount_created_at' => now(),
+        ])->save();
+
+        app(SecurityActivityService::class)->log(
+            $actor,
+            'tenant_client_commission_subaccount_created',
+            'Platform registered as a Paystack subaccount on tenant\'s own account for Client payments.',
+            [
+                'tenant_id' => $tenant->id,
+                'tenant' => $tenant->company_name,
+                'subaccount_code' => $tenant->client_commission_subaccount_code,
+                'client_commission_rate' => (float) $tenant->client_commission_rate,
+            ]
+        );
+
+        return $tenant;
+    }
+
     public function delete(Tenant $tenant, User $actor): void
     {
         $this->assertSuperAdmin($actor);
@@ -402,6 +489,9 @@ class TenantManagementService
         $data['commission_rate'] = ($data['billing_model'] ?? 'subscription') === 'commission'
             ? round((float) ($data['commission_rate'] ?? 0), 2)
             : 0;
+        $data['client_commission_rate'] = round((float) ($data['client_commission_rate'] ?? 0), 2);
+        $data['default_client_trial_days'] = (int) ($data['default_client_trial_days'] ?? 14);
+        $data['auto_void_unused_vouchers_every_cycle'] = (bool) ($data['auto_void_unused_vouchers_every_cycle'] ?? false);
         $data['is_active'] = (bool) ($data['is_active'] ?? false);
         $data['require_two_factor'] = (bool) ($data['require_two_factor'] ?? false);
         $data['public_site_enabled'] = (bool) ($data['public_site_enabled'] ?? false);

@@ -233,6 +233,36 @@
                             <flux:error name="trial_ends_at" />
                         </flux:field>
 
+                        @if ($editingTenantId)
+                            <section class="md:col-span-2 rounded-lg border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-950/30 p-4">
+                                <h2 class="text-sm font-semibold text-zinc-950 dark:text-zinc-100">Client reselling (per-tenant override)</h2>
+                                <p class="mt-1 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
+                                    {{ $editingTenant?->client_reselling_enabled ? 'Client reselling is enabled for this tenant.' : 'Client reselling is not enabled for this tenant yet -- the tenant admin opts in from their own Clients page, gated by their platform plan.' }}
+                                    These values are copied from the tenant's plan the moment they enable it, and can be overridden here afterward.
+                                </p>
+
+                                <div class="mt-4 grid gap-5 md:grid-cols-2">
+                                    <flux:field>
+                                        <flux:label>Client commission rate (%)</flux:label>
+                                        <flux:input type="number" wire:model.blur="client_commission_rate" min="0" max="100" step="0.01" icon="receipt-percent" />
+                                        <flux:description>The platform's cut of every payment a Client makes to this tenant.</flux:description>
+                                        <flux:error name="client_commission_rate" />
+                                    </flux:field>
+
+                                    <flux:field>
+                                        <flux:label>Default Client trial length (days)</flux:label>
+                                        <flux:input type="number" wire:model.blur="default_client_trial_days" min="0" max="365" />
+                                        <flux:error name="default_client_trial_days" />
+                                    </flux:field>
+
+                                    <div class="md:col-span-2">
+                                        <flux:checkbox wire:model.live="auto_void_unused_vouchers_every_cycle" label="Void every Client's unused vouchers at the end of every billing cycle (regardless of payment)" />
+                                        <p class="mt-1 text-sm leading-6 text-zinc-600 dark:text-zinc-400">Stricter, premium option. By default, unused vouchers are only voided once a Client's subscription actually lapses unpaid.</p>
+                                    </div>
+                                </div>
+                            </section>
+                        @endif
+
                         <div class="md:col-span-2">
                             <flux:checkbox wire:model.live="is_active" label="Active tenant account" />
                         </div>
@@ -449,6 +479,50 @@
                                 <flux:button type="button" variant="primary" size="sm" class="mt-3" wire:click="createCommissionSubaccount" wire:loading.attr="disabled" wire:target="createCommissionSubaccount">
                                     <span wire:loading.remove wire:target="createCommissionSubaccount">Enable automated commission collection</span>
                                     <span wire:loading wire:target="createCommissionSubaccount">Creating...</span>
+                                </flux:button>
+                            @endif
+                        </div>
+                    </section>
+                @endif
+
+                @if ($editingTenantId && $editingTenant?->client_reselling_enabled)
+                    {{--
+                        2026-11-12: the mirror image of the client-reselling
+                        override card above, and a sibling of the own-gateway
+                        commission-subaccount card -- this collects the
+                        platform's cut of what a CLIENT pays THIS tenant,
+                        not what this tenant's own hotspot customers pay.
+                    --}}
+                    <section class="rounded-lg border border-purple-200 dark:border-purple-700 bg-purple-50 dark:bg-purple-900/20 p-4">
+                        <h2 class="text-sm font-semibold text-zinc-950 dark:text-zinc-100">Automated client-commission collection (own gateway, pilot)</h2>
+                        <p class="mt-1 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
+                            Lets the platform automatically collect its cut of what this tenant's Clients pay them -- the platform gets registered as a subaccount on the tenant's OWN Paystack account, settling straight to the platform's own bank, with the rest landing in the tenant's account as usual.
+                        </p>
+
+                        @if ($clientCommissionSubaccountError)
+                            <p class="mt-3 text-sm text-red-600 dark:text-red-400">{{ $clientCommissionSubaccountError }}</p>
+                        @endif
+
+                        <?php $hasPaystackCredentialsForClients = filled($editingTenant?->paymentGatewaySettings()['paystack']['secret_key'] ?? null); ?>
+
+                        <div class="mt-4 rounded-lg border border-white bg-white dark:bg-zinc-900 p-3 shadow-sm">
+                            @if ($editingTenant?->hasClientCommissionSubaccount())
+                                <p class="text-sm font-semibold text-zinc-950 dark:text-zinc-100">Commission subaccount active</p>
+                                <p class="mt-1 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
+                                    Code <span class="font-mono">{{ $editingTenant->client_commission_subaccount_code }}</span>, created {{ $editingTenant->client_commission_subaccount_created_at?->diffForHumans() }}.
+                                </p>
+                            @elseif (! $hasPaystackCredentialsForClients)
+                                <p class="text-sm font-semibold text-amber-700 dark:text-amber-400">Only Paystack is supported right now</p>
+                                <p class="mt-1 text-sm leading-6 text-zinc-600 dark:text-zinc-400">This tenant has no saved Paystack secret key -- save one under this tenant's Payment Setup first.</p>
+                            @elseif ((float) $client_commission_rate <= 0)
+                                <p class="text-sm font-semibold text-amber-700 dark:text-amber-400">Commission rate required</p>
+                                <p class="mt-1 text-sm leading-6 text-zinc-600 dark:text-zinc-400">Set a client commission rate above zero above, save, then come back here.</p>
+                            @else
+                                <p class="text-sm font-semibold text-zinc-950 dark:text-zinc-100">Not enabled yet</p>
+                                <p class="mt-1 text-sm leading-6 text-zinc-600 dark:text-zinc-400">Paystack credentials and a commission rate are on file -- ready to create.</p>
+                                <flux:button type="button" variant="primary" size="sm" class="mt-3" wire:click="createClientCommissionSubaccount" wire:loading.attr="disabled" wire:target="createClientCommissionSubaccount">
+                                    <span wire:loading.remove wire:target="createClientCommissionSubaccount">Enable automated commission collection</span>
+                                    <span wire:loading wire:target="createClientCommissionSubaccount">Creating...</span>
                                 </flux:button>
                             @endif
                         </div>

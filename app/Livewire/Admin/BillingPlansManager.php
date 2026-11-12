@@ -40,6 +40,12 @@ class BillingPlansManager extends Component
 
     public string $wallet_commission_rate = '';
 
+    public bool $supports_client_reselling = false;
+
+    public string $default_client_commission_rate = '';
+
+    public string $default_client_trial_days = '14';
+
     public ?string $savedMessage = null;
 
     public function mount(BillingPlanManagementService $plans): void
@@ -71,6 +77,9 @@ class BillingPlansManager extends Component
         $this->is_active = (bool) $plan->is_active;
         $this->supports_wallet = (bool) $plan->supports_wallet;
         $this->wallet_commission_rate = $plan->wallet_commission_rate !== null ? (string) $plan->wallet_commission_rate : '';
+        $this->supports_client_reselling = (bool) $plan->supports_client_reselling;
+        $this->default_client_commission_rate = $plan->default_client_commission_rate !== null ? (string) $plan->default_client_commission_rate : '';
+        $this->default_client_trial_days = (string) ($plan->default_client_trial_days ?? 14);
         $this->savedMessage = null;
         $this->showFormModal = true;
     }
@@ -90,6 +99,9 @@ class BillingPlansManager extends Component
             'is_active' => $this->is_active,
             'supports_wallet' => $this->supports_wallet,
             'wallet_commission_rate' => $this->wallet_commission_rate,
+            'supports_client_reselling' => $this->supports_client_reselling,
+            'default_client_commission_rate' => $this->default_client_commission_rate,
+            'default_client_trial_days' => $this->default_client_trial_days,
         ], $plans->rules($plan))->validate();
 
         if ($plan) {
@@ -152,10 +164,13 @@ class BillingPlansManager extends Component
             'features',
             'supports_wallet',
             'wallet_commission_rate',
+            'supports_client_reselling',
+            'default_client_commission_rate',
         ]);
         $this->monthly_price = '0';
         $this->currency = 'NGN';
         $this->is_active = true;
+        $this->default_client_trial_days = '14';
         $this->resetValidation();
     }
 }

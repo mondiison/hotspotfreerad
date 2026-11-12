@@ -3,6 +3,7 @@
 namespace App\Services\Payments;
 
 use App\Models\Payment;
+use App\Models\Tenant;
 use App\Services\PlatformPaymentSettingsService;
 use App\Support\PaymentGatewayCatalog;
 
@@ -68,6 +69,28 @@ class GatewayCredentialResolver
         // anyone not explicitly opted in.
         if ($tenant?->commission_subaccount_gateway === $gateway && filled($tenant->commission_subaccount_code)) {
             $fields['subaccount_code'] = $tenant->commission_subaccount_code;
+        }
+
+        return new GatewayCredentials($fields);
+    }
+
+    /**
+     * For a Client paying its Tenant directly -- unlike forPayment() above,
+     * there's no Shop involved at all here; the tenant IS the payee, using
+     * whichever of its own saved gateway credentials it has configured.
+     * Merges a client_commission_subaccount_code when the platform has
+     * been registered as a subaccount on this specific gateway for Client
+     * payments (TenantManagementService::createClientCommissionSubaccount())
+     * -- deliberately a different column pair from forPayment()'s own
+     * commission_subaccount_* merge, since a tenant can run both at once,
+     * at two different rates.
+     */
+    public function forTenant(Tenant $tenant, string $gateway): GatewayCredentials
+    {
+        $fields = (array) ($tenant->paymentGatewaySettings()[$gateway] ?? []);
+
+        if ($tenant->client_commission_subaccount_gateway === $gateway && filled($tenant->client_commission_subaccount_code)) {
+            $fields['subaccount_code'] = $tenant->client_commission_subaccount_code;
         }
 
         return new GatewayCredentials($fields);

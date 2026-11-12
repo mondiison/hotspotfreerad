@@ -44,6 +44,10 @@ class Tenant extends Model
             'settlement_verified_at' => 'datetime',
             'subaccount_created_at' => 'datetime',
             'commission_subaccount_created_at' => 'datetime',
+            'client_reselling_enabled' => 'boolean',
+            'client_commission_rate' => 'decimal:2',
+            'auto_void_unused_vouchers_every_cycle' => 'boolean',
+            'client_commission_subaccount_created_at' => 'datetime',
         ];
     }
 
@@ -55,6 +59,16 @@ class Tenant extends Model
     public function shops(): HasMany
     {
         return $this->hasMany(Shop::class);
+    }
+
+    public function clients(): HasMany
+    {
+        return $this->hasMany(Client::class);
+    }
+
+    public function clientBillingPlans(): HasMany
+    {
+        return $this->hasMany(ClientBillingPlan::class);
     }
 
     public function billingSubscriptions(): HasMany
@@ -128,6 +142,18 @@ class Tenant extends Model
     public function hasCommissionSubaccount(): bool
     {
         return filled($this->commission_subaccount_gateway) && filled($this->commission_subaccount_code);
+    }
+
+    /**
+     * The mirror image of hasCommissionSubaccount() above, one layer
+     * deeper -- this tracks the subaccount collecting the platform's cut
+     * of what a Client pays THIS tenant (TenantManagementService
+     * ::createClientCommissionSubaccount()), kept as its own distinct
+     * column pair since a tenant can run both at once, at different rates.
+     */
+    public function hasClientCommissionSubaccount(): bool
+    {
+        return filled($this->client_commission_subaccount_gateway) && filled($this->client_commission_subaccount_code);
     }
 
     private static function uniqueSlug(string $name, ?int $ignoreId = null): string

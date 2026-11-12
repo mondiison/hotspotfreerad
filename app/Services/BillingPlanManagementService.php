@@ -31,6 +31,9 @@ class BillingPlanManagementService
             'is_active' => ['nullable', 'boolean'],
             'supports_wallet' => ['nullable', 'boolean'],
             'wallet_commission_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'supports_client_reselling' => ['nullable', 'boolean'],
+            'default_client_commission_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'default_client_trial_days' => ['nullable', 'integer', 'min:0', 'max:365'],
         ];
     }
 
@@ -39,6 +42,7 @@ class BillingPlanManagementService
         return $this->normalize($request->validate($this->rules($plan)) + [
             'is_active' => false,
             'supports_wallet' => false,
+            'supports_client_reselling' => false,
         ]);
     }
 
@@ -78,6 +82,9 @@ class BillingPlanManagementService
         $data['is_active'] = (bool) ($data['is_active'] ?? false);
         $data['supports_wallet'] = (bool) ($data['supports_wallet'] ?? false);
         $data['wallet_commission_rate'] = filled($data['wallet_commission_rate'] ?? null) ? (float) $data['wallet_commission_rate'] : null;
+        $data['supports_client_reselling'] = (bool) ($data['supports_client_reselling'] ?? false);
+        $data['default_client_commission_rate'] = filled($data['default_client_commission_rate'] ?? null) ? (float) $data['default_client_commission_rate'] : 0;
+        $data['default_client_trial_days'] = filled($data['default_client_trial_days'] ?? null) ? (int) $data['default_client_trial_days'] : 14;
         $features = is_array($data['features'] ?? null)
             ? $data['features']
             : preg_split('/\r\n|\r|\n/', (string) ($data['features'] ?? ''));

@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Models\Client;
 use App\Models\Expense;
 use App\Models\Package;
 use App\Models\PosDevice;
@@ -24,6 +25,23 @@ class TenantAccess
         return $user->isSuperAdmin()
             ? $query
             : $query->where('tenant_id', $user->tenant_id);
+    }
+
+    /**
+     * Client (the new reseller-tier model, 2026-11-12) has a direct
+     * tenant_id of its own -- same shape as Shop's, not transitive like
+     * routers/packages/etc.
+     */
+    public static function scopeClients(Builder $query, User $user): Builder
+    {
+        return $user->isSuperAdmin()
+            ? $query
+            : $query->where('tenant_id', $user->tenant_id);
+    }
+
+    public static function assertClient(Client $client, User $user): void
+    {
+        abort_unless($user->isSuperAdmin() || $client->tenant_id === $user->tenant_id, 403);
     }
 
     public static function scopeRouters(Builder $query, User $user): Builder

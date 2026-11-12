@@ -45,8 +45,18 @@ class RouterController extends Controller
         return redirect()->route('admin.routers.index', ['open' => 'create']);
     }
 
+    /**
+     * 2026-11-12: locked to super_admin only, like every other technical
+     * RouterOS surface below -- see CLAUDE.md's dated entry for the full
+     * reasoning. tenant_admin can still create/rename/reconfigure a
+     * Router's own settings (index/store/update/destroy, untouched) --
+     * what's locked here is specifically the generated scripts, live
+     * credentials, console, and every embedded tab on this one page.
+     */
     public function show(Router $router, MikroTikProvisioningService $mikroTik, RouterUsageHistory $usageHistory): View
     {
+        abort_unless(request()->user()->isSuperAdmin(), 403);
+
         TenantAccess::assertRouter($router, request()->user());
 
         $dailyUsage = collect($usageHistory->daily($router))->map(fn (array $day): array => [
@@ -115,6 +125,8 @@ class RouterController extends Controller
 
     public function regenerateWireguardKey(Request $request, Router $router, RouterManagementService $routers): RedirectResponse
     {
+        abort_unless($request->user()->isSuperAdmin(), 403);
+
         $routers->regenerateWireguardKey($router, $request->user());
 
         return redirect()->route('admin.routers.show', $router)
@@ -123,6 +135,8 @@ class RouterController extends Controller
 
     public function regenerateApiCredentials(Request $request, Router $router, RouterManagementService $routers): RedirectResponse
     {
+        abort_unless($request->user()->isSuperAdmin(), 403);
+
         $routers->regenerateApiCredentials($router, $request->user());
 
         return redirect()->route('admin.routers.show', $router)
@@ -131,6 +145,7 @@ class RouterController extends Controller
 
     public function testApiConnection(Request $request, Router $router, RouterOsConnectionService $routerOs): RedirectResponse
     {
+        abort_unless($request->user()->isSuperAdmin(), 403);
         TenantAccess::assertRouter($router, $request->user());
 
         $result = $routerOs->testConnection($router);
@@ -145,6 +160,7 @@ class RouterController extends Controller
 
     public function provisionHotspot(Request $request, Router $router, RouterOsConnectionService $routerOs): RedirectResponse
     {
+        abort_unless($request->user()->isSuperAdmin(), 403);
         TenantAccess::assertRouter($router, $request->user());
 
         $result = $routerOs->provisionHotspot($router);
@@ -156,6 +172,7 @@ class RouterController extends Controller
 
     public function provisionPppoe(Request $request, Router $router, RouterOsConnectionService $routerOs): RedirectResponse
     {
+        abort_unless($request->user()->isSuperAdmin(), 403);
         TenantAccess::assertRouter($router, $request->user());
 
         $result = $routerOs->provisionPppoe($router);
@@ -167,6 +184,7 @@ class RouterController extends Controller
 
     public function provisionPos(Request $request, Router $router, RouterOsConnectionService $routerOs): RedirectResponse
     {
+        abort_unless($request->user()->isSuperAdmin(), 403);
         TenantAccess::assertRouter($router, $request->user());
 
         $result = $routerOs->provisionPos($router);
@@ -178,6 +196,7 @@ class RouterController extends Controller
 
     public function provisionStaffWifi(Request $request, Router $router, RouterOsConnectionService $routerOs): RedirectResponse
     {
+        abort_unless($request->user()->isSuperAdmin(), 403);
         TenantAccess::assertRouter($router, $request->user());
 
         $result = $routerOs->provisionStaffWifi($router);
@@ -189,6 +208,7 @@ class RouterController extends Controller
 
     public function provisionLan(Request $request, Router $router, RouterOsConnectionService $routerOs): RedirectResponse
     {
+        abort_unless($request->user()->isSuperAdmin(), 403);
         TenantAccess::assertRouter($router, $request->user());
 
         $result = $routerOs->provisionLan($router);
@@ -200,6 +220,7 @@ class RouterController extends Controller
 
     public function pushFreshInfrastructure(Request $request, Router $router, MikroTikProvisioningService $mikroTik, RouterOsConnectionService $routerOs): RedirectResponse
     {
+        abort_unless($request->user()->isSuperAdmin(), 403);
         TenantAccess::assertRouter($router, $request->user());
 
         $result = $routerOs->pushFreshInfrastructureScript($router, $mikroTik->generateFreshInfrastructureScript($router));
@@ -221,6 +242,7 @@ class RouterController extends Controller
      */
     public function syncTrunkPorts(Request $request, Router $router, RouterOsConnectionService $routerOs): RedirectResponse
     {
+        abort_unless($request->user()->isSuperAdmin(), 403);
         TenantAccess::assertRouter($router, $request->user());
 
         $result = $routerOs->syncTrunkPorts($router);
