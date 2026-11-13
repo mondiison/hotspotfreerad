@@ -81,31 +81,60 @@ class RouterProvisioningRepository {
   ///
   /// Best-effort: returns null rather than throwing on any failure (a
   /// router that isn't using ZeroTier at all, or one where the identity
-  /// genuinely isn't ready yet) -- this step is a nice-to-have on top of
-  /// an already-successful push, not something that should turn a
+  /// genuinely never becomes ready) -- this step is a nice-to-have on top
+  /// of an already-successful push, not something that should turn a
   /// successful bootstrap into a reported failure.
+  ///
+  /// Confirmed live (2026-11-13): a single immediate read right after the
+  /// bootstrap script finishes running is not enough. `/zerotier enable
+  /// zt1` + `/zerotier interface add` (inside that script) both return
+  /// control to RouterOS almost instantly, while the ZeroTier daemon
+  /// itself keeps generating/writing the node's identity in the
+  /// background for a few seconds afterward -- the exact same
+  /// "returns before RouterOS has actually finished" timing this app's
+  /// own backend already had to work around on this same menu (the
+  /// `:delay 3s` MikroTikProvisioningService::zeroTierLines() inserts
+  /// after `/zerotier interface add`, which this one bootstrap run never
+  /// got, since that delay line is only emitted once a ZeroTier IP is
+  /// already saved -- and the IP is only ever saved *after* this exact
+  /// call successfully reads the identity, so there's no way to have both
+  /// at once). A real router was confirmed stuck on `ACCESS_DENIED` with
+  /// zero node ID ever saved as a direct result -- the identity existed
+  /// on the router the whole time, this call just never waited long
+  /// enough to see it. Retries a handful of times with a short pause
+  /// between attempts instead of one immediate try.
   Future<String?> fetchZeroTierNodeId(String adminPassword) async {
     final dio = _localRouterDio(adminPassword);
 
-    try {
-      final response = await dio.get('/rest/zerotier');
-      final rows = response.data;
-      if (rows is! List || rows.isEmpty) return null;
+    for (var attempt = 0; attempt < 8; attempt++) {
+      if (attempt > 0) {
+        await Future.delayed(const Duration(seconds: 2));
+      }
 
-      final row = rows.first as Map<String, dynamic>;
-      // Same field preference as the web admin's own
-      // RoutersIndex::fetchZeroTierNodeId() -- identity.public over
-      // identity, purely so a parsing failure never has private key
-      // material to leak. The node's own ID is the part before the first
-      // ":" in either field.
-      final identity = (row['identity.public'] as String?) ?? (row['identity'] as String?);
-      if (identity == null || identity.isEmpty) return null;
+      try {
+        final response = await dio.get('/rest/zerotier');
+        final rows = response.data;
+        if (rows is! List || rows.isEmpty) continue;
 
-      final nodeId = identity.split(':').first;
-      return nodeId.isEmpty ? null : nodeId;
-    } on DioException {
-      return null;
+        final row = rows.first as Map<String, dynamic>;
+        // Same field preference as the web admin's own
+        // RoutersIndex::fetchZeroTierNodeId() -- identity.public over
+        // identity, purely so a parsing failure never has private key
+        // material to leak. The node's own ID is the part before the
+        // first ":" in either field.
+        final identity = (row['identity.public'] as String?) ?? (row['identity'] as String?);
+        if (identity == null || identity.isEmpty) continue;
+
+        final nodeId = identity.split(':').first;
+        if (nodeId.isNotEmpty) return nodeId;
+      } on DioException {
+        // Keep retrying -- a router that's mid-reboot or briefly
+        // unresponsive right after a big script run is exactly the
+        // transient case this loop exists for.
+      }
     }
+
+    return null;
   }
 
   /// Hands the node ID discovered above to the backend, which -- running

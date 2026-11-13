@@ -102,4 +102,51 @@ class RouterCredentialsCardTest extends TestCase
 
         $this->assertNull($router->fresh()->zerotier_node_id);
     }
+
+    /**
+     * Confirmed live 2026-11-13: a router created via the zero-touch phone
+     * provisioning flow has no zerotier_ip saved until one is allocated --
+     * candidateHosts() for tunnel_mode=zerotier then returns an empty
+     * array, and "Authorize & connect now" fails outright with "No tunnel
+     * host configured for this router.", even though the authorize step
+     * itself succeeds. Saving a node ID here must allocate one, the same
+     * as Api\RouterProvisioningController::saveZeroTierNodeId() already
+     * does.
+     */
+    public function test_saving_a_node_id_without_an_existing_zerotier_ip_allocates_one(): void
+    {
+        $router = $this->makeRouter(['zerotier_ip' => null]);
+
+        Livewire::test(RouterCredentialsCard::class, ['router' => $router])
+            ->set('zerotierNodeId', 'a943bf5013')
+            ->call('saveZeroTierNodeId')
+            ->assertHasNoErrors();
+
+        $this->assertNotNull($router->fresh()->zerotier_ip);
+        $this->assertStringStartsWith('10.9.0.', $router->fresh()->zerotier_ip);
+    }
+
+    public function test_saving_a_node_id_does_not_overwrite_an_already_saved_zerotier_ip(): void
+    {
+        $router = $this->makeRouter(['zerotier_ip' => '10.9.0.99']);
+
+        Livewire::test(RouterCredentialsCard::class, ['router' => $router])
+            ->set('zerotierNodeId', 'a943bf5013')
+            ->call('saveZeroTierNodeId')
+            ->assertHasNoErrors();
+
+        $this->assertSame('10.9.0.99', $router->fresh()->zerotier_ip);
+    }
+
+    public function test_clearing_the_node_id_does_not_allocate_a_zerotier_ip(): void
+    {
+        $router = $this->makeRouter(['zerotier_node_id' => 'clearme0001', 'zerotier_ip' => null]);
+
+        Livewire::test(RouterCredentialsCard::class, ['router' => $router])
+            ->set('zerotierNodeId', '')
+            ->call('saveZeroTierNodeId')
+            ->assertHasNoErrors();
+
+        $this->assertNull($router->fresh()->zerotier_ip);
+    }
 }

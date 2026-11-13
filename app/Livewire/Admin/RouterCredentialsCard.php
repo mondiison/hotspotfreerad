@@ -103,8 +103,19 @@ class RouterCredentialsCard extends Component
      * ago" straight off that timestamp, and leaving it in place after typing
      * in a brand-new ID would misleadingly claim the NEW node is already
      * authorized when it never has been.
+     *
+     * Confirmed live (2026-11-13): a router created without a zerotier_ip
+     * already saved (e.g. via the zero-touch phone-provisioning flow, which
+     * only allocates one once a node ID is first registered) left
+     * RouterOsConnectionService::candidateHosts() returning an empty array
+     * for a zerotier-only router -- "Authorize & connect now" then failed
+     * with "No tunnel host configured for this router.", even though the
+     * controller-side authorization itself succeeded. Mirrors
+     * Api\RouterProvisioningController::saveZeroTierNodeId()'s identical
+     * fix -- allocate one here too, the one other place a node ID can be
+     * saved for a router that might not have one yet.
      */
-    public function saveZeroTierNodeId(): void
+    public function saveZeroTierNodeId(RouterManagementService $routers): void
     {
         $router = Router::find($this->routerId);
 
@@ -123,6 +134,9 @@ class RouterCredentialsCard extends Component
         $router->forceFill([
             'zerotier_node_id' => $newNodeId,
             'zerotier_authorized_at' => $changed ? null : $router->zerotier_authorized_at,
+            'zerotier_ip' => ($newNodeId !== null && blank($router->zerotier_ip))
+                ? $routers->suggestedZeroTierIp()
+                : $router->zerotier_ip,
         ])->save();
 
         $this->zerotierNodeId = $newNodeId;
