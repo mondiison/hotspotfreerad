@@ -36,15 +36,30 @@ class ApiException implements Exception {
 class ApiClient {
   static const _tokenKey = 'auth_token';
 
-  /// 10.0.2.2 is the Android emulator's own alias for the host machine's
-  /// localhost -- this points at `php artisan serve --host=127.0.0.1
-  /// --port=8001`, this codebase's documented local dev port (CLAUDE.md:
-  /// "Local dev runs on port 8001"). A real device on the same Wi-Fi needs
-  /// the host's actual LAN IP instead; a release build needs the tenant's
-  /// real public HOTSPOT_PORTAL_URL-style domain. Not yet made runtime-
-  /// configurable -- a clean follow-up once there's a real staging/prod
-  /// API host to point at.
-  static const String baseUrl = 'http://10.0.2.2:8001/api';
+  /// Points at the real production API (mmsradius.com) -- this is what a
+  /// real tenant_admin's phone needs to reach regardless of which network
+  /// they're on, so this is the right default to ship rather than a
+  /// dev-only address. Not yet made runtime-configurable (e.g. per-build
+  /// flavor) -- a clean follow-up once there's a second real environment
+  /// (staging) to switch between; for now, swap this one constant locally
+  /// for whichever of these a specific dev session needs:
+  ///   - Android emulator against a local dev server: `http://10.0.2.2:8001/api`
+  ///     (10.0.2.2 is the emulator's own alias for the host machine's
+  ///     localhost; `php artisan serve --host=127.0.0.1 --port=8001` per
+  ///     CLAUDE.md's documented local dev port).
+  ///   - A real device on the same Wi-Fi as a local dev server: the host's
+  ///     real LAN IP instead of 10.0.2.2, with the dev server bound to
+  ///     `--host=0.0.0.0` (not `127.0.0.1`) so it actually accepts that
+  ///     connection.
+  ///
+  /// Confirmed live (2026-11-13): on this project's own dev machine
+  /// specifically, `php artisan serve`'s cli-server SAPI was found to be
+  /// genuinely broken (random internal corruption on every request,
+  /// confirmed independent of GD/opcache/host binding) -- routing local
+  /// testing through XAMPP's Apache (mod_php) instead worked cleanly. Not
+  /// an application bug; likely specific to that one machine's PHP
+  /// install, not something every dev setup needs to work around.
+  static const String baseUrl = 'https://mmsradius.com/api';
 
   final Dio _dio;
   final FlutterSecureStorage _storage;

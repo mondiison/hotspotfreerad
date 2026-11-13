@@ -28,6 +28,13 @@ class _AddRouterScreenState extends ConsumerState<AddRouterScreen> {
   bool _submitting = false;
   String? _error;
 
+  // Mirrors the web wizard's own three tunnel_mode options. WireGuard
+  // alone can never form a tunnel at all when either side sits behind
+  // CGNAT (confirmed live 2026-11-13, testing from a site where the
+  // backend's own Pi is behind CGNAT) -- ZeroTier's built-in NAT
+  // traversal is what actually gets a router like that online.
+  String _tunnelMode = 'wireguard';
+
   @override
   void dispose() {
     _nameController.dispose();
@@ -49,6 +56,7 @@ class _AddRouterScreenState extends ConsumerState<AddRouterScreen> {
       final result = await ref.read(routerProvisioningRepositoryProvider).createRouter(
             shopId: _selectedShop!.id,
             name: _nameController.text.trim(),
+            tunnelMode: _tunnelMode,
           );
 
       if (!mounted) return;
@@ -112,6 +120,24 @@ class _AddRouterScreenState extends ConsumerState<AddRouterScreen> {
                       border: OutlineInputBorder(),
                     ),
                     validator: (value) => (value == null || value.trim().isEmpty) ? 'Required' : null,
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    initialValue: _tunnelMode,
+                    decoration: const InputDecoration(
+                      labelText: 'Connection type',
+                      helperText: 'Unsure? Leave this as WireGuard -- switch to ZeroTier only if this '
+                          'site is behind CGNAT (common on Starlink/mobile data) and a plain '
+                          'WireGuard tunnel never comes online.',
+                      helperMaxLines: 3,
+                      border: OutlineInputBorder(),
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'wireguard', child: Text('WireGuard (default)')),
+                      DropdownMenuItem(value: 'wireguard_zerotier', child: Text('WireGuard + ZeroTier fallback')),
+                      DropdownMenuItem(value: 'zerotier', child: Text('ZeroTier only (CGNAT sites)')),
+                    ],
+                    onChanged: (value) => setState(() => _tunnelMode = value ?? 'wireguard'),
                   ),
                   if (_error != null) ...[
                     const SizedBox(height: 16),

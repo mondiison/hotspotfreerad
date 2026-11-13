@@ -56,6 +56,102 @@ class RouterProvisioningTest extends TestCase
         ]);
     }
 
+    public function test_tenant_admin_can_pick_a_tunnel_mode_for_a_cgnat_site(): void
+    {
+        [$tenant, $shop] = $this->fixture();
+        $user = $this->tenantAdmin($tenant);
+        $token = $user->createToken('Test Device')->plainTextToken;
+
+        $response = $this->withHeader('Authorization', "Bearer {$token}")
+            ->postJson('/api/router-provisioning', [
+                'shop_id' => $shop->id,
+                'name' => 'CGNAT Site Router',
+                'tunnel_mode' => 'wireguard_zerotier',
+            ]);
+
+        $response->assertCreated();
+
+        $router = Router::where('shop_id', $shop->id)->firstOrFail();
+        $this->assertSame('wireguard_zerotier', $router->tunnel_mode);
+
+        // The generated bootstrap script actually reflects the chosen mode
+        // -- not just the saved column -- confirming the value reaches
+        // MikroTikProvisioningService::generateBootstrapScript() rather
+        // than only being persisted.
+        $script = $response->json('bootstrap_script');
+        $this->assertStringContainsString('/zerotier', $script);
+    }
+
+    public function test_omitting_tunnel_mode_defaults_to_wireguard(): void
+    {
+        [$tenant, $shop] = $this->fixture();
+        $user = $this->tenantAdmin($tenant);
+        $token = $user->createToken('Test Device')->plainTextToken;
+
+        $this->withHeader('Authorization', "Bearer {$token}")
+            ->postJson('/api/router-provisioning', ['shop_id' => $shop->id, 'name' => 'Default Mode Router'])
+            ->assertCreated();
+
+        $router = Router::where('shop_id', $shop->id)->firstOrFail();
+        $this->assertSame('wireguard', $router->tunnel_mode);
+    }
+
+    public function test_tenant_admin_can_save_a_zerotier_node_id_which_allocates_an_ip_and_attempts_authorization(): void
+    {
+        [$tenant, $shop] = $this->fixture();
+        $user = $this->tenantAdmin($tenant);
+        $token = $user->createToken('Test Device')->plainTextToken;
+        $router = Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'CGNAT Router',
+            'nas_identifier' => 'cgnat-router',
+            'wireguard_internal_ip' => '10.8.0.60',
+            'shared_secret' => 'radius-secret',
+            'tunnel_mode' => 'zerotier',
+        ]);
+
+        $response = $this->withHeader('Authorization', "Bearer {$token}")
+            ->postJson("/api/router-provisioning/{$router->id}/zerotier-node-id", [
+                'node_id' => 'a1e61a7e25',
+            ]);
+
+        $response->assertOk()->assertJsonPath('authorized', false);
+
+        $router->refresh();
+        $this->assertSame('a1e61a7e25', $router->zerotier_node_id);
+        // Confirms suggestedZeroTierIp() was actually invoked -- not just
+        // that the request didn't error -- without depending on its exact
+        // suggested value (which is deliberately only a floor, per that
+        // method's own docblock).
+        $this->assertNotNull($router->zerotier_ip);
+        $this->assertStringStartsWith('10.9.0.', $router->zerotier_ip);
+        // No real controller reachable in tests -- authorization itself
+        // fails, matching this codebase's "unreachable" test convention
+        // for live external calls elsewhere. The point of this test is the
+        // save + IP allocation, not a mocked controller success.
+    }
+
+    public function test_saving_zerotier_node_id_rejects_a_router_not_using_zerotier(): void
+    {
+        [$tenant, $shop] = $this->fixture();
+        $user = $this->tenantAdmin($tenant);
+        $token = $user->createToken('Test Device')->plainTextToken;
+        $router = Router::create([
+            'shop_id' => $shop->id,
+            'name' => 'WireGuard Router',
+            'nas_identifier' => 'wg-router',
+            'wireguard_internal_ip' => '10.8.0.61',
+            'shared_secret' => 'radius-secret',
+            'tunnel_mode' => 'wireguard',
+        ]);
+
+        $this->withHeader('Authorization', "Bearer {$token}")
+            ->postJson("/api/router-provisioning/{$router->id}/zerotier-node-id", ['node_id' => 'abc123'])
+            ->assertStatus(422);
+
+        $this->assertNull($router->refresh()->zerotier_node_id);
+    }
+
     public function test_tenant_staff_cannot_create_a_router_regardless_of_permissions(): void
     {
         [$tenant, $shop] = $this->fixture();

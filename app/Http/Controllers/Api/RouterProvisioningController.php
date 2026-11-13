@@ -7,10 +7,13 @@ use App\Models\Router;
 use App\Models\Shop;
 use App\Services\MikroTikProvisioningService;
 use App\Services\RouterManagementService;
+use App\Services\RouterOsConnectionService;
 use App\Services\SecurityActivityService;
+use App\Services\ZeroTierMembershipSyncService;
 use App\Support\TenantAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 /**
  * Reseller model Phase 3 (2026-11-14): the phone-facing half of zero-touch
@@ -40,6 +43,20 @@ class RouterProvisioningController extends Controller
         $validated = $request->validate([
             'shop_id' => ['required', TenantAccess::shopExistsRule($user)],
             'name' => ['required', 'string', 'max:255'],
+            // Same three options the web wizard's Identity step offers --
+            // added here specifically for a router sitting behind CGNAT,
+            // where raw WireGuard can never form a tunnel at all (the Pi
+            // itself being behind CGNAT is the identical problem from the
+            // other end). zerotier_node_id is deliberately NOT required
+            // here even when this is zerotier/wireguard_zerotier -- unlike
+            // RouterManagementService::rules()' stricter web-wizard
+            // version, this endpoint runs before the router has ever
+            // enabled ZeroTier at all (that only happens once THIS
+            // bootstrap script actually runs), so there's no node ID yet
+            // to supply -- it's entered later, once known, the same
+            // "no working WireGuard yet" manual-entry path already
+            // documented in CLAUDE.md for this exact scenario.
+            'tunnel_mode' => ['nullable', Rule::in(['wireguard', 'wireguard_zerotier', 'zerotier'])],
         ]);
 
         $shop = TenantAccess::scopeShops(Shop::query(), $user)->findOrFail($validated['shop_id']);
@@ -50,6 +67,7 @@ class RouterProvisioningController extends Controller
             'nas_identifier' => $routers->suggestedNasIdentifier($shop),
             'wireguard_internal_ip' => $routers->suggestedWireguardInternalIp(),
             'shared_secret' => $routers->suggestedSharedSecret(),
+            'tunnel_mode' => $validated['tunnel_mode'] ?? 'wireguard',
         ], $user);
 
         $script = $provisioning->generateBootstrapScript($router);
@@ -73,6 +91,7 @@ class RouterProvisioningController extends Controller
                 'name' => $router->name,
                 'nas_identifier' => $router->nas_identifier,
                 'public_token' => $router->public_token,
+                'tunnel_mode' => $router->tunnel_mode,
             ],
             'bootstrap_script' => $script,
         ], 201);
@@ -85,6 +104,78 @@ class RouterProvisioningController extends Controller
         $router->forceFill(['bootstrap_pushed_at' => now()])->save();
 
         return response()->json(['bootstrap_pushed_at' => $router->bootstrap_pushed_at]);
+    }
+
+    /**
+     * Closes the gap confirmed live (2026-11-13) testing this feature's
+     * first real CGNAT-site router: a router choosing zerotier/wireguard_zerotier
+     * generates its own ZeroTier node identity locally the moment the
+     * bootstrap script's `/zerotier enable` line runs, and there was
+     * previously no way to get that node ID authorized without a human
+     * reading it off the router's own console and then SSHing into the Pi
+     * to call the controller API directly -- the latter step genuinely
+     * cannot be done by a tenant_admin at all (no shell access, and the
+     * equivalent web-admin button is super_admin-only per the Phase 1
+     * router lockdown).
+     *
+     * The phone already reads the node ID itself now (same REST connection
+     * it just used to push the bootstrap script -- see
+     * RouterProvisioningRepository.fetchZeroTierNodeId() on the Dart side)
+     * and calls this endpoint instead of asking a human to bridge the gap.
+     * Running *as the backend* is what makes this actually work smoothly:
+     * ZeroTierControllerService's calls to the self-hosted controller
+     * (127.0.0.1:9993) only ever succeed from the Pi itself, which is
+     * exactly where this code already runs in production -- no SSH, no
+     * sudo, no manual IP picking (RouterManagementService::suggestedZeroTierIp()
+     * allocates the next free 10.9.0.x address the same way
+     * suggestedWireguardInternalIp() already does for the WireGuard range).
+     */
+    public function saveZeroTierNodeId(
+        Request $request,
+        Router $router,
+        RouterManagementService $routers,
+        ZeroTierMembershipSyncService $zeroTierMembers,
+        RouterOsConnectionService $routerOs,
+    ): JsonResponse {
+        TenantAccess::assertRouter($router, $request->user());
+
+        if (! in_array($router->tunnel_mode, ['wireguard_zerotier', 'zerotier'], true)) {
+            return response()->json(['message' => 'This router is not configured to use ZeroTier.'], 422);
+        }
+
+        $validated = $request->validate([
+            'node_id' => ['required', 'string', 'max:16', Rule::unique('routers', 'zerotier_node_id')->ignore($router->id)],
+        ]);
+
+        $router->zerotier_node_id = $validated['node_id'];
+
+        if (blank($router->zerotier_ip)) {
+            $router->zerotier_ip = $routers->suggestedZeroTierIp();
+        }
+
+        $router->save();
+
+        $authorize = $zeroTierMembers->authorizeRouter($router);
+
+        if (! $authorize['success']) {
+            return response()->json([
+                'zerotier_ip' => $router->zerotier_ip,
+                'authorized' => false,
+                'error' => $authorize['error'],
+            ]);
+        }
+
+        // Best-effort, same as the web admin's own "Authorize & connect now"
+        // button -- the router may not have propagated the new authorization
+        // yet, in which case hotspot:auto-provision-routers' own 5-minute
+        // retry (already running) picks this up without any further action.
+        $sync = $routerOs->syncZeroTierNetworkMembership($router);
+
+        return response()->json([
+            'zerotier_ip' => $router->zerotier_ip,
+            'authorized' => true,
+            'network_sync' => $sync['success'],
+        ]);
     }
 
     /**

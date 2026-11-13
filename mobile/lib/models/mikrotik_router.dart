@@ -5,13 +5,20 @@ class MikrotikRouter {
   final String name;
   final String nasIdentifier;
   final String publicToken;
+  final String tunnelMode;
 
   MikrotikRouter({
     required this.id,
     required this.name,
     required this.nasIdentifier,
     required this.publicToken,
+    required this.tunnelMode,
   });
+
+  /// Whether this router needs the extra ZeroTier node-ID registration
+  /// step after the bootstrap push -- see ProvisioningScreen and
+  /// RouterProvisioningRepository.fetchZeroTierNodeId()/saveZeroTierNodeId().
+  bool get usesZeroTier => tunnelMode == 'wireguard_zerotier' || tunnelMode == 'zerotier';
 
   factory MikrotikRouter.fromJson(Map<String, dynamic> json) {
     return MikrotikRouter(
@@ -19,6 +26,7 @@ class MikrotikRouter {
       name: json['name'] as String,
       nasIdentifier: json['nas_identifier'] as String,
       publicToken: json['public_token'] as String,
+      tunnelMode: json['tunnel_mode'] as String? ?? 'wireguard',
     );
   }
 }

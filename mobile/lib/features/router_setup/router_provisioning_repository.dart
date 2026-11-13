@@ -1,8 +1,6 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:dio/dio.dart';
-import 'package:dio/io.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../auth/auth_controller.dart';
@@ -41,11 +39,21 @@ class RouterProvisioningRepository {
 
   RouterProvisioningRepository(this._ref);
 
-  Future<RouterProvisioningResult> createRouter({required int shopId, required String name}) async {
+  /// [tunnelMode] mirrors the web wizard's own three options
+  /// (`wireguard`/`wireguard_zerotier`/`zerotier`) -- relevant here
+  /// specifically for a router behind CGNAT, where raw WireGuard can
+  /// never form a tunnel at all and ZeroTier's own NAT traversal is the
+  /// only way the router will ever actually come online.
+  Future<RouterProvisioningResult> createRouter({
+    required int shopId,
+    required String name,
+    String tunnelMode = 'wireguard',
+  }) async {
     final client = _ref.read(apiClientProvider);
     final response = await client.post('/router-provisioning', data: {
       'shop_id': shopId,
       'name': name,
+      'tunnel_mode': tunnelMode,
     });
     return RouterProvisioningResult.fromJson(response);
   }
@@ -61,13 +69,75 @@ class RouterProvisioningRepository {
     return RouterProvisioningStatus.fromJson(response);
   }
 
+  /// Reads the router's own ZeroTier node identity straight off its local
+  /// REST API -- the same information `/zerotier print` shows on the
+  /// console, which this app used to need a human to read by hand and
+  /// relay back (confirmed live 2026-11-13: that manual relay-then-SSH
+  /// path is real friction a tenant_admin can't even complete themselves,
+  /// since SSH access to the Pi was never part of this role). Called right
+  /// after [pushBootstrapScript] succeeds, over the same local connection,
+  /// only when the router's tunnel_mode actually uses ZeroTier -- see
+  /// MikrotikRouter.usesZeroTier.
+  ///
+  /// Best-effort: returns null rather than throwing on any failure (a
+  /// router that isn't using ZeroTier at all, or one where the identity
+  /// genuinely isn't ready yet) -- this step is a nice-to-have on top of
+  /// an already-successful push, not something that should turn a
+  /// successful bootstrap into a reported failure.
+  Future<String?> fetchZeroTierNodeId(String adminPassword) async {
+    final dio = _localRouterDio(adminPassword);
+
+    try {
+      final response = await dio.get('/rest/zerotier');
+      final rows = response.data;
+      if (rows is! List || rows.isEmpty) return null;
+
+      final row = rows.first as Map<String, dynamic>;
+      // Same field preference as the web admin's own
+      // RoutersIndex::fetchZeroTierNodeId() -- identity.public over
+      // identity, purely so a parsing failure never has private key
+      // material to leak. The node's own ID is the part before the first
+      // ":" in either field.
+      final identity = (row['identity.public'] as String?) ?? (row['identity'] as String?);
+      if (identity == null || identity.isEmpty) return null;
+
+      final nodeId = identity.split(':').first;
+      return nodeId.isEmpty ? null : nodeId;
+    } on DioException {
+      return null;
+    }
+  }
+
+  /// Hands the node ID discovered above to the backend, which -- running
+  /// on the real Pi in production -- can authorize it on the self-hosted
+  /// ZeroTier controller directly (ZeroTierControllerService's calls to
+  /// 127.0.0.1:9993 only ever succeed from there) and allocate a free
+  /// 10.9.0.x address, closing the exact gap that used to need a human
+  /// with Pi shell access. Best-effort in the same spirit as
+  /// [fetchZeroTierNodeId] -- a failure here still leaves
+  /// hotspot:auto-provision-routers' own 5-minute retry as a safety net
+  /// once an admin fixes things some other way.
+  Future<void> registerZeroTierNodeId(int routerId, String nodeId) async {
+    final client = _ref.read(apiClientProvider);
+    await client.post('/router-provisioning/$routerId/zerotier-node-id', data: {'node_id': nodeId});
+  }
+
   /// Confirms the phone can actually reach a RouterOS 7 device at the
   /// factory address, before attempting to push anything to it. Returns
   /// the detected board name/version so the UI can echo it back to the
   /// admin as a sanity check, mirroring RouterOsConnectionService::
   /// testConnection()'s existing identity-echo convention on the backend.
-  Future<({String boardName, String version})> detectFactoryRouter() async {
-    final dio = _localRouterDio();
+  ///
+  /// [adminPassword] is the router's own factory `admin` password --
+  /// confirmed live (2026-11-13) that this can NOT be assumed blank: many
+  /// current MikroTik boards ship with a unique per-device default
+  /// password printed on a label on the unit itself, the same label the
+  /// Wi-Fi network name comes from, rather than RouterOS's older
+  /// blank-password convention. The admin types it in on the previous
+  /// screen; an empty string is still tried for older boards that do use
+  /// a blank password.
+  Future<({String boardName, String version})> detectFactoryRouter(String adminPassword) async {
+    final dio = _localRouterDio(adminPassword);
 
     try {
       final response = await dio.get('/rest/system/resource');
@@ -91,11 +161,12 @@ class RouterProvisioningRepository {
   /// own "temporary /system/script object, run it, delete it regardless of
   /// outcome" pattern -- just over REST from the phone instead of the
   /// binary API from the backend. Authenticates as the router's own
-  /// factory `admin` user (blank password, RouterOS's own out-of-box
-  /// default) -- never the mmsradius-api user this app provisions and
-  /// manages long-term, which deliberately never gets REST access at all.
-  Future<void> pushBootstrapScript(String script) async {
-    final dio = _localRouterDio();
+  /// factory `admin` user (see [detectFactoryRouter]'s own docblock for
+  /// why [adminPassword] can't be assumed blank) -- never the
+  /// mmsradius-api user this app provisions and manages long-term, which
+  /// deliberately never gets REST access at all.
+  Future<void> pushBootstrapScript(String script, String adminPassword) async {
+    final dio = _localRouterDio(adminPassword);
     const scriptName = 'mms-zero-touch-bootstrap';
 
     try {
@@ -134,35 +205,47 @@ class RouterProvisioningRepository {
           'connected to the router\'s own Wi-Fi network, then try again.';
     }
 
+    // Confirmed live (2026-11-13): a factory router with a non-blank
+    // default admin password rejects every /rest/ request with a plain
+    // 401, not a RouterOS-shaped {detail: ...} body -- worth a specific,
+    // actionable message rather than Dio's generic (and, for 401
+    // specifically, misleading -- it describes 400, not 401) default text.
+    if (e.response?.statusCode == 401) {
+      return 'The router rejected this password. Check the label on the router for its real '
+          'admin password, go back, and try again.';
+    }
+
     final data = e.response?.data;
     final detail = (data is Map && data['detail'] is String) ? data['detail'] as String : e.message;
     return 'The router rejected this request: $detail';
   }
 
   /// A separate Dio instance from the app's main ApiClient on purpose --
-  /// this one only ever talks to the router's own local IP over a self-
-  /// signed HTTPS certificate RouterOS generates itself, which the main
-  /// API client (talking to the real HotspotFreeRAD backend) must never
-  /// be relaxed to accept.
-  Dio _localRouterDio() {
+  /// this one only ever talks to the router's own local IP, which the
+  /// main API client (talking to the real HotspotFreeRAD backend) must
+  /// never be pointed at.
+  ///
+  /// Plain HTTP, not HTTPS -- confirmed live against a real factory-reset
+  /// router (2026-11-13): a factory-default RouterOS device ships with no
+  /// SSL certificate installed, so its `www-ssl` service is never enabled
+  /// out of the box -- only `www` (plain HTTP) is reachable, the same
+  /// service WebFig itself uses for first-time setup. An earlier version
+  /// of this assumed `https://` (RouterOS's own self-signed-cert REST
+  /// convention for an *already-configured* router) and failed outright
+  /// with a connection error against real hardware -- this was the first
+  /// of this feature's two flagged "not yet confirmed against real
+  /// hardware" risks resolving in practice. RouterOS's REST API itself
+  /// works identically over either transport; only the factory-default
+  /// service availability differs.
+  Dio _localRouterDio(String adminPassword) {
     final dio = Dio(BaseOptions(
-      baseUrl: 'https://$factoryRouterHost',
+      baseUrl: 'http://$factoryRouterHost',
       connectTimeout: const Duration(seconds: 6),
       receiveTimeout: const Duration(seconds: 10),
     ));
 
     dio.options.headers['Authorization'] =
-        'Basic ${base64Encode(utf8.encode('admin:'))}';
-
-    final adapter = IOHttpClientAdapter();
-    adapter.createHttpClient = () {
-      final client = HttpClient();
-      // RouterOS's own self-signed cert -- scoped to exactly this one
-      // local-network client, never the app's main API Dio instance.
-      client.badCertificateCallback = (cert, host, port) => host == factoryRouterHost;
-      return client;
-    };
-    dio.httpClientAdapter = adapter;
+        'Basic ${base64Encode(utf8.encode('admin:$adminPassword'))}';
 
     return dio;
   }

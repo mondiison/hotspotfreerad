@@ -36,5 +36,6 @@ Route::middleware(['auth:sanctum', AuthorizeTenantStaff::class])->group(function
     // route missing from it, the same way admin.billing/admin.tenants are.
     Route::post('/router-provisioning', [RouterProvisioningController::class, 'store'])->name('api.router-provisioning.store');
     Route::post('/router-provisioning/{router}/mark-pushed', [RouterProvisioningController::class, 'markBootstrapPushed'])->name('api.router-provisioning.mark-pushed');
+    Route::post('/router-provisioning/{router}/zerotier-node-id', [RouterProvisioningController::class, 'saveZeroTierNodeId'])->name('api.router-provisioning.zerotier-node-id');
     Route::get('/router-provisioning/{router}/status', [RouterProvisioningController::class, 'status'])->name('api.router-provisioning.status');
 });
