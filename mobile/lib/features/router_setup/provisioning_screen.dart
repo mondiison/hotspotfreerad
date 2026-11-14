@@ -78,7 +78,14 @@ class _ProvisioningScreenState extends ConsumerState<ProvisioningScreen> {
         try {
           final nodeId = await repository.fetchZeroTierNodeId(widget.routerAdminPassword);
           if (nodeId != null) {
-            await repository.registerZeroTierNodeId(widget.provisioningResult.router.id, nodeId);
+            final zerotierIp = await repository.registerZeroTierNodeId(widget.provisioningResult.router.id, nodeId);
+            // See addZeroTierAddress's own docblock -- the backend cannot
+            // bind this address itself for a router with no other working
+            // tunnel, so the phone (still on the router's local Wi-Fi right
+            // now) does it directly.
+            if (zerotierIp != null) {
+              await repository.addZeroTierAddress(zerotierIp, widget.routerAdminPassword);
+            }
           }
         } catch (_) {
           // Swallowed deliberately -- see the comment above.

@@ -146,9 +146,74 @@ class RouterProvisioningRepository {
   /// [fetchZeroTierNodeId] -- a failure here still leaves
   /// hotspot:auto-provision-routers' own 5-minute retry as a safety net
   /// once an admin fixes things some other way.
-  Future<void> registerZeroTierNodeId(int routerId, String nodeId) async {
+  ///
+  /// Returns the ZeroTier IP the backend just allocated (or already had
+  /// saved) for this router -- the caller needs it for [addZeroTierAddress]
+  /// right after this, since the backend's own attempt to bind that same
+  /// address live (inside this same call, via
+  /// RouterOsConnectionService::syncZeroTierNetworkMembership()) is
+  /// structurally unable to succeed for a ZeroTier-only router with no
+  /// address bound yet -- see that method's own docblock. See
+  /// [addZeroTierAddress] for why the phone has to do this instead.
+  Future<String?> registerZeroTierNodeId(int routerId, String nodeId) async {
     final client = _ref.read(apiClientProvider);
-    await client.post('/router-provisioning/$routerId/zerotier-node-id', data: {'node_id': nodeId});
+    final response = await client.post('/router-provisioning/$routerId/zerotier-node-id', data: {'node_id': nodeId});
+    return response['zerotier_ip'] as String?;
+  }
+
+  /// Binds this router's newly-allocated ZeroTier IP to its `zerotier1`
+  /// interface, directly over the phone's own local connection to the
+  /// router -- NOT something the backend can do on its own here.
+  ///
+  /// Confirmed live (2026-11-14): a ZeroTier-only router (no WireGuard
+  /// fallback) that just had its node ID registered showed its ZeroTier
+  /// interface as genuinely authorized (STATUS: OK on the router itself),
+  /// yet every backend attempt to reach it -- "Test Connection",
+  /// "Authorize & connect now" -- failed with "Unable to establish socket
+  /// session, Connection timed out". Root cause: RouterOsConnectionService::
+  /// candidateHosts() for a zerotier-only router can only ever try
+  /// zerotier_ip, but nothing had bound that IP to the router's own
+  /// zerotier1 interface -- the bootstrap script this app pushed was
+  /// generated and run *before* a ZeroTier IP even existed for this router
+  /// (one is only allocated once [registerZeroTierNodeId] runs), so
+  /// MikroTikProvisioningService::zeroTierLines()'s own IP-assignment line
+  /// was never included in what got pushed. And the backend's own live-API
+  /// fallback for this (syncZeroTierNetworkMembership()'s "address" step)
+  /// is circular for a router with no other working tunnel: it needs a
+  /// RouterOS API connection to push the address, but that connection can
+  /// only go over the very address it's trying to create. The phone is the
+  /// one thing that can still reach this router directly (it's still on
+  /// the router's own factory Wi-Fi at this exact point in the flow),
+  /// regardless of tunnel state -- so it closes this gap itself rather than
+  /// leaving every zero-touch ZeroTier-only router stuck here permanently.
+  ///
+  /// Best-effort: swallowed by the caller on failure, same as the rest of
+  /// this step -- a router that misses this can still be fixed later via
+  /// the web admin's "Authorize & connect now" IF something else (a
+  /// WireGuard fallback, or a manual script re-paste) ever gives the
+  /// backend a reachable path; this call is just what makes the fully
+  /// automatic case actually complete.
+  Future<void> addZeroTierAddress(String zerotierIp, String adminPassword) async {
+    final dio = _localRouterDio(adminPassword);
+
+    for (var attempt = 0; attempt < 5; attempt++) {
+      if (attempt > 0) {
+        await Future.delayed(const Duration(seconds: 2));
+      }
+
+      try {
+        await dio.put('/rest/ip/address', data: {
+          'address': '$zerotierIp/24',
+          'interface': 'zerotier1',
+        });
+        return;
+      } on DioException {
+        // The zerotier1 interface itself may not have finished registering
+        // yet (the same RouterOS timing quirk [fetchZeroTierNodeId] already
+        // retries for) -- keep trying rather than giving up on the first
+        // miss.
+      }
+    }
   }
 
   /// Confirms the phone can actually reach a RouterOS 7 device at the
