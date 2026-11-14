@@ -1654,6 +1654,19 @@ HTML;
      * gives RouterOS time to finish before the address line runs -- a
      * generous, deliberately simple fixed wait rather than a polling loop,
      * since this only costs a few seconds once during bootstrap.
+     *
+     * A third issue, confirmed live 2026-11-14 during repeated zero-touch
+     * testing against the same physical router: a plain `/system
+     * reset-configuration` does NOT reliably clear this package's own
+     * node identity/network-membership state, which appears to live
+     * outside the configuration database that command wipes -- re-running
+     * this script against the same physical router (a new Router DB row,
+     * freshly re-provisioned) failed outright with RouterOS's own
+     * "failure: duplicate network id in instance", since the router
+     * already considered itself joined from a prior run. The `add` is now
+     * guarded the same way the WAN interface-list line at the top of
+     * generateBootstrapScript() already is -- skip it when a join for
+     * this exact network already exists, rather than erroring.
      */
     private function zeroTierLines(Router $router): array
     {
@@ -1669,7 +1682,7 @@ HTML;
             '# ARM/ARM64 hardware ONLY -- upload the .npk and reboot BEFORE running this section;',
             '# see docs/zerotier-fallback-setup.md. Skip this whole block on MIPSBE/SMIPS boards.',
             '/zerotier enable zt1',
-            '/zerotier interface add network='.$networkId.' instance=zt1',
+            ':if ([:len [/zerotier interface find network='.$networkId.']] = 0) do={ /zerotier interface add network='.$networkId.' instance=zt1 }',
             '# This router\'s ZeroTier node ID only exists after the line above runs. Retrieve it',
             '# with "/zerotier print" and enter it into MMS Radius so it can be authorized.',
             filled($router->zerotier_ip)

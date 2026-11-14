@@ -1490,6 +1490,36 @@ class MikroTikProvisioningServiceTest extends TestCase
         $this->assertStringNotContainsString('priority=', $script);
     }
 
+    /**
+     * Confirmed live 2026-11-14: a plain `/system reset-configuration`
+     * does not reliably clear the "zerotier" package's own node
+     * identity/network-membership state -- re-running the zero-touch
+     * bootstrap script against the same physical router failed outright
+     * with RouterOS's own "failure: duplicate network id in instance".
+     * The join is now guarded the same way the bootstrap script's own
+     * WAN interface-list line already is.
+     */
+    public function test_zerotier_network_join_is_guarded_against_an_already_existing_join(): void
+    {
+        config([
+            'services.zerotier.network_id' => 'abcd1234abcd1234',
+        ]);
+
+        $router = new Router([
+            'nas_identifier' => 'zerotier-rejoin-router',
+            'wireguard_internal_ip' => '10.8.0.60',
+            'shared_secret' => 'radius-secret',
+            'tunnel_mode' => 'zerotier',
+        ]);
+
+        $script = app(MikroTikProvisioningService::class)->generateBootstrapScript($router);
+
+        $this->assertStringContainsString(
+            ':if ([:len [/zerotier interface find network=abcd1234abcd1234]] = 0) do={ /zerotier interface add network=abcd1234abcd1234 instance=zt1 }',
+            $script
+        );
+    }
+
     public function test_zerotier_script_omits_the_ip_address_line_until_a_zerotier_ip_is_saved(): void
     {
         config([
