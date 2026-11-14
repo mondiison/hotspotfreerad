@@ -111,15 +111,23 @@ SCRIPT;
      * auto-generates a non-removable, non-movable dynamic "fasttrack
      * counter" rule that permanently occupies position 0 in that case, so
      * nothing can ever be moved to or before it. Targeting the *specific*
-     * known defconf drop rule directly with `place-before=` sidesteps this
-     * entirely -- no position-0 assumption needed. A router with no such
-     * rule (e.g. a "no-defaults=yes" reset, or defconf's own rule already
-     * removed/renamed some other way) just appends normally instead, which
-     * is already correct there since nothing exists to block it in the
-     * first place. Deliberately not scoped more narrowly than "accept
-     * everything on this interface" (e.g. just the API port) -- a tunnel
-     * interface this app creates has no other legitimate inbound traffic
-     * to worry about restricting further here.
+     * known defconf drop rule directly with `place-before=` sidesteps
+     * that, but a second attempt matching on `action=drop
+     * in-interface-list=!LAN` also failed live with "no such item" even
+     * though that rule genuinely exists and `print` shows it with exactly
+     * those properties -- RouterOS's `find` apparently can't match a
+     * negated interface-list property ("!LAN") as a literal string the
+     * way `print` displays it. Matching on the rule's own `comment`
+     * instead (confirmed live to work: "defconf: drop all not coming from
+     * LAN", MikroTik's own fixed defconf wording) sidesteps that too. A
+     * router with no such rule (e.g. a "no-defaults=yes" reset, or
+     * defconf's own rule already removed/renamed some other way) just
+     * appends normally instead, which is already correct there since
+     * nothing exists to block it in the first place. Deliberately not
+     * scoped more narrowly than "accept everything on this interface"
+     * (e.g. just the API port) -- a tunnel interface this app creates has
+     * no other legitimate inbound traffic to worry about restricting
+     * further here.
      *
      * @return list<string>
      */
@@ -135,7 +143,7 @@ SCRIPT;
         }
 
         $lines = [
-            ':local mmsZeroTouchLanDrop [/ip firewall filter find action=drop in-interface-list=!LAN]',
+            ':local mmsZeroTouchLanDrop [/ip firewall filter find comment="defconf: drop all not coming from LAN"]',
         ];
 
         foreach ($tunnelInterfaces as [$interface, $shortName]) {

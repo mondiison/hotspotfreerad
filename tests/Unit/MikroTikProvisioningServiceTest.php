@@ -187,7 +187,7 @@ class MikroTikProvisioningServiceTest extends TestCase
         $script = app(MikroTikProvisioningService::class)->generateBootstrapScript($router);
 
         $this->assertStringContainsString(
-            ':local mmsZeroTouchLanDrop [/ip firewall filter find action=drop in-interface-list=!LAN]',
+            ':local mmsZeroTouchLanDrop [/ip firewall filter find comment="defconf: drop all not coming from LAN"]',
             $script
         );
         $this->assertStringContainsString(
