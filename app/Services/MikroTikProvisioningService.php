@@ -1667,6 +1667,26 @@ HTML;
      * guarded the same way the WAN interface-list line at the top of
      * generateBootstrapScript() already is -- skip it when a join for
      * this exact network already exists, rather than erroring.
+     *
+     * A fourth issue, confirmed live the same day: the `/ip address add`
+     * line below has the identical problem -- a router that already has
+     * this exact address bound (the common case once the phone's own
+     * addZeroTierAddress() step has run during zero-touch provisioning)
+     * fails outright with "failure: already have such address" on any
+     * later re-push of a script containing this block. This one mattered
+     * far more than it looks: confirmed live that RouterOS aborts the
+     * REST of a script run via "/system/script/run" the moment any
+     * unguarded command throws (unlike pasting the same lines one at a
+     * time into an interactive terminal, where each line is its own
+     * independent console command and a failure never stops the next
+     * paste) -- so this single collision silently took out everything
+     * after it in generateFreshInfrastructureScript()'s own output too
+     * (the hotspot server object, firewall rules, staff/POS MAC-auth
+     * hotspot servers never got created, even though the mgmt/hotspot/
+     * staff/pos VLANs further down looked fine, self-healed separately by
+     * hotspot:auto-provision-routers' own already-idempotent ensure*
+     * Infrastructure() methods). Guarded the same way the network-join
+     * line is.
      */
     private function zeroTierLines(Router $router): array
     {
@@ -1689,7 +1709,23 @@ HTML;
                 ? ':delay 3s'
                 : null,
             filled($router->zerotier_ip)
-                ? '/ip address add address='.$router->zerotier_ip.'/24 interface=zerotier1 comment="MMS Radius ZeroTier IP"'
+                // Confirmed live 2026-11-14: an unguarded /ip address add here
+                // fails outright with "failure: already have such address" on
+                // a router that's already had this exact address bound --
+                // confirmed to happen via the phone's own addZeroTierAddress()
+                // step during zero-touch provisioning, so any script including
+                // this block that gets pushed/pasted again afterward (including
+                // Fresh Infrastructure Script) hits this immediately. Worse,
+                // since RouterOS aborts the REST of a script run via
+                // "/system/script/run" the moment an unguarded command throws
+                // (confirmed live the same day -- unlike pasting line-by-line
+                // into an interactive terminal, where each line is its own
+                // independent console command), this one collision silently
+                // took out everything after it in the same script too (the
+                // hotspot server object, firewall rules, staff/POS MAC-auth
+                // hotspot servers). Guarded the same way the network-join line
+                // above already is.
+                ? ':if ([:len [/ip address find address='.$router->zerotier_ip.'/24 interface=zerotier1]] = 0) do={ /ip address add address='.$router->zerotier_ip.'/24 interface=zerotier1 comment="MMS Radius ZeroTier IP" }'
                 : '# Once this router has a saved ZeroTier IP in MMS Radius, re-generate this script to add the "/ip address add ... interface=zerotier1" line -- without it, the tunnel and authorization can show fine while the RouterOS API is still unreachable over it.',
         ]);
     }

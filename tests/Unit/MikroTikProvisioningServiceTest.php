@@ -1520,6 +1520,39 @@ class MikroTikProvisioningServiceTest extends TestCase
         );
     }
 
+    /**
+     * Confirmed live 2026-11-14, the same day as the network-join guard
+     * above: re-pushing a script containing this block against a router
+     * that already has this exact address bound (the normal case once
+     * the phone's own addZeroTierAddress() step has run) fails outright
+     * with "failure: already have such address" -- and because RouterOS
+     * aborts the rest of a script run via "/system/script/run" the
+     * moment an unguarded command throws, this one collision silently
+     * took out everything after it in the same script too. Guarded the
+     * same way the network-join line is.
+     */
+    public function test_zerotier_ip_address_line_is_guarded_against_an_already_bound_address(): void
+    {
+        config([
+            'services.zerotier.network_id' => 'abcd1234abcd1234',
+        ]);
+
+        $router = new Router([
+            'nas_identifier' => 'zerotier-readdress-router',
+            'wireguard_internal_ip' => '10.8.0.61',
+            'shared_secret' => 'radius-secret',
+            'tunnel_mode' => 'zerotier',
+            'zerotier_ip' => '10.9.0.61',
+        ]);
+
+        $script = app(MikroTikProvisioningService::class)->generateBootstrapScript($router);
+
+        $this->assertStringContainsString(
+            ':if ([:len [/ip address find address=10.9.0.61/24 interface=zerotier1]] = 0) do={ /ip address add address=10.9.0.61/24 interface=zerotier1 comment="MMS Radius ZeroTier IP" }',
+            $script
+        );
+    }
+
     public function test_zerotier_script_omits_the_ip_address_line_until_a_zerotier_ip_is_saved(): void
     {
         config([
