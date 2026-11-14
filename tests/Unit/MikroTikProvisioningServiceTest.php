@@ -166,10 +166,12 @@ class MikroTikProvisioningServiceTest extends TestCase
      * zero-touch flow depends on was silently dropped (a timeout, not a
      * refusal) even once the tunnel itself was genuinely authorized and
      * addressed. generateBootstrapScript() now adds its own accept
-     * rule(s), moved to position 0 so they land before any pre-existing
-     * rule regardless of what's already there.
+     * rule(s), placed before that specific known drop rule when it
+     * exists (a plain "move ... destination=0" was tried first and
+     * confirmed live to fail with "cannot move builtin" -- see
+     * bootstrapFirewallLines()'s own docblock for why).
      */
-    public function test_bootstrap_script_adds_a_firewall_accept_rule_for_wireguard_moved_to_the_front(): void
+    public function test_bootstrap_script_adds_a_firewall_accept_rule_for_wireguard_before_the_defconf_drop(): void
     {
         config([
             'services.wireguard.endpoint_host' => 'vpn.example.com',
@@ -185,17 +187,18 @@ class MikroTikProvisioningServiceTest extends TestCase
         $script = app(MikroTikProvisioningService::class)->generateBootstrapScript($router);
 
         $this->assertStringContainsString(
-            '/ip firewall filter add chain=input in-interface=wg-saas action=accept comment="mms-zero-touch-wg-accept"',
+            ':local mmsZeroTouchLanDrop [/ip firewall filter find action=drop in-interface-list=!LAN]',
             $script
         );
         $this->assertStringContainsString(
-            '/ip firewall filter move [find comment="mms-zero-touch-wg-accept"] destination=0',
+            '/ip firewall filter add chain=input in-interface=wg-saas action=accept comment="mms-zero-touch-wg-accept" place-before=$mmsZeroTouchLanDrop',
             $script
         );
+        $this->assertStringNotContainsString('destination=0', $script);
         $this->assertStringNotContainsString('mms-zero-touch-zt-accept', $script);
     }
 
-    public function test_bootstrap_script_adds_a_firewall_accept_rule_for_zerotier_moved_to_the_front(): void
+    public function test_bootstrap_script_adds_a_firewall_accept_rule_for_zerotier_before_the_defconf_drop(): void
     {
         config([
             'services.zerotier.network_id' => 'abcd1234abcd1234',
@@ -211,13 +214,10 @@ class MikroTikProvisioningServiceTest extends TestCase
         $script = app(MikroTikProvisioningService::class)->generateBootstrapScript($router);
 
         $this->assertStringContainsString(
-            '/ip firewall filter add chain=input in-interface=zerotier1 action=accept comment="mms-zero-touch-zt-accept"',
+            '/ip firewall filter add chain=input in-interface=zerotier1 action=accept comment="mms-zero-touch-zt-accept" place-before=$mmsZeroTouchLanDrop',
             $script
         );
-        $this->assertStringContainsString(
-            '/ip firewall filter move [find comment="mms-zero-touch-zt-accept"] destination=0',
-            $script
-        );
+        $this->assertStringNotContainsString('destination=0', $script);
         $this->assertStringNotContainsString('mms-zero-touch-wg-accept', $script);
     }
 

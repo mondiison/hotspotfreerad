@@ -95,35 +95,53 @@ SCRIPT;
      * at all (it's a separate, super_admin-only "Push via API" action, not
      * part of hotspot:auto-provision-routers). A router straight off a
      * normal RouterOS reset (i.e. NOT `no-defaults=yes`) still has
-     * MikroTik's own factory "defconf" firewall active, whose standard
-     * input chain ends in `action=drop in-interface-list=!LAN` -- a
+     * MikroTik's own factory "defconf" firewall active -- confirmed live
+     * directly via `/ip firewall filter print` on the test router -- whose
+     * standard input chain ends in `action=drop in-interface-list=!LAN`. A
      * newly-created tunnel interface is never a member of "LAN", so every
      * inbound connection to it (including this app's own RouterOS API
-     * dial) is silently dropped, producing exactly a timeout rather than
-     * a refusal. Since bootstrap is meant to stand entirely on its own
-     * (see that method's own docblock), it adds its own minimal accept
-     * rule(s) for whichever tunnel(s) it just configured -- `destination=0`
-     * guarantees each lands before any pre-existing rule, whether that's
-     * defconf's own catch-all, a fully blank filter table (no-defaults
-     * reset), or nothing at all. Deliberately not scoped more narrowly
-     * (e.g. just the API port) -- a tunnel interface this app creates has
-     * no other legitimate inbound traffic to worry about restricting
-     * further here.
+     * dial) was silently dropped, producing exactly a timeout rather than
+     * a refusal.
+     *
+     * A first version of this fix added the accept rule and then ran
+     * `move ... destination=0` to force it to the very front -- also
+     * confirmed live, this fails outright ("cannot move builtin") whenever
+     * a fasttrack-connection rule exists anywhere in the filter table
+     * (which defconf's own forward chain always has): RouterOS
+     * auto-generates a non-removable, non-movable dynamic "fasttrack
+     * counter" rule that permanently occupies position 0 in that case, so
+     * nothing can ever be moved to or before it. Targeting the *specific*
+     * known defconf drop rule directly with `place-before=` sidesteps this
+     * entirely -- no position-0 assumption needed. A router with no such
+     * rule (e.g. a "no-defaults=yes" reset, or defconf's own rule already
+     * removed/renamed some other way) just appends normally instead, which
+     * is already correct there since nothing exists to block it in the
+     * first place. Deliberately not scoped more narrowly than "accept
+     * everything on this interface" (e.g. just the API port) -- a tunnel
+     * interface this app creates has no other legitimate inbound traffic
+     * to worry about restricting further here.
      *
      * @return list<string>
      */
     private function bootstrapFirewallLines(Router $router): array
     {
-        $lines = [];
+        $tunnelInterfaces = array_filter([
+            $this->includesWireguard($router) ? ['wg-saas', 'wg'] : null,
+            $this->includesZeroTier($router) ? ['zerotier1', 'zt'] : null,
+        ]);
 
-        if ($this->includesWireguard($router)) {
-            $lines[] = '/ip firewall filter add chain=input in-interface=wg-saas action=accept comment="mms-zero-touch-wg-accept"';
-            $lines[] = '/ip firewall filter move [find comment="mms-zero-touch-wg-accept"] destination=0';
+        if ($tunnelInterfaces === []) {
+            return [];
         }
 
-        if ($this->includesZeroTier($router)) {
-            $lines[] = '/ip firewall filter add chain=input in-interface=zerotier1 action=accept comment="mms-zero-touch-zt-accept"';
-            $lines[] = '/ip firewall filter move [find comment="mms-zero-touch-zt-accept"] destination=0';
+        $lines = [
+            ':local mmsZeroTouchLanDrop [/ip firewall filter find action=drop in-interface-list=!LAN]',
+        ];
+
+        foreach ($tunnelInterfaces as [$interface, $shortName]) {
+            $comment = 'mms-zero-touch-'.$shortName.'-accept';
+            $addRule = '/ip firewall filter add chain=input in-interface='.$interface.' action=accept comment="'.$comment.'"';
+            $lines[] = ':if ([:len $mmsZeroTouchLanDrop] > 0) do={ '.$addRule.' place-before=$mmsZeroTouchLanDrop } else={ '.$addRule.' }';
         }
 
         return $lines;
