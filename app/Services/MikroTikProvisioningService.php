@@ -67,6 +67,7 @@ class MikroTikProvisioningService
         $wan1 = $settings['wan1'];
         $tunnelLines = implode("\n", array_merge($this->wireguardProvisioningLines($router), $this->zeroTierLines($router)));
         $apiUserLines = implode("\n", $this->apiUserProvisioningLines($router));
+        $firewallLines = implode("\n", $this->bootstrapFirewallLines($router));
 
         return <<<SCRIPT
 :global wan1 "{$wan1}"
@@ -78,7 +79,54 @@ class MikroTikProvisioningService
 /ip dhcp-client add interface=\$wan1 add-default-route=yes use-peer-dns=no disabled=no comment="Get WAN IP/default route so the tunnel below can actually dial out"
 {$tunnelLines}
 {$apiUserLines}
+{$firewallLines}
 SCRIPT;
+    }
+
+    /**
+     * Confirmed live 2026-11-14, from the first real zero-touch-via-
+     * ZeroTier router provisioned end to end: the ZeroTier interface
+     * showed genuinely authorized (STATUS: OK) and had its address
+     * correctly bound, yet the backend's RouterOS API connection still
+     * timed out. Root cause: generateBootstrapScript() never touches
+     * /ip firewall filter at all -- that's generateFreshInfrastructureScript()'s
+     * job, which already has the right accept rules for wg-saas/zerotier1
+     * (see its own docblock), but which the zero-touch flow never pushes
+     * at all (it's a separate, super_admin-only "Push via API" action, not
+     * part of hotspot:auto-provision-routers). A router straight off a
+     * normal RouterOS reset (i.e. NOT `no-defaults=yes`) still has
+     * MikroTik's own factory "defconf" firewall active, whose standard
+     * input chain ends in `action=drop in-interface-list=!LAN` -- a
+     * newly-created tunnel interface is never a member of "LAN", so every
+     * inbound connection to it (including this app's own RouterOS API
+     * dial) is silently dropped, producing exactly a timeout rather than
+     * a refusal. Since bootstrap is meant to stand entirely on its own
+     * (see that method's own docblock), it adds its own minimal accept
+     * rule(s) for whichever tunnel(s) it just configured -- `destination=0`
+     * guarantees each lands before any pre-existing rule, whether that's
+     * defconf's own catch-all, a fully blank filter table (no-defaults
+     * reset), or nothing at all. Deliberately not scoped more narrowly
+     * (e.g. just the API port) -- a tunnel interface this app creates has
+     * no other legitimate inbound traffic to worry about restricting
+     * further here.
+     *
+     * @return list<string>
+     */
+    private function bootstrapFirewallLines(Router $router): array
+    {
+        $lines = [];
+
+        if ($this->includesWireguard($router)) {
+            $lines[] = '/ip firewall filter add chain=input in-interface=wg-saas action=accept comment="mms-zero-touch-wg-accept"';
+            $lines[] = '/ip firewall filter move [find comment="mms-zero-touch-wg-accept"] destination=0';
+        }
+
+        if ($this->includesZeroTier($router)) {
+            $lines[] = '/ip firewall filter add chain=input in-interface=zerotier1 action=accept comment="mms-zero-touch-zt-accept"';
+            $lines[] = '/ip firewall filter move [find comment="mms-zero-touch-zt-accept"] destination=0';
+        }
+
+        return $lines;
     }
 
     public function generateScript(Router $router): string

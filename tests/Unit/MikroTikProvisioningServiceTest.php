@@ -157,6 +157,92 @@ class MikroTikProvisioningServiceTest extends TestCase
         $this->assertStringContainsString('endpoint-port=13231', $script);
     }
 
+    /**
+     * Confirmed live 2026-11-14: a router straight off a normal RouterOS
+     * reset still has the factory "defconf" firewall active, whose input
+     * chain ends in a catch-all drop for anything not in the "LAN"
+     * interface list -- a brand-new tunnel interface this app creates is
+     * never in that list, so the RouterOS API connection this whole
+     * zero-touch flow depends on was silently dropped (a timeout, not a
+     * refusal) even once the tunnel itself was genuinely authorized and
+     * addressed. generateBootstrapScript() now adds its own accept
+     * rule(s), moved to position 0 so they land before any pre-existing
+     * rule regardless of what's already there.
+     */
+    public function test_bootstrap_script_adds_a_firewall_accept_rule_for_wireguard_moved_to_the_front(): void
+    {
+        config([
+            'services.wireguard.endpoint_host' => 'vpn.example.com',
+            'services.wireguard.public_key' => 'server-public-key',
+        ]);
+
+        $router = new Router([
+            'nas_identifier' => 'bootstrap-wg-router',
+            'wireguard_internal_ip' => '10.8.0.50',
+            'shared_secret' => 'radius-secret',
+        ]);
+
+        $script = app(MikroTikProvisioningService::class)->generateBootstrapScript($router);
+
+        $this->assertStringContainsString(
+            '/ip firewall filter add chain=input in-interface=wg-saas action=accept comment="mms-zero-touch-wg-accept"',
+            $script
+        );
+        $this->assertStringContainsString(
+            '/ip firewall filter move [find comment="mms-zero-touch-wg-accept"] destination=0',
+            $script
+        );
+        $this->assertStringNotContainsString('mms-zero-touch-zt-accept', $script);
+    }
+
+    public function test_bootstrap_script_adds_a_firewall_accept_rule_for_zerotier_moved_to_the_front(): void
+    {
+        config([
+            'services.zerotier.network_id' => 'abcd1234abcd1234',
+        ]);
+
+        $router = new Router([
+            'nas_identifier' => 'bootstrap-zt-router',
+            'wireguard_internal_ip' => '10.8.0.51',
+            'shared_secret' => 'radius-secret',
+            'tunnel_mode' => 'zerotier',
+        ]);
+
+        $script = app(MikroTikProvisioningService::class)->generateBootstrapScript($router);
+
+        $this->assertStringContainsString(
+            '/ip firewall filter add chain=input in-interface=zerotier1 action=accept comment="mms-zero-touch-zt-accept"',
+            $script
+        );
+        $this->assertStringContainsString(
+            '/ip firewall filter move [find comment="mms-zero-touch-zt-accept"] destination=0',
+            $script
+        );
+        $this->assertStringNotContainsString('mms-zero-touch-wg-accept', $script);
+    }
+
+    public function test_bootstrap_script_adds_both_firewall_accept_rules_in_dual_tunnel_mode(): void
+    {
+        config([
+            'services.wireguard.endpoint_host' => 'vpn.example.com',
+            'services.wireguard.public_key' => 'server-public-key',
+            'services.zerotier.network_id' => 'abcd1234abcd1234',
+        ]);
+
+        $router = new Router([
+            'nas_identifier' => 'bootstrap-dual-router',
+            'wireguard_internal_ip' => '10.8.0.52',
+            'shared_secret' => 'radius-secret',
+            'tunnel_mode' => 'wireguard_zerotier',
+            'zerotier_ip' => '10.9.0.52',
+        ]);
+
+        $script = app(MikroTikProvisioningService::class)->generateBootstrapScript($router);
+
+        $this->assertStringContainsString('mms-zero-touch-wg-accept', $script);
+        $this->assertStringContainsString('mms-zero-touch-zt-accept', $script);
+    }
+
     public function test_hotspot_script_walled_garden_matches_the_shops_active_gateway(): void
     {
         config([
