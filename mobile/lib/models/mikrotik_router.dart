@@ -1,18 +1,30 @@
 /// Named MikrotikRouter (not Router) to avoid colliding with Flutter SDK's
 /// own `Router` widget class.
+///
+/// Shared by two different backend responses: POST /api/router-provisioning
+/// (which returns nasIdentifier/publicToken, used right after creating a
+/// router) and GET /api/routers (the remote-access feature's router picker,
+/// which returns shopName/isOnline instead -- see
+/// Http\Resources\Api\RouterResource, which deliberately omits every
+/// technical/secret field). Every field from the provisioning response is
+/// nullable here so one model can parse either shape without throwing.
 class MikrotikRouter {
   final int id;
   final String name;
-  final String nasIdentifier;
-  final String publicToken;
+  final String? nasIdentifier;
+  final String? publicToken;
   final String tunnelMode;
+  final String? shopName;
+  final bool isOnline;
 
   MikrotikRouter({
     required this.id,
     required this.name,
-    required this.nasIdentifier,
-    required this.publicToken,
+    this.nasIdentifier,
+    this.publicToken,
     required this.tunnelMode,
+    this.shopName,
+    this.isOnline = false,
   });
 
   /// Whether this router needs the extra ZeroTier node-ID registration
@@ -24,9 +36,11 @@ class MikrotikRouter {
     return MikrotikRouter(
       id: json['id'] as int,
       name: json['name'] as String,
-      nasIdentifier: json['nas_identifier'] as String,
-      publicToken: json['public_token'] as String,
+      nasIdentifier: json['nas_identifier'] as String?,
+      publicToken: json['public_token'] as String?,
       tunnelMode: json['tunnel_mode'] as String? ?? 'wireguard',
+      shopName: json['shop_name'] as String?,
+      isOnline: json['is_online'] as bool? ?? false,
     );
   }
 }

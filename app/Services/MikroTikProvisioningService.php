@@ -1864,6 +1864,16 @@ HTML;
      * against your RouterOS version before relying on this in production;
      * policy syntax has shifted slightly across RouterOS 7 releases.
      *
+     * Also provisions a second, deliberately minimal "viewer" account
+     * (viewerUserProvisioningLines() below) -- a human login for Winbox/SSH/
+     * WebFig, bundled into this same method so every one of this file's
+     * script generators picks it up automatically without a second call
+     * site to remember. Kept as a genuinely separate account from the one
+     * above rather than widening this one's policy: that account's policy
+     * explicitly denies winbox/ssh/web/local (see apiGroupPolicy()'s own
+     * docblock) on a deliberate least-privilege decision this feature must
+     * not quietly reopen.
+     *
      * @return list<string>
      */
     private function apiUserProvisioningLines(Router $router): array
@@ -1885,7 +1895,65 @@ HTML;
             ':if ([:len [/user group find name=mmsradius-api-group]] = 0) do={ /user group add name=mmsradius-api-group policy='.$policy.' comment="MMS Radius API provisioning access" } else={ /user group set [find name=mmsradius-api-group] policy='.$policy.' comment="MMS Radius API provisioning access" }',
             ':if ([:len [/user find name="'.$username.'"]] = 0) do={ /user add name="'.$username.'" password="'.$password.'" group=mmsradius-api-group comment="MMS Radius API provisioning" } else={ /user set [find name="'.$username.'"] password="'.$password.'" group=mmsradius-api-group comment="MMS Radius API provisioning" }',
             '/ip service set api disabled=no port=8728 address='.$this->apiServiceAddressRestriction($router),
+            ...$this->viewerUserProvisioningLines($router),
         ];
+    }
+
+    /**
+     * A second RouterOS account distinct from mmsradius-api -- a human
+     * login for Winbox/SSH/WebFig (2026-11-18, direct request to let
+     * tenant_admin log in and look around without the ability to break
+     * anything). RouterOS user-group policy has no concept of "write, but
+     * only to this one menu" -- `write` is all-or-nothing across the whole
+     * router -- so the only way to guarantee "no breaking changes" at the
+     * RouterOS level itself is to deny `write` entirely here. A specific,
+     * genuinely safe change like editing the hotspot SSID is instead
+     * handled a completely different way -- RouterOsConnectionService::
+     * applySsid() pushes that one narrow, catalogued change over the
+     * existing mmsradius-api connection, server-side, so its safety comes
+     * from this app's own scoped code rather than from a RouterOS
+     * permission flag. See viewerGroupPolicy() for the exact policy.
+     *
+     * Winbox/SSH/web are already enabled and address-restricted to the
+     * tunnel/mgmt subnets by managementServiceAddressRestriction() (a
+     * separate fix, see CLAUDE.md's "A hotspot customer could reach and
+     * log into the router itself" entry) -- this only ever adds the user
+     * account itself, never touches /ip service.
+     *
+     * @return list<string>
+     */
+    private function viewerUserProvisioningLines(Router $router): array
+    {
+        if (blank($router->viewer_password)) {
+            return [];
+        }
+
+        $username = $this->quote($router->viewer_username ?: 'mmsradius-viewer');
+        $password = $this->quote($router->viewer_password);
+        $policy = $this->viewerGroupPolicy();
+
+        return [
+            ':if ([:len [/user group find name=mmsradius-viewer-group]] = 0) do={ /user group add name=mmsradius-viewer-group policy='.$policy.' comment="MMS Radius read-only remote access (Winbox/SSH/WebFig)" } else={ /user group set [find name=mmsradius-viewer-group] policy='.$policy.' comment="MMS Radius read-only remote access (Winbox/SSH/WebFig)" }',
+            ':if ([:len [/user find name="'.$username.'"]] = 0) do={ /user add name="'.$username.'" password="'.$password.'" group=mmsradius-viewer-group comment="MMS Radius read-only remote access" } else={ /user set [find name="'.$username.'"] password="'.$password.'" group=mmsradius-viewer-group comment="MMS Radius read-only remote access" }',
+        ];
+    }
+
+    /**
+     * read + winbox/ssh/web/local (so the account can actually log in
+     * through each of those three tools) + test (harmless ping/traceroute
+     * diagnostics) -- everything else explicitly denied, `write` above all.
+     * `sensitive` is denied too and deliberately so: granting it would let
+     * this account read back every password already stored in the
+     * router's own configuration (this app's RADIUS shared secret, the
+     * WireGuard private key, even the mmsradius-api account's own
+     * password) via Winbox/WebFig's config browser, not just this
+     * account's own login -- denying it keeps "minimal" meaning minimal.
+     * Not yet confirmed live against real hardware, matching every other
+     * freshly-added RouterOS policy string in this file.
+     */
+    public function viewerGroupPolicy(): string
+    {
+        return 'read,winbox,ssh,web,local,test,!write,!policy,!password,!sensitive,!ftp,!api,!telnet,!reboot,!sniff,!romon,!rest-api';
     }
 
     /**

@@ -1816,6 +1816,72 @@ class RouterOsConnectionService
     }
 
     /**
+     * Mobile remote-access feature (2026-11-18): lets tenant_admin change
+     * the customer hotspot's broadcast SSID from the phone app without any
+     * RouterOS write access of their own -- runs over the existing,
+     * already-restricted mmsradius-api connection, scoped to exactly one
+     * property on one existing object. This is deliberately the ONLY
+     * change this app exposes this way; it's safe specifically because
+     * the scope is this method's own code, not a RouterOS permission (see
+     * MikroTikProvisioningService::viewerGroupPolicy()'s docblock for why
+     * that account's own RouterOS policy can't express "write, but only
+     * to this one menu").
+     *
+     * Deliberately only ever SETs the existing mms-open-hotspot-cfg object
+     * created by generateFreshInfrastructureScript()/provisionHotspot()'s
+     * script-based wireless section -- never creates one. A router that's
+     * never had the Hotspot/Fresh Infrastructure script pasted (so no
+     * built-in-Wi-Fi configuration object exists yet) fails with a clear,
+     * actionable message instead of silently creating a disconnected
+     * config object nothing points at. Not yet confirmed against real
+     * hardware, matching every other freshly-added live-API method here.
+     */
+    public function applySsid(Router $router, string $ssid): array
+    {
+        if (! $this->isConfigured($router)) {
+            return ['success' => false, 'error' => 'RouterOS API credentials not generated yet.'];
+        }
+
+        $existingId = $this->existingWifiConfigurationId($router, 'mms-open-hotspot-cfg');
+
+        if ($existingId === null) {
+            return [
+                'success' => false,
+                'error' => 'This router has no built-in Wi-Fi hotspot configured yet -- paste the Hotspot Script (or Fresh Infrastructure Script) once first, then try again.',
+            ];
+        }
+
+        $query = (new Query('/interface/wifi/configuration/set'))
+            ->equal('numbers', $existingId)
+            ->equal('ssid', $ssid);
+
+        $result = $this->runSteps($router, ['Set hotspot SSID' => $query]);
+
+        if ($result['success']) {
+            $router->forceFill([
+                'provisioning_settings' => array_merge((array) $router->provisioning_settings, ['hotspot_ssid' => $ssid]),
+            ])->save();
+        }
+
+        return [
+            'success' => $result['success'],
+            'error' => $result['success'] ? null : ($result['steps'][0]['error'] ?? 'Unknown error.'),
+        ];
+    }
+
+    private function existingWifiConfigurationId(Router $router, string $name): ?string
+    {
+        try {
+            $row = collect($this->client($router, 8)->query(new Query('/interface/wifi/configuration/print'))->read())
+                ->first(fn ($r) => is_array($r) && ($r['name'] ?? null) === $name);
+
+            return $row['.id'] ?? null;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
      * The directory this app's own hotspot profile (`saas-prof`, created by
      * `provisionHotspot()`) uses -- correct as a default for a router being
      * freshly onboarded through this app, but NOT guaranteed for a router

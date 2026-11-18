@@ -18,12 +18,26 @@ class Router extends Model
 
     public const API_PORT = 8728;
 
+    /**
+     * A second, deliberately minimal RouterOS account for a human admin to
+     * log into Winbox/SSH/WebFig directly -- distinct from API_USERNAME
+     * (this app's own operational connection, whose policy denies those
+     * connection methods entirely). See
+     * MikroTikProvisioningService::viewerGroupPolicy().
+     */
+    public const VIEWER_USERNAME = 'mmsradius-viewer';
+
+    public const VIEWER_WINBOX_PORT = 8291;
+
+    public const VIEWER_SSH_PORT = 22;
+
     protected $guarded = [];
 
     protected $hidden = [
         'shared_secret',
         'wireguard_private_key',
         'api_password',
+        'viewer_password',
     ];
 
     /**
@@ -46,6 +60,7 @@ class Router extends Model
             'shared_secret' => 'encrypted',
             'wireguard_private_key' => 'encrypted',
             'api_password' => 'encrypted',
+            'viewer_password' => 'encrypted',
             'provisioning_settings' => 'array',
             'is_online' => 'boolean',
             'last_seen_at' => 'datetime',
@@ -67,6 +82,11 @@ class Router extends Model
                 $router->api_username = self::API_USERNAME;
                 $router->api_password = Str::random(32);
                 $router->api_port = self::API_PORT;
+            }
+
+            if (blank($router->viewer_password)) {
+                $router->viewer_username = self::VIEWER_USERNAME;
+                $router->viewer_password = Str::random(24);
             }
 
             // Backs the "scan this QR at the shop" self-service link
@@ -96,5 +116,24 @@ class Router extends Model
     public function shop(): BelongsTo
     {
         return $this->belongsTo(Shop::class);
+    }
+
+    /**
+     * Backfills the viewer account for a router created before this field
+     * existed -- the `creating()` hook above only ever fires on INSERT, so
+     * an already-saved router otherwise stays permanently blank here. Used
+     * by Api\RouterConsoleController::credentials() the moment the mobile
+     * app first asks for them.
+     */
+    public function ensureViewerCredentials(): void
+    {
+        if (filled($this->viewer_password)) {
+            return;
+        }
+
+        $this->forceFill([
+            'viewer_username' => self::VIEWER_USERNAME,
+            'viewer_password' => Str::random(24),
+        ])->save();
     }
 }

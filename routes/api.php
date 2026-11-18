@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\MeController;
+use App\Http\Controllers\Api\RouterConsoleController;
 use App\Http\Controllers\Api\RouterProvisioningController;
 use App\Http\Controllers\Api\ShopController;
 use App\Http\Controllers\Api\VoucherBatchController;
@@ -38,4 +39,14 @@ Route::middleware(['auth:sanctum', AuthorizeTenantStaff::class])->group(function
     Route::post('/router-provisioning/{router}/mark-pushed', [RouterProvisioningController::class, 'markBootstrapPushed'])->name('api.router-provisioning.mark-pushed');
     Route::post('/router-provisioning/{router}/zerotier-node-id', [RouterProvisioningController::class, 'saveZeroTierNodeId'])->name('api.router-provisioning.zerotier-node-id');
     Route::get('/router-provisioning/{router}/status', [RouterProvisioningController::class, 'status'])->name('api.router-provisioning.status');
+
+    // Remote access (2026-11-18): hands tenant_admin the router's tunnel IP
+    // plus a dedicated, read-only RouterOS login for their own Winbox/SSH/
+    // WebFig client, and a narrow, server-mediated SSID-change action for
+    // the one genuinely safe write this feature offers. Deliberately NOT
+    // added to StaffPermissions::ROUTE_PERMISSIONS -- same precedent as
+    // router-provisioning above, tenant_admin/super_admin only.
+    Route::get('/routers', [RouterConsoleController::class, 'index'])->name('api.routers.index');
+    Route::get('/routers/{router}/credentials', [RouterConsoleController::class, 'credentials'])->name('api.routers.credentials');
+    Route::post('/routers/{router}/ssid', [RouterConsoleController::class, 'updateSsid'])->name('api.routers.ssid');
 });

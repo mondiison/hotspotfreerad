@@ -40,6 +40,12 @@ class AppUser {
   /// above, there's no permission key to check here at all).
   bool get canProvisionRouters => isSuperAdmin || isTenantAdmin;
 
+  /// Mirrors the backend's own gate exactly, the same way canProvisionRouters
+  /// does -- the remote-access routes are deliberately never added to
+  /// StaffPermissions::ROUTE_PERMISSIONS either (see RouterConsoleController's
+  /// own docblock), so tenant_staff is denied outright.
+  bool get canManageRemoteAccess => isSuperAdmin || isTenantAdmin;
+
   factory AppUser.fromJson(Map<String, dynamic> json) {
     return AppUser(
       id: json['id'] as int,

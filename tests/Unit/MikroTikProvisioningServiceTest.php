@@ -1660,4 +1660,46 @@ class MikroTikProvisioningServiceTest extends TestCase
         $this->assertStringNotContainsString('http-equiv="refresh"', $template);
         $this->assertStringNotContainsString('http://127.0.0.1:8001/hotspot/portal', $template);
     }
+
+    public function test_generated_script_provisions_a_minimal_readonly_viewer_account(): void
+    {
+        $router = new Router([
+            'nas_identifier' => 'viewer-account-router',
+            'wireguard_internal_ip' => '10.8.0.50',
+            'shared_secret' => 'radius-secret',
+            'api_username' => 'mmsradius-api',
+            'api_password' => 'api-password',
+            'viewer_username' => 'mmsradius-viewer',
+            'viewer_password' => 'viewer-password',
+        ]);
+
+        $script = app(MikroTikProvisioningService::class)->generateScript($router);
+
+        $this->assertStringContainsString('mmsradius-viewer-group', $script);
+        $this->assertStringContainsString('password="viewer-password"', $script);
+        $this->assertStringContainsString('group=mmsradius-viewer-group', $script);
+
+        $policy = app(MikroTikProvisioningService::class)->viewerGroupPolicy();
+        $this->assertStringContainsString($policy, $script);
+        $this->assertStringContainsString('!write', $policy);
+        $this->assertStringContainsString('!sensitive', $policy);
+        $this->assertStringContainsString('winbox', $policy);
+        $this->assertStringContainsString('ssh', $policy);
+        $this->assertStringContainsString('web', $policy);
+    }
+
+    public function test_viewer_account_lines_are_omitted_when_viewer_credentials_are_blank(): void
+    {
+        $router = new Router([
+            'nas_identifier' => 'no-viewer-account-router',
+            'wireguard_internal_ip' => '10.8.0.51',
+            'shared_secret' => 'radius-secret',
+            'api_username' => 'mmsradius-api',
+            'api_password' => 'api-password',
+        ]);
+
+        $script = app(MikroTikProvisioningService::class)->generateScript($router);
+
+        $this->assertStringNotContainsString('mmsradius-viewer-group', $script);
+    }
 }

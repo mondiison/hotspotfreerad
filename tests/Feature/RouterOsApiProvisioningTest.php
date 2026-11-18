@@ -99,10 +99,16 @@ class RouterOsApiProvisioningTest extends TestCase
         $script = app(MikroTikProvisioningService::class)->generateScript($router);
 
         $this->assertStringContainsString('/user group add name=mmsradius-api-group', $script);
-        $this->assertStringContainsString('policy=read,write,api,test,sensitive,ftp,', $script);
-        $this->assertStringNotContainsString('!test', $script);
-        $this->assertStringNotContainsString('!sensitive', $script);
-        $this->assertStringNotContainsString('!ftp', $script);
+        // Asserts the exact, full policy string rather than scanning the
+        // whole script for the absence of "!test"/"!sensitive"/"!ftp" --
+        // since the viewer-account policy (mmsradius-viewer-group, a
+        // second, deliberately separate account, see
+        // MikroTikProvisioningService::viewerGroupPolicy()) is now also
+        // embedded in this same script and legitimately denies sensitive/
+        // ftp itself, a whole-script scan for those substrings would
+        // collide with that unrelated, correct content. The exact literal
+        // string below uniquely identifies the API group's own policy.
+        $this->assertStringContainsString(app(MikroTikProvisioningService::class)->apiGroupPolicy(), $script);
         $this->assertStringContainsString('/user add name="'.Router::API_USERNAME.'" password="'.$router->api_password.'"', $script);
         $this->assertStringContainsString('/ip service set api disabled=no port=8728 address=10.8.0.0/24', $script);
     }

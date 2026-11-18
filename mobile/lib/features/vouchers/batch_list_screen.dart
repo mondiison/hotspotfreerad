@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../api/api_client.dart';
 import '../../auth/auth_controller.dart';
 import '../../models/voucher_batch.dart';
+import '../remote_access/router_list_screen.dart';
 import '../router_setup/add_router_screen.dart';
 import 'batch_detail_screen.dart';
 import 'create_voucher_screen.dart';
@@ -25,11 +26,22 @@ class BatchListScreen extends ConsumerWidget {
     // -- see AppUser.canProvisionRouters' own docblock for why tenant_staff
     // never has this regardless of permissions.
     final canProvisionRouters = auth.user?.canProvisionRouters ?? false;
+    // Mirrors the same hide-not-just-reject habit as the two checks above --
+    // see AppUser.canManageRemoteAccess's own docblock.
+    final canManageRemoteAccess = auth.user?.canManageRemoteAccess ?? false;
 
     return Scaffold(
       appBar: AppBar(
         title: Text(auth.user?.tenant?.companyName ?? 'Voucher batches'),
         actions: [
+          if (canManageRemoteAccess)
+            IconButton(
+              icon: const Icon(Icons.vpn_key_outlined),
+              tooltip: 'Remote access',
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const RouterListScreen()),
+              ),
+            ),
           if (canProvisionRouters)
             IconButton(
               icon: const Icon(Icons.router_outlined),
