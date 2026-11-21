@@ -687,6 +687,118 @@ class AdminPaymentIndexTest extends TestCase
         $this->assertNull($payment->voucher_id);
     }
 
+    public function test_reprovision_button_is_offered_for_a_successful_payment_with_nothing_provisioned(): void
+    {
+        [$payment, $tenant] = $this->paymentFixture('Reprovision Tenant', 'reprovision@example.com', 'Reprovision Shop', 'HSF-REPROVISION', 'successful', createSubscription: false);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(PaymentsIndex::class)
+            ->assertSee('Not provisioned')
+            ->assertSee('Reprovision')
+            ->assertDontSee('Recover access');
+
+        $this->assertNull($payment->subscription()->first());
+    }
+
+    public function test_tenant_admin_can_reprovision_a_successful_payment_that_was_never_provisioned(): void
+    {
+        $this->createRadiusTables();
+        [$payment, $tenant, , , $customer] = $this->paymentFixture('Reprovision Grant Tenant', 'reprovision-grant@example.com', 'Reprovision Grant Shop', 'HSF-REPROVISION-GRANT', 'successful', createSubscription: false);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(PaymentsIndex::class)
+            ->call('reprovisionPayment', $payment->id)
+            ->assertDispatched('notify');
+
+        $payment->refresh();
+        $subscription = $payment->subscription;
+        $this->assertNotNull($subscription);
+        $this->assertSame($customer->mac_address, $subscription->mac_address);
+        $this->assertSame($payment->package_id, $subscription->package_id);
+        $this->assertTrue($subscription->expires_at->isFuture());
+
+        $this->assertDatabaseHas('radcheck', [
+            'username' => $customer->mac_address,
+            'attribute' => 'Cleartext-Password',
+        ]);
+    }
+
+    public function test_reprovision_is_refused_for_a_pending_payment(): void
+    {
+        [$payment, $tenant] = $this->paymentFixture('Reprovision Pending Tenant', 'reprovision-pending@example.com', 'Reprovision Pending Shop', 'HSF-REPROVISION-PENDING', 'pending');
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(PaymentsIndex::class)
+            ->call('reprovisionPayment', $payment->id)
+            ->assertDispatched('notify');
+
+        $payment->refresh();
+        $this->assertNull($payment->subscription()->first());
+    }
+
+    public function test_reprovision_is_refused_for_an_already_provisioned_payment(): void
+    {
+        [$payment, $tenant] = $this->paymentFixture('Reprovision Already Tenant', 'reprovision-already@example.com', 'Reprovision Already Shop', 'HSF-REPROVISION-ALREADY', 'successful');
+        $originalSubscriptionId = $payment->subscription->id;
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(PaymentsIndex::class)
+            ->assertSee('Recover access')
+            ->call('reprovisionPayment', $payment->id)
+            ->assertDispatched('notify');
+
+        $this->assertSame(1, Subscription::count());
+        $payment->refresh();
+        $this->assertSame($originalSubscriptionId, $payment->subscription->id);
+    }
+
+    public function test_tenant_admin_cannot_reprovision_another_tenants_payment(): void
+    {
+        [$payment] = $this->paymentFixture('Reprovision Other Tenant', 'reprovision-other@example.com', 'Reprovision Other Shop', 'HSF-REPROVISION-OTHER', 'successful', createSubscription: false);
+        $actorTenant = Tenant::create([
+            'company_name' => 'Reprovision Actor Tenant',
+            'owner_email' => 'reprovision-actor@example.com',
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $actorTenant->id,
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        try {
+            Livewire::actingAs($user)
+                ->test(PaymentsIndex::class)
+                ->call('reprovisionPayment', $payment->id);
+
+            $this->fail('Expected tenant-scoped reprovisioning to hide other tenant payment.');
+        } catch (ModelNotFoundException) {
+            $this->assertTrue(true);
+        }
+
+        $payment->refresh();
+        $this->assertNull($payment->subscription()->first());
+    }
+
     public function test_recovery_voucher_can_be_redeemed_under_a_new_mac_without_a_duplicate_payment(): void
     {
         $this->createRadiusTables();
@@ -763,7 +875,7 @@ class AdminPaymentIndexTest extends TestCase
         $this->assertSame('pending', $otherTenants->refresh()->status);
     }
 
-    private function paymentFixture(string $tenantName, string $ownerEmail, string $shopName, string $txRef, string $status, array $tenantOverrides = [], string $provider = 'flutterwave'): array
+    private function paymentFixture(string $tenantName, string $ownerEmail, string $shopName, string $txRef, string $status, array $tenantOverrides = [], string $provider = 'flutterwave', bool $createSubscription = true): array
     {
         $tenant = Tenant::create(array_merge([
             'company_name' => $tenantName,
@@ -810,7 +922,7 @@ class AdminPaymentIndexTest extends TestCase
             'payload' => ['mac' => $customer->mac_address],
         ]);
 
-        if ($status === 'successful') {
+        if ($status === 'successful' && $createSubscription) {
             Subscription::create([
                 'shop_id' => $shop->id,
                 'package_id' => $package->id,

@@ -4,6 +4,8 @@ namespace App\Livewire\Admin;
 
 use App\Livewire\Concerns\SortsTable;
 use App\Models\Payment;
+use App\Models\PppoeSubscriber;
+use App\Models\Subscription;
 use App\Models\Voucher;
 use App\Services\AbandonedPaymentCleanupService;
 use App\Services\HotspotPaymentConfirmationService;
@@ -170,6 +172,77 @@ class PaymentsIndex extends Component
         }
 
         $this->dispatch('notify', type: 'success', message: 'Manual transfer confirmed and hotspot access provisioned.');
+    }
+
+    /**
+     * 2026-11-21, direct live report: a successful Monnify payment showed
+     * "Not provisioned" with no action available to fix it -- the existing
+     * generateRecoveryVoucher() below requires an already-provisioned
+     * Subscription to salvage (a MAC-change scenario), so it has nothing to
+     * offer when provisioning never ran at all. Reuses the exact same
+     * markPaidAndGrantAccess() every other confirmation path (webhook,
+     * callback, manual-transfer confirm) already goes through -- not a new
+     * mechanism -- so this is only ever reachable for the one state the
+     * Action column's other branches don't already cover: successful, and
+     * genuinely nothing (Subscription/Voucher/PppoeSubscriber) linked yet.
+     */
+    public function reprovisionPayment(int $paymentId, HotspotPaymentConfirmationService $payments): void
+    {
+        $payment = TenantAccess::scopePayments(
+            Payment::query()->with(['shop.tenant', 'package', 'subscription', 'voucher', 'pppoeSubscriber']),
+            auth()->user()
+        )->findOrFail($paymentId);
+
+        if ($payment->status !== 'successful') {
+            $this->dispatch('notify', type: 'warning', message: 'Only a successful payment can be reprovisioned.');
+
+            return;
+        }
+
+        if ($payment->subscription || $payment->voucher || $payment->pppoeSubscriber) {
+            $this->dispatch('notify', type: 'warning', message: 'This payment is already provisioned.');
+
+            return;
+        }
+
+        try {
+            $result = $payments->markPaidAndGrantAccess($payment, [
+                'status' => 'success',
+                'data' => [
+                    'reference' => $payment->tx_ref,
+                    'status' => 'successful',
+                    'amount' => (float) $payment->amount,
+                    'currency' => $payment->currency,
+                    'reprovisioned_by' => auth()->id(),
+                    'reprovisioned_at' => now()->toIso8601String(),
+                ],
+            ]);
+        } catch (\Throwable $exception) {
+            $this->dispatch('notify', type: 'warning', message: 'Could not reprovision this payment: '.$exception->getMessage());
+
+            return;
+        }
+
+        if ($result instanceof Voucher) {
+            $this->voucherModalMode = 'purchase';
+            $this->recoveryVoucherCode = $result->code;
+            $this->recoveryVoucherTxRef = $payment->tx_ref;
+            $this->showRecoveryVoucherModal = true;
+
+            return;
+        }
+
+        if ($result instanceof PppoeSubscriber) {
+            $this->dispatch('notify', type: 'success', message: 'PPPoE subscriber renewed from this payment.');
+
+            return;
+        }
+
+        $message = $result instanceof Subscription
+            ? 'Hotspot access provisioned for MAC '.$result->mac_address.'.'
+            : 'Access provisioned.';
+
+        $this->dispatch('notify', type: 'success', message: $message);
     }
 
     /**

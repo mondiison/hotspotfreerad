@@ -64,7 +64,7 @@ class PaymentReportService
     public function query(User $user, array $filters)
     {
         return TenantAccess::scopePayments(
-            Payment::query()->with(['shop.tenant', 'package', 'customer', 'subscription']),
+            Payment::query()->with(['shop.tenant', 'package', 'customer', 'subscription', 'voucher', 'pppoeSubscriber']),
             $user
         )
             ->whereBetween('created_at', [$filters['from_date'], $filters['to_date']])

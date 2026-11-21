@@ -154,7 +154,14 @@
                         </td>
                         <td class="px-4 py-3">
                             <p class="font-medium">{{ $payment->package?->name ?? 'Deleted package' }}</p>
-                            <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $payment->subscription ? 'Provisioned' : 'Not provisioned' }}</p>
+                            {{--
+                                2026-11-21: was a bare $payment->subscription check --
+                                mislabeled a payment linked to a voucher (buy-as-voucher
+                                checkout, or a MAC-recovery voucher) or a PPPoE renewal as
+                                "Not provisioned" even though it was, just via a different
+                                mechanism than a Subscription row.
+                            --}}
+                            <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ ($payment->subscription || $payment->voucher || $payment->pppoeSubscriber) ? 'Provisioned' : 'Not provisioned' }}</p>
                         </td>
                         <td class="px-4 py-3">
                             <p>{{ $payment->shop?->name ?? 'Deleted shop' }}</p>
@@ -256,6 +263,20 @@
                                 >
                                     <span wire:loading.remove wire:target="generateRecoveryVoucher({{ $payment->id }})">Recover access</span>
                                     <span wire:loading wire:target="generateRecoveryVoucher({{ $payment->id }})">Generating...</span>
+                                </flux:button>
+                            @elseif ($payment->status === 'successful' && ! $payment->subscription && ! $payment->voucher && ! $payment->pppoeSubscriber)
+                                <flux:button
+                                    type="button"
+                                    size="xs"
+                                    variant="primary"
+                                    icon="bolt"
+                                    wire:click="reprovisionPayment({{ $payment->id }})"
+                                    wire:confirm="This successful payment was never provisioned -- grant hotspot access now for MAC {{ data_get($payment->payload, 'mac', 'unknown') }}?"
+                                    wire:loading.attr="disabled"
+                                    wire:target="reprovisionPayment({{ $payment->id }})"
+                                >
+                                    <span wire:loading.remove wire:target="reprovisionPayment({{ $payment->id }})">Reprovision</span>
+                                    <span wire:loading wire:target="reprovisionPayment({{ $payment->id }})">Provisioning...</span>
                                 </flux:button>
                             @else
                                 <span class="text-xs text-zinc-400 dark:text-zinc-500">-</span>
